@@ -137,15 +137,33 @@ class FrontendAccessibilityJourney : Instrumentation() {
                         val started=android.os.SystemClock.elapsedRealtime()
                         var exitLabel: String?=null
                         val useVisibleExit=visibleExit && route !in setOf(11,37)
+                        val exitDispatch=if(personLink && useVisibleExit)linkedMapOf<String,Any?>(
+                            "guard" to "fresh_same_source_before_single_click","click_attempted" to false,"click_accepted" to null) else null
+                        if(exitDispatch!=null)backEvidence=mapOf("interaction" to "visible_exit","expected_screen" to back,
+                            "dispatch_guard" to exitDispatch,"reached_expected" to false)
                         if(useVisibleExit) {
                             val exitNames=setOf(targetContext.getString(R.string.back),targetContext.getString(R.string.a11y_close),
                                 "Cancel","Cancel face capture","Back to gallery","Go Back")
                             val current=uiAutomation.rootInActiveWindow ?: error("Missing exit window")
                             var exit: AccessibilityNodeInfo?=null
                             try {
+                                if(exitDispatch!=null) {
+                                    exitDispatch["selection_root_refreshed"]=current.refresh()
+                                    check(exitDispatch["selection_root_refreshed"]==true) { "Exit selection window could not be refreshed" }
+                                }
                                 check(current.packageName?.toString()==targetContext.packageName) { "Reference Activity is not active before exit" }
                                 val windowBounds=Rect();current.getBoundsInScreen(windowBounds)
+                                var traversalRefreshAttempts=0
+                                var traversalRefreshUnavailable=0
                                 fun findExit(node: AccessibilityNodeInfo): AccessibilityNodeInfo? {
+                                    if(exitDispatch!=null) {
+                                        traversalRefreshAttempts++
+                                        val fresh=node.refresh()
+                                        if(!fresh)traversalRefreshUnavailable++
+                                        exitDispatch["traversal_refresh_attempts"]=traversalRefreshAttempts
+                                        exitDispatch["traversal_refresh_unavailable"]=traversalRefreshUnavailable
+                                        if(!fresh || node.windowId!=current.windowId || node.packageName?.toString()!=targetContext.packageName)return null
+                                    }
                                     val names=listOfNotNull(node.text?.toString(),node.contentDescription?.toString())
                                     val bounds=Rect();node.getBoundsInScreen(bounds)
                                     val area=Rect(bounds);val intersects=area.intersect(windowBounds)
@@ -162,7 +180,49 @@ class FrontendAccessibilityJourney : Instrumentation() {
                                 }
                                 exit=findExit(current)
                                 check(exit!=null) { "No named visible48dp Back, Close or Cancel control before exit" }
-                                check(exit.performAction(AccessibilityNodeInfo.ACTION_CLICK)) { "Visible exit action was rejected" }
+                                if(exitDispatch==null) {
+                                    check(exit.performAction(AccessibilityNodeInfo.ACTION_CLICK)) { "Visible exit action was rejected" }
+                                } else {
+                                    // Keep an independent, unrefreshed identity anchor. Query data must be fresh at dispatch.
+                                    val anchor=AccessibilityNodeInfo.obtain(exit)
+                                    fun snapshot(node: AccessibilityNodeInfo): Map<String,Any?> {
+                                        val bounds=Rect();node.getBoundsInScreen(bounds)
+                                        return mapOf("identity" to "${node.windowId}:${node.hashCode()}","window_id" to node.windowId,
+                                            "package" to node.packageName?.toString(),"own_names" to listOfNotNull(node.text?.toString(),node.contentDescription?.toString()),
+                                            "bounds_px" to listOf(bounds.left,bounds.top,bounds.right,bounds.bottom),
+                                            "enabled" to node.isEnabled,"visible" to node.isVisibleToUser,"clickable" to node.isClickable,
+                                            "actions" to node.actionList.map { it.id }.sorted())
+                                    }
+                                    try {
+                                        exitDispatch["selected_label"]=exitLabel;exitDispatch["before"]=snapshot(anchor)
+                                        val rootFresh=current.refresh()
+                                        val freshWindow=Rect();current.getBoundsInScreen(freshWindow)
+                                        exitDispatch["dispatch_root_refreshed"]=rootFresh
+                                        exitDispatch["dispatch_root_window"]=current.windowId
+                                        exitDispatch["dispatch_root_package"]=current.packageName?.toString()
+                                        exitDispatch["dispatch_window_bounds_px"]=listOf(freshWindow.left,freshWindow.top,freshWindow.right,freshWindow.bottom)
+                                        val refreshed=exit.refresh()
+                                        val area=Rect();exit.getBoundsInScreen(area)
+                                        val intersects=area.intersect(freshWindow)
+                                        val sameSource=exit==anchor
+                                        val sameWindow=exit.windowId==anchor.windowId && exit.windowId==current.windowId
+                                        val samePackage=exit.packageName?.toString()==targetContext.packageName && current.packageName?.toString()==targetContext.packageName
+                                        val sameName=exitLabel in exitNames && listOfNotNull(exit.text?.toString(),exit.contentDescription?.toString()).contains(exitLabel)
+                                        val actionAvailable=exit.actionList.any { it.id==AccessibilityNodeInfo.ACTION_CLICK }
+                                        val reachable=intersects && area.width()+1>=48*density && area.height()+1>=48*density
+                                        exitDispatch.putAll(mapOf("refreshed" to refreshed,"same_source" to sameSource,"same_window" to sameWindow,
+                                            "same_package" to samePackage,"same_own_label" to sameName,"click_action_available" to actionAvailable,
+                                            "visible_48dp" to reachable,"after" to snapshot(exit)))
+                                        val ready=rootFresh && refreshed && sameSource && sameWindow && samePackage && sameName &&
+                                            exit.isClickable && exit.isEnabled && exit.isVisibleToUser && actionAvailable && reachable
+                                        exitDispatch["guard_passed"]=ready
+                                        check(ready) { "Visible exit failed its fresh source, window, name or bounds guard" }
+                                        exitDispatch["click_attempted"]=true
+                                        val accepted=exit.performAction(AccessibilityNodeInfo.ACTION_CLICK)
+                                        exitDispatch["click_accepted"]=accepted
+                                        check(accepted) { "Visible exit action was rejected" }
+                                    } finally { anchor.recycle() }
+                                }
                             } finally { exit?.recycle();current.recycle() }
                         } else sendKeyDownUpSync(KeyEvent.KEYCODE_BACK)
                         waitForIdleSync();Thread.sleep(180)
@@ -186,7 +246,8 @@ class FrontendAccessibilityJourney : Instrumentation() {
                             Thread.sleep(60);waitForIdleSync()
                         } while(android.os.SystemClock.elapsedRealtime()-started<2000)
                         backEvidence=mapOf("interaction" to if(useVisibleExit)"visible_exit" else "physical_back","visible_exit_label" to exitLabel,"expected_screen" to expectedRoute,"observed_panes" to observed,"active_package" to activePackage,
-                            "settle_ms" to android.os.SystemClock.elapsedRealtime()-started,"pane_assertion_supported" to (Build.VERSION.SDK_INT>=28),"reached_expected" to reached)
+                            "settle_ms" to android.os.SystemClock.elapsedRealtime()-started,"pane_assertion_supported" to (Build.VERSION.SDK_INT>=28),"reached_expected" to reached) +
+                            if(exitDispatch!=null)mapOf("dispatch_guard" to exitDispatch) else emptyMap()
                         if(Build.VERSION.SDK_INT>=28 && !reached) {
                             failures.add("${if(useVisibleExit)"Visible exit" else "Physical Back"} did not return to screen $expectedRoute")
                             if(activePackage==targetContext.packageName)uiAutomation.takeScreenshot()?.let { bitmap ->

@@ -1,140 +1,51 @@
-# Lovelies readiness execution — 23–24 October 2026
+# Lovelies readiness execution — 24 October 2026
 
-**Local implementation has advanced; deployment and both store submissions remain blocked.** The full [90-ID disposition](release/backlog-disposition.md) names each retained obligation and its remaining acceptance. Local proof, hosted operation, physical-device behavior, signed upgrades and store acceptance are separate outcomes.
+**Implementation and local verification have advanced; runtime deployment and both store submissions remain blocked.** The [90-ID disposition](release/backlog-disposition.md) lists every retained obligation. Current source and receipt hashes are recorded in [verification-summary.json](release/verification-summary.json).
 
-## Replacement and scope
+## Replacement and product scope
 
-Lovelies updates the existing Google Play and Apple records using `com.lovelies.memories`. The owner confirms there are no real Memories users, photos or subscriptions to migrate. No legacy customer importer is required. Preserve unknown/test data, signing lineage, installed-state qualification, rollback and the Memories source/recovery history. Retire donor release jobs only after both replacements are live, stable and beyond the agreed observation window.
+Lovelies updates the existing Google Play and Apple records using `com.lovelies.memories`. The owner confirms there are no real Memories users, photos or subscriptions to import. Preserve unknown/test data, signing lineage, installed-state qualification, rollback and source/recovery history. Retire Memories jobs/services only after both replacements are live, stable and beyond the agreed observation window.
 
-Supabase project `ltqfplqevxztlswlzexn` is authoritative. The retained private model and push services have explicit authenticated boundaries. Anonymous-first authentication upgrades the same account only after backend verification of exactly three signed enrollment selfies. Later authentication/recovery compares fresh captures to the registered reference. No OTP or liveness/PAD is added. Matching alone grants no media access; exact approved recipient subsets, recipient acceptance, separate consent, current authority, private media and server-confirmed store entitlements remain enforced.
+Supabase project `ltqfplqevxztlswlzexn` is authoritative. Anonymous-first authentication upgrades the same account only after backend verification of exactly three signed enrollment selfies. Later authentication/recovery compares fresh captures to the registered reference. No OTP or liveness/PAD is added. Matching alone grants no media access: exact approved recipient subsets, recipient acceptance, separate consent, current authority, private media and server-confirmed entitlements remain required.
 
-## Implemented and locally verified
+## Implemented and verified within the stated scope
 
-| Boundary | Observed proof | Limit |
+| Boundary | Current result | Remaining acceptance |
 |---|---|---|
-| Supabase engine | Asynchronous PostgreSQL transactions, private Storage adapter, queue/outbox/leases, maintenance, enrollment/recovery/profile, exact sharing, privacy/erasure, store verification and operator routes. Frozen v7 plus additive v8 = 63 private forced-RLS tables. | Hosted schema version 8/63 forced-RLS tables and backend-only policies read back after approved application; API behavior remains unqualified. Private transports/providers are controlled fixtures in local tests. |
-| PostgreSQL regression | **209 distinct current cases covered**: 175 unchanged cases from the retained 209-case full attempt, plus all 34 cases in the corrected affected account-recovery file. TypeScript and actual Deno checks pass. Affected v8 strict-role/concurrency/refresh tests separately passed 49/49. | The full attempt had 205 passes and four failures because its explicit secret-scan table allowlist omitted the new encrypted receipt table. Only that test allowlist changed; the entire affected file then passed 34/34. This is not a single green 209-case aggregate run. Do not add overlapping counts. |
-| Refresh delivery | Backend, Android, iOS and operator journal the original refresh/key/independent secret before dispatch, reconcile exactly one encrypted credential result, preserve absolute expiry and cancel retired attempts. Legacy refresh remains single-use. | Hosted transport loss, real persistent secure storage and lifecycle acceptance remain. No device key alone grants authentication. |
-| Android | Latest checkpoint: **156 unit tests in 14 suites**, zero failures/skips, Debug app and instrumentation APK build pass, unchanged source inputs. Play upload-key continuity verified privately. | The final clipped-label, adaptive people-name, profile-header, compact-landscape-onboarding and schema3 scroll-audit and complete Profile-statistic-label corrections are frozen and included in the passing156-test build; Historical e7b11109 app V3 normal48/48,font2 48/48,landscape45/48 and keyboard15/22/45 are retained. The V5 reference Favorites viewport correction passes a fresh156-test/14-suite combined build, with a new app APK; targeted Favorites14 passes normal/font2/landscape and full48-screen matrices are underway. Connected Favorites viewport and full connected/spoken accessibility acceptance remain open. No signed release AAB or store-installed update pass. |
-| iOS | **665 focused Swift host checks**, unsigned Release build and Debug build-for-testing pass with unchanged final inputs. Bundle `com.lovelies.memories`, version 1.1.0/build18, minimum17, correct Edge URL, privacy manifest and no reference photo/catalog fixtures in Release. | No final signed archive/TestFlight/in-place update. Current inspected profiles lack APNs. A fresh final-source QA-only copy and both nested dylibs are development-signed/strict-deep-verified; it omits APNs/Associated Domains and establishes no production capabilities. After retained locked/tunnel failures, the phone reconnected/unlocked and the guarded development QA update installed in place over developerbuild11 with container backup/no reset. Test01 passed initial reference lifecycle/custom-link isolation, then an unrelated floating video window blocked the gallery control. Raw failed attempt is preserved; the same-source smoke awaits owner overlay removal. Full iOS runtime/spoken accessibility/provider/store-installed update acceptance remains open. |
-| Operator | **107/107** combined local operator/client tests pass. Independent reviewer closes all ten recovery/race probes, including stale tab/newer journal preservation, sign-out during crypto, exact replay and corrupt-state rejection. Service worker version `20261023-6`. | PGlite/WebCrypto/fake IndexedDB and minimal DOM tests do not qualify real deployed Chrome/Safari camera, persistent keys, service-worker updates or independent operated reviews. |
-| Private model | **23 local model/service-auth checks** pass. Authenticated HTTPS boundary, canonical model artifacts and evaluation tooling retained. | Representative consented calibration/held-out evaluation, threshold approval, faithful x86 kernel/container qualification and selected hosted runtime remain open. |
-| Push gateway | APNs HTTP/2, FCM HTTP v1, durable intent/receipt ledger, current-authority fences and disabled-by-default sending. **19 tests and six syntax checks pass.** | No actual provider credentials, hosted gateway or device delivery proof. |
-| Public/release material | Five public policy/support/deletion pages, store copy/reviewer instructions, source-based privacy/data worksheet and platform association files are prepared locally. Pinned CI/lockfiles prepared; production npm audit found zero vulnerabilities in its 57-package scope. | Pages/association files are unpublished. Final processors, retention, audiences, mailbox operations, declarations, reviewer access and store assets need qualification/approval. Prepared CI is not a GitHub run. |
+| Supabase | Owner-approved exact v7+v8 transaction applied. Hosted schema8,63 private forced-RLS tables/63 backend-only policies, zero accounts, no client schema access/backend membership. Three private buckets have expected MIME restrictions/20MiB limits and zero client Storage policies. Targeted function EXECUTE correction preserves its definition/event trigger; explicit Security Advisor rerun reports zero items. | Supported CLI migration-history reconciliation, hosted API/object operations, secrets, backup/restore and operating qualification. No Edge API, inference, gateway or scheduler is deployed. |
+| PostgreSQL | **209 distinct current cases covered:**175 unchanged cases from the retained full attempt plus the entire corrected34-case recovery file. TypeScript and actual Deno checks pass. Affected strict-role/concurrency v8 proof separately passes49/49 overlapping cases. | The full attempt had205 passes/four failures from a test allowlist omitting the new encrypted receipt table; only that allowlist changed. This is not one green209-case aggregate or hosted acceptance. |
+| Durable sessions | Backend, Android, iOS and operator persist refresh intent/key/independent secret before dispatch, reconcile one encrypted result, retain absolute expiry and cancel retired deliveries. | Real persistent secure storage, hosted lost transport and device lifecycle behavior. A device key alone never grants authentication. |
+| Android | Current count-filter product and Debug/test packaging pass. **156 unit tests/14 suites** ran fresh for the product change; later caller-only build reused the unchanged14 XMLs UP-TO-DATE. Current27 checks pass in normal/font2/landscape:21 nested person cases, exact names/captions/photo counts/IDs, coherent return and all three actual single visible Back actions. Direct28 three modes and keyboard15/22/45 pass on the explicitly retained prior test APK with identical product bytes. | Reference fixtures/AX geometry and callbacks do not establish physical touch, spoken TalkBack, connected/provider behavior, signed AAB or store-installed update acceptance. Connected Favorites geometry remains unqualified. |
+| iOS | **665 unchanged-scope focused Swift host checks** retained. Current count-filter source passes unsigned Release and Debug build-for-testing. Release readback confirms bundle/version1.1.0/build18/minimum17, correct Edge URL, privacy manifest/icons and no reference fixtures. New179-file development QA copy and nested dylibs are strict/deep verified; prior QA copy is preserved. Separate arm64 Simulator Debug app and unchanged V2 runner compile with all248 combined inputs unchanged. | New QA copy is not installed. Previous physical test01 passed initial reference lifecycle/custom-link isolation, then unrelated video overlay blocked navigation; owner removal remains pending. Simulator runtime is being qualified separately. No production Apple capabilities/profile/archive, full iOS runtime/spoken accessibility, provider or store-installed update acceptance. |
+| Browser reference | Seven person count/Back cases and10 layout cases/80 reachable44px targets pass. Empty headings on7/28/36 removed; affected axe checks report zero violations with contrast incompletes retained. Current served source matches; clean review tab is open. | Other45 unchanged renderers reuse prior source-bound evidence. No fresh full48 current-source aggregate or overall WCAG/native/connected acceptance. |
+| Operator | **107/107** local integrated tests plus ten independent recovery/race probes pass. | Real deployed Chrome/Safari camera, persistent keys, service-worker updates and independently operated reviews. |
+| Private inference | **23 local model/service-auth checks** pass; authenticated HTTPS boundary and canonical artifacts/evaluation tooling exist. | Selected host/operator, representative consented calibration/held-out evaluation, threshold approval and faithful x86/container qualification. |
+| Push | APNs HTTP/2, FCM HTTPv1 and durable intent/receipt reconciliation implemented; **19 tests/six syntax checks** pass with sending disabled. | Hosted gateway, real workload credentials and actual device delivery. |
+| Public/release material | Five local policy/support/deletion pages, association files, store copy/reviewer instructions and privacy/data worksheet prepared. Production npm audit has zero vulnerabilities in its57-package scope; CI is prepared/pinned. | Approved published URLs/notices, processors/retention/audiences, support operation, genuine candidate assets, declarations/reviewer access and actual remote CI. |
 
-Detailed receipts remain under `verification/supabase-release-20261023/`. Source-bound current aggregate pointers are `backend-integrated-reconciled-final.json`, `admin-integrated-final.json`, `android-final.json`, `android-unit-results-final.json`, `ios-release-final.json`, `ios-debug-final.json`, `ios-release-artifact-final.json`, `ios-refresh-delivery/final-manifest.json` and `push-provider/result.json`. Original failed/pre-fix runs and source preimages are preserved. [Independent operator review](release/operator-security-review.md) records its own snapshots and closure.
+## Current Android evidence and reuse
 
-## Hosted project and store readback
+Current product SHA256 is `a36d1a43228c8e8761b116fb5b0077fc1f30b32c395ab8c484d6b08d5cce0ef2`; test APK is `ac7e1f5b2565b468122de396357e5835199f0991a3cbc05ac75575ba3c2f2066`. Six default28/keyboard passes belong to the same product with test `99c5e20e…`; they are not relabelled as ac7 runs. The final caller guard refreshes the same source/window/package/name/48dp visible action immediately before one click; all three final dispatches are accepted and reach26 without fallback or retry. Earlier whole-row failures remain failures, with no proven cache/product cause inferred.
 
-- Chrome reaches **Lovelies / IKANISA**, Free/Nano, EU West (Ireland), project status label Healthy. Read-only SQL observed **zero application tables, zero public tables, zero buckets and no `lovelies_api` role**; managed base tables were auth27/realtime3/storage8/vault1. Overview displayed no repository, migrations or backups. These scoped observations do not establish a complete configuration audit or authorize deleting unknown data.
-- Health and Performance Advisors initially displayed zero items. The two pre-existing Security Advisor warnings concerned client EXECUTE on `public.rls_auto_enable()`. A fingerprint-guarded transaction removed only public/anon/authenticated execution; hosted readback confirms client denial, retained service-role access and unchanged definition/enabled event trigger. The explicit post-change linter rerun shows zero errors/warnings/suggestions. The main Supabase connector still denies this project.
-- The owner-approved exact **v7+v8 transaction succeeded** in the visible SQL editor; readback confirms schema 8, all 63 forced-RLS tables,63 backend-only policies, zero accounts and no client schema access. Bundle SHA-256 `4af45131d43ae3e5e832b8e6a151c683cc018eb08d43c1f4f34a4e6b42bc156a`. Specific role/grant action-time approval was received before execution; this supersedes the earlier v7-only staged package. Manual SQL execution still needs supported Supabase CLI migration-history reconciliation before future db push. Three private buckets are provisioned/read back with 20971520-byte limits, expected MIME types and zero client Storage policies. No API, model, gateway or scheduler was deployed. See `supabase-v7-v8-review.sql` and `supabase-inventory-final.json` in the receipt folder.
-- Google Play existing app4975869074578629128 has production1.0.5/code14; all ten uploaded versions observed maximum **16**. Candidate Android 2.0.0/code18 was unused. The privately copied donor upload key exactly matches the observed Play upload certificate; the app-signing certificate is separately recorded for website association. Existing app minimum API24 differs from candidate26 and needs compatibility qualification.
-- Apple existing app **6786056510**, IKANISA team **63STJ5N27W**, is Lovelies Event Photos, production1.0.5/build14. All eight observed uploads have maximum **14**; candidate1.1.0/build18 was unused. Current production/sandbox subscription callbacks still name the earlier API host. External Chrome sessions required reauthentication; the owner requested Codex panels, where Play already had correct IKANISA access and Apple is also authenticated. Google product/base-plan/notification-topic/receiver were then inspected read-only. Google product com.lovelies.memories.pro.monthly and active monthlypro/175-country plan are verified; Apple approved one-month product6799678587/group22297275 uses the same product ID and is available41/175 regions. The owner completed the Program License review; Business readback confirms the original blocker is cleared and Free Apps is Active with23 October2026 effective date. Paid Apps remains Active and now displays New Agreement Available; the new paid terms and billing qualification remain for owner review. Substantive trader/territory declarations and actual purchase/restore/provider delivery remain unqualified. Both provider callbacks still target the earlier API host.
+Reuse is limited to the other46 V5 normal/landscape routes excluding27/28, and the other47 V6 default font2 routes excluding28. Their original APK/source/fixture provenance is retained. V5 font2 remains47/48; V6 default font2 passes48/48. There is no single full latest-artifact three-mode matrix. All254 V5 screenshots were reviewed;40 latest guarded screenshots have a completed review with one retained rotation-skewed capture. A separate settled landscape27 recapture passes and preserves the original image.
 
-[Store identity and signing readback](store-update-identity.md) contains exact public certificates and preservation requirements. Highest versions must be refreshed immediately before upload. No store record, product, callback or declaration was modified.
+Root `device-checkpoint-person-gallery-final.json` binds13 raw reports, including retained failures, passing consumers/guarded rows and settled recapture. Build, signing, preservation and raw receipts remain under `verification/supabase-release-20261023/` and `verification/accessibility-navigation-20261023/`. Git preserves earlier checkpoint narratives.
 
-## Current device checkpoint
+## Hosted store and provider configuration
 
-The latest coordinated Pixel checkpoint is normal48/48, font2 48/48 and
-landscape45/48, with46/46 applicable Back checks and all257 screenshots reviewed.
-Fresh V3 keyboard routes15/22/45 pass. Three landscape failures retain their raw
-records while a nested-scroller test correction is prepared. The iPhone V2
-runner is built/signed/read back; the unchanged installed QA product's physical
-retry still awaits owner removal of the unrelated floating video overlay.
-`device-checkpoint-v3-v2-runner.json` binds this partial checkpoint.
+Both stores retain `com.lovelies.memories`. Play app4975869074578629128 is live1.0.5/code14; maximum observed upload16. Candidate2.0.0/code18 was unused on23 October. Matching donor upload-key continuity is privately verified; app-signing certificate is recorded separately. Existing API24 coverage versus candidate26 needs qualification.
 
-The V4 test-only Android batch subsequently compiled with unchanged frozen
-inputs and an identical product APK; its new test APK is handed to the UI owner
-for targeted/final landscape and actual visible-exit callbacks. Gradle reused
-all14 unchanged unit-result XMLs (156 tests); no fresh unit execution is claimed.
-`android-v4-test-only-review.json` binds the build and preserved V3 preimages.
-V4 physical acceptance remains pending.
+Apple app6786056510/team63STJ5N27W is live1.0.5/build14; maximum observed upload14. Candidate1.1.0/build18 was unused on23 October. Google monthly product/base plan is active in175 regions; Apple approved same-ID monthly product is available41/175. The owner completed the Program License review and the original blocker is cleared. Paid Apps is Active with New Agreement Available; owner review and billing qualification remain. Subscription callbacks on both platforms still target the earlier API host. Refresh versions/permissions immediately before upload. No store product/callback/declaration/upload/submission has been changed by this work.
 
-V4 targeted landscape20/39 then passed,14 retained Save photo5, and all three
-visible exits reached the expected pane. Normal/font2 actual visible-navigation
-matrices each completed48 cases with one incorrect Cancel7 assertion; unchanged
-product source sends named Cancel to5, while physical Back remains6. The final
-V4.2 test-only batch corrects that assertion and two nested coverage keys,
-compiles with unchanged frozen inputs, and retains the exact product APK hash.
-Its final corrected device runs are pending. Raw failures and the reconciled
-intermediate source-backup guard failure remain; no product change, hosted or
-store acceptance is inferred.
+The owner approved existing Firebase project `easymoai`; Lovelies registration is complete for Android `com.lovelies.memories`, app `1:423260854848:android:05e378657a0a819135dda5`, sender423260854848. Official client properties are prepared in ignored `.release-secrets/android/`; the example exposes only the three public identifiers. FCM HTTPv1 is enabled/legacy disabled. Shared Android key has25 API restrictions, no Generative Language API and application restrictions None; final shared-key review must preserve existing Cool. No billing/Analytics/IAM/restriction change, private sender key or notification occurred. Supabase remains the backend.
 
-V4.2 then passes Cancel7 at both text sizes but still fails Favorites14 landscape.
-The final V5 product delta fixes only the demonstrated reference14 viewport;
-MainActivity and test sources are unchanged. Root's combined build and fresh
-156-test/14-suite execution pass with no changed frozen inputs; new app SHA256
-is e47b514f18234c719f6f53132e79b396598fdeae59b2900d8f0c3f049b169301.
-New APK-bound device retakes are pending. The broader connected-host candidate
-remains preserved unbuilt; connected Favorites constraints/behavior are open.
+## Remaining work and inputs
 
-## Remaining release gates
+1. **SP01/SP03/SP10/B05:** Reconcile supported Supabase migration history, configure server-only secrets, qualify real API/Storage operations and backup/restore. Select the private inference/push host, operator and location; these inputs were requested and remain unresolved.
+2. **B01–B09/SP07/SP09/P01–P05:** Qualify model/runtime, representative evaluation, scheduler/gateway/store workload credentials and callbacks, independent operators, alarms/capacity/retention/incident/support/privacy/recovery operation. Prepare the exact runtime deployment for its separate action-time approval.
+3. **Q01–Q07/A01–A06/U01–U10:** Complete connected two-account Android/iOS camera, secure storage, Photos/Files, save/share, background, expiry/revocation/failure, spoken screen-reader, locale/window and release performance checks. Q02 still has concrete live count-copy defects; the spec explicitly requires English and Kinyarwanda, with resource extraction/translation and language/runtime review still open.
+4. **R02/R08/R10/T01–T08:** Supply approved published policy/support/deletion/link URLs, production Apple APNs/Associated Domains profile/capabilities and final signing inputs. Inspect exact signed AAB/archive,16KiB/SDK/device support, and qualify in-place updates over current store installations without uninstall/reset.
+5. **D01–D07/S01–S09:** Approve/publish notices/association files, operate support/deletion mailbox, capture genuine assets and finalize actual disclosure/rating/access/trader forms plus workable reviewer enrollment/sharing/purchase access.
+6. **R12/S01–S09:** Configure the intended canonical Git remote, run prepared CI, execute Play testing/TestFlight, resolve observed feedback, then present exact packages for separately gated upload/submission/staged rollout. Connected search found `ikanisa/Memories` but no Lovelies repository; none was inferred or created. Both live replacements and observation precede Memories retirement.
 
-1. The approved schema is applied/read back; reconcile Supabase CLI history, retain the clean post-change security-linter receipt, complete API/Auth/Storage/configuration inventory and establish backup/restore. Supply server-only secrets through the deployment secret store, not chat or Git.
-2. Select and qualify the private inference runtime/host and representative consented model evaluation. Private Storage buckets/configuration are provisioned/read back; qualify actual object operations and configure the authenticated scheduler, push gateway, store verification/callbacks, independent operators, alarms, retention, incident/support/privacy operation and recovery.
-3. Finish final corrected-source device evidence; run connected two-account Android/iOS journeys, actual camera/secure storage/Photos/Files/save/share/background/expiry/revocation/failure behavior, spoken screen-reader accessibility, localization/window coverage and release performance. Reference screens and host checks cannot substitute.
-4. Supply approved published policy/support/deletion/link URLs, final provider/store authentication and callback configuration, production Apple APNs/Associated Domains profiles and final signing inputs. Build and inspect exact signed AAB/archive, validate 16 KiB/SDK/device support and install over the current store versions without uninstall/reset.
-5. Approve/publish actual notices and association files, qualify the support/deletion mailbox, capture genuine candidate store assets, finalize both disclosure/rating/access/trader forms and workable reviewer enrollment/sharing/purchase access.
-6. Use the locally sealed canonical source/receipts and configure the owner's intended remote/CI; execute applicable Play testing/TestFlight, fix observed feedback, then present the exact package for gated deployment/upload/submission and staged rollout. Public availability and the observation window precede Memories job/service retirement.
-
-No completion percentage is assigned to the differently sized work packages. The owner's authorization to finish readiness remains active; missing external inputs, action-time grants and unqualified operating/device/store gates are explicit rather than represented as completed.
-
-## Source preservation
-
-The canonical source and a portable verification summary are sealed in local Git.
-`verification/supabase-release-20261023/git-source-seal.json` records the resulting
-commit/tree. No remote is configured or pushed and no GitHub CI run is claimed.
-Local `verification/`, generated `deliverables/`, private signing/credentials and
-build caches are excluded from source tracking and preserved on disk. Pattern
-scan hits were two literal PEM-header removal strings, not embedded key material;
-the bounded scan does not constitute a comprehensive secret/security audit.
-
-## Existing Firebase registration and remaining provider configuration
-
-The owner chose existing Firebase project `easymoai` and specifically approved registering Lovelies there. Android package `com.lovelies.memories` is registered/read back as app `1:423260854848:android:05e378657a0a819135dda5`, sender423260854848. The official client configuration is downloaded and prepared in ignored `.release-secrets/android/firebase-public-client.properties` for explicit candidate-build inputs; three public identifiers are recorded in the example. FCM HTTP v1 is enabled and legacy FCM disabled. The exact matching shared Android key has25 API restrictions and no Generative Language API; application restrictions remain None and require final shared-key review without breaking existing Cool. No restriction, billing, Analytics or IAM change, private sender key or notification occurred. The uncreated new-project draft was closed. Supabase remains authoritative.
-The private inference/push host/operator and intended Git remote are still
-requested inputs. Connected GitHub search found existing`ikanisa/Memories`,
-not a connected Lovelies repository; no donor remote/history was changed.
-
-The UI owner has now installed that exact V5 app in place without reset.
-Favorites14 passes fresh normal/font2/landscape, including fully observed48dp
-Save photo5 and actual visible Back to10 in every run, with preferences restored.
-Root read/hash-checked all three raw reports; `device-checkpoint-v5-favorites.json`
-binds the result. Full48 V5 matrices/visual review are underway; connected
-Favorites and broader hosted/device/store acceptance remain open.
-
-The full V5 normal-text reference matrix now passes48/48 with48 uncapped scroll
-audits,44 actual visible callbacks and two primary physical Back fallbacks;
-all asserted destinations and rotation restoration pass. Root hash-checked the
-raw report and17 Android/12 iOS sources plus12 compile/package receipts in
-`device-checkpoint-v5-final-normal.json`. Enlarged text, landscape and full
-visual review remain in progress; connected/spoken/provider/store gates stay open.
-
-V5 font2 completes47/48; only27 fails one unnamed visible action after deeper
-scroll. All44 visible callbacks/two primary physical fallbacks and rotation
-restoration pass. Root preserves the raw failure in
-`device-checkpoint-v5-final-font2-failure.json`; source diagnosis is ongoing,
-landscape continues on the immutable pair, and no new source/build is accepted.
-The UI review of all54 normal images/proof is complete with zero new blockers.
-Font2 remains a failed matrix; connected/spoken/provider/store gates remain open.
-
-The V5 landscape matrix also passes48/48 with48 uncapped schema4 scroll audits,
-44 actual visible callbacks and two primary physical Back fallbacks; every
-asserted destination and preference restoration passes. Root hash-checked raw
-report `5bf3801054aaaa99a6f4a5bbe20aedaa88e74b5b5dd1c380b445280aef729f3e`
-in immutable `device-checkpoint-v5-final-landscape.json`. Font2 remains47/48.
-Installed-framework/source evidence shows the person label already exists and
-is exposed through a merging child; a persistent missing product label is not
-established. Direct action-owned semantics and a James→28→Back27 callback probe
-are proposed for review; no new source/build is accepted by this checkpoint.
-
-The reviewed V6 localized person27 semantics/callback-probe batch compiles with
-unchanged frozen inputs and fresh156/14-suite unit success. All seven action
-names/role/selection and shared callbacks are explicit; +2/layout/default paths
-and the strict scroll helper are unchanged. The new app/test pair awaits fresh27
-three variants, full48font2 and keyboard15/22/45. The other47 normal/landscape
-routes may reuse qualified V5 evidence with explicit per-route provenance;
-this is not a full normal/landscape V6 run or all-mode aggregate. Root source
-closure review and all254 V5 visual-review manifests are preserved; the V5
-font2 failure remains. No iOS/backend rebuild or deployment occurred.
+Source and portable verification summary are sealed locally in Git; `git-source-seal.json` records commit/tree checkpoints. No remote/push/CI/publication is claimed. Ignored verification, generated deliverables, signing/credentials and build caches are preserved outside source tracking. The [90-ID register](release/backlog-disposition.md) is authoritative for individual remaining gates; no completion percentage is assigned.

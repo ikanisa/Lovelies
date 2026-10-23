@@ -138,11 +138,11 @@ private fun PersonToPhotos(state: PreviewState) {
         Avatar(state.selectedPerson,size = 121.dp,selected = true)
         Text(PeopleNames[state.selectedPerson],color = Color.White,fontSize = 23.sp,fontWeight = FontWeight.Medium,
             modifier = Modifier.padding(top = 7.dp))
-        Text("${PeopleCounts[state.selectedPerson]} matched photos",color = Color.White,fontSize = 17.sp,
+        Text("${PeopleCounts[state.selectedPerson]} matched ${if(PeopleCounts[state.selectedPerson]==1)"photo" else"photos"}",color = Color.White,fontSize = 17.sp,
             modifier = Modifier.padding(top = 4.dp,bottom = 13.dp))
         if(state.selectedPerson == 0 && state.referenceGrids.containsKey(28))SourcePhotoGrid(state,28,Modifier.weight(1f),
-            onPhotoClick = { index,asset -> state.openPhoto(index,27,asset) })
-        else PhotoGrid(state,Modifier.weight(1f),photos = listOf(0,1,3,5,15,6,16,12,8),onPhotoClick = { state.openPhoto(it,27) })
+            tilesOverride=state.referenceGrids[28]?.tiles?.take(PeopleCounts[state.selectedPerson]),onPhotoClick = { index,asset -> state.openPhoto(index,27,asset) })
+        else PhotoGrid(state,Modifier.weight(1f),photos = listOf(0,1,3,5,15,6,16,12,8).take(PeopleCounts[state.selectedPerson]),onPhotoClick = { state.openPhoto(it,27) })
     }
 }
 

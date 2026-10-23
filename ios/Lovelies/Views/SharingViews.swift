@@ -113,10 +113,10 @@ struct SharingViews: View {
             PageHeader(title: "")
             Avatar(asset: store.currentPerson.asset, size: 119).padding(.top, -20)
             Text(store.currentPerson.name).loveliesFont(size: 22, weight: .medium)
-            Text("\(store.currentPerson.matches) matched photos").loveliesFont(size: 17).foregroundStyle(LoveliesTheme.secondary)
+            Text("\(store.currentPerson.matches) matched \(store.currentPerson.matches == 1 ? "photo" : "photos")").loveliesFont(size: 17).foregroundStyle(LoveliesTheme.secondary)
             ScrollView {
                 if SourceReferenceCatalog.layout(28) != nil, store.currentPerson.id == 1 {
-                    SourcePhotoGrid(route: 28) { store.openPhoto($0) }.padding(.horizontal, 13).padding(.bottom, 12)
+                    SourcePhotoGrid(route: 28, filterIDs: Set((SourceReferenceCatalog.layout(28)?.tiles ?? []).prefix(store.currentPerson.matches).map(\.id))) { store.openPhoto($0) }.padding(.horizontal, 13).padding(.bottom, 12)
                 } else {
                     MasonryPhotos(photos: Array([1, 2, 4, 13, 16, 7, 11, 8].prefix(store.currentPerson.matches)).map { DemoPhoto.all[$0 - 1] }) { store.openPhoto($0) }
                         .padding(.horizontal, 13).padding(.bottom, 12)

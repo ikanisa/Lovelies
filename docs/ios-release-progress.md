@@ -1,4 +1,12 @@
-# iOS replacement implementation checkpoint — 23 October 2026
+# iOS replacement implementation checkpoint — 24 October 2026
+
+## Current source-bound checkpoint — 24 October
+
+Reference person galleries now filter the existing source-grid tiles to the configured match count and use singular copy at one. Current source SHA256 `73b50fb6f521e16759805b87a1de1156fe94a41cc652d09cbc3fe75cabbbf2fc` passes unsigned Release and Debug build-for-testing with unchanged245-file inputs.665 focused host checks retain their unchanged protocol/model scope; no new host-test execution is inferred.
+
+The new179-file development-signed count-filter QA copy is strict/deep verified and uninstalled; prior179-file signed QA is unchanged. APNs/Associated Domains remain excluded from QA and unqualified for production. Release preflight still blocks on approved link host, four published policy URLs and valid distribution signature. Previous physical test01 passed initial reference lifecycle/custom-link isolation, then unrelated video overlay blocked navigation; owner removal is pending.
+
+Separate arm64 generic iOS Simulator Debug app and unchanged c565 V2 runner compile successfully with248 combined inputs unchanged, in unique external paths. Existing Debug `--reference-preview` is enabled without source changes; root performed no signing/install/runtime/default-set/phone action. UI owner reported a healthy isolated internal simulator and is qualifying supported XCTest execution; this is distinct from physical iPhone proof. The [current execution status](release-implementation-status.md) and [portable proof](release/verification-summary.json) supersede historical pending build statements below. Current iOS runtime, connected count/localization, spoken VoiceOver, provider, distribution archive and store-installed update gates remain.
 
 Owner scope: Lovelies updates the existing Memories App Store listing. The owner
 confirmed there are no real Memories users, photos or subscriptions to migrate.

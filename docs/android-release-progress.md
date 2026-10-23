@@ -1,4 +1,12 @@
-# Android replacement readiness — 23 October 2026
+# Android replacement readiness — 24 October 2026
+
+## Current source-bound checkpoint — 24 October
+
+The latest product corrects reference person-gallery counts and singular copy. The fresh product build passes156 unit tests in14 suites; the final test-only visible-exit caller guard reuses those unchanged XMLs UP-TO-DATE. Product SHA256 `a36d1a43228c8e8761b116fb5b0077fc1f30b32c395ab8c484d6b08d5cce0ef2`; test SHA256 `ac7e1f5b2565b468122de396357e5835199f0991a3cbc05ac75575ba3c2f2066`.
+
+All three27 variants pass21 total person subcases: exact own names/selection, captions/raw photo counts/IDs, strict28 audit and coherent physical Back27. Final fresh same-source/window/package/name/48dp single visible Back reaches26 in all three, with no fallback/retry. The six default28/keyboard15/22/45 passes retain test99c5 provenance and identical a36 product; no ac7 execution is inferred for them. Separate settled landscape27 recapture passes; the earlier skewed frame and failed whole rows remain.
+
+Only other46 V5 normal/landscape routes and other47 V6 default font2 routes are reused with their original artifact/source/fixture provenance. No full current-artifact three-mode matrix, physical touch, spoken AT, connected/provider or store acceptance is claimed. `device-checkpoint-person-gallery-final.json` binds13 raw reports. The current [execution status](release-implementation-status.md) and [portable proof](release/verification-summary.json) supersede pending statements in the retained chronological notes below. Q02 connected count/localization work, connected Favorites geometry, signed AAB and store-installed upgrade qualification remain open.
 
 The intended store update uses `com.lovelies.memories`, version `2.0.0`, code
 `18`. The coordinator observed ten Play Console uploads with highest version code
