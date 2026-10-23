@@ -65,7 +65,7 @@ exposed at inspection. No client schema grants were added.
   upgrades without uninstall/reset, run two-account hosted journeys and physical
   camera/storage/media/accessibility/performance/provider acceptance, and complete
   Play testing/TestFlight and reviewer access. No actual store upload occurred.
-- The intended canonical Git remote and approved private inference/push host/operator
+- Both store sessions need reauthentication for final product/provider checks. The intended canonical Git remote and approved private inference/push host/operator
   have been requested from the owner. Source and historical evidence remain local;
   no new repository, paid host, provider send or public release was created.
 - Reconcile the two manually applied migration versions through supported Supabase
