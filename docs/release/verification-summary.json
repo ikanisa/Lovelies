@@ -153,7 +153,7 @@
           "bytes": 500669
         }
       ],
-      "physical_final_retests": "Historical pre-V5 product e7b11109: V3 normal48/48,font2 48/48,landscape45/48;46/46 physical Back;257 PNGs reviewed; V3 font2 keyboard15/22/45 pass. V4 targeted20/39 pass,14 fails Save photo5. V4.2 Cancel7 passes normal/font2;14landscape stillfails. V5 changed only the reference14 viewport and needs new APK-bound device retakes. No earlier matrix relabelled as V5 acceptance.",
+      "physical_final_retests": "Historical pre-V5 product e7b11109: V3 normal48/48,font2 48/48,landscape45/48;46/46 physical Back;257 PNGs reviewed; V3 font2 keyboard15/22/45 pass. V4 targeted20/39 pass,14 fails Save photo5. V4.2 Cancel7 passes normal/font2;14landscape stillfails. V5 changed only the reference14 viewport and needs new APK-bound device retakes. No earlier matrix relabelled as V5 acceptance. V5 Favorites14 now passes all3 fresh variants on exact e47b514f appAPK, including full Save photo5 geometry and actual visible Back. Full48 V5 variants/visual review remain in progress.",
       "signed_store_artifact": false,
       "test_only_v4_build": "passed with unchanged frozen inputs; exact V3 product app hash retained; schema4/visible-exit physical execution pending",
       "test_only_v4_2_build": "passed with unchanged final frozen inputs; two-line descendant coverage key and visible Cancel7 expected5; physical Back7 still6; byte-identical V3 product APK; final4.2 device execution pending",
@@ -163,7 +163,20 @@
       "unit_result_execution": "Fresh execution after actual one-file reference viewport product change; testDebugUnitTest executed, all14 XML mtimes follow build start",
       "reference_favorites_v5_compile": "passed; fresh156/14-suite unit execution; new appAPK e47b514f18234c719f6f53132e79b396598fdeae59b2900d8f0c3f049b169301; unchanged testAPK5201146deb3bf511cb0ed0df3c1fead601e0157b443b772040fdc5cdc675d610",
       "connected_favorites_viewport": "unchanged; broader candidate preserved unbuilt because dynamic fixed chrome needs separate connected qualification",
-      "physical_v4_2_targeted_receipt": "verification/supabase-release-20261023/device-checkpoint-v4-2-targeted.json"
+      "physical_v4_2_targeted_receipt": "verification/supabase-release-20261023/device-checkpoint-v4-2-targeted.json",
+      "physical_v5_targeted": {
+        "receipt": "verification/supabase-release-20261023/device-checkpoint-v5-favorites.json",
+        "favorites14_normal": "passed",
+        "favorites14_font2": "passed",
+        "favorites14_landscape": "passed",
+        "save_photo5_fully_observed_reachable48": true,
+        "actual_visible_back_to10": "passed all3",
+        "rotation_restored": true,
+        "installed_in_place": true,
+        "uninstall_or_clear": false,
+        "full48_matrices": "in_progress",
+        "connected_favorites_geometry": "unchanged and unqualified"
+      }
     },
     "ios": {
       "focused_host_checks_pass": 665,
@@ -275,7 +288,8 @@
     "verification/supabase-release-20261023/android-v5-favorites-review.json": "950f18e404c53ce3466857987e52b03418cf17ee2ad980f04cf078ebf79d7cf6",
     "verification/supabase-release-20261023/device-checkpoint-v4-2-targeted.json": "d375cc861d5791be2afcb88898fe87a53402c976151533830c339266c51d0477",
     "verification/accessibility-navigation-20261023/android-ui-v5-freeze.json": "cc87ad8278189811d7e4358d6a3ad84b5e32110b5e417239a625195c11ae7913",
-    "verification/accessibility-navigation-20261023/favorites-viewport-v5/freeze.json": "fc31866a61aad98cd268f78422d94d81635bcd69e3f974c3142b006090010b68"
+    "verification/accessibility-navigation-20261023/favorites-viewport-v5/freeze.json": "fc31866a61aad98cd268f78422d94d81635bcd69e3f974c3142b006090010b68",
+    "verification/supabase-release-20261023/device-checkpoint-v5-favorites.json": "bedb70f54a27901cc802bad0346218e4fb06fa75e932bc8032a46d5391632a5e"
   },
   "current_tested_source_inputs": {
     "admin/app.js": "f7f148fee1709fe762e3421c2b36dd3b32f271a9cd9d642c8d85705bc54fa4b9",

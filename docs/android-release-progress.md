@@ -270,3 +270,12 @@ then final48 variants/visible exits and visual review. V5 device outcomes are
 pending; prior e7b11109 app results remain tied to that original APK. The QA
 update must be installed in place without reset; store-installed upgrades,
 connected/hosted behavior, spoken accessibility and release acceptance stay open.
+
+The exact V5 APK is now installed in place with no reset, reusing the matching
+final test package. Fresh Favorites14 normal/font2/landscape all pass; Save photo5
+is fully observed with a48dp intersection, no unresolved/capped coverage, and
+actual visible Back returns to10 in all three runs. Rotation preferences are
+restored. Root independently checked the exact artifact/report hashes and raw
+geometry in `device-checkpoint-v5-favorites.json`. Full48 V5 variants, visible
+callbacks and visual review are in progress. These targeted reference passes do
+not qualify connected Favorites, spoken accessibility or store-installed updates.
