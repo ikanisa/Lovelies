@@ -4,5 +4,9 @@
 <dict>
 	<key>aps-environment</key>
 	<string>$(LOVELIES_APNS_ENVIRONMENT)</string>
+	<key>com.apple.developer.associated-domains</key>
+	<array>
+		<string>applinks:$(LOVELIES_LINK_HOST)</string>
+	</array>
 </dict>
 </plist>

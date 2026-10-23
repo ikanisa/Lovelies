@@ -73,9 +73,10 @@ private fun Profile(state: PreviewState) {
             BodyText("Here for the good photos\nand great company ✨",Modifier.padding(top = 4.dp),size = 14)
             Row(Modifier.fillMaxWidth().padding(vertical = 19.dp),horizontalArrangement = Arrangement.SpaceEvenly) {
                 listOf(Triple("248","Photos",13),Triple("36","Matches",11),Triple("12","People",39)).forEach { (number,title,destination) ->
-                    Column(Modifier.weight(1f).heightIn(min=48.dp).clickable(role = Role.Button) { state.navigate(destination) },horizontalAlignment = Alignment.CenterHorizontally) {
-                        Text(number,color = Color.White,fontSize = 19.sp,fontWeight = FontWeight.Medium)
-                        Text(title,color = Muted,fontSize = 13.sp,modifier = Modifier.padding(top = 4.dp))
+                    Column(Modifier.weight(1f).heightIn(min=48.dp).clickable(role = Role.Button) { state.navigate(destination) }
+                        .semantics { contentDescription = "$number $title" },horizontalAlignment = Alignment.CenterHorizontally) {
+                        Text(number,color = Color.White,fontSize = 19.sp,fontWeight = FontWeight.Medium,modifier = Modifier.clearAndSetSemantics { })
+                        Text(title,color = Muted,fontSize = 13.sp,modifier = Modifier.padding(top = 4.dp).clearAndSetSemantics { })
                     }
                 }
             }

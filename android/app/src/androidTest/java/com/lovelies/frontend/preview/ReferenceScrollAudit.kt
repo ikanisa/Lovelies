@@ -4,6 +4,7 @@ import android.app.Instrumentation
 import android.graphics.Bitmap
 import android.graphics.Rect
 import android.os.Build
+import android.os.SystemClock
 import android.view.accessibility.AccessibilityEvent
 import android.view.accessibility.AccessibilityNodeInfo
 import java.io.File
@@ -26,7 +27,8 @@ private class ReferenceScrollAudit(private val instrumentation: Instrumentation,
     // AX child indexes change when Compose omits offscreen semantics. Android's public equals
     // compares source-node ID and window ID; keep an independent identity copy for this run.
     private data class Identity(val key: String,val window: Int,val unique: String?,val anchor: AccessibilityNodeInfo)
-    private data class Move(val dispatched: Boolean)
+    private data class Move(val dispatched: Boolean,val attempted: Boolean=false)
+    private data class Probe(val state: Snapshot,val freshReachable: Boolean)
     private val failures=mutableListOf<String>()
     private val observations=linkedMapOf<String,Observation>()
     private val identities=mutableListOf<Identity>()
@@ -39,6 +41,11 @@ private class ReferenceScrollAudit(private val instrumentation: Instrumentation,
     private val probedTargets=mutableSetOf<String>()
     private val scrollPositions=mutableMapOf<String,Map<String,Int>>()
     private val scrollEvents=mutableListOf<Map<String,Any?>>()
+    private val refreshSamples=mutableListOf<Map<String,Any?>>()
+    private val directionChecks=mutableListOf<Map<String,Any?>>()
+    private val probeSamples=mutableListOf<Map<String,Any?>>()
+    private val startedAt=SystemClock.uptimeMillis()
+    private val maxFreshChecks=3
     private var moves=0
     private var snapshots=0
     private var capped=false
@@ -149,7 +156,9 @@ private class ReferenceScrollAudit(private val instrumentation: Instrumentation,
                             contained && (!widthOk || !heightOk) && !partial,partial,parents))
                     }
                 }
-                return name
+                // A nested action has its own audit/name. Do not append a Save/Favorite
+                // checkbox label to its photo action's fallback when that child is visible.
+                return if(node.isClickable || node.isSelected)"" else name
             }
             visit(root,emptyList(),emptyList(),emptyList())
             return Snapshot(targets,containers)
@@ -159,7 +168,7 @@ private class ReferenceScrollAudit(private val instrumentation: Instrumentation,
     private fun signature(state: Snapshot)=state.targets.map { "${it.key}:${it.bounds.wire()}:${it.viewport.wire()}" }.sorted().joinToString(";")+
         state.containers.map { "${it.key}:${it.bounds.wire()}:${it.actions.sorted()}" }.sorted().joinToString(";")
 
-    private fun snapshot(): Snapshot {
+    private fun snapshot(record: Boolean=true): Snapshot {
         var state=readSnapshot();var stable=false
         for(attempt in 0 until 3) {
             Thread.sleep(80);val next=readSnapshot()
@@ -168,7 +177,14 @@ private class ReferenceScrollAudit(private val instrumentation: Instrumentation,
         }
         if(!stable)failures.add("Accessibility geometry did not settle within 240ms")
         snapshots++
+        val settled=state.copy(settled=stable)
+        if(record)observe(settled)
+        return settled
+    }
+
+    private fun observe(state: Snapshot,blockedProofKeys: Set<String> = emptySet()) {
         state.targets.forEach { target ->
+            val stable=state.settled && target.key !in blockedProofKeys
             val observation=observations.getOrPut(target.key) { Observation(target.identity,target.name) }
             observation.samples++;observation.full=observation.full || (stable && target.full)
             observation.reachable48=observation.reachable48 || (stable && target.reachable48)
@@ -179,11 +195,10 @@ private class ReferenceScrollAudit(private val instrumentation: Instrumentation,
             val firstFullProof=target.full && observation.geometry.none { it["fully_bounded"]==true }
             if(stable && geometry !in observation.geometry && (observation.geometry.size<24 || firstReachableProof || firstFullProof))observation.geometry.add(geometry)
             observation.partial=observation.partial || target.partial
-            if(stable && target.interiorSmall && target.bounds.wire() !in observation.interiorSmall)observation.interiorSmall.add(target.bounds.wire())
+            if(state.settled && target.interiorSmall && target.bounds.wire() !in observation.interiorSmall)observation.interiorSmall.add(target.bounds.wire())
             if(stable && target.reachable48)expectedFooters.filter { matches(target.name,it) }.forEach(footerSeen::add)
             if(stable && target.full)expectedFooters.filter { matches(target.name,it) }.forEach(fullFooterSeen::add)
         }
-        return state.copy(settled=stable)
     }
 
     private fun nodeByIdentity(key: String): AccessibilityNodeInfo? {
@@ -203,14 +218,85 @@ private class ReferenceScrollAudit(private val instrumentation: Instrumentation,
         } finally { root.recycle() }
     }
 
-    private fun move(key: String,action: Int): Move {
+    /** Refresh only a temporary query copy; the retained identity anchor is never mutated. */
+    private fun freshNode(key: String,phase: String): AccessibilityNodeInfo? {
+        val began=SystemClock.uptimeMillis()
+        val sample=mutableMapOf<String,Any?>("identity" to key,"phase" to phase,"run_elapsed_ms" to (began-startedAt),
+            "refresh_succeeded" to false,"identity_matched" to false)
+        var node: AccessibilityNodeInfo?=null;var retained=false
+        try {
+            val expected=identities.firstOrNull { it.key==key } ?: return null
+            val current=nodeByIdentity(key) ?: return null
+            node=current
+            val before=Rect();current.getBoundsInScreen(before)
+            sample["bounds_before_px"]=before.wire();sample["actions_before"]=current.actionList.map { it.id }.sorted()
+            val refreshed=current.refresh()
+            sample["refresh_succeeded"]=refreshed
+            if(!refreshed)return null
+            val after=Rect();current.getBoundsInScreen(after)
+            val matched=sameNode(expected,current) && current.packageName?.toString()==instrumentation.targetContext.packageName
+            sample["identity_matched"]=matched;sample["window_id"]=current.windowId
+            sample["bounds_after_px"]=after.wire();sample["actions_after"]=current.actionList.map { it.id }.sorted()
+            sample["enabled"]=current.isEnabled;sample["visible"]=current.isVisibleToUser
+            if(!matched)return null
+            retained=true;return current
+        } finally {
+            sample["elapsed_ms"]=SystemClock.uptimeMillis()-began
+            refreshSamples.add(sample)
+            if(!retained)node?.recycle()
+        }
+    }
+
+    /** Two consecutive fresh, unchanged observations establish an absent direction action. */
+    private fun directionAbsentFresh(key: String,action: Int,phase: String): Boolean {
+        val began=SystemClock.uptimeMillis()
+        val sample=mutableMapOf<String,Any?>("identity" to key,"phase" to phase,"action" to action,
+            "run_elapsed_ms" to (began-startedAt),"confirmed_absent" to false,"checks" to 0)
+        var previous: String?=null
+        try {
+            for(attempt in 0 until maxFreshChecks) {
+                if(capped)return false
+                instrumentation.waitForIdleSync()
+                if(attempt>0)Thread.sleep(80)
+                sample["checks"]=attempt+1
+                val node=freshNode(key,"$phase:check-$attempt")
+                if(node==null) { previous=null;continue }
+                try {
+                    val bounds=Rect();node.getBoundsInScreen(bounds)
+                    val actions=node.actionList.map { it.id }.sorted()
+                    if(!node.isEnabled || !node.isVisibleToUser || bounds.isEmpty || action in actions) { previous=null;continue }
+                    val current="${node.windowId}:${bounds.wire()}:$actions"
+                    if(current==previous) { sample["confirmed_absent"]=true;return true }
+                    previous=current
+                } finally { node.recycle() }
+            }
+            return false
+        } finally {
+            sample["elapsed_ms"]=SystemClock.uptimeMillis()-began;directionChecks.add(sample)
+        }
+    }
+
+    private fun move(key: String,action: Int,phase: String): Move {
         check(action in setOf(AccessibilityNodeInfo.ACTION_SCROLL_FORWARD,AccessibilityNodeInfo.ACTION_SCROLL_BACKWARD,
             AccessibilityNodeInfo.AccessibilityAction.ACTION_SHOW_ON_SCREEN.id))
-        if(moves>=maxMoves) { capped=true;return Move(false) }
-        val node=nodeByIdentity(key) ?: return Move(false)
+        val began=SystemClock.uptimeMillis()
+        val telemetry=mutableMapOf<String,Any?>("container" to key,"phase" to phase,"action" to action,
+            "run_elapsed_ms" to (began-startedAt),"attempted" to false,"dispatched" to false,"source_matched" to false)
+        var queried: AccessibilityNodeInfo?=null
         try {
-            if(node.actionList.none { it.id==action })return Move(false)
+            if(moves>=maxMoves) { capped=true;telemetry["reason"]="move_cap";return Move(false) }
+            val node=freshNode(key,"$phase:before-action") ?: run { telemetry["reason"]="fresh_node_unavailable";return Move(false) }
+            queried=node
+            val advertised=node.actionList.any { it.id==action }
+            telemetry["action_advertised"]=advertised;telemetry["actions_before"]=node.actionList.map { it.id }.sorted()
+            if(!node.isEnabled || !node.isVisibleToUser) { telemetry["reason"]="node_not_enabled_visible";return Move(false) }
+            // Compose handles SHOW_ON_SCREEN without advertising it. Scroll directions
+            // still require the provider's current advertised action.
+            if(action!=AccessibilityNodeInfo.AccessibilityAction.ACTION_SHOW_ON_SCREEN.id && !advertised) {
+                telemetry["reason"]="scroll_action_absent";return Move(false)
+            }
             moves++
+            telemetry["attempted"]=true
             val dispatched=AtomicBoolean(false)
             val expected=identities.first { it.key==key }
             val event=try {
@@ -221,7 +307,8 @@ private class ReferenceScrollAudit(private val instrumentation: Instrumentation,
                         else candidate.source?.let { source -> try { sameNode(expected,source) } finally { source.recycle() } } ?: false
                     },900)
             } catch(_: java.util.concurrent.TimeoutException) { null }
-            val telemetry=mutableMapOf<String,Any?>("container" to key,"action" to action,"dispatched" to dispatched.get(),"source_matched" to false)
+            telemetry["dispatched"]=dispatched.get()
+            telemetry["event_received"]=event!=null
             event?.let {
                 val source=it.source
                 val matched=try { source!=null && sameNode(expected,source) } finally { source?.recycle() }
@@ -242,10 +329,48 @@ private class ReferenceScrollAudit(private val instrumentation: Instrumentation,
                 }
                 it.recycle()
             }
-            scrollEvents.add(telemetry)
             instrumentation.waitForIdleSync();Thread.sleep(100)
-            return Move(dispatched.get())
-        } finally { node.recycle() }
+            return Move(dispatched.get(),true)
+        } finally {
+            queried?.recycle()
+            telemetry["elapsed_ms"]=SystemClock.uptimeMillis()-began
+            scrollEvents.add(telemetry)
+        }
+    }
+
+    private fun showOnScreen(target: Target,phase: String): Probe {
+        val began=SystemClock.uptimeMillis()
+        val move=move(target.identity,AccessibilityNodeInfo.AccessibilityAction.ACTION_SHOW_ON_SCREEN.id,phase)
+        // Delay proof credit until the refreshed target agrees with this settled snapshot.
+        val state=snapshot(record=false)
+        val sample=mutableMapOf<String,Any?>("identity" to target.identity,"name" to target.name,"phase" to phase,
+            "attempted" to move.attempted,"accepted" to move.dispatched,"settled" to state.settled,
+            "fresh_result_reachable_48dp" to false,"bounds_before_px" to target.bounds.wire())
+        val current=state.targets.firstOrNull { it.key==target.key }
+        val fresh=freshNode(target.identity,"$phase:result")
+        var freshReachable=false
+        try {
+            current?.let { sample["snapshot_bounds_px"]=it.bounds.wire();sample["viewport_px"]=it.viewport.wire() }
+            if(fresh!=null) {
+                val bounds=Rect();fresh.getBoundsInScreen(bounds);sample["fresh_bounds_px"]=bounds.wire()
+                val visible=Rect(bounds)
+                if(current==null || !visible.intersect(current.viewport))visible.setEmpty()
+                sample["visible_intersection_px"]=visible.wire()
+                // Acceptance alone is not visibility evidence: require the same named target,
+                // fresh matching geometry and the unchanged minimum intersection criterion.
+                val own=listOfNotNull(fresh.text?.toString(),fresh.contentDescription?.toString()).filter { it.isNotBlank() }.distinct().joinToString(" · ")
+                sample["fresh_own_label"]=own
+                freshReachable=move.attempted && state.settled && current!=null && own==current.ownName &&
+                    bounds==current.bounds && fresh.isVisibleToUser && fresh.isEnabled &&
+                    visible.width()+1>=48*density && visible.height()+1>=48*density
+                sample["fresh_result_reachable_48dp"]=freshReachable
+            }
+        } finally {
+            fresh?.recycle();sample["elapsed_ms"]=SystemClock.uptimeMillis()-began;probeSamples.add(sample)
+        }
+        // Keep every other target's normal observations and all small-target failures.
+        observe(state,if(freshReachable)emptySet() else setOf(target.key))
+        return Probe(state,freshReachable)
     }
 
     private fun fingerprint(state: Snapshot,container: String)=state.targets.filter { container in it.parents }
@@ -254,23 +379,25 @@ private class ReferenceScrollAudit(private val instrumentation: Instrumentation,
     private fun probeSmallVisibleTargets(state: Snapshot,container: String): Snapshot {
         var result=state
         state.targets.filter { it.parents.lastOrNull()==container && observations[it.key]?.reachable48!=true }.forEach { target ->
-            if(probedTargets.add(target.key) && move(target.identity,AccessibilityNodeInfo.AccessibilityAction.ACTION_SHOW_ON_SCREEN.id).dispatched)result=snapshot()
+            val current=result.targets.firstOrNull { it.key==target.key && it.parents.lastOrNull()==container }
+            if(current!=null && observations[current.key]?.reachable48!=true && probedTargets.add(current.key))
+                result=showOnScreen(current,"sweep-probe:$container").state
         }
         return result
     }
 
-    private fun resetTop(key: String): Boolean {
+    private fun resetTop(key: String,phase: String): Boolean {
         var previous="";var repeated=0
         for(step in 0 until maxContainerMoves) {
             val state=snapshot();val container=state.containers.firstOrNull { it.key==key } ?: return false
-            if(AccessibilityNodeInfo.ACTION_SCROLL_BACKWARD !in container.actions)return true
+            if(directionAbsentFresh(key,AccessibilityNodeInfo.ACTION_SCROLL_BACKWARD,"$phase:at-start-$step"))return true
             val current=fingerprint(state,key)
             repeated=if(current==previous)repeated+1 else 0;previous=current
             if(repeated>=2)return false
-            val result=move(container.key,AccessibilityNodeInfo.ACTION_SCROLL_BACKWARD)
+            val result=move(container.key,AccessibilityNodeInfo.ACTION_SCROLL_BACKWARD,"$phase:backward-$step")
             if(!result.dispatched) {
-                val remaining=snapshot().containers.firstOrNull { it.key==key }
-                return !capped && remaining!=null && AccessibilityNodeInfo.ACTION_SCROLL_BACKWARD !in remaining.actions
+                snapshot()
+                return !capped && directionAbsentFresh(key,AccessibilityNodeInfo.ACTION_SCROLL_BACKWARD,"$phase:after-rejection-$step")
             }
         }
         capped=true;return false
@@ -286,7 +413,7 @@ private class ReferenceScrollAudit(private val instrumentation: Instrumentation,
 
     private fun sweep(key: String,depth: Int) {
         if(depth>maxDepth || moves>=maxMoves) { capped=true;return }
-        if(!resetTop(key)) { failures.add("Could not establish scroll start for $key");return }
+        if(!resetTop(key,"sweep-start:$depth")) { failures.add("Could not establish scroll start for $key");return }
         var previous="";var repeated=0;var terminal=false;var reason="move_limit"
         for(step in 0 until maxContainerMoves) {
             var state=probeSmallVisibleTargets(snapshot(),key);val container=state.containers.firstOrNull { it.key==key }
@@ -299,11 +426,11 @@ private class ReferenceScrollAudit(private val instrumentation: Instrumentation,
             state=snapshot()
             val currentContainer=state.containers.firstOrNull { it.key==key }
             if(currentContainer==null) { reason="container_disappeared";break }
-            if(AccessibilityNodeInfo.ACTION_SCROLL_FORWARD !in currentContainer.actions) { terminal=true;reason="no_forward_action";break }
+            if(directionAbsentFresh(key,AccessibilityNodeInfo.ACTION_SCROLL_FORWARD,"sweep-end:$depth:$step")) { terminal=true;reason="no_forward_action";break }
             val current=fingerprint(state,key)
             repeated=if(current==previous)repeated+1 else 0;previous=current
             if(repeated>=2) { reason="no_observable_progress";break }
-            val result=move(currentContainer.key,AccessibilityNodeInfo.ACTION_SCROLL_FORWARD)
+            val result=move(currentContainer.key,AccessibilityNodeInfo.ACTION_SCROLL_FORWARD,"sweep-forward:$depth:$step")
             if(!result.dispatched) {
                 // Inspect the actual last viewport, including its inner scroll regions, next iteration.
                 state=snapshot()
@@ -312,7 +439,7 @@ private class ReferenceScrollAudit(private val instrumentation: Instrumentation,
                     if(visited.add(visit))sweep(nested.key,depth+1)
                 }
                 val remaining=state.containers.firstOrNull { it.key==key }
-                terminal=!capped && remaining!=null && AccessibilityNodeInfo.ACTION_SCROLL_FORWARD !in remaining.actions
+                terminal=!capped && remaining!=null && directionAbsentFresh(key,AccessibilityNodeInfo.ACTION_SCROLL_FORWARD,"sweep-rejected:$depth:$step")
                 reason=if(terminal)"forward_rejected_at_terminal" else "forward_rejected_before_verified_end";break
             }
         }
@@ -320,7 +447,7 @@ private class ReferenceScrollAudit(private val instrumentation: Instrumentation,
         if(terminal)saveBottom()
         scans.add(mapOf("container" to key,"depth" to depth,"terminal" to terminal,"reason" to reason,
             "diagnostic_child_path" to snapshot().containers.firstOrNull { it.key==key }?.path))
-        if(!resetTop(key))failures.add("Could not restore scroll start for $key")
+        if(!resetTop(key,"sweep-restore:$depth"))failures.add("Could not restore scroll start for $key")
     }
 
     fun run(): Map<String,Any?> {
@@ -331,7 +458,7 @@ private class ReferenceScrollAudit(private val instrumentation: Instrumentation,
             // Safe direct reachability probe when a footer node is already exposed but partly clipped.
             expectedFooters.filter { it !in footerSeen }.forEach { expected ->
                 initial.targets.firstOrNull { matches(it.name,expected) }?.let { target ->
-                    move(target.identity,AccessibilityNodeInfo.AccessibilityAction.ACTION_SHOW_ON_SCREEN.id);initial=snapshot()
+                    initial=showOnScreen(target,"required-control-probe").state
                 }
             }
             initial.containers.filter { it.parents.isEmpty() }.forEach { container -> sweep(container.key,0) }
@@ -341,9 +468,11 @@ private class ReferenceScrollAudit(private val instrumentation: Instrumentation,
             // settled full target with the SAME name and one unchanged dimension. A stable small
             // target, changed label, unavailable node or unsuccessful recovery remains a failure.
             observations.filterValues { it.interiorSmall.isNotEmpty() }.toList().forEach { (key,observation) ->
-                move(observation.identity,AccessibilityNodeInfo.AccessibilityAction.ACTION_SHOW_ON_SCREEN.id)
-                val recovery=snapshot()
-                val recovered=if(recovery.settled)recovery.targets.firstOrNull { it.key==key && it.full } else null
+                val before=snapshot().targets.firstOrNull { it.key==key }
+                val probe=before?.let { showOnScreen(it,"interior-size-probe") }
+                val recovery=probe?.state
+                val recovered=if(probe?.freshReachable==true && recovery!=null && recovery.settled)
+                    recovery.targets.firstOrNull { it.key==key && it.full } else null
                 if(recovered!=null)observation.interiorSmall.filter { small ->
                     val width=small[2]-small[0];val height=small[3]-small[1]
                     (width==recovered.bounds.width() && height<recovered.bounds.height()) ||
@@ -353,7 +482,7 @@ private class ReferenceScrollAudit(private val instrumentation: Instrumentation,
             // SHOW_ON_SCREEN probes may move a parent. Restore visible nested containers before
             // their outer parents, using identities rather than changing child indexes.
             snapshot().containers.sortedByDescending { it.parents.size }.forEach {
-                if(!resetTop(it.key))failures.add("Could not restore scroll start after geometry probe for ${it.key}")
+                if(!resetTop(it.key,"post-probe-restore"))failures.add("Could not restore scroll start after geometry probe for ${it.key}")
             }
         } catch(problem: Throwable) { failures.add("${problem.javaClass.simpleName}: ${problem.message}") }
         finally { identities.forEach { it.anchor.recycle() } }
@@ -367,7 +496,7 @@ private class ReferenceScrollAudit(private val instrumentation: Instrumentation,
         if(unnamed.isNotEmpty())failures.add("${unnamed.size} visible enabled actions had no accessible name during scroll traversal")
         if(missingFooters.isNotEmpty())failures.add("Required controls never exposed a48dp AX-visible intersection: ${missingFooters.joinToString()}")
         if(capped)failures.add("Scroll traversal cap reached; coverage is incomplete")
-        return mapOf("audit_schema" to 2,"status" to if(failures.isEmpty())"passed" else "failed","failures" to failures.distinct(),
+        return mapOf("audit_schema" to 3,"status" to if(failures.isEmpty())"passed" else "failed","failures" to failures.distinct(),
             "target_metric" to "At least48dp in both dimensions of the AX bounding rectangle intersected with represented viewports; not a physical hit-test or proof of full text visibility.",
             "reference_only" to true,"actions_dispatched" to "scroll_and_show_on_screen_only","moves" to moves,"snapshots" to snapshots,
             "move_limit" to maxMoves,"container_move_limit" to maxContainerMoves,"capped" to capped,"containers" to scans,
@@ -379,6 +508,8 @@ private class ReferenceScrollAudit(private val instrumentation: Instrumentation,
             "unresolved_clipped_targets" to unresolved.keys.toList(),"interior_small_targets" to genuinelySmall.keys.toList(),
             "unstable_names" to unstableNames.map { (key,values) -> mapOf("identity" to key,"names" to values.map { it.name }.distinct()) },
             "scroll_event_samples" to scrollEvents,
+            "node_refresh_samples" to refreshSamples,"direction_absence_checks" to directionChecks,
+            "show_on_screen_probes" to probeSamples,"fresh_check_limit" to maxFreshChecks,
             "unnamed_visible_actions" to unnamed.values.toList(),
             "bottom_screenshots" to screenshots,"spoken_screen_reader_verified" to false)
     }

@@ -19,6 +19,7 @@ not a deployed application or store release.
 | Inspected uploaded maxima | Play 16 / Apple 14; refresh immediately before upload |
 | Play upload key | Existing matching key is held privately in `.release-secrets/android/`; certificate/highest-code build guards exist |
 | Subscription product | Both stores verified `com.lovelies.memories.pro.monthly`: Google active auto-renewing monthlypro/175 regions; Apple approved one-month product6799678587/group22297275, available41/175 regions |
+| Firebase client | Existing `easymoai`, app`1:423260854848:android:05e378657a0a819135dda5`, sender423260854848; registered/read back, client config prepared locally; private sender auth/device delivery remain |
 | Public mailbox | `info@ikanisa.com` observed in current Play listing; actual operation/delivery remains untested |
 | Current Apple callbacks | Earlier `https://lovelies.api.ikanisa.com/subscriptions/apple/notifications`; cutover must preserve and qualify callbacks |
 
@@ -61,7 +62,8 @@ exposed at inspection. No client schema grants were added.
   certificate/highest-code inputs. Apple needs production APNs/Associated Domains
   capabilities and a matching distribution profile. Current inspected profiles do
   not establish those production capabilities.
-- Apple currently blocks updates until its Account Holder reviews/accepts the updated Developer Program License Agreement. Its Developer account banner gives29 October2026 as the resource-access deadline. The final legal-review modal is open in Codex; no agreement was accepted by this agent. Paid Apps Agreement is Active; substantive territory/trader declarations and actual purchase/provider behavior remain unqualified.
+- The owner completed the Apple Program License review. The original blocking banner is absent and Free Apps is Active, effective23 October2026. Paid Apps remains Active with New Agreement Available; review those new paid terms before final billing qualification. No agreement was accepted by this agent; substantive territory/trader declarations and actual purchases/providers remain unqualified.
+- The owner approved `easymoai`; Lovelies is registered and its matching client config is prepared in ignored `.release-secrets/android/firebase-public-client.properties`. Load its four values explicitly as `ORG_GRADLE_PROJECT_<property-name>` environment variables for the reviewed candidate build; do not source an unvalidated shell file or print values. Gradle already consumes those project properties, and the source template records the three public identifiers. The shared key has25 API restrictions/no Generative Language API, with application restrictions None; review that baseline without breaking existing Cool. FCM HTTP v1 is enabled. Private sender authentication, actual device delivery and APNs remain unqualified. No private key, billing/Analytics/IAM/restriction change or notification was created/sent.
 - Produce and inspect exact signed candidates, qualify store-installed in-place
   upgrades without uninstall/reset, run two-account hosted journeys and physical
   camera/storage/media/accessibility/performance/provider acceptance, and complete
@@ -78,3 +80,5 @@ shown in submission evidence. This file requests configuration facts and secure
 setup, not a new authorization to repeat implementation work.
 
 [Android public input template](android-public.properties.example) records the verified product/API/signing/version values without loading them automatically or inventing missing policy/Firebase/link inputs. The observed Google topic is `projects/easymoai/topics/lovelies-google-play-rtdn`; its receiver/OIDC/IAM and delivery still require qualification.
+
+The existing Google project also lists `lovelies-play-billing-verifier@easymoai.iam.gserviceaccount.com` as Lovelies Play Billing Verifier. This is identity existence only; Play permissions, workload/private credential configuration and purchase/restore verification are not established by its name. Do not substitute the separate RTDN OIDC identity for purchase validation.

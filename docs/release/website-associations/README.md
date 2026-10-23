@@ -15,6 +15,15 @@ selected domain must match both release configurations exactly. The current
 public Lovelies site is `https://lovelies.ikanisa.com`; final association there
 has not been inspected or changed by this package.
 
+iOS `LOVELIES_LINK_HOST` in `ios/Configuration/Release.xcconfig` supplies both
+the runtime's trusted host and the source `applinks:` entitlement. The Release
+project configuration no longer shadows that input with an empty value. Leave
+it unconfigured until the exact host and association are approved/published;
+the artifact preflight rejects missing/malformed hosts and a signed entitlement
+that differs from the single configured host, including wildcard or alternate
+mode entries. Source wiring does not enable an Apple portal capability, obtain
+a provisioning profile or qualify hosted/CDN delivery.
+
 Current route contracts differ by platform: Android accepts
 `/requests/<UUID>` and `/notifications/<UUID>`; iOS accepts
 `/match/<UUID>`, `/support/<UUID>` and `/payment/<UUID>`. The Apple file preserves

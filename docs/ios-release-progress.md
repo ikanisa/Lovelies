@@ -193,7 +193,7 @@ real AppIcon and absent reference-photo/catalog fixtures. Receipts are
 A separate final-source Debug app and its two nested dylibs were development-
 signed and strict/deep verified for the exact paired iPhone12Pro. It remains a
 private QA-only copy (`qa-iphone-storage-final-signing.json`), omits APNs/Associated Domains
-and is not installed. The prior DDI mount was blocked by the locked device. No
+and was not installed at that checkpoint. The prior DDI mount was blocked by the locked device. No
 uninstall/reset or production signing/store/provider/update acceptance occurred.
 Current distribution profiles lack APNs and final policy URLs remain blank; the
 release preflight correctly rejects those missing inputs/signature.
@@ -203,3 +203,59 @@ eight uploads (maximum14) were observed. Codex sign-in is restored; approved mon
 63 forced-RLS tables and private buckets are applied/read back; actual API/private
 model/provider deployment and hosted/device qualification remain separate. See
 the [current release status](release-implementation-status.md).
+
+## Reference lifecycle and release-link checkpoint
+
+Root verified the UI owner's two-file freeze and rebuilt unsigned Release plus
+Debug build-for-testing; both passed with no changed inputs. Cold reference
+launch now skips connected service binding, refresh and deep-link routes. Entering
+reference review suspends purchase observation/push bindings and retires their
+asynchronous continuations; returning explicitly resumes connected services.
+The665 protocol/model host checks retain their unchanged source scope and are
+not new StoreKit/provider/runtime acceptance.
+
+Root also wired the configured `LOVELIES_LINK_HOST` into the Associated Domains
+entitlement and removed the Release project's redundant empty override. The
+preflight checks exact signed `applinks:` correspondence;13 synthetic
+artifact/entitlement cases passed with mocked codesign. The real unsigned
+artifact remains correctly blocked by a missing qualified host, four missing
+policy URLs and release signature. No portal capability/profile was changed.
+
+The separate latest QA copy is
+`verification/supabase-release-20261023/private/qa-iphone-reference-final/Lovelies.app`;
+its two nested dylibs and app are signed/strict-deep-verified, with full source
+and staged file hashes in `qa-iphone-reference-final-signing.json`. It excludes
+APNs/Associated Domains and is not a production signing or store-update proof.
+The exact phone is now unlocked. The UI owner read back existing developer-built
+1.0.5/build11 and backed up its six-file container before any install; this is
+not the production build14 required for store-installed update qualification.
+An existing wildcard development profile includes this phone and a matching
+local identity, so an ephemeral target-only XCTest runner can be built without
+new Apple profiles. Device/runner execution remains separately qualified.
+
+The standalone device runner subsequently compiled and signed successfully using
+offline Automatic signing/Apple Development and the existing wildcard profile.
+Root read back that exact profile, matching development certificate, target-device
+inclusion and strict/deep signature verification0. The first two pre-compile
+signing-setting failures are retained; no provisioning update was allowed.
+The first physical smoke remains unexecuted: a fresh guard still returned
+passcodeRequired=true, followed by CoreDevice4016/tunnel unavailable/DDI false.
+No QA app/runner install, launch, reset or data removal occurred; the owner has
+a reconnect/unlock request in the UI chat.
+
+The phone subsequently reconnected and the fresh lock check was false. The UI
+owner refreshed the six-file container backup and installed the guarded QA app
+in place, developer1.0.5/build11 to development1.1.0/build18, without uninstall
+or clearing data. Physical test01 passed reference launch/notice dismissal,
+background/reactivation and custom URL remaining on reference1, then failed
+finding the gallery search while choosing20. Raw exit65/log/xcresult are retained;
+locator versus app diagnosis remains in progress. This partial smoke is not a
+full pass, and the previous developer installation does not qualify an update
+over production store build14.
+
+The UI owner's target-only hierarchy/private XCTest recording classifies that
+lookup failure: an existing floating video window covers the Screen gallery
+control, leaving the app on reference1. No product or runner source change is
+required on that evidence. The owner has a request to remove the overlay; the
+same frozen smoke will be rerun. The failed attempt and private diagnostics are
+retained without exporting that unrelated content into public review sheets.

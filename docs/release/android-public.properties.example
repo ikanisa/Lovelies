@@ -13,8 +13,10 @@ loveliesPrivacyPolicyUrl=
 loveliesTermsUrl=
 loveliesDeletionUrl=
 loveliesLinkHost=
-loveliesFirebaseProjectId=
-loveliesFirebaseAppId=
+loveliesFirebaseProjectId=easymoai
+loveliesFirebaseAppId=1:423260854848:android:05e378657a0a819135dda5
+# Verified public client key is in the ignored .release-secrets/android/firebase-public-client.properties.
+# Load that file explicitly into ORG_GRADLE_PROJECT_* environment variables at candidate build time.
 loveliesFirebaseApiKey=
-loveliesFirebaseSenderId=
+loveliesFirebaseSenderId=423260854848
 # Upload keystore/passwords stay in .release-secrets/android/signing.properties.

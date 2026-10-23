@@ -133,7 +133,7 @@ through the prepared current-version instructions. Receipts are
 `apple-subscription-product-readback.txt` and `apple-current-prices-readback.txt`
 under `verification/supabase-release-20261023/`.
 
-## Current Apple agreement blocker
+## Initial Apple agreement blocker (cleared after owner review)
 
 Signed-in Business readback shows Paid Apps Agreement **Active** and Free Apps
 Agreement **Active (New Agreement Available)**. Apple's banner explicitly blocks
@@ -146,3 +146,14 @@ validate the substance of the existing non-trader/territory declarations. No
 banking/tax values or reviewer credentials were copied, no financial change was
 made, and no agreement was accepted. See `apple-agreements-status.json` and
 `apple-agreement-review.png` in the release receipt folder.
+
+## After the owner's agreement review
+
+The owner reported completion. Subsequent signed-in Business readback shows the
+original Program License blocking banner absent and Free Apps Agreement Active,
+effective23 October2026. Paid Apps remains Active for the current period and now
+shows New Agreement Available; Apple's banner offers new Paid Applications
+terms for owner review. This is a different agreement from the completed Program
+License step. No legal terms were accepted by this agent. Prior readback is
+preserved in `apple-agreements-status-before-owner-acceptance.json`; current
+status is in `apple-agreements-status.json`.

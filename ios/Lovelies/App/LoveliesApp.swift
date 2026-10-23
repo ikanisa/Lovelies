@@ -24,6 +24,7 @@ struct LoveliesRootView: View {
     @EnvironmentObject private var purchases: NativePurchases
     @Environment(\.scenePhase) private var scenePhase
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @State private var foregroundRefresh: Task<Void, Never>?
     var body: some View {
         ZStack {
             LoveliesTheme.canvas.ignoresSafeArea()
@@ -42,26 +43,63 @@ struct LoveliesRootView: View {
             }
         }
         .sheet(isPresented: $store.showGallery) { ScreenGalleryView() }
-        .task { live.attach(store); purchases.attach(live); NativePush.shared.attach(live); if !store.isReferenceMode, scenePhase == .active { live.connect() } }
-        .task(id: "\(live.session?.accountID ?? "none"):\(live.session?.authenticated == true)") { if live.session?.authenticated == true { await purchases.load(); await NativePush.shared.foreground() } else { purchases.retire() } }
+        .task {
+            live.attach(store)
+            guard !store.isReferenceMode else { return }
+            attachConnectedServices()
+            if scenePhase == .active { live.connect() }
+        }
+        .task(id: "\(store.isReferenceMode):\(live.session?.accountID ?? "none"):\(live.session?.authenticated == true)") {
+            guard !store.isReferenceMode else { return }
+            if live.session?.authenticated == true {
+                await purchases.load()
+                guard !Task.isCancelled, !store.isReferenceMode else { return }
+                await NativePush.shared.foreground()
+            } else { purchases.retire() }
+        }
         .onChange(of: store.screen) { _, _ in
             if !store.isReferenceMode { live.persistLibraryState() }
             if UIAccessibility.isVoiceOverRunning { UIAccessibility.post(notification: .screenChanged, argument: nil) }
         }
-        .onChange(of: live.busy) { _, busy in if !busy { NativePush.shared.routePending() } }
-        .onOpenURL { live.openLink($0) }
-        .onContinueUserActivity(NSUserActivityTypeBrowsingWeb) { activity in if let url = activity.webpageURL { live.openLink(url) } }
+        .onChange(of: live.busy) { _, busy in if !store.isReferenceMode, !busy { NativePush.shared.routePending() } }
+        .onOpenURL { if !store.isReferenceMode { live.openLink($0) } }
+        .onContinueUserActivity(NSUserActivityTypeBrowsingWeb) { activity in if !store.isReferenceMode, let url = activity.webpageURL { live.openLink(url) } }
         .sheet(item: $live.sharedFile, onDismiss: { live.retireSharedFile() }) { item in NativeSystemShare(url: item.url) { live.retireSharedFile() } }
         .onReceive(NotificationCenter.default.publisher(for: Notification.Name("LoveliesAccountRetired"))) { _ in purchases.retire() }
-        .onChange(of: scenePhase) { _, phase in if phase != .active { live.background(scheduleRetry: phase == .background) } else { live.foreground(); Task { await NativePush.shared.foreground(); try? await purchases.refreshEntitlement() } } }
+        .onChange(of: scenePhase) { _, phase in
+            foregroundRefresh?.cancel()
+            guard !store.isReferenceMode else { return }
+            if phase != .active { live.background(scheduleRetry: phase == .background) }
+            else { resumeConnectedApp() }
+        }
         .onChange(of: store.isReferenceMode) { _, reference in
-            if reference { live.background() }
-            else { live.foreground(); if !live.connected { live.connect() } }
+            foregroundRefresh?.cancel()
+            if reference {
+                purchases.suspend()
+                NativePush.shared.suspend()
+                live.background()
+            } else {
+                attachConnectedServices()
+                if scenePhase == .active { resumeConnectedApp() }
+            }
         }
         .alert("Lovelies reference review", isPresented: $store.showDemoNotice) {
             Button("Explore the screens", role: .cancel) {}
         } message: {
             Text("Reference review mode uses sample photos and people. Its actions are local fixtures and send no data. The connected app uses its real backend separately. Use Return to connected app in the screen gallery to leave reference review.")
+        }
+    }
+    private func attachConnectedServices() {
+        purchases.attach(live)
+        NativePush.shared.attach(live)
+    }
+    private func resumeConnectedApp() {
+        live.foreground()
+        foregroundRefresh = Task {
+            guard !Task.isCancelled, !store.isReferenceMode else { return }
+            await NativePush.shared.foreground()
+            guard !Task.isCancelled, !store.isReferenceMode else { return }
+            try? await purchases.refreshEntitlement()
         }
     }
     @ViewBuilder private var route: some View {

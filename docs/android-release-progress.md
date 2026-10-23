@@ -147,13 +147,13 @@ Supabase schema8/63 forced-RLS tables/private policies and three private buckets
 are applied/read back; the API/inference/providers remain undeployed. See the
 [current release status](release-implementation-status.md) for remaining gates.
 
-## Root final schema2/landscape repair checkpoint
+## Previous root schema2/landscape repair checkpoint
 
 The nine-file freeze `scroll-label-target-v2-final-freeze.json` was verified before
 root's sole combined build. **156 unit tests in14 suites passed**, with zero
 failures/errors/skips; Debug app and the custom accessibility-runner test APK
 both package successfully. `android-final-inputs.json` readback reports no changed
-inputs. Current APK SHA256 values are:
+inputs. That checkpoint's APK SHA256 values are:
 
 - App: `311b1e4b0846114b6a19014bf3ce09188fc705caa8271351be411bfe38fe61e9`.
 - Phone tests: `4f80d7c8a3b2610fd1b248add68884386291d77da3dd6bb4edff4982ce4e4570`.
@@ -165,3 +165,28 @@ APKs, test results, logs and proof preimage are preserved in
 normal/enlarged/landscape/scroll and keyboard retakes are in progress under the
 coordinated UI owner; earlier fixture passes are not relabelled as current-source
 acceptance. No signed AAB/store upload or installed-store upgrade is established.
+
+## Latest root schema3/Profile-label checkpoint
+
+Root verified `scroll-label-target-v3-final-freeze.json` and ran the sole combined
+build. **156 unit tests in14 suites passed**, zero failures/errors/skips; Debug
+app and instrumentation APK packaged with no changed source inputs. App SHA256
+is `e7b11109de7dac436d3cd51d8d55a577f03f1232af92063409b3952110c5c641`;
+test APK is `804efce8c69b2cbf1dc361b0b63d37f805787640271aaed2682edc7082c9776c`.
+This adds complete labels to the three Profile statistics and corrects observed
+audit restoration/provenance defects without lowering its target/name/coverage
+requirements. Immutable copies are hash-checked/installed with replacement on
+the Pixel by the UI owner; fresh schema3 matrices are running.
+
+Previous schema2 physical results remain preserved: normal48/48, font2 47/48
+(route43 restoration failure) and landscape41/48;203 font2/landscape PNGs were
+visually reviewed. Keyboard routes15/22/45 passed on that schema2 checkpoint.
+Those are not relabelled as schema3 passes. Root preserved its prior build/APKs
+in `before-android-v3-profile-label/`; raw device failures/preimages remain with
+the UI owner's receipts. No signed store package/provider/in-place update pass
+is established by fixture verification.
+
+The UI owner's fresh schema3 normal and font2 matrices now both pass48/48 on the
+immutable V3 APKs. The complete landscape matrix remains running; current
+keyboard/connected/spoken accessibility gates are not closed by those fixture
+passes. The prior schema2 failures remain unchanged in their original evidence.
