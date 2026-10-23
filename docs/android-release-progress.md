@@ -146,3 +146,22 @@ and observed maximum code. No signed AAB/store upload/in-place upgrade is accept
 Supabase schema8/63 forced-RLS tables/private policies and three private buckets
 are applied/read back; the API/inference/providers remain undeployed. See the
 [current release status](release-implementation-status.md) for remaining gates.
+
+## Root final schema2/landscape repair checkpoint
+
+The nine-file freeze `scroll-label-target-v2-final-freeze.json` was verified before
+root's sole combined build. **156 unit tests in14 suites passed**, with zero
+failures/errors/skips; Debug app and the custom accessibility-runner test APK
+both package successfully. `android-final-inputs.json` readback reports no changed
+inputs. Current APK SHA256 values are:
+
+- App: `311b1e4b0846114b6a19014bf3ce09188fc705caa8271351be411bfe38fe61e9`.
+- Phone tests: `4f80d7c8a3b2610fd1b248add68884386291d77da3dd6bb4edff4982ce4e4570`.
+
+This includes the final clipped-label/adaptive-name/profile-header/compact
+landscape-onboarding corrections and revised scroll audit. The previous passing
+APKs, test results, logs and proof preimage are preserved in
+`verification/supabase-release-20261023/before-final-landscape-repair/`. Fresh
+normal/enlarged/landscape/scroll and keyboard retakes are in progress under the
+coordinated UI owner; earlier fixture passes are not relabelled as current-source
+acceptance. No signed AAB/store upload or installed-store upgrade is established.

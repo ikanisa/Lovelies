@@ -15,7 +15,7 @@ customer data and do not authorize deleting data.
 | Live target/page size | API36; Play reports supports16KB | Qualify new signed AAB and actual16KB runtime independently |
 | Existing Apple identity | Lovelies Event Photos, app6786056510, bundle`com.lovelies.memories`, SKU`lovelies-ios-com-lovelies-memories`, IKANISA LTD | Console identity observed; local matching team63STJ5N27W/profile/certificate inspected separately |
 | Live Apple version | 1.0.5, build14, Ready for Distribution | All8 displayed uploads across1.0.5/1.0.0 inspected; highest14, candidate1.1.0/build18 not observed as used |
-| Existing product from source | `com.lovelies.memories.pro.monthly` | Verify both live product records, pricing, service credentials and notifications |
+| Subscription | Google Play verified `com.lovelies.memories.pro.monthly`, active monthly auto-renewing `monthlypro`,175 countries/regions; backwards compatible, one legacy price point | Apple product6799678587 is approved, one month, same product ID;41/175 regions available. Actual provider/purchase/restore remain unqualified; no store product changed |
 
 The live Play release notes describe old Featured Photos behavior. The new native
 product follows its current48-screen scope; revise store copy and disclosures to
@@ -75,6 +75,74 @@ Published Apple description and reviewer notes still claim on-device-only
 processing, no raw-selfie upload, phone/code reviewer access and Featured Photos.
 Replace those through the next reviewed version using the prepared listing,
 privacy and reviewer instructions. No existing reviewer credential was copied,
-used or placed in source. Live product/pricing/notification credentials still
-need current verification. The browser session expired after the readback;
-future console work requires a signed-in session again.
+used or placed in source. Both store sessions were restored in Codex. The approved existing Apple product and current regional pricing/availability were subsequently read back; actual provider credentials and purchase/restore/delivery remain unqualified.
+
+## Current Play product/provider readback in Codex
+
+The Codex in-app browser retained the correct IKANISA session after the external
+Chrome session required sign-in. Read-only inspection confirms one subscription,
+Lovelies Monthly Pro (`com.lovelies.memories.pro.monthly`), with active monthly
+auto-renewing base plan`monthlypro`,175 countries/regions, one legacy price point
+and backwards compatibility. Current grace is7days and automatic account hold
+53days; offer changes charge at the next billing date and resubscribe is allowed.
+Observed regional examples are US USD4.99, Austria EUR4.99 and Ireland EUR5.49;
+these are samples, not a universal price or recommendation. Native billing must
+continue using the store's localized eligible product/offer values.
+
+Subscription pause and real-time notifications are enabled. The existing topic is
+`projects/easymoai/topics/lovelies-google-play-rtdn`; notification content is
+subscriptions and voided purchases only. Topic/receiver/IAM/OIDC, provider service
+credentials and actual delivery still need qualification/cutover. No test
+notification, price/product edit, alternative billing or external offer setup was
+performed. Apple product readback is recorded below; provider and purchase/restore checks remain open.
+Receipts: `play-subscription-readback.txt`, `play-base-plan-readback.txt`,
+`play-monetization-readback.txt` and `play-product-final.json` in the release
+verification folder.
+
+Google Cloud readback also confirms active subscription
+`projects/easymoai/subscriptions/lovelies-google-play-rtdn-push`. It pushes to
+`https://lovelies.api.ikanisa.com/subscriptions/google/notifications`, with OIDC
+authentication enabled as`lovelies-rtdn-push@easymoai.iam.gserviceaccount.com` and
+the same old endpoint as audience. Payload unwrapping is disabled; retry is
+immediate, dead lettering disabled, acknowledgement deadline10seconds and
+retention7days without acknowledged messages. No subscription/IAM/configuration
+was changed and no message was pulled, acknowledged or sent. This is current
+configuration readback, not successful delivery. The Supabase cutover must
+explicitly reconcile endpoint and expected audience with one writer and qualify
+store-state refetch/idempotency; the current URL does not deliver to the new Edge
+API. See`google-rtdn-subscription-readback.txt` in the verification folder.
+
+## Current Apple product readback in Codex
+
+The signed-in correct Lovelies record confirms subscription group `22297275`,
+Lovelies Pro, and product `6799678587`, Lovelies Monthly Pro, both approved.
+Product ID `com.lovelies.memories.pro.monthly` and one-month duration match the
+current iOS and API configuration. Availability is **41 of175 regions**, compared
+with Google's175. Current regional price samples are Austria EUR5.99 and Canada
+CAD6.99; the expanded current-price table shows zero introductory offers. These
+are observed samples; native purchase presentation must use eligible localized
+StoreKit values. No price, region, product or reviewer note was edited.
+
+The group shows Billing Grace Period “Set Up” and streamlined purchasing On.
+Any intended grace-period or territory change requires release review; this
+readback does not qualify store billing/restore, agreements/trader declarations,
+provider credentials or callback delivery. Existing review notes still refer to
+build14, phone-code reviewer access and Featured behavior and must be replaced
+through the prepared current-version instructions. Receipts are
+`apple-product-final.json`, `apple-subscription-group-readback.txt`,
+`apple-subscription-product-readback.txt` and `apple-current-prices-readback.txt`
+under `verification/supabase-release-20261023/`.
+
+## Current Apple agreement blocker
+
+Signed-in Business readback shows Paid Apps Agreement **Active** and Free Apps
+Agreement **Active (New Agreement Available)**. Apple's banner explicitly blocks
+existing-app updates/new submissions until the Account Holder reviews and accepts
+the updated Apple Developer Program License Agreement. The Developer account
+page specifies29 October2026 to retain membership-resource access. The final
+review modal is staged in Codex for the owner; **no acceptance occurred**.
+Displayed required tax-form and DSA/DAC7 statuses are Active, which does not
+validate the substance of the existing non-trader/territory declarations. No
+banking/tax values or reviewer credentials were copied, no financial change was
+made, and no agreement was accepted. See `apple-agreements-status.json` and
+`apple-agreement-review.png` in the release receipt folder.

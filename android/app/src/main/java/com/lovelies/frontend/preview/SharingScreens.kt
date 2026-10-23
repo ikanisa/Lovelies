@@ -21,6 +21,7 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.liveRegion
@@ -61,8 +62,9 @@ private fun MatchSummary(state: PreviewState) {
             Text("People Found",color = Color.White,fontSize = 19.sp,modifier = Modifier.padding(top = 2.dp))
             Row(Modifier.fillMaxWidth().padding(top = 23.dp).horizontalScroll(rememberScrollState()),horizontalArrangement = Arrangement.Center) {
                 listOf(0,2,4,6,1).forEach { Avatar(it,size = 49.dp,selected = true,onClick = { state.openPerson(it) }) }
-                Box(Modifier.size(48.dp).clip(CircleShape).background(Panel).clickable(role = Role.Button) { state.navigate(39) },contentAlignment = Alignment.Center) {
-                    Text("+4",color = Color.White,fontSize = 14.sp,modifier=Modifier.semantics { contentDescription="More matched people" })
+                Box(Modifier.size(48.dp).clip(CircleShape).background(Panel).clickable(role = Role.Button) { state.navigate(39) }
+                    .semantics { contentDescription="More matched people" },contentAlignment = Alignment.Center) {
+                    Text("+4",color = Color.White,fontSize = 14.sp,modifier=Modifier.clearAndSetSemantics { })
                 }
             }
             BodyText("Great matches!\nYour photos found people\nin your memories.",Modifier.padding(top = 16.dp))
@@ -99,20 +101,19 @@ private fun PhotoToPeople(state: PreviewState) {
         Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(topStart = 26.dp,topEnd = 26.dp))
             .background(Ink).padding(horizontal = 13.dp,vertical = 6.dp)) {
             ScreenHeader("People in this photo",onBack = state::back,right = { Overflow(state) })
-            repeat(2) { row ->
-                Row(Modifier.fillMaxWidth().padding(bottom = 15.dp),horizontalArrangement = Arrangement.SpaceEvenly) {
-                    repeat(4) { column ->
-                        val index = row*4+column
-                        Column(Modifier.width(72.dp),horizontalAlignment = Alignment.CenterHorizontally) {
-                            if(index == 7)Box(Modifier.size(60.dp).clip(CircleShape).background(Panel)
-                                .clickable(role = Role.Button) { state.navigate(39) },contentAlignment = Alignment.Center) {
-                                Text("+2",color = Color.White,fontSize = 16.sp,modifier=Modifier.semantics { contentDescription="More matched people" })
-                            }
-                            else {
-                                Avatar(index,size = 60.dp,selected = index == 0,onClick = { state.openPerson(index) })
-                                Text(PeopleNames[index],color = Color.White,fontSize = 12.sp,modifier = Modifier.padding(top = 6.dp))
-                            }
-                        }
+            val labels=List(8) { index -> if(index==7)"+2" else PeopleNames[index] }
+            AdaptiveChoices(labels,Modifier.padding(bottom=15.dp),labelSize=12.sp,minimumItemWidth=72.dp,spacing=15.dp) { index,itemModifier ->
+                Column(itemModifier.then(if(index<7)Modifier.clickable(role=Role.Button) { state.openPerson(index) }
+                    .semantics { contentDescription=PeopleNames[index];selected=index==0 } else Modifier),
+                    horizontalAlignment=Alignment.CenterHorizontally) {
+                    if(index==7)Box(Modifier.size(60.dp).clip(CircleShape).background(Panel)
+                        .clickable(role=Role.Button) { state.navigate(39) }
+                        .semantics { contentDescription="More matched people" },contentAlignment=Alignment.Center) {
+                        Text("+2",color=Color.White,fontSize=16.sp,modifier=Modifier.clearAndSetSemantics { })
+                    } else {
+                        Avatar(index,size=60.dp,selected=index==0)
+                        Text(PeopleNames[index],color=Color.White,fontSize=12.sp,
+                            modifier=Modifier.padding(top=6.dp).clearAndSetSemantics { })
                     }
                 }
             }
@@ -284,20 +285,24 @@ private fun ShareHistory(state: PreviewState) {
         Column(Modifier.verticalScroll(rememberScrollState())) {
             listOf(0,4,6,1,2,3).forEachIndexed { position,index ->
                 if(position == 3)SectionTitle("Earlier",Modifier.padding(top = 6.dp))
-                Row(Modifier.fillMaxWidth().heightIn(min=95.dp).clickable(role = Role.Button) { state.openPerson(index) },verticalAlignment = Alignment.CenterVertically) {
+                val photoCount=if(position<3)state.selectedSharePhotos.size else 3
+                val time=listOf("Just now","2m ago","2m ago","1d ago","1d ago","2d ago")[position]
+                val status=if(position<3)"● Delivered" else if(position<5)"✓ Viewed" else "● Sent"
+                val statusLabel=status.removePrefix("● ").removePrefix("✓ ")
+                Row(Modifier.fillMaxWidth().heightIn(min=95.dp).clickable(role = Role.Button) { state.openPerson(index) }
+                    .semantics { contentDescription="${PeopleNames[index]}, $photoCount photos, $time, $statusLabel" },verticalAlignment = Alignment.CenterVertically) {
                     if(position < 3)Box(Modifier.width(78.dp).height(64.dp)) {
                         Asset(photoAsset(listOf(9,0,5)[position]),Modifier.width(43.dp).fillMaxHeight().clip(RoundedCornerShape(7.dp)))
                         Avatar(index,Modifier.align(Alignment.CenterEnd),size = 54.dp)
                     } else Avatar(index,size = 51.dp)
                     Spacer(Modifier.width(13.dp))
-                    Column(Modifier.weight(1f)) {
+                    Column(Modifier.weight(1f).clearAndSetSemantics { }) {
                         Text(PeopleNames[index],color = Color.White,fontSize = 15.sp,fontWeight = FontWeight.Medium)
-                        Text("${if(position < 3)state.selectedSharePhotos.size else 3} photos · ${listOf("Just now","2m ago","2m ago","1d ago","1d ago","2d ago")[position]}",
+                        Text("$photoCount photos · $time",
                             color = Muted,fontSize = 12.sp,modifier = Modifier.padding(top = 5.dp))
                     }
-                    val status = if(position < 3)"● Delivered" else if(position < 5)"✓ Viewed" else"● Sent"
                     Box(Modifier.clip(CircleShape).background(if(position < 3)Color(0xFF462731) else if(position < 5)Pink else Violet)
-                        .padding(horizontal = 10.dp,vertical = 7.dp)) {
+                        .padding(horizontal = 10.dp,vertical = 7.dp).clearAndSetSemantics { }) {
                         Text(status,color = if(position < 3)Pink else Ink,fontSize = 11.sp)
                     }
                 }

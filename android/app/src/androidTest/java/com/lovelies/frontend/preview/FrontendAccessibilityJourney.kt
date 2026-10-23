@@ -110,12 +110,14 @@ class FrontendAccessibilityJourney : Instrumentation() {
                         check(field!=null) { "No visible editable field for keyboard variant" }
                         check(field.performAction(AccessibilityNodeInfo.ACTION_CLICK)) { "Input could not receive focus" }
                         waitForIdleSync();sendStringSync("review");waitForIdleSync();Thread.sleep(220)
-                        val fieldBounds=Rect();field.refresh();field.getBoundsInScreen(fieldBounds);field.recycle()
+                        val fieldBounds=Rect();field.refresh();field.getBoundsInScreen(fieldBounds)
+                        val fieldVisible=field.isVisibleToUser && !fieldBounds.isEmpty;field.recycle()
                         val imeBounds=Rect()
                         uiAutomation.windows.firstOrNull { it.type==android.view.accessibility.AccessibilityWindowInfo.TYPE_INPUT_METHOD }?.getBoundsInScreen(imeBounds)
-                        keyboardEvidence=mapOf("visible" to !imeBounds.isEmpty,"field_bounds" to listOf(fieldBounds.left,fieldBounds.top,fieldBounds.right,fieldBounds.bottom),
+                        keyboardEvidence=mapOf("visible" to !imeBounds.isEmpty,"field_visible" to fieldVisible,"field_bounds" to listOf(fieldBounds.left,fieldBounds.top,fieldBounds.right,fieldBounds.bottom),
                             "ime_bounds" to listOf(imeBounds.left,imeBounds.top,imeBounds.right,imeBounds.bottom))
                         if(imeBounds.isEmpty)failures.add("Soft keyboard was not observed")
+                        else if(!fieldVisible)failures.add("Focused input is not visible above the keyboard")
                         else if(Rect.intersects(fieldBounds,imeBounds))failures.add("Focused input is covered by the keyboard")
                         uiAutomation.takeScreenshot()?.let { bitmap ->
                             File(output,"screen-${route.toString().padStart(2,'0')}-keyboard.png").outputStream().use { bitmap.compress(android.graphics.Bitmap.CompressFormat.PNG,100,it) };bitmap.recycle()

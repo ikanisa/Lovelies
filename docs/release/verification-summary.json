@@ -8,7 +8,14 @@
     "play_highest_observed_upload": 16,
     "apple_highest_observed_upload": 14,
     "legacy_real_customer_import_required": false,
-    "preserve_unknown_test_data_and_donor_history": true
+    "preserve_unknown_test_data_and_donor_history": true,
+    "google_subscription_product": "com.lovelies.memories.pro.monthly",
+    "google_base_plan": "monthlypro",
+    "google_product_console_readback": "verified_active; provider purchase/restore/delivery unqualified",
+    "apple_subscription_product": "com.lovelies.memories.pro.monthly",
+    "apple_product_console_readback": "verified_approved; one month; product6799678587/group22297275; available41/175 regions; provider purchase/restore/delivery unqualified",
+    "apple_subscription_available_regions": 41,
+    "apple_agreement_blocker": "Account Holder must review/accept updated Developer Program License Agreement; final review modal staged; not accepted"
   },
   "hosted_infrastructure": {
     "project": "ltqfplqevxztlswlzexn",
@@ -136,16 +143,16 @@
       "artifacts": [
         {
           "path": "android/app/build/outputs/apk/debug/app-debug.apk",
-          "sha256": "ae73df7b156d5bced87e1c2b7e5766437383c5d4fd1f1650c2d8c4d447717120",
-          "bytes": 14765339
+          "sha256": "311b1e4b0846114b6a19014bf3ce09188fc705caa8271351be411bfe38fe61e9",
+          "bytes": 14772279
         },
         {
           "path": "android/app/build/outputs/apk/androidTest/debug/app-debug-androidTest.apk",
-          "sha256": "203b64184ac1f20ffe25a8552d52965b563a2a8b0c07a9104b791bfb8b807b14",
-          "bytes": 480708
+          "sha256": "4f80d7c8a3b2610fd1b248add68884386291d77da3dd6bb4edff4982ce4e4570",
+          "bytes": 486549
         }
       ],
-      "physical_final_retests": "in_progress_in_coordinated_UI_chat",
+      "physical_final_retests": "in_progress_for_final_schema2_scroll_label_and_compact_landscape_repair; previous checkpoint and failures preserved",
       "signed_store_artifact": false
     },
     "ios": {
@@ -159,7 +166,7 @@
         "build": "18",
         "minimum_os": "17.0",
         "api_origin": "https://ltqfplqevxztlswlzexn.supabase.co/functions/v1/lovelies-api",
-        "binary_sha256": "8b0f143d3716b5c0fc35128968d8b156ed8909b0b59797ea5fde796c995613a2",
+        "binary_sha256": "da0993b30f7d9925c288a03ac73dcf663dd14eddb2665bb18b3ce796fd9a93b3",
         "reference_fixture_paths": [],
         "privacy_manifest": true,
         "icon_files": {
@@ -175,10 +182,13 @@
           "LoveliesTermsURL": "",
           "LoveliesSupportURL": "",
           "LoveliesAccountDeletionURL": ""
-        }
+        },
+        "storage_text_source_sha256": "8fc79685c8b0d3c03c6119cad4726d1723bc9631f020272b06d5ebeda06b0d89"
       },
       "qa_only_development_signing": "verified_not_installed",
-      "production_signature_or_device_store_acceptance": false
+      "production_signature_or_device_store_acceptance": false,
+      "storage_accessibility_source_compile": "passed; device/Dynamic Type runtime unqualified",
+      "qa_signing_receipt": "verification/supabase-release-20261023/qa-iphone-storage-final-signing.json"
     },
     "model_service": {
       "local_checks_pass": 23,
@@ -196,19 +206,23 @@
     "verification/supabase-release-20261023/backend-account-recovery-final.json": "22adf0a5d0ea6c08e7a9bc6e02d8beee209f1e9ffec10e524f1e9001b568798d",
     "verification/supabase-release-20261023/backend-refresh-delivery/result.json": "d03bec24127b766e60b8b15976ff2cf75a963e66224b6f2d8318fc22bc6d5571",
     "verification/supabase-release-20261023/admin-integrated-final.json": "694ea637e53a4ca99d860dd5c7e766bc6f07d5a6f518069963aea20ae916599f",
-    "verification/supabase-release-20261023/android-final.json": "d7a86ba78cdb6f86ebfa68f54c677af2d34d250b58da8d35a3164f459d263d55",
-    "verification/supabase-release-20261023/android-final-inputs.json": "e124379e16e042efa7f932bf62be405948223c8efebe4b3a1d6f0b0834c9a6aa",
+    "verification/supabase-release-20261023/android-final.json": "53502bca9d74dbc96658ab22bb138c867d5e27400ec453b2b94253a6b2accb5c",
+    "verification/supabase-release-20261023/android-final-inputs.json": "dde7ed5820a3d476e1285fb4d659b470a7f820b14f96673c2900636c7f279a01",
     "verification/supabase-release-20261023/android-unit-results-final.json": "52950744d7e0d4022654ac0a36afffbf27eee7d66396c3ef0361573e8f1c7bb1",
-    "verification/supabase-release-20261023/ios-release-final.json": "a43be49a3ee8a5e1df3a8cf4125f8204dbadb006dbfa208fefea643efdc98dd7",
-    "verification/supabase-release-20261023/ios-debug-final.json": "20feecf6f018abf6a23303072faceafdc352b6016f59f283a8d1e6f10c7ee5c3",
-    "verification/supabase-release-20261023/ios-final-inputs.json": "365fd3dda340f5311eb19d99b79afd57f20361a0428b38094f174f39e42e626f",
-    "verification/supabase-release-20261023/ios-release-artifact-final.json": "8d5f814e9da7c6440e5a68e38c3e5f97bc06338c3b50647fdfd34a5337eefa17",
+    "verification/supabase-release-20261023/ios-release-final.json": "770177cd2c438593e6d7d897726c33f031da0d93b18256ba865346ea8a3654bd",
+    "verification/supabase-release-20261023/ios-debug-final.json": "4c7c16a056d032ea8dcac5b017cc8813f3f5bc381d9760300430158646f363b0",
+    "verification/supabase-release-20261023/ios-final-inputs.json": "706c828f3524bb3d973d50ac2aece5746da1efc70dd619d7e590ea03111ef3b2",
+    "verification/supabase-release-20261023/ios-release-artifact-final.json": "efbeb230d2ad4ff354b517ae6cc803ac094d8d2d5fcb0ba50253013dc812d6d5",
     "verification/supabase-release-20261023/ios-refresh-delivery/final-manifest.json": "c8c052fd7c0e0539091e2fc377c38deccd825ef8c94ff0f9f40ee6de0494c2db",
     "verification/supabase-release-20261023/push-provider/result.json": "4b76b6bf5780250020f9c3b3893fdb9605491bee2b2a0dfa6f27aec31797b45a",
     "verification/supabase-release-20261023/supabase-v7-v8-review.json": "339be082199e43a54f394175fbd57c397703f7f9a3bd456adfcb6e9ba2394747",
     "verification/supabase-release-20261023/supabase-inventory-final.json": "b9febabfb8966be119d1ea8173bc9ec581a92444be6c6dd0cee1be4987c46022",
     "verification/supabase-release-20261023/supabase-storage-role-readback.json": "a708f87133cadc14b5b2f0e70a3c22c109aeb35fcd3569ff2d0e3f4853c371a4",
-    "verification/supabase-release-20261023/qa-iphone-final-signing.json": "0ec5f1dd75a02f5f2021eddde954f61e5c5a8193183cde1e898c3cc7d9fce1de"
+    "verification/supabase-release-20261023/qa-iphone-storage-final-signing.json": "450086afcaebeecbf5298c01a4b9cf2b836a0755a617a3ad82bb2c3433b9e06c",
+    "verification/supabase-release-20261023/play-product-final.json": "0412df65fbd8698d05bf6c3ae5ac0480ee8d06477f3352507e4b430beea1c083",
+    "verification/supabase-release-20261023/apple-product-final.json": "0fe87e44519913029ee7608a4efcaa236082784507c3534e5ce75ad266c15ff6",
+    "verification/supabase-release-20261023/apple-agreements-status.json": "04dcc62338e569f706bcf6f7991856f7cb5d194229345da141d662cc7311d26e",
+    "verification/supabase-release-20261023/public-store-inputs-check.json": "79f75456de15e4294b639030a095abc461e1137b0cc27c39505390b097b292fc"
   },
   "current_tested_source_inputs": {
     "admin/app.js": "f7f148fee1709fe762e3421c2b36dd3b32f271a9cd9d642c8d85705bc54fa4b9",
@@ -251,11 +265,11 @@
     "android/app/src/androidTest/java/com/lovelies/frontend/preview/CameraRecoveryJourney.kt": "0f34ad208152932111a222d9cad56a98ca245a108b1d6a45a6ea62dc0064a2f6",
     "android/app/src/androidTest/java/com/lovelies/frontend/preview/EnrollmentRecoveryJourney.kt": "bb9e9ec301c7df82b7b94a24660ae96f1616399f2804c3cea346e3a142e6ef3f",
     "android/app/src/androidTest/java/com/lovelies/frontend/preview/FaceLifecycleJourney.kt": "0cf1bc1de3e356833fd230f2c14dd94229931e6b3130cf803cd88bc0fedbbb8c",
-    "android/app/src/androidTest/java/com/lovelies/frontend/preview/FrontendAccessibilityJourney.kt": "0ec97574e44c5ed8f0121753213f716aa1e3906ce28bc574f18d8052c7005a87",
+    "android/app/src/androidTest/java/com/lovelies/frontend/preview/FrontendAccessibilityJourney.kt": "9a72556307a40b6acc84d9269c33a6dba20125e88358c1fac39231310eb41c3f",
     "android/app/src/androidTest/java/com/lovelies/frontend/preview/GuestDeletionJourney.kt": "6259e3651d59ad4bf23566001004da6b47fabed5cd8319c6e4a7f0a1a1018951",
     "android/app/src/androidTest/java/com/lovelies/frontend/preview/NativeCloudflareJourney.kt": "cb683e7ff370c553b851271599aa80380f26196c246f41b749feada7c60eeb55",
     "android/app/src/androidTest/java/com/lovelies/frontend/preview/PhotoUploadRecoveryJourney.kt": "f8941926d9c6acbbc91b867df6aac27d1d405b2cff2985f6e40e06fa30b17eef",
-    "android/app/src/androidTest/java/com/lovelies/frontend/preview/ReferenceScrollAudit.kt": "a06e70832189da0b7ede9a80af059ec4abaa0f015daeba92838354fee9e21541",
+    "android/app/src/androidTest/java/com/lovelies/frontend/preview/ReferenceScrollAudit.kt": "31cb49ba72a7f988e93dab7e30ce47a68dd173ca38c81b91b847860eb2d90e02",
     "android/app/src/debug/AndroidManifest.xml": "80157d72973351585167c394517096d99e29d259140b8dd51fd094cf9562e193",
     "android/app/src/debug/assets/catalog.json": "3e013f4b873275901fc020c5037c667a5e29ebc24d2dba3ca86a0b368313f10b",
     "android/app/src/debug/assets/home-grid.json": "905fc61e393309ea7100bb58f1c063b04949ae8fa7aa14b9bc640846a62ae5bc",
@@ -423,7 +437,7 @@
     "android/app/src/main/assets/upload-hero.png": "7363aa7d889d490759740810678515319029b2b44d00ee48ce2c0d37e6e2238d",
     "android/app/src/main/assets/wordmark.png": "0b85eb48e8609cba285b78cc1f586da6991a0af9def20c1395b6b6fb19a5a105",
     "android/app/src/main/java/com/lovelies/frontend/preview/AccountRecovery.kt": "3661000de5b533d4f98074ee67143e568cc45ac2050e7998e9f46dbc7e64ec03",
-    "android/app/src/main/java/com/lovelies/frontend/preview/AccountScreens.kt": "9913a651ca3dbe78fa770de664c22c31562ed37394710ef3d908c0b94e3dcf13",
+    "android/app/src/main/java/com/lovelies/frontend/preview/AccountScreens.kt": "3a88e96fb99884cf525a76aa51d7e810b2786c0920e39c6cb5bef118c4291df2",
     "android/app/src/main/java/com/lovelies/frontend/preview/AppLinks.kt": "c42e75675ff65814b8d67ee4afeda6ee7a3d3ccc5aeacf4929fd29816b3c0d48",
     "android/app/src/main/java/com/lovelies/frontend/preview/BackgroundTransfers.kt": "88071a3b7eed17221bc63570a370e44f44598d677a1939b9392549a25e2b9d1d",
     "android/app/src/main/java/com/lovelies/frontend/preview/CameraRecovery.kt": "836cd20bea89308854061f927b8d7fa497f792927aad3b9fb85053bb8b1dfa17",
@@ -433,15 +447,15 @@
     "android/app/src/main/java/com/lovelies/frontend/preview/DeviceIdentity.kt": "0d28e143c015c643db29bd780ca26d5ace3242d6f01222acbd91dabdc8d393af",
     "android/app/src/main/java/com/lovelies/frontend/preview/EnrollmentJournal.kt": "5e4754849d2fa24c201533492b0713648ad37143234fb3841e374a20643d75cc",
     "android/app/src/main/java/com/lovelies/frontend/preview/FaceLifecycle.kt": "4ce245f5616c67eec1f345e50320d10cf2f4f5702ec789c848e44e577ead21e1",
-    "android/app/src/main/java/com/lovelies/frontend/preview/GalleryScreens.kt": "f289f31fef35150a505807d7033b834daac25ab1f27401e614218823b8d0cc77",
+    "android/app/src/main/java/com/lovelies/frontend/preview/GalleryScreens.kt": "d01409dacaaa596e9fd4c608025b503a2527679e45dcbbc5c6b1dda450390bdd",
     "android/app/src/main/java/com/lovelies/frontend/preview/GuestDeletion.kt": "36bb65327fc7651ce1d9eaae4dbe8e73929e9623ace0ac63b15db64134fd61cf",
     "android/app/src/main/java/com/lovelies/frontend/preview/LibraryState.kt": "08575ab553cb0b959f41401eb8a7c488284a5985215e2a7b7ff6969465a15416",
     "android/app/src/main/java/com/lovelies/frontend/preview/LiveController.kt": "cc5402ff3bb944e236aaf860184b6581c54ceaf1e3de16836ecbb70d98a170e7",
     "android/app/src/main/java/com/lovelies/frontend/preview/LiveScreens.kt": "610dfe947a5959973370649c24c62bacecfad51f81c440a860dde8fbcffe76af",
-    "android/app/src/main/java/com/lovelies/frontend/preview/MainActivity.kt": "93bb7060203e7582fce372ac1676119936ce3fc749f697a3f0fe1e765dcf2268",
+    "android/app/src/main/java/com/lovelies/frontend/preview/MainActivity.kt": "84bd1f84327f71baf5adf6b7537ad9127838b4611d80609c25321e6808a106ce",
     "android/app/src/main/java/com/lovelies/frontend/preview/NativeCamera.kt": "70ae19de33c639611512cd2ec39dac1b195ac4a5ec70344ee1273f1bf17bf17b",
     "android/app/src/main/java/com/lovelies/frontend/preview/NativeProtocol.kt": "e91a10c977d7fbd6570f6fcd15a25bff63bb716ed89ab401f534e33709165a1b",
-    "android/app/src/main/java/com/lovelies/frontend/preview/OnboardingScreens.kt": "ce18f4a1dbbe4b980ab48f7d2bd9293c98ab33e1ae21991f712a3979716d2f9e",
+    "android/app/src/main/java/com/lovelies/frontend/preview/OnboardingScreens.kt": "2f503daea99552517a13aab144cf73d99a8ae53ca4c0bf1ced6540fbd16ef403",
     "android/app/src/main/java/com/lovelies/frontend/preview/OriginalMedia.kt": "d3a7fb438b09fe9d840b2322dd8d133deefd97b01356dba15a2348300458d697",
     "android/app/src/main/java/com/lovelies/frontend/preview/PhotoUploadJournal.kt": "4b42994b9ed0b7f0e3afc8fed6fea6eef3e81ea1915e873523747cc108bff15b",
     "android/app/src/main/java/com/lovelies/frontend/preview/PlayPurchases.kt": "ec1e3fc09474a9cd761c76cd9ecdf00fba03bd84ebc4d76f19f9578e5457eaac",
@@ -449,9 +463,9 @@
     "android/app/src/main/java/com/lovelies/frontend/preview/PushMessaging.kt": "faedc7398d00e26b72f2afc44a457570f70bab25de954aa361df0bfa5d8dfdf9",
     "android/app/src/main/java/com/lovelies/frontend/preview/RefreshDelivery.kt": "236f3dd706736b65be0e5739af938ac2348d49d4a3fff76f0e70f0427f0fc287",
     "android/app/src/main/java/com/lovelies/frontend/preview/SecureSession.kt": "f3e7c000b3dc48d42affcc2d6b45424c75cbf3f6a6af26d2b48b1cdc89608c10",
-    "android/app/src/main/java/com/lovelies/frontend/preview/SharingScreens.kt": "fa0718be2648d6731e21c37bf3e447269c598aabedf0579f047b62ce1210a92d",
+    "android/app/src/main/java/com/lovelies/frontend/preview/SharingScreens.kt": "92c2aa4f3570b4b27c30443db4f8a24f893b5b46b90827f28318ea9ab8f16c7c",
     "android/app/src/main/java/com/lovelies/frontend/preview/SourcePhotoGrids.kt": "97357ebe1102e296de144c017990a0c375fd7949d60b7897c044a10b53c5eb41",
-    "android/app/src/main/java/com/lovelies/frontend/preview/UiPresentation.kt": "7be98fdcabc935d32bd367ce9a399ca3f0c1ddd7f28ddf89413d0dc19fdcacde",
+    "android/app/src/main/java/com/lovelies/frontend/preview/UiPresentation.kt": "4981a54b51d2f04a6f8e2c6974fe9ae02983a0788f4ea7d130674b109c7ad9ca",
     "android/app/src/main/java/com/lovelies/frontend/preview/UploadScreens.kt": "397185f230792ab5e594e47962c1879758e5fd97b8569cc3dba31c88c039f97b",
     "android/app/src/main/res/drawable/ic_launcher_foreground.xml": "87d72c4eccb67013eb3077beff8fd8216d1e5344ac5ccde870d423d93c088b6d",
     "android/app/src/main/res/drawable/ic_lovelies.png": "f8970a77cb78738d4beac5e46c24aa5caf4e0cb63a44f62f097b8ee7aa3f5d13",
@@ -695,7 +709,7 @@
     "ios/Lovelies/Views/Components.swift": "33619878374f983622edd037c1d2e792a905fa3317e0532af805fbfcf09ffe57",
     "ios/Lovelies/Views/GalleryViews.swift": "720f8cda377b217fe41bbe51e653f25f9beec0a4ad2a4bba6e1b4cfbe2e131bb",
     "ios/Lovelies/Views/OnboardingViews.swift": "2106a223936f93ba6ffc646e7cef5cc401bb72240e39899bb5bab853549ed82d",
-    "ios/Lovelies/Views/SettingsViews.swift": "cd61c8f608400dffba1827b03b342ccccf59b7645f9c6c29c3f8f7e9e3342d3f",
+    "ios/Lovelies/Views/SettingsViews.swift": "8fc79685c8b0d3c03c6119cad4726d1723bc9631f020272b06d5ebeda06b0d89",
     "ios/Lovelies/Views/SharingViews.swift": "72ef16e1f61103a903267b349ef5cda19ac4c2b56bef3cf45646b016a8d61ba3",
     "ios/Lovelies/Views/UploadViews.swift": "bf236b7318f0a038dbfa9f8336eeecf9e0e23e2aee440db9ab78e43703f2fc5f",
     "ios/README.md": "364916f2774671a4d611433648d2bf23accb15fe68d9efe4ce776f696d86da5e",

@@ -16,16 +16,17 @@ internal fun runReferenceScrollAudit(instrumentation: Instrumentation,output: Fi
 private class ReferenceScrollAudit(private val instrumentation: Instrumentation,private val output: File,
     private val route: Int,private val density: Float) {
     private data class Container(val key: String,val path: List<Int>,val parents: List<String>,val bounds: Rect,val actions: Set<Int>)
-    private data class Target(val key: String,val identity: String,val name: String,val path: List<Int>,val bounds: Rect,val viewport: Rect,
-        val full: Boolean,val interiorSmall: Boolean,val partial: Boolean,val parents: List<String>)
+    private data class Target(val key: String,val identity: String,val name: String,val ownName: String,val path: List<Int>,val bounds: Rect,val viewport: Rect,
+        val full: Boolean,val reachable48: Boolean,val visibleBounds: Rect,val interiorSmall: Boolean,val partial: Boolean,val parents: List<String>)
     private data class Snapshot(val targets: List<Target>,val containers: List<Container>,val settled: Boolean=false)
-    private data class Observation(val identity: String,val name: String,var full: Boolean=false,var partial: Boolean=false,
+    private data class Observation(val identity: String,val name: String,var full: Boolean=false,var reachable48: Boolean=false,var partial: Boolean=false,
         val interiorSmall: MutableList<List<Int>> = mutableListOf(),var samples: Int=0,
-        val recoveredFragments: MutableList<List<Int>> = mutableListOf())
+        val recoveredFragments: MutableList<List<Int>> = mutableListOf(),val ownNames: MutableSet<String> = linkedSetOf(),
+        val geometry: MutableList<Map<String,Any?>> = mutableListOf())
     // AX child indexes change when Compose omits offscreen semantics. Android's public equals
     // compares source-node ID and window ID; keep an independent identity copy for this run.
     private data class Identity(val key: String,val window: Int,val unique: String?,val anchor: AccessibilityNodeInfo)
-    private data class Move(val dispatched: Boolean,val terminalEvent: Boolean)
+    private data class Move(val dispatched: Boolean)
     private val failures=mutableListOf<String>()
     private val observations=linkedMapOf<String,Observation>()
     private val identities=mutableListOf<Identity>()
@@ -34,6 +35,10 @@ private class ReferenceScrollAudit(private val instrumentation: Instrumentation,
     private val screenshots=mutableListOf<String>()
     private val visited=mutableSetOf<String>()
     private val footerSeen=linkedSetOf<String>()
+    private val fullFooterSeen=linkedSetOf<String>()
+    private val probedTargets=mutableSetOf<String>()
+    private val scrollPositions=mutableMapOf<String,Map<String,Int>>()
+    private val scrollEvents=mutableListOf<Map<String,Any?>>()
     private var moves=0
     private var snapshots=0
     private var capped=false
@@ -104,7 +109,7 @@ private class ReferenceScrollAudit(private val instrumentation: Instrumentation,
                 val bounds=Rect();node.getBoundsInScreen(bounds)
                 val currentViewport=viewport(window,edges)
                 val reachable=node.isVisibleToUser && !bounds.isEmpty && Rect.intersects(bounds,currentViewport)
-                val key=if(node.isScrollable || node.isClickable)identity(node) else ""
+                val key=if(node.isScrollable || node.isClickable || node.isSelected)identity(node) else ""
                 val ownContainer=node.isScrollable && reachable
                 val nextParents=if(ownContainer)parents+key else parents
                 // Non-scroll semantics parents can also report a clipping boundary (for example
@@ -117,12 +122,20 @@ private class ReferenceScrollAudit(private val instrumentation: Instrumentation,
                 }
                 val own=listOfNotNull(node.text?.toString(),node.contentDescription?.toString()).filter { it.isNotBlank() }.distinct().joinToString(" · ")
                 val name=own.ifBlank { children.filter { it.isNotBlank() }.distinct().joinToString(" · ") }
-                if(node.isClickable && node.isEnabled && reachable) {
+                // Compose exposes the current selected tab as non-clickable. It still needs a
+                // visible, named, adequately sized location in required navigation coverage.
+                if((node.isClickable || node.isSelected) && node.isEnabled && reachable) {
                     val widthOk=bounds.width()+1>=48*density;val heightOk=bounds.height()+1>=48*density
-                    val contained=currentViewport.contains(bounds)
+                    // AX child and ancestor edges can round in opposite directions by one
+                    // raster pixel. Match the existing one-pixel minimum-size tolerance.
+                    val contained=bounds.left>=currentViewport.left-1 && bounds.top>=currentViewport.top-1 &&
+                        bounds.right<=currentViewport.right+1 && bounds.bottom<=currentViewport.bottom+1
                     val atWidthEdge=!widthOk && (bounds.left<=currentViewport.left+1 || bounds.right>=currentViewport.right-1)
                     val atHeightEdge=!heightOk && (bounds.top<=currentViewport.top+1 || bounds.bottom>=currentViewport.bottom-1)
                     val partial=!contained || atWidthEdge || atHeightEdge
+                    val visibleBounds=Rect(bounds)
+                    if(!visibleBounds.intersect(currentViewport))visibleBounds.setEmpty()
+                    val reachable48=visibleBounds.width()+1>=48*density && visibleBounds.height()+1>=48*density
                     if(name.isBlank()) {
                         val unnamedKey="$key|${node.className}"
                         unnamed[unnamedKey]=mapOf("key" to unnamedKey,"bounds_px" to bounds.wire(),"viewport_px" to currentViewport.wire(),
@@ -132,7 +145,7 @@ private class ReferenceScrollAudit(private val instrumentation: Instrumentation,
                         // Keep the name in the observation key: subtitle-only or missing names
                         // after clipping must not inherit a different label's successful observation.
                         val targetKey="$key|${node.className}|checkable=${node.isCheckable}|$name"
-                        targets.add(Target(targetKey,key,name,path,Rect(bounds),currentViewport,contained && widthOk && heightOk,
+                        targets.add(Target(targetKey,key,name,own,path,Rect(bounds),currentViewport,contained && widthOk && heightOk,reachable48,visibleBounds,
                             contained && (!widthOk || !heightOk) && !partial,partial,parents))
                     }
                 }
@@ -158,9 +171,17 @@ private class ReferenceScrollAudit(private val instrumentation: Instrumentation,
         state.targets.forEach { target ->
             val observation=observations.getOrPut(target.key) { Observation(target.identity,target.name) }
             observation.samples++;observation.full=observation.full || (stable && target.full)
+            observation.reachable48=observation.reachable48 || (stable && target.reachable48)
+            observation.ownNames.add(target.ownName)
+            val geometry=mapOf("bounds_px" to target.bounds.wire(),"viewport_px" to target.viewport.wire(),
+                "visible_intersection_px" to target.visibleBounds.wire(),"fully_bounded" to target.full,"reachable_48dp" to target.reachable48)
+            val firstReachableProof=target.reachable48 && observation.geometry.none { it["reachable_48dp"]==true }
+            val firstFullProof=target.full && observation.geometry.none { it["fully_bounded"]==true }
+            if(stable && geometry !in observation.geometry && (observation.geometry.size<24 || firstReachableProof || firstFullProof))observation.geometry.add(geometry)
             observation.partial=observation.partial || target.partial
             if(stable && target.interiorSmall && target.bounds.wire() !in observation.interiorSmall)observation.interiorSmall.add(target.bounds.wire())
-            if(stable && target.full)expectedFooters.filter { matches(target.name,it) }.forEach(footerSeen::add)
+            if(stable && target.reachable48)expectedFooters.filter { matches(target.name,it) }.forEach(footerSeen::add)
+            if(stable && target.full)expectedFooters.filter { matches(target.name,it) }.forEach(fullFooterSeen::add)
         }
         return state.copy(settled=stable)
     }
@@ -185,32 +206,58 @@ private class ReferenceScrollAudit(private val instrumentation: Instrumentation,
     private fun move(key: String,action: Int): Move {
         check(action in setOf(AccessibilityNodeInfo.ACTION_SCROLL_FORWARD,AccessibilityNodeInfo.ACTION_SCROLL_BACKWARD,
             AccessibilityNodeInfo.AccessibilityAction.ACTION_SHOW_ON_SCREEN.id))
-        if(moves>=maxMoves) { capped=true;return Move(false,false) }
-        val node=nodeByIdentity(key) ?: return Move(false,false)
+        if(moves>=maxMoves) { capped=true;return Move(false) }
+        val node=nodeByIdentity(key) ?: return Move(false)
         try {
-            if(node.actionList.none { it.id==action })return Move(false,true)
+            if(node.actionList.none { it.id==action })return Move(false)
             moves++
             val dispatched=AtomicBoolean(false)
+            val expected=identities.first { it.key==key }
             val event=try {
                 instrumentation.uiAutomation.executeAndWaitForEvent({ dispatched.set(node.performAction(action)) },
-                    { it.eventType==AccessibilityEvent.TYPE_VIEW_SCROLLED && it.packageName?.toString()==instrumentation.targetContext.packageName },900)
+                    { candidate ->
+                        if(candidate.eventType!=AccessibilityEvent.TYPE_VIEW_SCROLLED || candidate.packageName?.toString()!=instrumentation.targetContext.packageName)false
+                        else if(action==AccessibilityNodeInfo.AccessibilityAction.ACTION_SHOW_ON_SCREEN.id)true
+                        else candidate.source?.let { source -> try { sameNode(expected,source) } finally { source.recycle() } } ?: false
+                    },900)
             } catch(_: java.util.concurrent.TimeoutException) { null }
-            val terminal=event?.let {
-                val reached=when {
-                    it.maxScrollY>0 -> if(action==AccessibilityNodeInfo.ACTION_SCROLL_BACKWARD)it.scrollY<=0 else it.scrollY>=it.maxScrollY
-                    it.maxScrollX>0 -> if(action==AccessibilityNodeInfo.ACTION_SCROLL_BACKWARD)it.scrollX<=0 else it.scrollX>=it.maxScrollX
-                    it.itemCount>0 && it.toIndex>=0 -> if(action==AccessibilityNodeInfo.ACTION_SCROLL_BACKWARD)it.fromIndex==0 else it.toIndex>=it.itemCount-1
-                    else -> false
+            val telemetry=mutableMapOf<String,Any?>("container" to key,"action" to action,"dispatched" to dispatched.get(),"source_matched" to false)
+            event?.let {
+                val source=it.source
+                val matched=try { source!=null && sameNode(expected,source) } finally { source?.recycle() }
+                telemetry["source_matched"]=matched
+                telemetry["event_geometry"]=mapOf("scroll_x" to it.scrollX,"scroll_y" to it.scrollY,"max_scroll_x" to it.maxScrollX,
+                    "max_scroll_y" to it.maxScrollY,"from_index" to it.fromIndex,"to_index" to it.toIndex,"item_count" to it.itemCount)
+                if(matched) {
+                    val previous=scrollPositions[key].orEmpty()
+                    val position=linkedMapOf<String,Int>()
+                    // Android13 defaults X/Y to zero even when an axis was not supplied.
+                    if(it.maxScrollX>0 || "x" in previous)position["x"]=it.scrollX
+                    if(it.maxScrollY>0 || "y" in previous)position["y"]=it.scrollY
+                    if(it.itemCount>0 && it.fromIndex>=0 && it.toIndex>=it.fromIndex) {
+                        position["from"]=it.fromIndex;position["to"]=it.toIndex
+                    }
+                    if(position.isNotEmpty())scrollPositions[key]=position
+                    telemetry["supported_position"]=position
                 }
-                it.recycle();reached
-            } ?: false
+                it.recycle()
+            }
+            scrollEvents.add(telemetry)
             instrumentation.waitForIdleSync();Thread.sleep(100)
-            return Move(dispatched.get(),terminal)
+            return Move(dispatched.get())
         } finally { node.recycle() }
     }
 
     private fun fingerprint(state: Snapshot,container: String)=state.targets.filter { container in it.parents }
-        .map { "${it.key}:${it.bounds.wire()}" }.sorted().joinToString(";")
+        .map { "${it.key}:${it.bounds.wire()}" }.sorted().joinToString(";")+"|source_scroll_position=${scrollPositions[container]}"
+
+    private fun probeSmallVisibleTargets(state: Snapshot,container: String): Snapshot {
+        var result=state
+        state.targets.filter { it.parents.lastOrNull()==container && observations[it.key]?.reachable48!=true }.forEach { target ->
+            if(probedTargets.add(target.key) && move(target.identity,AccessibilityNodeInfo.AccessibilityAction.ACTION_SHOW_ON_SCREEN.id).dispatched)result=snapshot()
+        }
+        return result
+    }
 
     private fun resetTop(key: String): Boolean {
         var previous="";var repeated=0
@@ -242,7 +289,7 @@ private class ReferenceScrollAudit(private val instrumentation: Instrumentation,
         if(!resetTop(key)) { failures.add("Could not establish scroll start for $key");return }
         var previous="";var repeated=0;var terminal=false;var reason="move_limit"
         for(step in 0 until maxContainerMoves) {
-            var state=snapshot();val container=state.containers.firstOrNull { it.key==key }
+            var state=probeSmallVisibleTargets(snapshot(),key);val container=state.containers.firstOrNull { it.key==key }
             if(container==null) { reason="container_not_visible";break }
             state.containers.filter { it.parents.lastOrNull()==key }.forEach { nested ->
                 val visibleViewport=viewport(nested.bounds,listOf(container.bounds))
@@ -311,21 +358,27 @@ private class ReferenceScrollAudit(private val instrumentation: Instrumentation,
         } catch(problem: Throwable) { failures.add("${problem.javaClass.simpleName}: ${problem.message}") }
         finally { identities.forEach { it.anchor.recycle() } }
         val genuinelySmall=observations.filterValues { it.interiorSmall.any { bounds -> bounds !in it.recoveredFragments } }
-        val unresolved=observations.filterValues { it.partial && !it.full }
+        val unresolved=observations.filterValues { !it.reachable48 }
+        val unstableNames=observations.values.groupBy { it.identity }.filterValues { values -> values.map { it.name }.distinct().size>1 }
         if(genuinelySmall.isNotEmpty())failures.add("${genuinelySmall.size} named actions have an interior target below48dp")
-        if(unresolved.isNotEmpty())failures.add("${unresolved.size} clipped named actions were never fully observed")
+        if(unresolved.isNotEmpty())failures.add("${unresolved.size} named controls never exposed a48dp AX-visible intersection")
+        if(unstableNames.isNotEmpty())failures.add("${unstableNames.size} static controls changed accessible names while scrolling")
         val missingFooters=expectedFooters.filter { it !in footerSeen }
         if(unnamed.isNotEmpty())failures.add("${unnamed.size} visible enabled actions had no accessible name during scroll traversal")
-        if(missingFooters.isNotEmpty())failures.add("Required controls never fully observed: ${missingFooters.joinToString()}")
+        if(missingFooters.isNotEmpty())failures.add("Required controls never exposed a48dp AX-visible intersection: ${missingFooters.joinToString()}")
         if(capped)failures.add("Scroll traversal cap reached; coverage is incomplete")
-        return mapOf("status" to if(failures.isEmpty())"passed" else "failed","failures" to failures.distinct(),
+        return mapOf("audit_schema" to 2,"status" to if(failures.isEmpty())"passed" else "failed","failures" to failures.distinct(),
+            "target_metric" to "At least48dp in both dimensions of the AX bounding rectangle intersected with represented viewports; not a physical hit-test or proof of full text visibility.",
             "reference_only" to true,"actions_dispatched" to "scroll_and_show_on_screen_only","moves" to moves,"snapshots" to snapshots,
             "move_limit" to maxMoves,"container_move_limit" to maxContainerMoves,"capped" to capped,"containers" to scans,
-            "expected_footers" to expectedFooters,"fully_observed_footers" to footerSeen.toList(),"missing_footers" to missingFooters,
+            "expected_footers" to expectedFooters,"fully_observed_footers" to fullFooterSeen.toList(),"reachable_48dp_footers" to footerSeen.toList(),"missing_footers" to missingFooters,
             "targets" to observations.map { (key,value) -> mapOf("key" to key,"name" to value.name,"samples" to value.samples,
-                "fully_observed" to value.full,"partial_observed" to value.partial,"interior_small_bounds_px" to value.interiorSmall,
+                "fully_observed" to value.full,"reachable_48dp" to value.reachable48,"partial_observed" to value.partial,"interior_small_bounds_px" to value.interiorSmall,
+                "own_labels" to value.ownNames.filter { it.isNotBlank() },"descendant_derived_label" to ("" in value.ownNames),"geometry_samples" to value.geometry,
                 "show_on_screen_recovered_fragment_bounds_px" to value.recoveredFragments) },
             "unresolved_clipped_targets" to unresolved.keys.toList(),"interior_small_targets" to genuinelySmall.keys.toList(),
+            "unstable_names" to unstableNames.map { (key,values) -> mapOf("identity" to key,"names" to values.map { it.name }.distinct()) },
+            "scroll_event_samples" to scrollEvents,
             "unnamed_visible_actions" to unnamed.values.toList(),
             "bottom_screenshots" to screenshots,"spoken_screen_reader_verified" to false)
     }

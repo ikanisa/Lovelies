@@ -41,7 +41,7 @@ internal fun referenceNeedsExit(route: Int) = route in setOf(2,3,4,6,8,9,13,15,1
 
 /** Keep nested grids finite while providing an outer escape from short/enlarged layouts. */
 @Composable
-internal fun AdaptiveRouteHost(routeKey: String, reduceMotion: Boolean, content: @Composable () -> Unit) {
+internal fun AdaptiveRouteHost(routeKey: String, reduceMotion: Boolean, referenceRoute: Int?=null, content: @Composable () -> Unit) {
     val fontScale=LocalDensity.current.fontScale
     val scroll=remember(routeKey) { ScrollState(0) }
     val opacity=remember { Animatable(1f) }
@@ -52,7 +52,12 @@ internal fun AdaptiveRouteHost(routeKey: String, reduceMotion: Boolean, content:
     BoxWithConstraints(Modifier.fillMaxSize()) {
         val enlarged=fontScale>1.25f || maxHeight<600.dp
         val minimumHeight=maxOf(640.dp,minOf(maxWidth,720.dp)*1.4f)*fontScale.coerceAtLeast(1f)
-        val pageHeight=if(enlarged)maxOf(maxHeight,minimumHeight) else maxHeight
+        val pageHeight=when {
+            referenceRoute==1 -> maxHeight
+            maxHeight<600.dp && (referenceRoute==3 || referenceRoute==4) -> maxOf(maxHeight,640.dp*fontScale.coerceAtLeast(1f))
+            enlarged -> maxOf(maxHeight,minimumHeight)
+            else -> maxHeight
+        }
         Box(Modifier.fillMaxSize().verticalScroll(scroll,enabled=enlarged)) {
             Box(Modifier.align(Alignment.TopCenter).widthIn(max=720.dp).fillMaxWidth().height(pageHeight)
                 .graphicsLayer { alpha=opacity.value }) { content() }

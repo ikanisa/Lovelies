@@ -324,12 +324,13 @@ private fun Activity(state: PreviewState) {
         Column(Modifier.verticalScroll(rememberScrollState())) {
             entries.forEachIndexed { index,(title,time,category) ->
                 if(state.activityCategory == "All" || state.activityCategory == category) {
-                    Row(Modifier.fillMaxWidth().heightIn(min=113.dp).clickable(role = Role.Button) { state.navigate(if(category == "Shares")35 else 11) },
+                    Row(Modifier.fillMaxWidth().heightIn(min=113.dp).clickable(role = Role.Button) { state.navigate(if(category == "Shares")35 else 11) }
+                        .semantics { contentDescription="${title.replace('\n',' ')}, $time" },
                         verticalAlignment = Alignment.CenterVertically) {
                         if(index in listOf(0,1,3))Avatar(listOf(6,2,4)[if(index == 3)2 else index],size = 57.dp,selected = index == 0)
                         else AppIcon(if(index == 2)Glyph.LINK else Glyph.PEOPLE, Modifier.size(53.dp), Pink)
                         Spacer(Modifier.width(16.dp))
-                        Column(Modifier.weight(1f)) {
+                        Column(Modifier.weight(1f).clearAndSetSemantics { }) {
                             Text(title, color = Color.White, fontSize = 15.sp, lineHeight = 20.sp)
                             Text(time, color = Muted, fontSize = 12.sp, modifier = Modifier.padding(top = 5.dp))
                         }
@@ -361,10 +362,11 @@ private fun Notifications(state: PreviewState) {
             Notice("New memories ready\nto explore","5h ago",Glyph.STAR,10,"System"))
         Column(Modifier.verticalScroll(rememberScrollState())) {
             entries.filter { state.notificationCategory == "All" || it.category == state.notificationCategory }.forEach { item ->
-                Row(Modifier.fillMaxWidth().heightIn(min=98.dp).clickable(role = Role.Button) { state.navigate(item.destination) },verticalAlignment = Alignment.CenterVertically) {
+                Row(Modifier.fillMaxWidth().heightIn(min=98.dp).clickable(role = Role.Button) { state.navigate(item.destination) }
+                    .semantics { contentDescription="${item.title.replace('\n',' ')}, ${item.time}" },verticalAlignment = Alignment.CenterVertically) {
                     AppIcon(item.icon,Modifier.size(37.dp),Pink,filled = item.icon in listOf(Glyph.HEART,Glyph.STAR))
                     Spacer(Modifier.width(22.dp))
-                    Column(Modifier.weight(1f)) {
+                    Column(Modifier.weight(1f).clearAndSetSemantics { }) {
                         Text(item.title,color = Color.White,fontSize = 15.sp,lineHeight = 20.sp)
                         Text(item.time,color = Muted,fontSize = 12.sp,modifier = Modifier.padding(top = 5.dp))
                     }

@@ -1,0 +1,20 @@
+# Reviewed public inputs only; not auto-loaded by Gradle.
+# Refresh ALL-track maximum immediately before the signed release build/upload.
+# Supply these as Gradle project properties together with the remaining verified
+# settings. Blank fields remain release blockers. API runtime is not deployed yet.
+loveliesApiUrl=https://ltqfplqevxztlswlzexn.supabase.co/functions/v1/lovelies-api
+loveliesVersionCode=18
+loveliesVersionName=2.0.0
+loveliesKnownHighestPlayVersionCode=16
+loveliesExpectedUploadCertificateSha256=D7:A0:AA:02:BB:C9:66:5C:88:00:52:AB:6E:17:EE:0C:6D:61:C6:22:38:39:83:5C:C3:2A:74:A6:A0:DC:1C:7C
+# Verified current Google Play product; active base plan monthlypro.
+loveliesPlayProduct=com.lovelies.memories.pro.monthly
+loveliesPrivacyPolicyUrl=
+loveliesTermsUrl=
+loveliesDeletionUrl=
+loveliesLinkHost=
+loveliesFirebaseProjectId=
+loveliesFirebaseAppId=
+loveliesFirebaseApiKey=
+loveliesFirebaseSenderId=
+# Upload keystore/passwords stay in .release-secrets/android/signing.properties.

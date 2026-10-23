@@ -27,6 +27,7 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.text.TextStyle
@@ -60,7 +61,7 @@ private fun Profile(state: PreviewState) {
     Box(Modifier.fillMaxSize()) {
         Glow(strong = true)
         Column(Modifier.fillMaxSize().padding(horizontal = 15.dp),horizontalAlignment = Alignment.CenterHorizontally) {
-            Box(Modifier.fillMaxWidth().height(42.dp)) { Box(Modifier.align(Alignment.CenterEnd)) { Overflow(state) } }
+            Box(Modifier.fillMaxWidth().height(48.dp)) { Box(Modifier.align(Alignment.CenterEnd)) { Overflow(state) } }
             Box(Modifier.size(157.dp)) {
                 Avatar(0,Modifier.align(Alignment.Center),size = 153.dp,selected = false,onClick = { state.navigate(38) },label="Manage your face")
                 Box(Modifier.align(Alignment.BottomEnd).size(48.dp).clip(CircleShape).background(Pink)
@@ -149,19 +150,20 @@ private fun ManagePeople(state: PreviewState) {
                 Modifier.padding(vertical = 22.dp), center = false)
             entries.forEach { index ->
                 val name = PeopleNames.getOrNull(index) ?: state.historicalPeople[index] ?: "Blocked person"
+                val sharingStatus = if(viewingBlocked)"Blocked" else"Can share with"
                 Row(Modifier.fillMaxWidth().heightIn(min = 73.dp).clickable(role = Role.Button) {
                     state.confirm(name,if(viewingBlocked)"Allow future matching and sharing with this person? Previous access and excluded photos are not restored."
                         else "Block sharing with this matched person? They will also be removed from the current sample share.",
                         if(viewingBlocked)"Unblock person" else"Block person") {
                         state.setPersonBlocked(index, !viewingBlocked)
                     }
-                },verticalAlignment = Alignment.CenterVertically) {
+                }.semantics { contentDescription = "$name, $sharingStatus" },verticalAlignment = Alignment.CenterVertically) {
                     if(index in state.matchedPeople)Avatar(index,size = 45.dp)
-                    else Box(Modifier.size(45.dp).clip(CircleShape).background(Panel), contentAlignment = Alignment.Center) {
+                    else Box(Modifier.size(45.dp).clip(CircleShape).background(Panel).clearAndSetSemantics { }, contentAlignment = Alignment.Center) {
                         Text(name.take(1), color = Color.White, fontSize = 17.sp)
                     }
-                    Text(name,color = Color.White,fontSize = 14.sp,modifier = Modifier.padding(start = 13.dp).weight(1f))
-                    Text(if(viewingBlocked)"Blocked" else"Can share with",color = Muted,fontSize = 12.sp)
+                    Text(name,color = Color.White,fontSize = 14.sp,modifier = Modifier.padding(start = 13.dp).weight(1f).clearAndSetSemantics { })
+                    Text(sharingStatus,color = Muted,fontSize = 12.sp,modifier = Modifier.clearAndSetSemantics { })
                     AppIcon(Glyph.BACK,Modifier.padding(start = 12.dp).size(16.dp).graphicsLayer { rotationZ = 180f },Muted)
                 }
                 DividerLine()
@@ -237,10 +239,11 @@ private fun PhotoAccess(state: PreviewState) {
                 Triple("Limited Access","Allow only certain photos",Glyph.LOCK)).forEach { (title,subtitle,icon) ->
                 val selected = state.photoAccess == title
                 Row(Modifier.fillMaxWidth().heightIn(min=82.dp).border(if(selected)1.dp else 0.dp,if(selected)SoftPink else Color.Transparent,RoundedCornerShape(15.dp))
-                    .selectable(selected=selected,role = Role.RadioButton,onClick={ state.setAccess(title) }).padding(horizontal = 15.dp,vertical=12.dp),verticalAlignment = Alignment.CenterVertically) {
+                    .selectable(selected=selected,role = Role.RadioButton,onClick={ state.setAccess(title) })
+                    .semantics { contentDescription = "$title, $subtitle" }.padding(horizontal = 15.dp,vertical=12.dp),verticalAlignment = Alignment.CenterVertically) {
                     if(selected)SelectionMark(true) else AppIcon(icon,Modifier.size(27.dp))
                     Spacer(Modifier.width(17.dp))
-                    Column(Modifier.weight(1f)) {
+                    Column(Modifier.weight(1f).clearAndSetSemantics { }) {
                         Text(title,color = Color.White,fontSize = 15.sp)
                         Text(subtitle,color = Muted,fontSize = 12.sp,modifier = Modifier.padding(top = 4.dp))
                     }

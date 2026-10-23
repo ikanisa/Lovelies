@@ -19,6 +19,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
@@ -48,16 +49,18 @@ fun OnboardingScreen(state: PreviewState) {
 
 @Composable
 private fun Splash(state: PreviewState) {
-    Box(Modifier.fillMaxSize()) {
+    BoxWithConstraints(Modifier.fillMaxSize()) {
+        val compact=maxHeight<600.dp
         Asset("splash.jpg", Modifier.fillMaxSize())
-        Column(Modifier.fillMaxWidth().align(Alignment.Center).padding(bottom = 15.dp),
+        Column(Modifier.fillMaxWidth().align(if(compact)Alignment.TopCenter else Alignment.Center)
+            .padding(top=if(compact)12.dp else 0.dp,bottom = 15.dp),
             horizontalAlignment = Alignment.CenterHorizontally) {
-            Asset("wordmark.png", Modifier.fillMaxWidth(.83f).height(150.dp), "Lovelies", ContentScale.Fit)
+            Asset("wordmark.png", Modifier.fillMaxWidth(.83f).height(if(compact)86.dp else 150.dp), "Lovelies", ContentScale.Fit)
             Text(stringResource(R.string.copy_photos_bring_people_closer_63eca6c3), color = Color(0xFFECD4DE), fontSize = 13.sp,
                 letterSpacing = 4.sp, lineHeight = 23.sp, textAlign = TextAlign.Center,
                 modifier = Modifier.padding(top = 8.dp))
         }
-        Box(Modifier.align(Alignment.BottomCenter).padding(bottom = 70.dp).size(82.dp)
+        Box(Modifier.align(Alignment.BottomCenter).padding(bottom = if(compact)16.dp else 70.dp).size(if(compact)64.dp else 82.dp)
             .clip(CircleShape).background(Pink).clickable(role = Role.Button) { state.navigate(2) }
             .semantics { contentDescription = "Get started" }, contentAlignment = Alignment.Center) {
             AppIcon(Glyph.ARROW, Modifier.size(37.dp), Ink)
@@ -101,11 +104,12 @@ private fun IntroFeature(icon: Glyph, title: String, modifier: Modifier = Modifi
 
 @Composable
 private fun SignIn(state: PreviewState) {
+    val compact=LocalConfiguration.current.screenHeightDp<600
     Box(Modifier.fillMaxSize()) {
         Glow(strong = true)
         Column(Modifier.fillMaxSize().padding(horizontal = 22.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-            Spacer(Modifier.weight(.7f))
-            Asset("wordmark.png", Modifier.fillMaxWidth(.76f).height(138.dp), "Lovelies", ContentScale.Fit)
+            if(compact)Spacer(Modifier.height(16.dp)) else Spacer(Modifier.weight(.7f))
+            Asset("wordmark.png", Modifier.fillMaxWidth(.76f).height(if(compact)84.dp else 138.dp), "Lovelies", ContentScale.Fit)
             Text(stringResource(R.string.copy_welcome_ca4f9dcf), color = Color.White, fontSize = 27.sp, modifier = Modifier.padding(top = 14.dp))
             BodyText(stringResource(R.string.copy_same_photos_more_people_in_them_dee1a826), Modifier.padding(top = 8.dp, bottom = 25.dp), size = 17)
             OutlineButton(stringResource(R.string.copy_continue_with_apple_01ca4c21), icon = Glyph.APPLE, light = true) {
@@ -119,19 +123,20 @@ private fun SignIn(state: PreviewState) {
             PinkButton(stringResource(R.string.copy_create_account_eff4fd86)) { state.navigate(4) }
             Text(stringResource(R.string.copy_sign_in_f8492cc1), color = SoftPink, fontSize = 14.sp,
                 modifier = Modifier.padding(top = 22.dp).sizeIn(minWidth=48.dp,minHeight=48.dp).clickable(role = Role.Button) { state.navigate(4) })
-            Spacer(Modifier.weight(.8f))
+            if(compact)Spacer(Modifier.height(16.dp)) else Spacer(Modifier.weight(.8f))
         }
     }
 }
 
 @Composable
 private fun PhotoPermissionPreview(state: PreviewState) {
-    Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+    val compact=LocalConfiguration.current.screenHeightDp<600
+    Box(Modifier.fillMaxSize(), contentAlignment = if(compact)Alignment.TopCenter else Alignment.Center) {
         Box(Modifier.fillMaxSize().clearAndSetSemantics { }) {
             PhotoGrid(state, Modifier.fillMaxSize().padding(6.dp), onPhotoClick = {})
         }
         Box(Modifier.fillMaxSize().background(Color.Black.copy(alpha = .48f)))
-        Column(Modifier.fillMaxWidth(.81f).clip(RoundedCornerShape(23.dp)).background(Color(0xFFECE9EB))
+        Column(Modifier.fillMaxWidth(.81f).padding(top=if(compact)12.dp else 0.dp).clip(RoundedCornerShape(23.dp)).background(Color(0xFFECE9EB))
             .padding(17.dp), horizontalAlignment = Alignment.CenterHorizontally) {
             Asset("photo-heart.png", Modifier.size(68.dp), scale = ContentScale.Fit)
             Text(stringResource(R.string.copy_lovelies_would_like_to_access_your__f64e9035), color = Ink, fontSize = 17.sp,
@@ -173,10 +178,11 @@ private fun AccessOption(state: PreviewState, title: String, text: String, icon:
     val selected = state.photoAccess == title
     Row(Modifier.fillMaxWidth().heightIn(min=111.dp).clip(RoundedCornerShape(21.dp)).background(Panel)
         .border(if(selected)1.6.dp else 1.dp, if(selected)Pink else Hairline, RoundedCornerShape(21.dp))
-        .selectable(selected=selected,role = Role.RadioButton,onClick={ state.setAccess(title) }).padding(17.dp), verticalAlignment = Alignment.CenterVertically) {
+        .selectable(selected=selected,role = Role.RadioButton,onClick={ state.setAccess(title) })
+        .semantics { contentDescription = "$title, ${text.replace('\n',' ')}" }.padding(17.dp), verticalAlignment = Alignment.CenterVertically) {
         SelectionMark(selected);Spacer(Modifier.width(16.dp))
         AppIcon(icon, Modifier.size(29.dp));Spacer(Modifier.width(14.dp))
-        Column(Modifier.weight(1f)) {
+        Column(Modifier.weight(1f).clearAndSetSemantics { }) {
             Text(title, color = Color.White, fontSize = 16.sp, fontWeight = FontWeight.Medium)
             Text(text, color = Muted, fontSize = 13.sp, lineHeight = 18.sp, modifier = Modifier.padding(top = 5.dp))
         }

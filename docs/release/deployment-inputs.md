@@ -18,7 +18,7 @@ not a deployed application or store release.
 | Candidate versions | Android 2.0.0/code18; iOS 1.1.0/build18 |
 | Inspected uploaded maxima | Play 16 / Apple 14; refresh immediately before upload |
 | Play upload key | Existing matching key is held privately in `.release-secrets/android/`; certificate/highest-code build guards exist |
-| Product candidate | `com.lovelies.memories.pro.monthly` remains source provenance until actual product/pricing/offer records are verified |
+| Subscription product | Both stores verified `com.lovelies.memories.pro.monthly`: Google active auto-renewing monthlypro/175 regions; Apple approved one-month product6799678587/group22297275, available41/175 regions |
 | Public mailbox | `info@ikanisa.com` observed in current Play listing; actual operation/delivery remains untested |
 | Current Apple callbacks | Earlier `https://lovelies.api.ikanisa.com/subscriptions/apple/notifications`; cutover must preserve and qualify callbacks |
 
@@ -61,11 +61,12 @@ exposed at inspection. No client schema grants were added.
   certificate/highest-code inputs. Apple needs production APNs/Associated Domains
   capabilities and a matching distribution profile. Current inspected profiles do
   not establish those production capabilities.
+- Apple currently blocks updates until its Account Holder reviews/accepts the updated Developer Program License Agreement. Its Developer account banner gives29 October2026 as the resource-access deadline. The final legal-review modal is open in Codex; no agreement was accepted by this agent. Paid Apps Agreement is Active; substantive territory/trader declarations and actual purchase/provider behavior remain unqualified.
 - Produce and inspect exact signed candidates, qualify store-installed in-place
   upgrades without uninstall/reset, run two-account hosted journeys and physical
   camera/storage/media/accessibility/performance/provider acceptance, and complete
   Play testing/TestFlight and reviewer access. No actual store upload occurred.
-- Both store sessions need reauthentication for final product/provider checks. The intended canonical Git remote and approved private inference/push host/operator
+- Google Play access is restored in Codex and its product/base plan/notification topic were read back; Apple is also authenticated in Codex and its approved monthly product/group/availability were read back. The intended canonical Git remote and approved private inference/push host/operator
   have been requested from the owner. Source and historical evidence remain local;
   no new repository, paid host, provider send or public release was created.
 - Reconcile the two manually applied migration versions through supported Supabase
@@ -75,3 +76,5 @@ exposed at inspection. No client schema grants were added.
 Secrets must not be pasted into chat, committed, bundled in native clients or
 shown in submission evidence. This file requests configuration facts and secure
 setup, not a new authorization to repeat implementation work.
+
+[Android public input template](android-public.properties.example) records the verified product/API/signing/version values without loading them automatically or inventing missing policy/Firebase/link inputs. The observed Google topic is `projects/easymoai/topics/lovelies-google-play-rtdn`; its receiver/OIDC/IAM and delivery still require qualification.

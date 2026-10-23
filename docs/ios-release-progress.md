@@ -183,7 +183,7 @@ update installation and store/provider acceptance remain separate release gates.
 ## Root final combined-source checkpoint
 
 Both unsigned **Release build and Debug build-for-testing pass** for the final
-arrow/protocol source with unchanged input hashes, independently of the665 host
+arrow/protocol and final enlarged-text storage-chart source with unchanged input hashes, independently of the665 host
 checks above. Release readback confirms bundle`com.lovelies.memories`,
 version1.1.0/build18, minimum17, the selected Supabase Edge URL, privacy manifest,
 real AppIcon and absent reference-photo/catalog fixtures. Receipts are
@@ -192,15 +192,14 @@ real AppIcon and absent reference-photo/catalog fixtures. Receipts are
 
 A separate final-source Debug app and its two nested dylibs were development-
 signed and strict/deep verified for the exact paired iPhone12Pro. It remains a
-private QA-only copy (`qa-iphone-final-signing.json`), omits APNs/Associated Domains
+private QA-only copy (`qa-iphone-storage-final-signing.json`), omits APNs/Associated Domains
 and is not installed. The prior DDI mount was blocked by the locked device. No
 uninstall/reset or production signing/store/provider/update acceptance occurred.
 Current distribution profiles lack APNs and final policy URLs remain blank; the
 release preflight correctly rejects those missing inputs/signature.
 
 Apple app6786056510/team63STJ5N27W, its existing production1.0.5/build14 and all
-eight uploads (maximum14) were observed before its sign-in expired. Product/
-provider/capability and exact signed update qualification remain. Supabase schema8/
+eight uploads (maximum14) were observed. Codex sign-in is restored; approved monthly product6799678587/group22297275 and matching product ID were read back, with41/175 regions available. Actual purchase/restore/provider/capability and exact signed update qualification remain. Supabase schema8/
 63 forced-RLS tables and private buckets are applied/read back; actual API/private
 model/provider deployment and hosted/device qualification remain separate. See
 the [current release status](release-implementation-status.md).

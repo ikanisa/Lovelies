@@ -80,7 +80,8 @@ class MainActivity : ComponentActivity() {
                 Box(Modifier.fillMaxSize().background(Ink).windowInsetsPadding(WindowInsets.safeDrawing).imePadding()
                     .semantics { isTraversalGroup=true;paneTitle = if(state.catalogVisible)"All 48 screens" else
                         "Screen ${state.route.toString().padStart(2,'0')}: ${if(!state.reviewMode && state.route==38)"Manage your face" else if(!state.reviewMode && state.route==6 && state.live.hasLifecycle)"Face profile verification" else if(!state.reviewMode && state.route==6 && state.live.hasAccountRecovery)"Account recovery" else if(!state.reviewMode && state.route==44 && !state.live.registered)"Guest account deletion" else ScreenNames[state.route-1]}" }) {
-                    AdaptiveRouteHost("${state.reviewMode}:${state.catalogVisible}:${state.route}",state.reduceMotion) {
+                    AdaptiveRouteHost("${state.reviewMode}:${state.catalogVisible}:${state.route}",state.reduceMotion,
+                        referenceRoute=state.route.takeIf { state.reviewMode && !state.catalogVisible }) {
                         Column(Modifier.fillMaxSize()) {
                             if(state.reviewMode && !state.catalogVisible && referenceNeedsExit(state.route)) {
                                 Row(Modifier.fillMaxWidth().heightIn(min=48.dp),verticalAlignment=Alignment.CenterVertically) {

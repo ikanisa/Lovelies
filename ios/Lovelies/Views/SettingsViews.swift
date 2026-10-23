@@ -2,6 +2,8 @@ import SwiftUI
 
 struct SettingsViews: View {
     @EnvironmentObject private var store: DemoStore
+    @Environment(\.dynamicTypeSize) private var textSize
+    @ScaledMetric(relativeTo: .body) private var storageChartScale: CGFloat = 1
     let screen: Screen
     @State private var sheet: SettingsSheet?
     @State private var profileTab = "Photos"
@@ -280,11 +282,15 @@ struct SettingsViews: View {
 
     private var storage: some View {
         GeometryReader { geometry in
+            let chartSize = min(max(0, geometry.size.width - 48), min(190, geometry.size.width * 0.431) * storageChartScale)
             ScrollView {
             VStack(spacing: 20) {
                 PageHeader(title: "Storage", trailing: false)
                 Spacer(minLength: 0)
-                storageDonut.frame(width: min(190, geometry.size.width * 0.431), height: min(190, geometry.size.width * 0.431))
+                VStack(spacing: 16) {
+                    storageDonut.frame(width: chartSize, height: chartSize)
+                    if textSize.isAccessibilitySize { storageUsage }
+                }.accessibilityElement(children: .combine)
                 Spacer(minLength: 0)
                 VStack(spacing: 21) {
                     storageRow("Photos", amount: "1.8 GB", color: LoveliesTheme.pink)
@@ -305,8 +311,14 @@ struct SettingsViews: View {
             Circle().trim(from: 0, to: 0.62).stroke(LoveliesTheme.pink, lineWidth: 21).rotationEffect(.degrees(-90))
             Circle().trim(from: 0.635, to: 0.9).stroke(Color(red: 0.68, green: 0.51, blue: 0.96), lineWidth: 21).rotationEffect(.degrees(-90))
             Circle().trim(from: 0.915, to: 0.978).stroke(Color(red: 0.95, green: 0.92, blue: 0.8), lineWidth: 21).rotationEffect(.degrees(-90))
-            VStack(spacing: 5) { Text(store.cacheCleared ? "2.2 GB" : "2.4 GB").loveliesFont(size: 26, weight: .medium); Text("of 5 GB used").loveliesFont(size: 16).foregroundStyle(LoveliesTheme.secondary) }
+            if !textSize.isAccessibilitySize { storageUsage }
         }.shadow(color: LoveliesTheme.pink.opacity(0.09), radius: 16)
+    }
+    private var storageUsage: some View {
+        VStack(spacing: 5) {
+            Text(store.cacheCleared ? "2.2 GB" : "2.4 GB").loveliesFont(size: 26, weight: .medium)
+            Text("of 5 GB used").loveliesFont(size: 16).foregroundStyle(LoveliesTheme.secondary)
+        }.multilineTextAlignment(.center).fixedSize(horizontal: false, vertical: true)
     }
     private func storageRow(_ title: String, amount: String, color: Color) -> some View {
         HStack(spacing: 13) { Circle().fill(color).frame(width: 18, height: 18); Text(title).loveliesFont(size: 16); Spacer(); Text(amount).loveliesFont(size: 15).foregroundStyle(LoveliesTheme.secondary) }
