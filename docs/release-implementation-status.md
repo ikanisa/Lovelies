@@ -110,3 +110,11 @@ all asserted destinations and rotation restoration pass. Root hash-checked the
 raw report and17 Android/12 iOS sources plus12 compile/package receipts in
 `device-checkpoint-v5-final-normal.json`. Enlarged text, landscape and full
 visual review remain in progress; connected/spoken/provider/store gates stay open.
+
+V5 font2 completes47/48; only27 fails one unnamed visible action after deeper
+scroll. All44 visible callbacks/two primary physical fallbacks and rotation
+restoration pass. Root preserves the raw failure in
+`device-checkpoint-v5-final-font2-failure.json`; source diagnosis is ongoing,
+landscape continues on the immutable pair, and no new source/build is accepted.
+The UI review of all54 normal images/proof is complete with zero new blockers.
+Font2 remains a failed matrix; connected/spoken/provider/store gates remain open.

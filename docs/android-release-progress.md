@@ -289,3 +289,15 @@ and captured17 Android/12 iOS source hashes plus12 matching compile/package
 receipt digests in immutable `device-checkpoint-v5-final-normal.json`. Enlarged
 text, landscape and full visual review continue; the evolving UI matrix receipt
 is not bound as an immutable final receipt. No new source/build is required.
+
+The V5 full font2 run completes47/48, retaining one failure on27: an unnamed
+visible enabled action reached only during deeper traversal. All44 actual visible
+callbacks and two primary physical Back fallbacks still reach the expected
+pane; rotation restoration passes. Raw report SHA256 is
+`e4c5911720cc9b9980246cd24c4e8b9ce5359b6760f59118730ba0d17d851184`.
+Root captured the failure without a name waiver in
+`device-checkpoint-v5-final-font2-failure.json`; UI source diagnosis is in
+progress and no source/build change has been made. Landscape continues on the
+immutable V5 pair. The UI reviewer completed all54 normal images and proof with
+zero new visual blockers; root bound the actual review manifests/receipt without
+claiming an independent root image review. Font2 is not a passing matrix.
