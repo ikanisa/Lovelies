@@ -259,3 +259,11 @@ control, leaving the app on reference1. No product or runner source change is
 required on that evidence. The owner has a request to remove the overlay; the
 same frozen smoke will be rerun. The failed attempt and private diagnostics are
 retained without exporting that unrelated content into public review sheets.
+
+The V2 ephemeral runner also compiled and signed offline with no changed frozen
+inputs. Root verified the actual existing wildcard profile, certificate, exact
+phone membership and strict/deep signature; no product app rebuild or reinstall
+occurred. The runner adds an explicit gallery obstruction/open-state check and
+bounded matrix ranges, retaining the original failed attempt and V1 products.
+Its receipt is `ios-device-audit-v2-artifact.json`. Physical V2 execution still
+awaits owner removal of the unrelated overlay; compilation is not a smoke pass.

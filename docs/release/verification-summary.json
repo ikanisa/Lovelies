@@ -153,7 +153,7 @@
           "bytes": 493299
         }
       ],
-      "physical_final_retests": "V3 normal48/48 and font2 48/48 pass,152 current PNGs visually reviewed; landscape in progress. PriorV2 failures/keyboard scope retained separately.",
+      "physical_final_retests": "V3 normal48/48, font2 48/48, landscape45/48;46/46 applicable Back checks;257 Android PNGs reviewed per owner report. Fresh V3 font2 keyboard routes15/22/45 pass. Three landscape failures retained under test-only nested-scroller diagnosis; final landscape/connected/spoken acceptance remains open.",
       "signed_store_artifact": false
     },
     "ios": {
@@ -202,7 +202,7 @@
         "actual_unsigned_artifact": "blocked: missing approved link host, four published policy URLs, valid release signature"
       },
       "physical_runtime": "Guarded development QA installed in place over developerbuild11 after container backup/no reset. Test01 passes initial reference lifecycle/custom-link checks; retained failed navigation is blocked by an unrelated floating video overlay. Same-source smoke awaits owner removal; full runtime/provider/store acceptance incomplete.",
-      "existing_signed_xctest_runner": "Build-for-testing passed with unchanged inputs; offline Automatic signing selects existing wildcard/profile/certificate and strict/deep verify0; device smoke not run"
+      "existing_signed_xctest_runner": "V1 executed partial physical smoke with retained overlay-blocked failure. V2 build/signature/profile/certificate/phone membership pass with unchanged inputs; physical V2 not run, awaits owner overlay removal; installed product app unchanged."
     },
     "model_service": {
       "local_checks_pass": 23,
@@ -248,7 +248,12 @@
     "verification/accessibility-navigation-20261023/ios-device-audit-build.json": "783fef96c51096cddd2d64c7c058cc79850ffa6a3a878c3d7f5cfdafa9b459d6",
     "verification/accessibility-navigation-20261023/ios-device-audit-artifact.json": "343c8213277707c95b8f4fc6e8b56c0056274c1a8e382d3fea355b4d9f55cbec",
     "verification/supabase-release-20261023/device-checkpoint-before-ui-completion.json": "570f0ad6619940f4addbfef3db686f5131000506d925ca3e9c9feeffe84068ca",
-    "verification/supabase-release-20261023/google-provider-identities-readback.txt": "4502596d2b0a9dcaf2b26b317de3a32efbfb987804ccb3cd0400fa3d4ff2b734"
+    "verification/supabase-release-20261023/google-provider-identities-readback.txt": "4502596d2b0a9dcaf2b26b317de3a32efbfb987804ccb3cd0400fa3d4ff2b734",
+    "verification/accessibility-navigation-20261023/ios-device-audit-v2-freeze.json": "01d395819df18b13dda7a0104743f2c99ffe4846f982ad4ac0a5334a3bbecd05",
+    "verification/accessibility-navigation-20261023/ios-device-audit-v2-build.json": "57b83d5ea9396d19816449e932e95371d9e6702a97a10520454f761fd0803202",
+    "verification/accessibility-navigation-20261023/ios-device-audit-v2-artifact.json": "42263facfe8763f0c45747ff7a748ca03865e9a13f6d481b49d27d6115a1cae3",
+    "verification/accessibility-navigation-20261023/pixel-v3-final-keyboard-receipt.json": "9fa268116d3f239448424bc2e26ca586505a9169851d4e7f4955651f0b354291",
+    "verification/supabase-release-20261023/device-checkpoint-v3-v2-runner.json": "e4a11d8a5a07a3f50b5daa1b15e760c09666faf22985deaa5d59a4b01261ddff"
   },
   "current_tested_source_inputs": {
     "admin/app.js": "f7f148fee1709fe762e3421c2b36dd3b32f271a9cd9d642c8d85705bc54fa4b9",

@@ -186,7 +186,14 @@ in `before-android-v3-profile-label/`; raw device failures/preimages remain with
 the UI owner's receipts. No signed store package/provider/in-place update pass
 is established by fixture verification.
 
-The UI owner's fresh schema3 normal and font2 matrices now both pass48/48 on the
-immutable V3 APKs. The complete landscape matrix remains running; current
-keyboard/connected/spoken accessibility gates are not closed by those fixture
-passes. The prior schema2 failures remain unchanged in their original evidence.
+The UI owner's fresh schema3 normal and font2 matrices both pass48/48 on the
+immutable V3 APKs. Landscape passes45/48, with retained failures on routes14
+(Save photo5),20 (Google Drive) and39 (Emma);46/46 applicable Back checks pass.
+The UI owner reviewed all257 Android screenshots. Fresh V3 font2 keyboard checks
+on routes15/22/45 pass and restore rotation preferences, bound by
+`pixel-v3-final-keyboard-receipt.json`. Read-only diagnosis identifies the nested
+semantic SHOW action stopping at a zero-range inner scroller before the outer
+host aligns the target; a bounded test-only correction is being prepared without
+relaxing the same-node/name48dp visible-area requirement. Full final landscape,
+connected journeys and spoken accessibility remain open. Prior failures remain
+in their original evidence.
