@@ -1,0 +1,1780 @@
+{
+  "schema_version": 1,
+  "created_local_date": "2026-10-24",
+  "target_language": "rw",
+  "status": "UNAPPROVED_REVIEW_DRAFT_NOT_PACKAGED",
+  "purpose": "Reviewable Kinyarwanda draft for only the existing extracted Android resources and seven separately scoped iOS CountCopy entries.",
+  "source_files": [
+    {
+      "path": "android/app/src/main/res/values/strings.xml",
+      "sha256": "f73f6579cb9634743aa368a21c1207444aa1cd986f884dce95cbf7d8f6fe8c4f",
+      "scope": "android_extracted_default"
+    },
+    {
+      "path": "android/app/src/main/res/values/copy.xml",
+      "sha256": "a1f08ca94c3e0dfa8bc59a8ebe28607aa333fff4a4cb46aa65e143aec35884fc",
+      "scope": "android_extracted_default"
+    },
+    {
+      "path": "ios/Lovelies/Resources/en.lproj/CountCopy.stringsdict",
+      "sha256": "f2aa433c01cc100e04702f472606b9ae2cfdfa712950cb7c496820557153ad0a",
+      "scope": "ios_english_count_dictionary"
+    }
+  ],
+  "encoding": "Android english_source/rw_draft preserve the source Android outer quoting and literal backslash escapes. iOS dictionaries retain their exact keys, plural variables, format metadata, placeholder tokens/order and one/other categories.",
+  "authority_and_semantics": [
+    "No native-language reviewer, legal approval, approved terminology, packaged Kinyarwanda locale or language/runtime acceptance is claimed.",
+    "Account authentication compares registered face captures. Nothing here adds OTP, liveness/PAD, camera attestation or civil-identity proof.",
+    "Uploads/private processing, matching, sharing review and separate consent purposes remain distinct. Matching never grants access; the recipient accepts the request before access.",
+    "Private backup/recovery key and fresh face are used together. No draft asks users to disclose keys or private capture material to support.",
+    "Source statements and reference/development copy are translated as source material; this draft neither approves marketing claims nor proves production behavior."
+  ],
+  "terminology_for_native_review": [
+    {
+      "english": "Face profile / registered face",
+      "draft_choice": "amakuru y’isura / isura yanditswe",
+      "note": "Confirm wording denotes the stored face reference/profile, not civil identity or a public profile photograph."
+    },
+    {
+      "english": "Matching / matched people",
+      "draft_choice": "guhuza amafoto n’abantu / abantu bahujwe n’amafoto",
+      "note": "Confirm recognizable face-comparison terminology without implying dating, automatic sharing or access."
+    },
+    {
+      "english": "Review / subset / acceptance",
+      "draft_choice": "isuzuma cyangwa kureba / amafoto yatoranyirijwe uyu muntu / kwemera ubusabe",
+      "note": "Keep contributor review of exact subsets separate from recipient acceptance and current access."
+    },
+    {
+      "english": "Private recovery backup / recovery key",
+      "draft_choice": "kopi y’ingoboka y’ibanga / urufunguzo rwo kugarura konti",
+      "note": "Check consistent everyday language while preserving cryptographic recovery and fresh-face requirements."
+    },
+    {
+      "english": "Preview / memory / local reference",
+      "draft_choice": "ishusho yo kureba mbere / ububiko bw’akazi / ibihuza n’amafoto",
+      "note": "Native technical review is needed; this does not promise remote original erasure or on-device-only inference."
+    },
+    {
+      "english": "Session / operation reconciliation / recurring subscription",
+      "draft_choice": "ibihe konti yinjiriwemo / kugenzurira igikorwa uko gihagaze / ukwiyandikisha kwishyuwe",
+      "note": "Confirm precise terminology for active authorization, original-operation status recovery and paid recurring entitlement."
+    },
+    {
+      "english": "Loaded / available count wrappers",
+      "draft_choice": "Byafunguwe / Biraboneka",
+      "note": "Label-style forms avoid noun-class disagreement when the unchanged placeholder itself contains a singular/plural photo phrase. Review fluency and contextual fit."
+    }
+  ],
+  "exclusions_inventory": {
+    "excluded_resource_ids": [],
+    "technical_non_user_visible_values": [],
+    "technical_scan_result": "None found among these source string/plural values. Resource identifiers and format metadata are preserved unchanged, not translated.",
+    "unchanged_language_neutral_values": [
+      "app_name",
+      "notification_title",
+      "photo_status",
+      "photo_summary",
+      "copy__0ab8318a"
+    ],
+    "out_of_scope_sources": [
+      "Unextracted hardcoded Android live/reference/status/error/accessibility copy outside these two default XML files.",
+      "All iOS copy outside the seven English CountCopy.stringsdict entries, including unextracted live/reference and runtime status values.",
+      "Web/preview/operator/public policies and store listing translations.",
+      "Technical configuration, URLs, service credentials, product/application identifiers, runtime-generated user names/captions and source code."
+    ]
+  },
+  "android": {
+    "resource_entries": [
+      {
+        "resource_id": "app_name",
+        "resource_type": "string",
+        "source_file": "android/app/src/main/res/values/strings.xml",
+        "english_source": "Lovelies",
+        "rw_draft": "Lovelies",
+        "review_note": "Product branding retained verbatim."
+      },
+      {
+        "resource_id": "search_photos",
+        "resource_type": "string",
+        "source_file": "android/app/src/main/res/values/strings.xml",
+        "english_source": "Search your photos",
+        "rw_draft": "Shakisha amafoto yawe"
+      },
+      {
+        "resource_id": "add_photos",
+        "resource_type": "string",
+        "source_file": "android/app/src/main/res/values/strings.xml",
+        "english_source": "Add Photos",
+        "rw_draft": "Ongeramo amafoto"
+      },
+      {
+        "resource_id": "previous",
+        "resource_type": "string",
+        "source_file": "android/app/src/main/res/values/strings.xml",
+        "english_source": "Previous",
+        "rw_draft": "Ibanza"
+      },
+      {
+        "resource_id": "next",
+        "resource_type": "string",
+        "source_file": "android/app/src/main/res/values/strings.xml",
+        "english_source": "Next",
+        "rw_draft": "Ikurikira"
+      },
+      {
+        "resource_id": "show_controls",
+        "resource_type": "string",
+        "source_file": "android/app/src/main/res/values/strings.xml",
+        "english_source": "Show controls",
+        "rw_draft": "Garagaza ibigenzura"
+      },
+      {
+        "resource_id": "save_original",
+        "resource_type": "string",
+        "source_file": "android/app/src/main/res/values/strings.xml",
+        "english_source": "Save Original",
+        "rw_draft": "Bika ifoto y’umwimerere"
+      },
+      {
+        "resource_id": "share_original",
+        "resource_type": "string",
+        "source_file": "android/app/src/main/res/values/strings.xml",
+        "english_source": "Share Original",
+        "rw_draft": "Sangiza ifoto y’umwimerere"
+      },
+      {
+        "resource_id": "notification_channel",
+        "resource_type": "string",
+        "source_file": "android/app/src/main/res/values/strings.xml",
+        "english_source": "Lovelies updates",
+        "rw_draft": "Amakuru mashya ya Lovelies"
+      },
+      {
+        "resource_id": "notification_title",
+        "resource_type": "string",
+        "source_file": "android/app/src/main/res/values/strings.xml",
+        "english_source": "Lovelies",
+        "rw_draft": "Lovelies",
+        "review_note": "Product branding retained verbatim."
+      },
+      {
+        "resource_id": "notification_body",
+        "resource_type": "string",
+        "source_file": "android/app/src/main/res/values/strings.xml",
+        "english_source": "Open Lovelies to check your updates.",
+        "rw_draft": "Fungura Lovelies urebe amakuru yawe mashya."
+      },
+      {
+        "resource_id": "back",
+        "resource_type": "string",
+        "source_file": "android/app/src/main/res/values/strings.xml",
+        "english_source": "Back",
+        "rw_draft": "Subira inyuma"
+      },
+      {
+        "resource_id": "clear_search",
+        "resource_type": "string",
+        "source_file": "android/app/src/main/res/values/strings.xml",
+        "english_source": "Clear search",
+        "rw_draft": "Siba ibyo washakishije"
+      },
+      {
+        "resource_id": "filters",
+        "resource_type": "string",
+        "source_file": "android/app/src/main/res/values/strings.xml",
+        "english_source": "Filters",
+        "rw_draft": "Ibyungurura"
+      },
+      {
+        "resource_id": "zoom_photo",
+        "resource_type": "string",
+        "source_file": "android/app/src/main/res/values/strings.xml",
+        "english_source": "Zoom photo",
+        "rw_draft": "Tera ifoto hafi"
+      },
+      {
+        "resource_id": "reset_zoom",
+        "resource_type": "string",
+        "source_file": "android/app/src/main/res/values/strings.xml",
+        "english_source": "Reset zoom",
+        "rw_draft": "Subiza ifoto ku ngano yabanje"
+      },
+      {
+        "resource_id": "show_photo_controls",
+        "resource_type": "string",
+        "source_file": "android/app/src/main/res/values/strings.xml",
+        "english_source": "Show photo controls",
+        "rw_draft": "Garagaza ibigenzura ifoto"
+      },
+      {
+        "resource_id": "hide_photo_controls",
+        "resource_type": "string",
+        "source_file": "android/app/src/main/res/values/strings.xml",
+        "english_source": "Hide photo controls",
+        "rw_draft": "Hisha ibigenzura ifoto"
+      },
+      {
+        "resource_id": "privacy_policy",
+        "resource_type": "string",
+        "source_file": "android/app/src/main/res/values/strings.xml",
+        "english_source": "Privacy Policy",
+        "rw_draft": "Politiki y’ibanga"
+      },
+      {
+        "resource_id": "terms_of_use",
+        "resource_type": "string",
+        "source_file": "android/app/src/main/res/values/strings.xml",
+        "english_source": "Terms of Use",
+        "rw_draft": "Amabwiriza y’imikoreshereze"
+      },
+      {
+        "resource_id": "account_deletion_help",
+        "resource_type": "string",
+        "source_file": "android/app/src/main/res/values/strings.xml",
+        "english_source": "Account Deletion",
+        "rw_draft": "Gusiba konti"
+      },
+      {
+        "resource_id": "legal_link_unavailable",
+        "resource_type": "string",
+        "source_file": "android/app/src/main/res/values/strings.xml",
+        "english_source": "Policy unavailable",
+        "rw_draft": "Politiki ntiboneka"
+      },
+      {
+        "resource_id": "legal_link_unavailable_detail",
+        "resource_type": "string",
+        "source_file": "android/app/src/main/res/values/strings.xml",
+        "english_source": "This policy has not been configured for this build. Contact support from Help Center.",
+        "rw_draft": "Iyi politiki ntirashyirwaho muri iyi verisiyo. Saba ubufasha unyuze mu Kigo cy’ubufasha."
+      },
+      {
+        "resource_id": "legal_link_open_failed",
+        "resource_type": "string",
+        "source_file": "android/app/src/main/res/values/strings.xml",
+        "english_source": "A browser could not open this policy. Please try again when a browser is available.",
+        "rw_draft": "Mushakisha ntiyashoboye gufungura iyi politiki. Ongera ugerageze igihe mushakisha ibonetse."
+      },
+      {
+        "resource_id": "loaded_photo_count",
+        "resource_type": "string",
+        "source_file": "android/app/src/main/res/values/strings.xml",
+        "english_source": "%1$s loaded",
+        "rw_draft": "Byafunguwe: %1$s",
+        "review_note": "Review the platform term for loaded content; label-style wording avoids singular/plural agreement on the inserted photo phrase."
+      },
+      {
+        "resource_id": "photo_status",
+        "resource_type": "string",
+        "source_file": "android/app/src/main/res/values/strings.xml",
+        "english_source": "%1$s · %2$s",
+        "rw_draft": "%1$s · %2$s"
+      },
+      {
+        "resource_id": "photo_summary",
+        "resource_type": "string",
+        "source_file": "android/app/src/main/res/values/strings.xml",
+        "english_source": "%1$s · %2$s",
+        "rw_draft": "%1$s · %2$s"
+      },
+      {
+        "resource_id": "photos_processed",
+        "resource_type": "string",
+        "source_file": "android/app/src/main/res/values/strings.xml",
+        "english_source": "%1$s processed. Review matched people before sharing.",
+        "rw_draft": "Byatunganijwe: %1$s. Reba abantu bahujwe n’amafoto mbere yo kuyasangiza.",
+        "review_note": "Review processing terminology and noun agreement; label-style wording keeps the full existing count placeholder."
+      },
+      {
+        "resource_id": "photos_in_subset",
+        "resource_type": "string",
+        "source_file": "android/app/src/main/res/values/strings.xml",
+        "english_source": "%1$s in their subset",
+        "rw_draft": "Mu mafoto yatoranyirijwe uyu muntu: %1$s",
+        "review_note": "Subset means the exact photos selected for this recipient, not an access grant."
+      },
+      {
+        "resource_id": "photos_available",
+        "resource_type": "string",
+        "source_file": "android/app/src/main/res/values/strings.xml",
+        "english_source": "%1$s available",
+        "rw_draft": "Biraboneka: %1$s",
+        "review_note": "Label-style wording avoids singular/plural agreement on the inserted photo phrase."
+      },
+      {
+        "resource_id": "include_person",
+        "resource_type": "string",
+        "source_file": "android/app/src/main/res/values/strings.xml",
+        "english_source": "Include %1$s",
+        "rw_draft": "Shyiramo %1$s"
+      },
+      {
+        "resource_id": "open_person",
+        "resource_type": "string",
+        "source_file": "android/app/src/main/res/values/strings.xml",
+        "english_source": "Open %1$s",
+        "rw_draft": "Fungura %1$s"
+      },
+      {
+        "resource_id": "photo_of_total",
+        "resource_type": "string",
+        "source_file": "android/app/src/main/res/values/strings.xml",
+        "english_source": "Photo %1$d of %2$d",
+        "rw_draft": "Ifoto %1$d muri %2$d"
+      },
+      {
+        "resource_id": "selected",
+        "resource_type": "string",
+        "source_file": "android/app/src/main/res/values/strings.xml",
+        "english_source": "Selected",
+        "rw_draft": "Byatoranyijwe"
+      },
+      {
+        "resource_id": "not_selected",
+        "resource_type": "string",
+        "source_file": "android/app/src/main/res/values/strings.xml",
+        "english_source": "Not selected",
+        "rw_draft": "Ntibyatoranyijwe"
+      },
+      {
+        "resource_id": "photo_count",
+        "resource_type": "plurals",
+        "source_file": "android/app/src/main/res/values/strings.xml",
+        "english_source": {
+          "one": "%d photo",
+          "other": "%d photos"
+        },
+        "rw_draft": {
+          "one": "Ifoto %d",
+          "other": "Amafoto %d"
+        },
+        "review_note": "Source categories one/other retained for parity; reviewer and platform runtime must validate Kinyarwanda category selection and numeral agreement."
+      },
+      {
+        "resource_id": "person_count",
+        "resource_type": "plurals",
+        "source_file": "android/app/src/main/res/values/strings.xml",
+        "english_source": {
+          "one": "%d person",
+          "other": "%d people"
+        },
+        "rw_draft": {
+          "one": "Umuntu %d",
+          "other": "Abantu %d"
+        },
+        "review_note": "Source categories one/other retained for parity; reviewer and platform runtime must validate Kinyarwanda category selection and numeral agreement."
+      },
+      {
+        "resource_id": "a11y_close",
+        "resource_type": "string",
+        "source_file": "android/app/src/main/res/values/strings.xml",
+        "english_source": "Close",
+        "rw_draft": "Funga"
+      },
+      {
+        "resource_id": "a11y_continue_preview",
+        "resource_type": "string",
+        "source_file": "android/app/src/main/res/values/strings.xml",
+        "english_source": "Continue preview",
+        "rw_draft": "Komeza kureba mbere"
+      },
+      {
+        "resource_id": "a11y_preview_paused",
+        "resource_type": "string",
+        "source_file": "android/app/src/main/res/values/strings.xml",
+        "english_source": "Preview paused. This screen uses sample progress.",
+        "rw_draft": "Kureba mbere byahagaritswe by’agateganyo. Iyi paji ikoresha urugero rw’uko igikorwa kigenda."
+      },
+      {
+        "resource_id": "a11y_loading",
+        "resource_type": "string",
+        "source_file": "android/app/src/main/res/values/strings.xml",
+        "english_source": "Loading",
+        "rw_draft": "Birafunguka"
+      },
+      {
+        "resource_id": "a11y_camera_loading",
+        "resource_type": "string",
+        "source_file": "android/app/src/main/res/values/strings.xml",
+        "english_source": "Preparing camera",
+        "rw_draft": "Kamera irategurwa"
+      },
+      {
+        "resource_id": "a11y_profile_photos",
+        "resource_type": "string",
+        "source_file": "android/app/src/main/res/values/strings.xml",
+        "english_source": "Profile photos",
+        "rw_draft": "Amafoto yo ku mwirondoro"
+      },
+      {
+        "resource_id": "a11y_profile_favorites",
+        "resource_type": "string",
+        "source_file": "android/app/src/main/res/values/strings.xml",
+        "english_source": "Profile favorites",
+        "rw_draft": "Amafoto akunzwe yo ku mwirondoro"
+      },
+      {
+        "resource_id": "a11y_profile_people",
+        "resource_type": "string",
+        "source_file": "android/app/src/main/res/values/strings.xml",
+        "english_source": "Profile people",
+        "rw_draft": "Abantu bo ku mwirondoro"
+      },
+      {
+        "resource_id": "a11y_more_matched_people",
+        "resource_type": "string",
+        "source_file": "android/app/src/main/res/values/strings.xml",
+        "english_source": "More matched people",
+        "rw_draft": "Abandi bantu bahujwe n’amafoto"
+      },
+      {
+        "resource_id": "copy__0ab8318a",
+        "resource_type": "string",
+        "source_file": "android/app/src/main/res/values/copy.xml",
+        "english_source": "\"!\"",
+        "rw_draft": "\"!\"",
+        "review_note": "Language-neutral punctuation retained."
+      },
+      {
+        "resource_id": "copy_a_saved_operation_needs_reconciliat_f323e585",
+        "resource_type": "string",
+        "source_file": "android/app/src/main/res/values/copy.xml",
+        "english_source": "\"A saved operation needs reconciliation. Your original selections and operation key are retained.\"",
+        "rw_draft": "\"Igikorwa cyabitswe gikeneye kugenzurirwa uko gihagaze. Ibyo watoranyije mbere n’urufunguzo rw’igikorwa biracyabitswe.\"",
+        "review_note": "Review reconciliation/operation-key terminology. This means recovering the existing operation, not starting another one."
+      },
+      {
+        "resource_id": "copy_a_verified_subscription_is_required_6773aca5",
+        "resource_type": "string",
+        "source_file": "android/app/src/main/res/values/copy.xml",
+        "english_source": "\"A verified subscription is required to save or forward originals. Previewing your approved photos remains available.\"",
+        "rw_draft": "\"Hakeneye ukwiyandikisha kwishyuwe kandi kwemejwe kugira ngo ubike cyangwa wohereze amafoto y’umwimerere. Uracyashobora kureba mbere amafoto wemerewe.\"",
+        "review_note": "Review a paid recurring subscription versus account registration; approved previews remain available without this entitlement."
+      },
+      {
+        "resource_id": "copy_accept_photos_e8b4342a",
+        "resource_type": "string",
+        "source_file": "android/app/src/main/res/values/copy.xml",
+        "english_source": "\"Accept Photos\"",
+        "rw_draft": "\"Emera amafoto\""
+      },
+      {
+        "resource_id": "copy_add_photos_be917560",
+        "resource_type": "string",
+        "source_file": "android/app/src/main/res/values/copy.xml",
+        "english_source": "\"Add Photos\"",
+        "rw_draft": "\"Ongeramo amafoto\""
+      },
+      {
+        "resource_id": "copy_all_48_reference_screens_6b3d3425",
+        "resource_type": "string",
+        "source_file": "android/app/src/main/res/values/copy.xml",
+        "english_source": "\"All 48 reference screens\"",
+        "rw_draft": "\"Paji zose 48 z’icyitegererezo\""
+      },
+      {
+        "resource_id": "copy_all_outgoing_requests_708f14a0",
+        "resource_type": "string",
+        "source_file": "android/app/src/main/res/values/copy.xml",
+        "english_source": "\"All Outgoing Requests\"",
+        "rw_draft": "\"Ubusabe bwose bwoherejwe\""
+      },
+      {
+        "resource_id": "copy_allow_full_access_ff2815e6",
+        "resource_type": "string",
+        "source_file": "android/app/src/main/res/values/copy.xml",
+        "english_source": "\"Allow Full Access\"",
+        "rw_draft": "\"Emera uburenganzira bwose bwo kubona amafoto\""
+      },
+      {
+        "resource_id": "copy_allow_limited_access_78262ff4",
+        "resource_type": "string",
+        "source_file": "android/app/src/main/res/values/copy.xml",
+        "english_source": "\"Allow Limited Access\"",
+        "rw_draft": "\"Emera uburenganzira bwo kubona amafoto amwe gusa\""
+      },
+      {
+        "resource_id": "copy_apply_filters_6b2a78a8",
+        "resource_type": "string",
+        "source_file": "android/app/src/main/res/values/copy.xml",
+        "english_source": "\"Apply Filters\"",
+        "rw_draft": "\"Koresha ibyungurura\""
+      },
+      {
+        "resource_id": "copy_back_to_photos_b080279d",
+        "resource_type": "string",
+        "source_file": "android/app/src/main/res/values/copy.xml",
+        "english_source": "\"Back to Photos\"",
+        "rw_draft": "\"Subira ku mafoto\""
+      },
+      {
+        "resource_id": "copy_bring_your_memories_to_lovelies_40789f6a",
+        "resource_type": "string",
+        "source_file": "android/app/src/main/res/values/copy.xml",
+        "english_source": "\"Bring your memories\\nto Lovelies\"",
+        "rw_draft": "\"Zana inzibutso zawe\\nmuri Lovelies\""
+      },
+      {
+        "resource_id": "copy_by_continuing_you_consent_to_use_yo_7c404e1b",
+        "resource_type": "string",
+        "source_file": "android/app/src/main/res/values/copy.xml",
+        "english_source": "\"By continuing, you consent to use your registered face to authenticate this account.\"",
+        "rw_draft": "\"Ukomeje, uba wemeye ko isura yawe yanditswe ikoreshwa mu kwemeza iyi konti.\"",
+        "review_note": "Native review must retain account authentication using the registered face; no civil-identity, OTP or liveness claim."
+      },
+      {
+        "resource_id": "copy_cancel_77dfd213",
+        "resource_type": "string",
+        "source_file": "android/app/src/main/res/values/copy.xml",
+        "english_source": "\"Cancel\"",
+        "rw_draft": "\"Hagarika\""
+      },
+      {
+        "resource_id": "copy_cancel_remaining_uploads_8e597ca8",
+        "resource_type": "string",
+        "source_file": "android/app/src/main/res/values/copy.xml",
+        "english_source": "\"Cancel remaining uploads\"",
+        "rw_draft": "\"Hagarika kohereza amafoto asigaye\""
+      },
+      {
+        "resource_id": "copy_check_profile_status_a4432f02",
+        "resource_type": "string",
+        "source_file": "android/app/src/main/res/values/copy.xml",
+        "english_source": "\"Check Profile Status\"",
+        "rw_draft": "\"Reba uko amakuru y’isura ahagaze\""
+      },
+      {
+        "resource_id": "copy_check_share_status_9e34c4e7",
+        "resource_type": "string",
+        "source_file": "android/app/src/main/res/values/copy.xml",
+        "english_source": "\"Check Share Status\"",
+        "rw_draft": "\"Reba uko gusangiza bihagaze\""
+      },
+      {
+        "resource_id": "copy_check_status_99f3765b",
+        "resource_type": "string",
+        "source_file": "android/app/src/main/res/values/copy.xml",
+        "english_source": "\"Check Status\"",
+        "rw_draft": "\"Reba uko bihagaze\""
+      },
+      {
+        "resource_id": "copy_choose_photo_access_5e644cf7",
+        "resource_type": "string",
+        "source_file": "android/app/src/main/res/values/copy.xml",
+        "english_source": "\"Choose Photo Access\"",
+        "rw_draft": "\"Hitamo uburenganzira bwo kubona amafoto\""
+      },
+      {
+        "resource_id": "copy_choose_photos_0df966e4",
+        "resource_type": "string",
+        "source_file": "android/app/src/main/res/values/copy.xml",
+        "english_source": "\"Choose photos\"",
+        "rw_draft": "\"Hitamo amafoto\""
+      },
+      {
+        "resource_id": "copy_choose_photos_155a4f76",
+        "resource_type": "string",
+        "source_file": "android/app/src/main/res/values/copy.xml",
+        "english_source": "\"Choose Photos\"",
+        "rw_draft": "\"Hitamo amafoto\""
+      },
+      {
+        "resource_id": "copy_choose_photos_review_matched_people_bc56958c",
+        "resource_type": "string",
+        "source_file": "android/app/src/main/res/values/copy.xml",
+        "english_source": "\"Choose photos, review matched people, and approve exactly what to share.\"",
+        "rw_draft": "\"Hitamo amafoto, urebe abantu bahujwe na yo, kandi wemeze neza ibyo ushaka gusangiza.\""
+      },
+      {
+        "resource_id": "copy_choose_photos_when_you_want_to_uplo_c1b898aa",
+        "resource_type": "string",
+        "source_file": "android/app/src/main/res/values/copy.xml",
+        "english_source": "\"Choose photos when you want to upload. Register your face with three fresh camera photos to authenticate your account.\"",
+        "rw_draft": "\"Hitamo amafoto igihe ushaka kuyohereza. Andikisha isura yawe ukoresheje amafoto mashya atatu afashwe na kamera kugira ngo wemeze konti yawe.\""
+      },
+      {
+        "resource_id": "copy_choose_source_8bc9b333",
+        "resource_type": "string",
+        "source_file": "android/app/src/main/res/values/copy.xml",
+        "english_source": "\"Choose Source\"",
+        "rw_draft": "\"Hitamo aho amafoto ava\""
+      },
+      {
+        "resource_id": "copy_clear_previews_7c3c42fd",
+        "resource_type": "string",
+        "source_file": "android/app/src/main/res/values/copy.xml",
+        "english_source": "\"Clear Previews\"",
+        "rw_draft": "\"Kuraho amashusho yo kureba mbere\""
+      },
+      {
+        "resource_id": "copy_close_bbfa773e",
+        "resource_type": "string",
+        "source_file": "android/app/src/main/res/values/copy.xml",
+        "english_source": "\"Close\"",
+        "rw_draft": "\"Funga\""
+      },
+      {
+        "resource_id": "copy_continue_2e026239",
+        "resource_type": "string",
+        "source_file": "android/app/src/main/res/values/copy.xml",
+        "english_source": "\"Continue\"",
+        "rw_draft": "\"Komeza\""
+      },
+      {
+        "resource_id": "copy_continue_face_setup_cf156d7e",
+        "resource_type": "string",
+        "source_file": "android/app/src/main/res/values/copy.xml",
+        "english_source": "\"Continue Face Setup\"",
+        "rw_draft": "\"Komeza kwandikisha isura\""
+      },
+      {
+        "resource_id": "copy_continue_face_sign_in_51a3763a",
+        "resource_type": "string",
+        "source_file": "android/app/src/main/res/values/copy.xml",
+        "english_source": "\"Continue Face Sign-In\"",
+        "rw_draft": "\"Komeza kwinjira ukoresheje isura\""
+      },
+      {
+        "resource_id": "copy_continue_with_apple_01ca4c21",
+        "resource_type": "string",
+        "source_file": "android/app/src/main/res/values/copy.xml",
+        "english_source": "\"Continue with Apple\"",
+        "rw_draft": "\"Komeza ukoresheje Apple\""
+      },
+      {
+        "resource_id": "copy_continue_with_google_ccc5b0ed",
+        "resource_type": "string",
+        "source_file": "android/app/src/main/res/values/copy.xml",
+        "english_source": "\"Continue with Google\"",
+        "rw_draft": "\"Komeza ukoresheje Google\""
+      },
+      {
+        "resource_id": "copy_copy_backup_c76efb2a",
+        "resource_type": "string",
+        "source_file": "android/app/src/main/res/values/copy.xml",
+        "english_source": "\"Copy backup\"",
+        "rw_draft": "\"Koporora kopi y’ingoboka\""
+      },
+      {
+        "resource_id": "copy_create_account_eff4fd86",
+        "resource_type": "string",
+        "source_file": "android/app/src/main/res/values/copy.xml",
+        "english_source": "\"Create Account\"",
+        "rw_draft": "\"Fungura konti\""
+      },
+      {
+        "resource_id": "copy_current_status_3aa1d93d",
+        "resource_type": "string",
+        "source_file": "android/app/src/main/res/values/copy.xml",
+        "english_source": "\"Current status\"",
+        "rw_draft": "\"Uko bihagaze ubu\""
+      },
+      {
+        "resource_id": "copy_decline_b59cf9ed",
+        "resource_type": "string",
+        "source_file": "android/app/src/main/res/values/copy.xml",
+        "english_source": "\"Decline\"",
+        "rw_draft": "\"Anga\""
+      },
+      {
+        "resource_id": "copy_delete_guest_account_8e0f6d76",
+        "resource_type": "string",
+        "source_file": "android/app/src/main/res/values/copy.xml",
+        "english_source": "\"Delete guest account\"",
+        "rw_draft": "\"Siba konti y’umushyitsi\""
+      },
+      {
+        "resource_id": "copy_done_e9b450d1",
+        "resource_type": "string",
+        "source_file": "android/app/src/main/res/values/copy.xml",
+        "english_source": "\"Done\"",
+        "rw_draft": "\"Byarangiye\""
+      },
+      {
+        "resource_id": "copy_each_person_receives_only_the_photo_cc4a906a",
+        "resource_type": "string",
+        "source_file": "android/app/src/main/res/values/copy.xml",
+        "english_source": "\"Each person receives only the photos shown in their subset, after they accept.\"",
+        "rw_draft": "\"Buri muntu ahabwa gusa amafoto agaragara mu yamutoranyirijwe, nyuma yo kwemera ubusabe.\""
+      },
+      {
+        "resource_id": "copy_edit_5301648d",
+        "resource_type": "string",
+        "source_file": "android/app/src/main/res/values/copy.xml",
+        "english_source": "\"Edit\"",
+        "rw_draft": "\"Hindura\""
+      },
+      {
+        "resource_id": "copy_edit_profile_cd280a41",
+        "resource_type": "string",
+        "source_file": "android/app/src/main/res/values/copy.xml",
+        "english_source": "\"Edit Profile\"",
+        "rw_draft": "\"Hindura umwirondoro\""
+      },
+      {
+        "resource_id": "copy_enable_photo_processing_5ba32687",
+        "resource_type": "string",
+        "source_file": "android/app/src/main/res/values/copy.xml",
+        "english_source": "\"Enable photo processing\"",
+        "rw_draft": "\"Emera gutunganya amafoto\""
+      },
+      {
+        "resource_id": "copy_enter_your_saved_private_recovery_b_48653b34",
+        "resource_type": "string",
+        "source_file": "android/app/src/main/res/values/copy.xml",
+        "english_source": "\"Enter your saved private recovery backup. Then take one fresh selfie to restore its registered account.\"",
+        "rw_draft": "\"Shyiramo kopi yawe y’ingoboka y’ibanga wabitse. Hanyuma ufate ifoto nshya y’isura yawe kugira ngo ugarure konti iyanditseho.\"",
+        "review_note": "Recovery requires the saved private backup together with a fresh registered-face selfie, not the backup alone."
+      },
+      {
+        "resource_id": "copy_excluded_people_receive_none_of_you_6f684f22",
+        "resource_type": "string",
+        "source_file": "android/app/src/main/res/values/copy.xml",
+        "english_source": "\"Excluded people receive none of your photos.\"",
+        "rw_draft": "\"Abantu wakuyemo nta foto yawe bahabwa.\""
+      },
+      {
+        "resource_id": "copy_explore_matches_4f1186fc",
+        "resource_type": "string",
+        "source_file": "android/app/src/main/res/values/copy.xml",
+        "english_source": "\"Explore Matches\"",
+        "rw_draft": "\"Reba ibyahujwe\""
+      },
+      {
+        "resource_id": "copy_face_sign_in_photo_matching_and_upl_c6aedef1",
+        "resource_type": "string",
+        "source_file": "android/app/src/main/res/values/copy.xml",
+        "english_source": "\"Face sign-in, photo matching and upload processing have separate consent choices.\"",
+        "rw_draft": "\"Kwinjira ukoresheje isura, guhuza amafoto n’abantu no gutunganya amafoto yoherejwe bifite amahitamo atandukanye yo kubyemera.\"",
+        "review_note": "Retain three separate consent purposes: face authentication, matching, and processing uploads."
+      },
+      {
+        "resource_id": "copy_finding_your_photos_9e4eb363",
+        "resource_type": "string",
+        "source_file": "android/app/src/main/res/values/copy.xml",
+        "english_source": "\"Finding your photos...\"",
+        "rw_draft": "\"Turimo gushaka amafoto yawe...\""
+      },
+      {
+        "resource_id": "copy_get_started_bd2cb051",
+        "resource_type": "string",
+        "source_file": "android/app/src/main/res/values/copy.xml",
+        "english_source": "\"Get Started\"",
+        "rw_draft": "\"Tangira\""
+      },
+      {
+        "resource_id": "copy_help_c47ae153",
+        "resource_type": "string",
+        "source_file": "android/app/src/main/res/values/copy.xml",
+        "english_source": "\"Help\"",
+        "rw_draft": "\"Ubufasha\""
+      },
+      {
+        "resource_id": "copy_how_can_we_help_d9961547",
+        "resource_type": "string",
+        "source_file": "android/app/src/main/res/values/copy.xml",
+        "english_source": "\"How can we help?\"",
+        "rw_draft": "\"Twagufasha dute?\""
+      },
+      {
+        "resource_id": "copy_how_lovelies_works_964ea584",
+        "resource_type": "string",
+        "source_file": "android/app/src/main/res/values/copy.xml",
+        "english_source": "\"How Lovelies works\"",
+        "rw_draft": "\"Uko Lovelies ikora\""
+      },
+      {
+        "resource_id": "copy_keep_this_backup_somewhere_you_can__e41bab8d",
+        "resource_type": "string",
+        "source_file": "android/app/src/main/res/values/copy.xml",
+        "english_source": "\"Keep this backup somewhere you can access on another device. It works together with your registered face.\"",
+        "rw_draft": "\"Bika iyi kopi y’ingoboka ahantu ushobora kuyibona ukoresheje ikindi gikoresho. Ikoreshwa hamwe n’isura yawe yanditswe.\""
+      },
+      {
+        "resource_id": "copy_let_s_go_09b2882d",
+        "resource_type": "string",
+        "source_file": "android/app/src/main/res/values/copy.xml",
+        "english_source": "\"Let’s Go\"",
+        "rw_draft": "\"Reka dukomeze\""
+      },
+      {
+        "resource_id": "copy_let_s_go_0f0afeff",
+        "resource_type": "string",
+        "source_file": "android/app/src/main/res/values/copy.xml",
+        "english_source": "\"Let's Go\"",
+        "rw_draft": "\"Reka dukomeze\""
+      },
+      {
+        "resource_id": "copy_let_s_try_again_c201e419",
+        "resource_type": "string",
+        "source_file": "android/app/src/main/res/values/copy.xml",
+        "english_source": "\"Let’s try again\"",
+        "rw_draft": "\"Reka twongere tugerageze\""
+      },
+      {
+        "resource_id": "copy_let_s_try_that_again_9eae938d",
+        "resource_type": "string",
+        "source_file": "android/app/src/main/res/values/copy.xml",
+        "english_source": "\"Let's try that again\"",
+        "rw_draft": "\"Reka twongere tubigerageze\""
+      },
+      {
+        "resource_id": "copy_lovelies_uses_the_system_photo_pick_a33bfeb7",
+        "resource_type": "string",
+        "source_file": "android/app/src/main/res/values/copy.xml",
+        "english_source": "\"Lovelies uses the system photo picker. Your library is not scanned automatically.\"",
+        "rw_draft": "\"Lovelies ikoresha uburyo bwa sisitemu bwo guhitamo amafoto. Ububiko bw’amafoto yawe ntibugenzurwa ku buryo bwikora.\""
+      },
+      {
+        "resource_id": "copy_lovelies_would_like_to_access_your__f64e9035",
+        "resource_type": "string",
+        "source_file": "android/app/src/main/res/values/copy.xml",
+        "english_source": "\"“Lovelies” Would Like\\nto Access Your Photos\"",
+        "rw_draft": "\"“Lovelies” Irashaka\\nKubona Amafoto Yawe\""
+      },
+      {
+        "resource_id": "copy_make_sure_your_face_is_well_lit_in__e565e107",
+        "resource_type": "string",
+        "source_file": "android/app/src/main/res/values/copy.xml",
+        "english_source": "\"Make sure your face is well lit,\\nin focus, and centered.\"",
+        "rw_draft": "\"Menya ko isura yawe imurikiwe neza,\\nigaragara neza kandi iri hagati.\""
+      },
+      {
+        "resource_id": "copy_manage_people_a3539654",
+        "resource_type": "string",
+        "source_file": "android/app/src/main/res/values/copy.xml",
+        "english_source": "\"Manage People\"",
+        "rw_draft": "\"Genzura abantu\""
+      },
+      {
+        "resource_id": "copy_matched_people_27323e24",
+        "resource_type": "string",
+        "source_file": "android/app/src/main/res/values/copy.xml",
+        "english_source": "\"Matched People\"",
+        "rw_draft": "\"Abantu bahujwe n’amafoto\""
+      },
+      {
+        "resource_id": "copy_matched_people_are_allowed_by_defau_1cb367d3",
+        "resource_type": "string",
+        "source_file": "android/app/src/main/res/values/copy.xml",
+        "english_source": "\"Matched people are allowed by default unless blocked. Photos still need approval before access.\"",
+        "rw_draft": "\"Abantu bahujwe n’amafoto bemererwa ku ikubitiro keretse bahagaritswe. Amafoto aracyakeneye kwemezwa mbere yo kuyageraho.\"",
+        "review_note": "Allowed means eligible for matching/review unless blocked. It must not imply permission to open a photo before approval."
+      },
+      {
+        "resource_id": "copy_name_709a2322",
+        "resource_type": "string",
+        "source_file": "android/app/src/main/res/values/copy.xml",
+        "english_source": "\"Name\"",
+        "rw_draft": "\"Izina\""
+      },
+      {
+        "resource_id": "copy_newest_first_search_and_photo_sourc_8b7617ee",
+        "resource_type": "string",
+        "source_file": "android/app/src/main/res/values/copy.xml",
+        "english_source": "\"Newest first. Search and photo source apply across your authorized library.\"",
+        "rw_draft": "\"Amashya abanza. Gushakisha n’aho amafoto ava bikurikizwa mu bubiko bwose bw’amafoto wemerewe kubona.\""
+      },
+      {
+        "resource_id": "copy_no_blocked_people_dd602f71",
+        "resource_type": "string",
+        "source_file": "android/app/src/main/res/values/copy.xml",
+        "english_source": "\"No blocked people.\"",
+        "rw_draft": "\"Nta bantu bahagaritswe.\""
+      },
+      {
+        "resource_id": "copy_not_now_b1e5359f",
+        "resource_type": "string",
+        "source_file": "android/app/src/main/res/values/copy.xml",
+        "english_source": "\"Not Now\"",
+        "rw_draft": "\"Si nonaha\""
+      },
+      {
+        "resource_id": "copy_notification_preferences_0ead6c12",
+        "resource_type": "string",
+        "source_file": "android/app/src/main/res/values/copy.xml",
+        "english_source": "\"Notification preferences\"",
+        "rw_draft": "\"Amahitamo y’imenyesha\""
+      },
+      {
+        "resource_id": "copy_notifications_753a22b2",
+        "resource_type": "string",
+        "source_file": "android/app/src/main/res/values/copy.xml",
+        "english_source": "\"Notifications\"",
+        "rw_draft": "\"Imenyesha\""
+      },
+      {
+        "resource_id": "copy_open_a_photo_review_first_e2f30cd2",
+        "resource_type": "string",
+        "source_file": "android/app/src/main/res/values/copy.xml",
+        "english_source": "\"Open a photo review first.\"",
+        "rw_draft": "\"Banza ufungure isuzuma ry’amafoto.\""
+      },
+      {
+        "resource_id": "copy_open_a_photo_review_from_your_galle_7b747039",
+        "resource_type": "string",
+        "source_file": "android/app/src/main/res/values/copy.xml",
+        "english_source": "\"Open a photo review from your gallery.\"",
+        "rw_draft": "\"Fungura isuzuma ry’amafoto unyuze mu bubiko bwawe bw’amafoto.\""
+      },
+      {
+        "resource_id": "copy_open_a_photo_review_to_see_its_matc_18b4a6ae",
+        "resource_type": "string",
+        "source_file": "android/app/src/main/res/values/copy.xml",
+        "english_source": "\"Open a photo review to see its matched people here.\"",
+        "rw_draft": "\"Fungura isuzuma ry’amafoto kugira ngo ubone hano abantu bahujwe na yo.\""
+      },
+      {
+        "resource_id": "copy_open_a_photo_to_review_its_matches_cd430a24",
+        "resource_type": "string",
+        "source_file": "android/app/src/main/res/values/copy.xml",
+        "english_source": "\"Open a photo to review its matches.\"",
+        "rw_draft": "\"Fungura ifoto urebe abantu bahujwe na yo.\""
+      },
+      {
+        "resource_id": "copy_original_photo_access_fe8275e8",
+        "resource_type": "string",
+        "source_file": "android/app/src/main/res/values/copy.xml",
+        "english_source": "\"Original photo access\"",
+        "rw_draft": "\"Uburenganzira bwo kubona ifoto y’umwimerere\""
+      },
+      {
+        "resource_id": "copy_pause_781961bc",
+        "resource_type": "string",
+        "source_file": "android/app/src/main/res/values/copy.xml",
+        "english_source": "\"Pause\"",
+        "rw_draft": "\"Hagarika by’agateganyo\""
+      },
+      {
+        "resource_id": "copy_photo_preferences_d1ccbb74",
+        "resource_type": "string",
+        "source_file": "android/app/src/main/res/values/copy.xml",
+        "english_source": "\"Photo Preferences\"",
+        "rw_draft": "\"Amahitamo y’amafoto\""
+      },
+      {
+        "resource_id": "copy_photo_requests_will_appear_here_375f2958",
+        "resource_type": "string",
+        "source_file": "android/app/src/main/res/values/copy.xml",
+        "english_source": "\"Photo requests will appear here.\"",
+        "rw_draft": "\"Ubusabe bw’amafoto buzagaragara hano.\""
+      },
+      {
+        "resource_id": "copy_photo_source_dfe0371b",
+        "resource_type": "string",
+        "source_file": "android/app/src/main/res/values/copy.xml",
+        "english_source": "\"Photo source\"",
+        "rw_draft": "\"Aho amafoto ava\""
+      },
+      {
+        "resource_id": "copy_photo_title_optional_029237d2",
+        "resource_type": "string",
+        "source_file": "android/app/src/main/res/values/copy.xml",
+        "english_source": "\"Photo title (optional)\"",
+        "rw_draft": "\"Umutwe w’ifoto (si ngombwa)\""
+      },
+      {
+        "resource_id": "copy_photos_bring_people_closer_63eca6c3",
+        "resource_type": "string",
+        "source_file": "android/app/src/main/res/values/copy.xml",
+        "english_source": "\"PHOTOS BRING\\nPEOPLE CLOSER\"",
+        "rw_draft": "\"AMAFOTO YEGEREZA\\nABANTU\""
+      },
+      {
+        "resource_id": "copy_photos_uploaded_40ce29e6",
+        "resource_type": "string",
+        "source_file": "android/app/src/main/res/values/copy.xml",
+        "english_source": "\"Photos uploaded!\"",
+        "rw_draft": "\"Amafoto yoherejwe!\""
+      },
+      {
+        "resource_id": "copy_position_your_face_in_the_frame_d8080d72",
+        "resource_type": "string",
+        "source_file": "android/app/src/main/res/values/copy.xml",
+        "english_source": "\"Position your face\\nin the frame\"",
+        "rw_draft": "\"Shyira isura yawe\\nmu mwanya ugaragajwe\""
+      },
+      {
+        "resource_id": "copy_private_photo_storage_d3b1cb7a",
+        "resource_type": "string",
+        "source_file": "android/app/src/main/res/values/copy.xml",
+        "english_source": "\"Private photo storage\"",
+        "rw_draft": "\"Ububiko bw’amafoto bw’ibanga\""
+      },
+      {
+        "resource_id": "copy_private_recovery_backup_0573f471",
+        "resource_type": "string",
+        "source_file": "android/app/src/main/res/values/copy.xml",
+        "english_source": "\"Private recovery backup\"",
+        "rw_draft": "\"Kopi y’ingoboka y’ibanga yo kugarura konti\""
+      },
+      {
+        "resource_id": "copy_protected_previews_are_held_in_memo_951bd453",
+        "resource_type": "string",
+        "source_file": "android/app/src/main/res/values/copy.xml",
+        "english_source": "\"Protected previews are held in memory while you view them. Sign-out clears private photo references and local capture files.\"",
+        "rw_draft": "\"Amashusho yo kureba mbere arinzwe abikwa mu bubiko bw’akazi igihe uyareba. Gusohoka bikuraho ibihuza n’amafoto y’ibanga n’amadosiye y’amafoto yafashwe kuri iki gikoresho.\"",
+        "review_note": "Review RAM/preview/reference terminology; signing out clears local references/captures, not remotely stored originals."
+      },
+      {
+        "resource_id": "copy_recover_my_account_8b0b03be",
+        "resource_type": "string",
+        "source_file": "android/app/src/main/res/values/copy.xml",
+        "english_source": "\"Recover my account\"",
+        "rw_draft": "\"Garura konti yanjye\""
+      },
+      {
+        "resource_id": "copy_recover_with_my_backup_bf4d877b",
+        "resource_type": "string",
+        "source_file": "android/app/src/main/res/values/copy.xml",
+        "english_source": "\"Recover With My Backup\"",
+        "rw_draft": "\"Garura konti ukoresheje kopi yanjye y’ingoboka\""
+      },
+      {
+        "resource_id": "copy_recovery_key_2e524a4f",
+        "resource_type": "string",
+        "source_file": "android/app/src/main/res/values/copy.xml",
+        "english_source": "\"Recovery key\"",
+        "rw_draft": "\"Urufunguzo rwo kugarura konti\"",
+        "review_note": "Review recovery-key terminology consistently with the private backup; do not suggest an OTP or ordinary password."
+      },
+      {
+        "resource_id": "copy_refresh_history_5ffdb33d",
+        "resource_type": "string",
+        "source_file": "android/app/src/main/res/values/copy.xml",
+        "english_source": "\"Refresh History\"",
+        "rw_draft": "\"Ongera usome amateka y’ibikorwa\""
+      },
+      {
+        "resource_id": "copy_refresh_requests_3dc3afd4",
+        "resource_type": "string",
+        "source_file": "android/app/src/main/res/values/copy.xml",
+        "english_source": "\"Refresh Requests\"",
+        "rw_draft": "\"Ongera urebe ubusabe\""
+      },
+      {
+        "resource_id": "copy_refresh_status_28a0e95a",
+        "resource_type": "string",
+        "source_file": "android/app/src/main/res/values/copy.xml",
+        "english_source": "\"Refresh Status\"",
+        "rw_draft": "\"Ongera urebe uko bihagaze\""
+      },
+      {
+        "resource_id": "copy_register_your_face_using_the_camera_5215d56a",
+        "resource_type": "string",
+        "source_file": "android/app/src/main/res/values/copy.xml",
+        "english_source": "\"Register your face using the camera to sign in. Choose photos to upload, then review each matched person’s exact photo subset. Sharing sends a request; accepted requests create access. You can exclude a person globally or uncheck an individual photo for them.\"",
+        "rw_draft": "\"Andikisha isura yawe ukoresheje kamera kugira ngo winjire. Hitamo amafoto yo kohereza, hanyuma urebe neza amafoto yatoranyirijwe buri muntu wahujwe na yo. Gusangiza byohereza ubusabe; iyo ababohererejwe babwemeye, ni bwo bahabwa uburenganzira bwo kubona amafoto. Ushobora gukuramo umuntu mu gusangiza kose cyangwa ugakuraho akamenyetso ku ifoto imwe iri mu zo wamutoranyirije.\"",
+        "review_note": "Keep exact per-person subsets, recipient acceptance before access, global exclusion and individual-photo exclusion distinct."
+      },
+      {
+        "resource_id": "copy_registered_devices_4faea88f",
+        "resource_type": "string",
+        "source_file": "android/app/src/main/res/values/copy.xml",
+        "english_source": "\"Registered devices\"",
+        "rw_draft": "\"Ibikoresho byanditswe\""
+      },
+      {
+        "resource_id": "copy_remove_face_profile_1d28e692",
+        "resource_type": "string",
+        "source_file": "android/app/src/main/res/values/copy.xml",
+        "english_source": "\"Remove Face Profile\"",
+        "rw_draft": "\"Kuraho amakuru y’isura\""
+      },
+      {
+        "resource_id": "copy_renew_expired_management_247280ad",
+        "resource_type": "string",
+        "source_file": "android/app/src/main/res/values/copy.xml",
+        "english_source": "\"Renew Expired Management\"",
+        "rw_draft": "\"Vugurura uburenganzira bwo gucunga bwarangiye\"",
+        "review_note": "Management authority expires here; this is not subscription renewal."
+      },
+      {
+        "resource_id": "copy_replace_face_profile_2fd80a65",
+        "resource_type": "string",
+        "source_file": "android/app/src/main/res/values/copy.xml",
+        "english_source": "\"Replace Face Profile\"",
+        "rw_draft": "\"Simbuza amakuru y’isura\""
+      },
+      {
+        "resource_id": "copy_request_a_copy_of_your_data_the_sta_5aa86443",
+        "resource_type": "string",
+        "source_file": "android/app/src/main/res/values/copy.xml",
+        "english_source": "\"Request a copy of your data. The status below is reported by the server.\"",
+        "rw_draft": "\"Saba kopi y’amakuru yawe. Uko bihagaze bigaragara hasi bitangwa na seriveri.\""
+      },
+      {
+        "resource_id": "copy_request_account_deletion_faa6919a",
+        "resource_type": "string",
+        "source_file": "android/app/src/main/res/values/copy.xml",
+        "english_source": "\"Request Account Deletion\"",
+        "rw_draft": "\"Saba gusiba konti\""
+      },
+      {
+        "resource_id": "copy_request_export_cfe37002",
+        "resource_type": "string",
+        "source_file": "android/app/src/main/res/values/copy.xml",
+        "english_source": "\"Request Export\"",
+        "rw_draft": "\"Saba gukuramo kopi y’amakuru\""
+      },
+      {
+        "resource_id": "copy_request_guest_account_deletion_c17f5942",
+        "resource_type": "string",
+        "source_file": "android/app/src/main/res/values/copy.xml",
+        "english_source": "\"Request guest account deletion\"",
+        "rw_draft": "\"Saba gusiba konti y’umushyitsi\""
+      },
+      {
+        "resource_id": "copy_restore_face_sign_in_5364a734",
+        "resource_type": "string",
+        "source_file": "android/app/src/main/res/values/copy.xml",
+        "english_source": "\"Restore Face Sign-In\"",
+        "rw_draft": "\"Subizaho kwinjira ukoresheje isura\""
+      },
+      {
+        "resource_id": "copy_restore_purchases_2d557413",
+        "resource_type": "string",
+        "source_file": "android/app/src/main/res/values/copy.xml",
+        "english_source": "\"Restore Purchases\"",
+        "rw_draft": "\"Garura ibyo waguze\""
+      },
+      {
+        "resource_id": "copy_resume_setup_e799297d",
+        "resource_type": "string",
+        "source_file": "android/app/src/main/res/values/copy.xml",
+        "english_source": "\"Resume setup\"",
+        "rw_draft": "\"Komeza gushyiraho konti\""
+      },
+      {
+        "resource_id": "copy_retake_16457335",
+        "resource_type": "string",
+        "source_file": "android/app/src/main/res/values/copy.xml",
+        "english_source": "\"Retake\"",
+        "rw_draft": "\"Ongera ufotore\""
+      },
+      {
+        "resource_id": "copy_retry_original_share_b4d52f73",
+        "resource_type": "string",
+        "source_file": "android/app/src/main/res/values/copy.xml",
+        "english_source": "\"Retry Original Share\"",
+        "rw_draft": "\"Ongera ugerageze gusangiza kwa mbere\"",
+        "review_note": "Original means the same saved sharing operation/request, not a new send or a photo-original download."
+      },
+      {
+        "resource_id": "copy_retry_saved_key_request_c8c5da9e",
+        "resource_type": "string",
+        "source_file": "android/app/src/main/res/values/copy.xml",
+        "english_source": "\"Retry saved key request\"",
+        "rw_draft": "\"Ongera ugerageze ubusabe bw’urufunguzo bwabitswe\""
+      },
+      {
+        "resource_id": "copy_retry_stop_f7cc0a3e",
+        "resource_type": "string",
+        "source_file": "android/app/src/main/res/values/copy.xml",
+        "english_source": "\"Retry Stop\"",
+        "rw_draft": "\"Ongera ugerageze guhagarika\""
+      },
+      {
+        "resource_id": "copy_return_to_my_account_1e0b386e",
+        "resource_type": "string",
+        "source_file": "android/app/src/main/res/values/copy.xml",
+        "english_source": "\"Return to My Account\"",
+        "rw_draft": "\"Subira kuri konti yanjye\""
+      },
+      {
+        "resource_id": "copy_review_matched_people_bda254b4",
+        "resource_type": "string",
+        "source_file": "android/app/src/main/res/values/copy.xml",
+        "english_source": "\"Review Matched People\"",
+        "rw_draft": "\"Reba abantu bahujwe n’amafoto\""
+      },
+      {
+        "resource_id": "copy_review_matched_people_before_sharin_c105f158",
+        "resource_type": "string",
+        "source_file": "android/app/src/main/res/values/copy.xml",
+        "english_source": "\"Review matched people before sharing any photo.\"",
+        "rw_draft": "\"Reba abantu bahujwe n’amafoto mbere yo gusangiza ifoto iyo ari yo yose.\""
+      },
+      {
+        "resource_id": "copy_review_my_photos_23b36063",
+        "resource_type": "string",
+        "source_file": "android/app/src/main/res/values/copy.xml",
+        "english_source": "\"Review my photos\"",
+        "rw_draft": "\"Reba amafoto yanjye\""
+      },
+      {
+        "resource_id": "copy_review_reference_screens_693e2915",
+        "resource_type": "string",
+        "source_file": "android/app/src/main/res/values/copy.xml",
+        "english_source": "\"Review Reference Screens\"",
+        "rw_draft": "\"Reba paji z’icyitegererezo\""
+      },
+      {
+        "resource_id": "copy_review_selection_04dd6243",
+        "resource_type": "string",
+        "source_file": "android/app/src/main/res/values/copy.xml",
+        "english_source": "\"Review selection\"",
+        "rw_draft": "\"Reba ibyo watoranyije\""
+      },
+      {
+        "resource_id": "copy_review_share_023d8493",
+        "resource_type": "string",
+        "source_file": "android/app/src/main/res/values/copy.xml",
+        "english_source": "\"Review & Share\"",
+        "rw_draft": "\"Reba kandi usangize\""
+      },
+      {
+        "resource_id": "copy_review_your_current_selection_befor_b592a97e",
+        "resource_type": "string",
+        "source_file": "android/app/src/main/res/values/copy.xml",
+        "english_source": "\"Review your current selection before sharing.\"",
+        "rw_draft": "\"Reba ibyo watoranyije ubu mbere yo kubisangiza.\""
+      },
+      {
+        "resource_id": "copy_revoke_access_094386f6",
+        "resource_type": "string",
+        "source_file": "android/app/src/main/res/values/copy.xml",
+        "english_source": "\"Revoke access\"",
+        "rw_draft": "\"Kuraho uburenganzira bwo kubona amafoto\""
+      },
+      {
+        "resource_id": "copy_revoke_recovery_key_f01a6d60",
+        "resource_type": "string",
+        "source_file": "android/app/src/main/res/values/copy.xml",
+        "english_source": "\"Revoke recovery key\"",
+        "rw_draft": "\"Hagarika urufunguzo rwo kugarura konti\""
+      },
+      {
+        "resource_id": "copy_same_photos_more_people_in_them_dee1a826",
+        "resource_type": "string",
+        "source_file": "android/app/src/main/res/values/copy.xml",
+        "english_source": "\"Same photos.\\nMore people in them.\"",
+        "rw_draft": "\"Amafoto amwe.\\nAbantu benshi kurushaho bayagaragaramo.\""
+      },
+      {
+        "resource_id": "copy_save_a_private_backup_key_to_recove_845d2912",
+        "resource_type": "string",
+        "source_file": "android/app/src/main/res/values/copy.xml",
+        "english_source": "\"Save a private backup key to recover this account with a fresh selfie on another device.\"",
+        "rw_draft": "\"Bika urufunguzo rw’ibanga rw’ingoboka kugira ngo ugarure iyi konti ukoresheje ifoto nshya y’isura yawe ku kindi gikoresho.\""
+      },
+      {
+        "resource_id": "copy_save_efc007a3",
+        "resource_type": "string",
+        "source_file": "android/app/src/main/res/values/copy.xml",
+        "english_source": "\"Save\"",
+        "rw_draft": "\"Bika\""
+      },
+      {
+        "resource_id": "copy_save_preferences_e9fdd169",
+        "resource_type": "string",
+        "source_file": "android/app/src/main/res/values/copy.xml",
+        "english_source": "\"Save Preferences\"",
+        "rw_draft": "\"Bika amahitamo\""
+      },
+      {
+        "resource_id": "copy_save_your_recovery_backup_e8ed0c24",
+        "resource_type": "string",
+        "source_file": "android/app/src/main/res/values/copy.xml",
+        "english_source": "\"Save your recovery backup\"",
+        "rw_draft": "\"Bika kopi yawe y’ingoboka yo kugarura konti\""
+      },
+      {
+        "resource_id": "copy_select_a_matched_person_first_ba1e7627",
+        "resource_type": "string",
+        "source_file": "android/app/src/main/res/values/copy.xml",
+        "english_source": "\"Select a matched person first.\"",
+        "rw_draft": "\"Banza uhitemo umuntu wahujwe n’amafoto.\""
+      },
+      {
+        "resource_id": "copy_select_photos_to_share_52f9b7e4",
+        "resource_type": "string",
+        "source_file": "android/app/src/main/res/values/copy.xml",
+        "english_source": "\"Select Photos to Share\"",
+        "rw_draft": "\"Hitamo amafoto yo gusangiza\""
+      },
+      {
+        "resource_id": "copy_send_support_request_5ebcb06b",
+        "resource_type": "string",
+        "source_file": "android/app/src/main/res/values/copy.xml",
+        "english_source": "\"Send Support Request\"",
+        "rw_draft": "\"Ohereza ubusabe bw’ubufasha\""
+      },
+      {
+        "resource_id": "copy_sessions_e11e37a9",
+        "resource_type": "string",
+        "source_file": "android/app/src/main/res/values/copy.xml",
+        "english_source": "\"Sessions\"",
+        "rw_draft": "\"Ibihe konti yinjiriwemo\"",
+        "review_note": "Review the term for active authorization sessions; it must not imply a location list or only historical sign-ins."
+      },
+      {
+        "resource_id": "copy_set_photo_preferences_58dc8238",
+        "resource_type": "string",
+        "source_file": "android/app/src/main/res/values/copy.xml",
+        "english_source": "\"Set photo preferences\"",
+        "rw_draft": "\"Shyiraho amahitamo y’amafoto\""
+      },
+      {
+        "resource_id": "copy_set_up_a_new_face_profile_017b2a6f",
+        "resource_type": "string",
+        "source_file": "android/app/src/main/res/values/copy.xml",
+        "english_source": "\"Set Up a New Face Profile\"",
+        "rw_draft": "\"Shyiraho amakuru mashya y’isura\""
+      },
+      {
+        "resource_id": "copy_sign_in_f8492cc1",
+        "resource_type": "string",
+        "source_file": "android/app/src/main/res/values/copy.xml",
+        "english_source": "\"Sign In\"",
+        "rw_draft": "\"Injira\""
+      },
+      {
+        "resource_id": "copy_sign_out_61fd08ff",
+        "resource_type": "string",
+        "source_file": "android/app/src/main/res/values/copy.xml",
+        "english_source": "\"Sign Out\"",
+        "rw_draft": "\"Sohoka\""
+      },
+      {
+        "resource_id": "copy_sign_out_forget_this_device_82f2999b",
+        "resource_type": "string",
+        "source_file": "android/app/src/main/res/values/copy.xml",
+        "english_source": "\"Sign Out & Forget This Device\"",
+        "rw_draft": "\"Sohoka kandi wibagirwe iki gikoresho\""
+      },
+      {
+        "resource_id": "copy_start_again_1721c828",
+        "resource_type": "string",
+        "source_file": "android/app/src/main/res/values/copy.xml",
+        "english_source": "\"Start Again\"",
+        "rw_draft": "\"Tangira bushya\""
+      },
+      {
+        "resource_id": "copy_start_again_b6fffc5a",
+        "resource_type": "string",
+        "source_file": "android/app/src/main/res/values/copy.xml",
+        "english_source": "\"Start again\"",
+        "rw_draft": "\"Tangira bushya\""
+      },
+      {
+        "resource_id": "copy_subject_8d183dbd",
+        "resource_type": "string",
+        "source_file": "android/app/src/main/res/values/copy.xml",
+        "english_source": "\"Subject\"",
+        "rw_draft": "\"Umutwe w’ubusabe\""
+      },
+      {
+        "resource_id": "copy_submit_report_1ca00033",
+        "resource_type": "string",
+        "source_file": "android/app/src/main/res/values/copy.xml",
+        "english_source": "\"Submit Report\"",
+        "rw_draft": "\"Ohereza raporo\""
+      },
+      {
+        "resource_id": "copy_tell_us_what_s_wrong_08e99516",
+        "resource_type": "string",
+        "source_file": "android/app/src/main/res/values/copy.xml",
+        "english_source": "\"Tell us what’s wrong\"",
+        "rw_draft": "\"Tubwire ikibazo gihari\""
+      },
+      {
+        "resource_id": "copy_these_choices_are_separate_from_fac_234cd232",
+        "resource_type": "string",
+        "source_file": "android/app/src/main/res/values/copy.xml",
+        "english_source": "\"These choices are separate from face authentication. Turning matching off revokes matching access; turning it back on does not restore old access.\"",
+        "rw_draft": "\"Aya mahitamo atandukanye no kwemeza konti ukoresheje isura. Guhagarika guhuza amafoto bikuraho uburenganzira bwo kuyageraho buturuka kuri uko guhuza; kongera kubikora ntibisubizaho uburenganzira bwa kera.\"",
+        "review_note": "Revocation applies to matching-derived access. Re-enabling matching never revives old access."
+      },
+      {
+        "resource_id": "copy_these_preferences_are_saved_to_your_a848bd4b",
+        "resource_type": "string",
+        "source_file": "android/app/src/main/res/values/copy.xml",
+        "english_source": "\"These preferences are saved to your account.\"",
+        "rw_draft": "\"Aya mahitamo abikwa kuri konti yawe.\""
+      },
+      {
+        "resource_id": "copy_this_photo_is_unavailable_return_to_9a6755dc",
+        "resource_type": "string",
+        "source_file": "android/app/src/main/res/values/copy.xml",
+        "english_source": "\"This photo is unavailable. Return to your gallery and refresh current access.\"",
+        "rw_draft": "\"Iyi foto ntiboneka. Subira mu bubiko bwawe bw’amafoto wongere urebe uburenganzira ufite ubu bwo kuyabona.\""
+      },
+      {
+        "resource_id": "copy_this_review_is_limited_to_the_photo_cdbe75a2",
+        "resource_type": "string",
+        "source_file": "android/app/src/main/res/values/copy.xml",
+        "english_source": "\"This review is limited to the photos and matched people shown. Additional photos require a separate review.\"",
+        "rw_draft": "\"Iri suzuma rireba gusa amafoto n’abantu bahujwe na yo bagaragara. Andi mafoto akeneye isuzuma ryihariye.\""
+      },
+      {
+        "resource_id": "copy_this_won_t_take_long_ef97ed1c",
+        "resource_type": "string",
+        "source_file": "android/app/src/main/res/values/copy.xml",
+        "english_source": "\"This won't take long\"",
+        "rw_draft": "\"Ibi ntibizatinda\""
+      },
+      {
+        "resource_id": "copy_try_again_cef2fe09",
+        "resource_type": "string",
+        "source_file": "android/app/src/main/res/values/copy.xml",
+        "english_source": "\"Try Again\"",
+        "rw_draft": "\"Ongera ugerageze\""
+      },
+      {
+        "resource_id": "copy_uncheck_a_person_to_exclude_this_ph_897f2a03",
+        "resource_type": "string",
+        "source_file": "android/app/src/main/res/values/copy.xml",
+        "english_source": "\"Uncheck a person to exclude this photo from their subset.\"",
+        "rw_draft": "\"Kuraho akamenyetso ku muntu kugira ngo iyi foto ikurwe mu mafoto yatoranyirijwe uwo muntu.\""
+      },
+      {
+        "resource_id": "copy_use_another_recovery_key_99e60eca",
+        "resource_type": "string",
+        "source_file": "android/app/src/main/res/values/copy.xml",
+        "english_source": "\"Use another recovery key\"",
+        "rw_draft": "\"Koresha urundi rufunguzo rwo kugarura konti\""
+      },
+      {
+        "resource_id": "copy_use_this_anyway_986e85ae",
+        "resource_type": "string",
+        "source_file": "android/app/src/main/res/values/copy.xml",
+        "english_source": "\"Use This Anyway\"",
+        "rw_draft": "\"Koresha iyi n’ubwo bimeze bityo\"",
+        "review_note": "Retain the existing action meaning; the translation does not authorize bypassing server quality, consent or access checks."
+      },
+      {
+        "resource_id": "copy_verify_my_face_7d81b5df",
+        "resource_type": "string",
+        "source_file": "android/app/src/main/res/values/copy.xml",
+        "english_source": "\"Verify My Face\"",
+        "rw_draft": "\"Emeza isura yanjye\""
+      },
+      {
+        "resource_id": "copy_view_matches_731444f2",
+        "resource_type": "string",
+        "source_file": "android/app/src/main/res/values/copy.xml",
+        "english_source": "\"View Matches\"",
+        "rw_draft": "\"Reba ibyahujwe\""
+      },
+      {
+        "resource_id": "copy_view_saved_backup_ff31fab2",
+        "resource_type": "string",
+        "source_file": "android/app/src/main/res/values/copy.xml",
+        "english_source": "\"View saved backup\"",
+        "rw_draft": "\"Reba kopi y’ingoboka yabitswe\""
+      },
+      {
+        "resource_id": "copy_view_subset_2ead249e",
+        "resource_type": "string",
+        "source_file": "android/app/src/main/res/values/copy.xml",
+        "english_source": "\"View subset\"",
+        "rw_draft": "\"Reba amafoto yatoranyirijwe uyu muntu\""
+      },
+      {
+        "resource_id": "copy_we_ll_match_your_photos_to_people_u_30220d04",
+        "resource_type": "string",
+        "source_file": "android/app/src/main/res/values/copy.xml",
+        "english_source": "\"Choose which photos Lovelies can access.\\nYou review what to share.\"",
+        "rw_draft": "\"Hitamo amafoto Lovelies ishobora kubona.\\nUgenzura ibyo ushaka gusangiza.\""
+      },
+      {
+        "resource_id": "copy_we_ve_matched_your_photos_to_the_pe_604c75ed",
+        "resource_type": "string",
+        "source_file": "android/app/src/main/res/values/copy.xml",
+        "english_source": "\"We've matched your photos\\nto the people in them.\"",
+        "rw_draft": "\"Twahuje amafoto yawe\\nn’abantu bayagaragaramo.\"",
+        "review_note": "Some extracted resources serve reference/development states. Translation is not evidence that matching completed in production."
+      },
+      {
+        "resource_id": "copy_welcome_ca4f9dcf",
+        "resource_type": "string",
+        "source_file": "android/app/src/main/res/values/copy.xml",
+        "english_source": "\"Welcome\"",
+        "rw_draft": "\"Murakaza neza\""
+      },
+      {
+        "resource_id": "copy_withdraw_face_sign_in_consent_b5af30ef",
+        "resource_type": "string",
+        "source_file": "android/app/src/main/res/values/copy.xml",
+        "english_source": "\"Withdraw Face Sign-In Consent\"",
+        "rw_draft": "\"Kuraho uruhushya rwo kwinjira ukoresheje isura\""
+      },
+      {
+        "resource_id": "copy_withdraw_request_f6da7054",
+        "resource_type": "string",
+        "source_file": "android/app/src/main/res/values/copy.xml",
+        "english_source": "\"Withdraw request\"",
+        "rw_draft": "\"Kuraho ubusabe\""
+      },
+      {
+        "resource_id": "copy_you_re_all_set_058a8130",
+        "resource_type": "string",
+        "source_file": "android/app/src/main/res/values/copy.xml",
+        "english_source": "\"You're all set!\"",
+        "rw_draft": "\"Byose biratunganye!\""
+      },
+      {
+        "resource_id": "copy_you_re_all_set_063aa1b0",
+        "resource_type": "string",
+        "source_file": "android/app/src/main/res/values/copy.xml",
+        "english_source": "\"You’re all set!\"",
+        "rw_draft": "\"Byose biratunganye!\""
+      },
+      {
+        "resource_id": "copy_your_account_data_41640209",
+        "resource_type": "string",
+        "source_file": "android/app/src/main/res/values/copy.xml",
+        "english_source": "\"Your account data\"",
+        "rw_draft": "\"Amakuru ya konti yawe\""
+      },
+      {
+        "resource_id": "copy_your_face_is_registered_and_you_re__deb732c4",
+        "resource_type": "string",
+        "source_file": "android/app/src/main/res/values/copy.xml",
+        "english_source": "\"Your face is registered and you’re signed in.\"",
+        "rw_draft": "\"Isura yawe yanditswe kandi winjiye muri konti.\""
+      },
+      {
+        "resource_id": "copy_your_memories_connected_ea90b2ef",
+        "resource_type": "string",
+        "source_file": "android/app/src/main/res/values/copy.xml",
+        "english_source": "\"Your memories, connected\"",
+        "rw_draft": "\"Inzibutso zawe, zahujwe\""
+      },
+      {
+        "resource_id": "copy_your_outgoing_photo_requests_will_a_c770b1b1",
+        "resource_type": "string",
+        "source_file": "android/app/src/main/res/values/copy.xml",
+        "english_source": "\"Your outgoing photo requests will appear here.\"",
+        "rw_draft": "\"Ubusabe bw’amafoto wohereje buzagaragara hano.\""
+      },
+      {
+        "resource_id": "copy_your_photos_find_their_people_3168ba56",
+        "resource_type": "string",
+        "source_file": "android/app/src/main/res/values/copy.xml",
+        "english_source": "\"Your photos\\nfind their people\"",
+        "rw_draft": "\"Amafoto yawe\\nabona abantu bayagaragaramo\""
+      },
+      {
+        "resource_id": "copy_your_photos_your_choice_5f10a2e7",
+        "resource_type": "string",
+        "source_file": "android/app/src/main/res/values/copy.xml",
+        "english_source": "\"Your photos.\\nYour choice.\"",
+        "rw_draft": "\"Amafoto yawe.\\nAmahitamo yawe.\""
+      },
+      {
+        "resource_id": "copy_your_preferences_41bc34e5",
+        "resource_type": "string",
+        "source_file": "android/app/src/main/res/values/copy.xml",
+        "english_source": "\"Your preferences\"",
+        "rw_draft": "\"Amahitamo yawe\""
+      },
+      {
+        "resource_id": "copy_your_requests_91d672ff",
+        "resource_type": "string",
+        "source_file": "android/app/src/main/res/values/copy.xml",
+        "english_source": "\"Your requests\"",
+        "rw_draft": "\"Ubusabe bwawe\""
+      },
+      {
+        "resource_id": "copy_your_support_request_is_saved_9fb2c9cf",
+        "resource_type": "string",
+        "source_file": "android/app/src/main/res/values/copy.xml",
+        "english_source": "\"Your support request is saved.\"",
+        "rw_draft": "\"Ubusabe bwawe bw’ubufasha bwabitswe.\""
+      },
+      {
+        "resource_id": "copy_upload_photo_count",
+        "resource_type": "string",
+        "source_file": "android/app/src/main/res/values/copy.xml",
+        "english_source": "\"Upload %1$s\"",
+        "rw_draft": "\"Ohereza %1$s\""
+      },
+      {
+        "resource_id": "copy_share_photo_count",
+        "resource_type": "string",
+        "source_file": "android/app/src/main/res/values/copy.xml",
+        "english_source": "\"Share %1$s\"",
+        "rw_draft": "\"Sangiza %1$s\""
+      }
+    ]
+  },
+  "ios": {
+    "scope": "Seven existing English CountCopy.stringsdict entries only; separate from Android and not an installed rw.lproj.",
+    "english_source": {
+      "upload_photo_count": {
+        "NSStringLocalizedFormatKey": "Upload %#@photos@",
+        "photos": {
+          "NSStringFormatSpecTypeKey": "NSStringPluralRuleType",
+          "NSStringFormatValueTypeKey": "ld",
+          "one": "%ld Photo",
+          "other": "%ld Photos"
+        }
+      },
+      "review_photo_people_count": {
+        "NSStringLocalizedFormatKey": "%#@photos@ · %#@people@",
+        "photos": {
+          "NSStringFormatSpecTypeKey": "NSStringPluralRuleType",
+          "NSStringFormatValueTypeKey": "ld",
+          "one": "%ld photo",
+          "other": "%ld photos"
+        },
+        "people": {
+          "NSStringFormatSpecTypeKey": "NSStringPluralRuleType",
+          "NSStringFormatValueTypeKey": "ld",
+          "one": "%ld person",
+          "other": "%ld people"
+        }
+      },
+      "limited_review_photo_count": {
+        "NSStringLocalizedFormatKey": "This review covers %#@photos@. Choose another group to review more.",
+        "photos": {
+          "NSStringFormatSpecTypeKey": "NSStringPluralRuleType",
+          "NSStringFormatValueTypeKey": "ld",
+          "one": "%ld photo",
+          "other": "%ld photos"
+        }
+      },
+      "matched_photo_count": {
+        "NSStringLocalizedFormatKey": "%#@photos@",
+        "photos": {
+          "NSStringFormatSpecTypeKey": "NSStringPluralRuleType",
+          "NSStringFormatValueTypeKey": "ld",
+          "one": "%ld matched photo",
+          "other": "%ld matched photos"
+        }
+      },
+      "photo_count": {
+        "NSStringLocalizedFormatKey": "%#@photos@",
+        "photos": {
+          "NSStringFormatSpecTypeKey": "NSStringPluralRuleType",
+          "NSStringFormatValueTypeKey": "ld",
+          "one": "%ld photo",
+          "other": "%ld photos"
+        }
+      },
+      "photo_status_count": {
+        "NSStringLocalizedFormatKey": "%#@photos@ · %@",
+        "photos": {
+          "NSStringFormatSpecTypeKey": "NSStringPluralRuleType",
+          "NSStringFormatValueTypeKey": "ld",
+          "one": "%ld photo",
+          "other": "%ld photos"
+        }
+      },
+      "reviewed_photo_count": {
+        "NSStringLocalizedFormatKey": "%#@photos@",
+        "photos": {
+          "NSStringFormatSpecTypeKey": "NSStringPluralRuleType",
+          "NSStringFormatValueTypeKey": "ld",
+          "one": "%ld reviewed photo",
+          "other": "%ld reviewed photos"
+        }
+      }
+    },
+    "rw_draft": {
+      "upload_photo_count": {
+        "NSStringLocalizedFormatKey": "Ohereza %#@photos@",
+        "photos": {
+          "NSStringFormatSpecTypeKey": "NSStringPluralRuleType",
+          "NSStringFormatValueTypeKey": "ld",
+          "one": "Ifoto %ld",
+          "other": "Amafoto %ld"
+        }
+      },
+      "review_photo_people_count": {
+        "NSStringLocalizedFormatKey": "%#@photos@ · %#@people@",
+        "photos": {
+          "NSStringFormatSpecTypeKey": "NSStringPluralRuleType",
+          "NSStringFormatValueTypeKey": "ld",
+          "one": "Ifoto %ld",
+          "other": "Amafoto %ld"
+        },
+        "people": {
+          "NSStringFormatSpecTypeKey": "NSStringPluralRuleType",
+          "NSStringFormatValueTypeKey": "ld",
+          "one": "Umuntu %ld",
+          "other": "Abantu %ld"
+        }
+      },
+      "limited_review_photo_count": {
+        "NSStringLocalizedFormatKey": "Iri suzuma rireba %#@photos@ gusa. Hitamo irindi tsinda kugira ngo urebe andi.",
+        "photos": {
+          "NSStringFormatSpecTypeKey": "NSStringPluralRuleType",
+          "NSStringFormatValueTypeKey": "ld",
+          "one": "Ifoto %ld",
+          "other": "Amafoto %ld"
+        }
+      },
+      "matched_photo_count": {
+        "NSStringLocalizedFormatKey": "%#@photos@",
+        "photos": {
+          "NSStringFormatSpecTypeKey": "NSStringPluralRuleType",
+          "NSStringFormatValueTypeKey": "ld",
+          "one": "Ifoto %ld yahujwe n’abantu",
+          "other": "Amafoto %ld yahujwe n’abantu"
+        }
+      },
+      "photo_count": {
+        "NSStringLocalizedFormatKey": "%#@photos@",
+        "photos": {
+          "NSStringFormatSpecTypeKey": "NSStringPluralRuleType",
+          "NSStringFormatValueTypeKey": "ld",
+          "one": "Ifoto %ld",
+          "other": "Amafoto %ld"
+        }
+      },
+      "photo_status_count": {
+        "NSStringLocalizedFormatKey": "%#@photos@ · %@",
+        "photos": {
+          "NSStringFormatSpecTypeKey": "NSStringPluralRuleType",
+          "NSStringFormatValueTypeKey": "ld",
+          "one": "Ifoto %ld",
+          "other": "Amafoto %ld"
+        }
+      },
+      "reviewed_photo_count": {
+        "NSStringLocalizedFormatKey": "%#@photos@",
+        "photos": {
+          "NSStringFormatSpecTypeKey": "NSStringPluralRuleType",
+          "NSStringFormatValueTypeKey": "ld",
+          "one": "Ifoto %ld yasuzumwe",
+          "other": "Amafoto %ld yasuzumwe"
+        }
+      }
+    },
+    "review_notes": [
+      "Review numeral placement and noun classes for every one/other branch with zero, one and many actual counts.",
+      "matched_photo_count remains a count of candidate-matched photos; it is not approved sharing or recipient access.",
+      "reviewed_photo_count means reviewed photos, not necessarily accepted/delivered/saved photos.",
+      "photo_status_count preserves %@; status text supplied from outside this dictionary still needs its own localization.",
+      "No dictionary metadata, placeholder variable or plural category is approved or changed by packaging/runtime here."
+    ]
+  },
+  "validation": {
+    "source_hashes_matched": true,
+    "android_resource_entries": 211,
+    "android_string_entries": 209,
+    "android_plural_entries": 2,
+    "android_plural_forms": 4,
+    "ios_dictionary_entries": 7,
+    "structural_and_text_leaf_checks": 252,
+    "placeholder_multiset_parity_android": true,
+    "placeholder_order_parity_ios": true,
+    "android_quote_and_escape_parity": true,
+    "branding_token_parity": true,
+    "plural_category_and_ios_metadata_parity": true,
+    "native_language_review_performed": false,
+    "packaged_locale_changed": false,
+    "build_or_device_run_performed": false
+  },
+  "remaining_acceptance": [
+    "A native Kinyarwanda reviewer checks each translation, technical terminology, tone, noun agreement and contextual accuracy against the bound English sources.",
+    "Complete extraction and review of remaining current live/reference/accessibility/error/status copy; this inventory is complete only for the three listed resource files.",
+    "A separately owned implementation would add reviewed rw resources and verify Android/iOS locale discovery, fallback, plural selection and all substituted status/count phrases.",
+    "Qualify zero/one/many, long names and filenames, dates/counts/transfer units, enlarged text/Dynamic Type and screen-reader behavior on the actual journeys with the runtime owner.",
+    "Recheck source hashes if default resources change; do not infer a source mismatch is covered by this draft."
+  ]
+}

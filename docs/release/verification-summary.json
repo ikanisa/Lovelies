@@ -144,8 +144,8 @@
       "artifacts": [
         {
           "path": "android/app/build/outputs/apk/debug/app-debug.apk",
-          "sha256": "a36d1a43228c8e8761b116fb5b0077fc1f30b32c395ab8c484d6b08d5cce0ef2",
-          "bytes": 14773295
+          "sha256": "bd1e9ed1bf78a0b338870f186dd40e9b9377ccd9b0984e6e3c8f74c8f121622b",
+          "bytes": 14773409
         },
         {
           "path": "android/app/build/outputs/apk/androidTest/debug/app-debug-androidTest.apk",
@@ -153,20 +153,8 @@
           "bytes": 516917
         }
       ],
-      "unit_result_execution": "Fresh156/14-suite count-product build; later opt-in caller-only build reused the same14 XML hashes UP-TO-DATE. No new unit execution claimed for guard.",
-      "current_product_checkpoint": "Reference person gallery uses exact configured per-person counts and correct singular; seven person actions retain explicit own-name/role/selected/shared callbacks. Test-only caller refreshes the same visible Back source immediately before one dispatch and retains failure telemetry.",
-      "current_reference_runtime": {
-        "receipt": "verification/supabase-release-20261023/device-checkpoint-person-gallery-final.json",
-        "guarded27_variants_pass": 3,
-        "nested_person_cases_pass": 21,
-        "final_actual_visible_back26_pass": 3,
-        "strict_scroll_caps_relaxed": false,
-        "default28_and_keyboard_consumer_runs_pass": 6,
-        "default_consumer_actual_test_sha256": "99c5e20e6c1dcc557646dce9dc709c1fd8074003c34e99c33c0dcf7d8666d596",
-        "default_consumer_current_product_same": true,
-        "separate_settled_landscape27_recapture": "passed; original skewed frame retained",
-        "environment_restored": "font1/auto-rotation1/user-rotation0/animator1; installed artifact hashes match"
-      },
+      "unit_result_execution": "Latest connected-count-copy product build freshly executed156/14 suites; all14 XML mtimes follow start. Prior count-product fresh156 and caller-only UP-TO-DATE reuse remain separate preserved checkpoints.",
+      "current_product_checkpoint": "Two connected Upload/Share action formats reuse existing photo plurals; callbacks,enablement,layout and inherited accessible labels unchanged. Reference person counts/semantics and instrumentation guard unchanged.",
       "historical_reference_checkpoints": {
         "V5_normal": 48,
         "V5_landscape": 48,
@@ -187,20 +175,41 @@
       },
       "connected_favorites_viewport": "Unchanged; broader candidate preserved unbuilt and connected behavior unqualified",
       "signed_store_artifact": false,
-      "scope_limits": "Reference fixtures and Android AX geometry/callback proof do not establish physical touch, spoken TalkBack, connected services, provider behavior or store-installed update acceptance."
+      "scope_limits": "Reference fixtures and Android AX geometry/callback proof do not establish physical touch, spoken TalkBack, connected services, provider behavior or store-installed update acceptance.",
+      "connected_count_copy": {
+        "receipt": "verification/supabase-release-20261023/q02-count-copy/result.json",
+        "compiled": "passed",
+        "runtime": "Connected live screen unqualified; prior reference runtime is not a new current-product run",
+        "full_locale_coverage": false
+      },
+      "latest_reference_runtime_checkpoint": {
+        "receipt": "verification/supabase-release-20261023/device-checkpoint-person-gallery-final.json",
+        "guarded27_variants_pass": 3,
+        "nested_person_cases_pass": 21,
+        "final_actual_visible_back26_pass": 3,
+        "strict_scroll_caps_relaxed": false,
+        "default28_and_keyboard_consumer_runs_pass": 6,
+        "default_consumer_actual_test_sha256": "99c5e20e6c1dcc557646dce9dc709c1fd8074003c34e99c33c0dcf7d8666d596",
+        "separate_settled_landscape27_recapture": "passed; original skewed frame retained",
+        "environment_restored": "font1/auto-rotation1/user-rotation0/animator1; installed artifact hashes match",
+        "product_sha256": "a36d1a43228c8e8761b116fb5b0077fc1f30b32c395ab8c484d6b08d5cce0ef2",
+        "test_sha256": "ac7e1f5b2565b468122de396357e5835199f0991a3cbc05ac75575ba3c2f2066",
+        "default_consumer_product_sha256": "a36d1a43228c8e8761b116fb5b0077fc1f30b32c395ab8c484d6b08d5cce0ef2",
+        "scope": "Preserved prior producta36 reference checkpoint; reference sources and existing default resource values unchanged. No full currentbd APK runtime asserted."
+      }
     },
     "ios": {
       "focused_host_checks_pass": 665,
       "unsigned_release": "passed",
       "debug_build_for_testing": "passed",
       "release_artifact": {
-        "scope": "Unsigned latest person-gallery Release artifact readback; no signing/device/provider/store acceptance",
+        "scope": "Unsigned latest connected-count-copy Release artifact readback; no signing/device/provider/store acceptance",
         "bundle": "com.lovelies.memories",
         "marketing_version": "1.1.0",
         "build": "18",
         "minimum_os": "17.0",
         "api_origin": "https://ltqfplqevxztlswlzexn.supabase.co/functions/v1/lovelies-api",
-        "binary_sha256": "be7c8aa4b0c10cc5674e14ca21343b7a36b5bbae50b725eaacc945144c9b1f49",
+        "binary_sha256": "7cc83bbb988d1fc0710cef061bfb90abf77c38e716e4ebe3dd17d2b46f39d3dd",
         "reference_fixture_paths": [],
         "privacy_manifest": true,
         "icon_files": {
@@ -223,18 +232,21 @@
           "ios/Lovelies/App/LoveliesApp.swift": "1ef42f6d4bad1b922b540c009a161a8d97578696e30884e6e90eedbab4d54827",
           "ios/Lovelies/Native/NativeServices.swift": "0b95c71847871ee954be5831c435b172952c949ef2b8ea79939f512f564b36ac"
         },
-        "person_gallery_source_sha256": "73b50fb6f521e16759805b87a1de1156fe94a41cc652d09cbc3fe75cabbbf2fc"
+        "person_gallery_source_sha256": "73b50fb6f521e16759805b87a1de1156fe94a41cc652d09cbc3fe75cabbbf2fc",
+        "connected_count_copy_source_sha256": "3c5b89834f4603f552c70bfb363806160c7d9f184cccadf8bd1897fbb2d371e1",
+        "count_plural_resource_packaged": true,
+        "count_plural_resource_sha256": "009e37da0e44b0dd0e1041813d1105bb28e6b42939d2369079c8bd090de50ffa"
       },
-      "qa_only_development_signing": "Current179-file count-filter QA copy strict/deep verified; not installed. Previous179-file signed QA copy preserved unchanged.",
+      "qa_only_development_signing": "Current180-file connected-count-copy QA strict/deep/certificate verified,uninstalled; both prior179-file signed QAs preserved unchanged.",
       "production_signature_or_device_store_acceptance": false,
       "storage_accessibility_source_compile": "passed; device/Dynamic Type runtime unqualified",
-      "qa_signing_receipt": "verification/supabase-release-20261023/qa-iphone-person-gallery-v7-signing.json",
+      "qa_signing_receipt": "verification/supabase-release-20261023/q02-count-copy/qa-iphone-signing.json",
       "reference_lifecycle_and_service_binding_compile": "Release and Debug build-for-testing passed with unchanged inputs; device/provider behavior separate",
       "release_link_preflight": {
         "synthetic_cases_pass": 13,
         "codesign_mocked": true,
         "actual_unsigned_artifact": "blocked: missing approved link host, four published policy URLs, valid release signature",
-        "actual_receipt": "verification/supabase-release-20261023/ios-preflight-person-gallery-final.json"
+        "actual_receipt": "verification/supabase-release-20261023/q02-count-copy/ios-preflight.json"
       },
       "physical_runtime": "Previous developer-build11 to reference QA build18 in-place install used container backup/no reset. Its test01 passed initial lifecycle/custom-link isolation then failed under unrelated video overlay. Owner Clear remains pending; new count-filter QA copy not installed.",
       "existing_signed_xctest_runner": "V1 executed partial physical smoke with retained overlay-blocked failure. V2 build/signature/profile/certificate/phone membership pass with unchanged inputs; physical V2 not run, awaits owner overlay removal; installed product app unchanged.",
@@ -242,8 +254,23 @@
         "receipt": "verification/supabase-release-20261023/ios-simulator-final-build.json",
         "status": "passed",
         "app_and_existing_V2_runner": "Separate arm64 Debug generic iOS Simulator products;248 combined source inputs unchanged; no signing/install/runtime by root",
-        "runtime": "Healthy isolated internal simulator reported by UI owner; supported custom-set XCTest execution remains under qualification",
-        "physical_device_acceptance": false
+        "runtime": {
+          "receipt": "verification/supabase-release-20261023/ios-simulator-smoke-checkpoint.json",
+          "smoke": "passed",
+          "installed_app_files_verified": 172,
+          "full_matrix": "Pending completed evidence; owned by coordinated UI review",
+          "physical_device_acceptance": false
+        },
+        "physical_device_acceptance": false,
+        "source_scope": "Preserved08a product before connected count-copy change; no new simulator product/current-source runtime inferred."
+      },
+      "connected_count_copy": {
+        "phrases": 7,
+        "temporary_bundle_outputs_pass": 27,
+        "actual_release_packaged_bundle_outputs_pass": 27,
+        "counting": "Same27 format cases repeated against packaged resource,not54 distinct cases",
+        "packaged_proof": "verification/supabase-release-20261023/q02-count-copy/packaged-resource-result.json",
+        "runtime": "macOS Foundation against Release resources; not iOS UI/full locale acceptance"
       }
     },
     "model_service": {
@@ -271,6 +298,16 @@
       "reuse_scope": "Other45 unchanged route renderers from989d source only; no fresh full48 current-source aggregate",
       "review_url": "http://127.0.0.1:8765/preview/index.html?review=20261024-final#48",
       "scope_limits": "Local browser/reference proof; no overall WCAG, native, connected or release acceptance"
+    },
+    "localization_preparation": {
+      "draft": "docs/release/localization/rw-resource-draft.json",
+      "draft_sha256": "9d4c5d21a91021033e5c219650ec88b202841e4017af408d4b2d7cd204bfdef7",
+      "android_extracted_entries": 211,
+      "ios_count_dictionary_entries": 7,
+      "draft_technical_check": "Isolated AAPT2compile/27Foundation outputs produced. Original wrapper failed parsing report labels; preserved failure and corrected postprocessing passed without command rerun.",
+      "packaged_locale_changed": false,
+      "native_language_review_or_full_locale_acceptance": false,
+      "remaining": "Whole-app extraction, language review, integration and actual English/Kinyarwanda journeys"
     }
   },
   "receipts": {
@@ -278,13 +315,13 @@
     "verification/supabase-release-20261023/backend-account-recovery-final.json": "22adf0a5d0ea6c08e7a9bc6e02d8beee209f1e9ffec10e524f1e9001b568798d",
     "verification/supabase-release-20261023/backend-refresh-delivery/result.json": "d03bec24127b766e60b8b15976ff2cf75a963e66224b6f2d8318fc22bc6d5571",
     "verification/supabase-release-20261023/admin-integrated-final.json": "694ea637e53a4ca99d860dd5c7e766bc6f07d5a6f518069963aea20ae916599f",
-    "verification/supabase-release-20261023/android-final.json": "861fb6fbadf85189a4b71c0a7a48d9bc9ce6af8bac7755831eb063917f64347b",
-    "verification/supabase-release-20261023/android-final-inputs.json": "72fd47915bd21236204e11cd4c9b9977fe2aee81f0ce6045549a1d2760c427e5",
-    "verification/supabase-release-20261023/android-unit-results-final.json": "52950744d7e0d4022654ac0a36afffbf27eee7d66396c3ef0361573e8f1c7bb1",
-    "verification/supabase-release-20261023/ios-release-final.json": "5a78ec60386a938089b5f10251be936f26acc09c62166f0a3e2e82bb542368a2",
-    "verification/supabase-release-20261023/ios-debug-final.json": "cf2153bb760f866716e6ddedb99faeacb3b50413f4b7ebc4f884fd70b216696a",
-    "verification/supabase-release-20261023/ios-final-inputs.json": "0ec3918409a1493ecca7c27f4ff1a7ac08948c73c64c0252352220f45ba9d1e7",
-    "verification/supabase-release-20261023/ios-release-artifact-final.json": "8054f018b9a7d23c7367a9c98601b8db6e52f128ca840596e0365769168fe37c",
+    "verification/supabase-release-20261023/android-final.json": "7accc2b5b8b9ce7930f52d662c2b34b758214b27ea51d82e1f75486d2672cbbd",
+    "verification/supabase-release-20261023/android-final-inputs.json": "a85a72d1b87a95ab6522bc227ad18fe44ed353f2f063c460aadffc50b9eded65",
+    "verification/supabase-release-20261023/android-unit-results-final.json": "8738e9110d50b6f51c8e8ff40aff25002b0cad7fd0bc030c78c3c528c8324b08",
+    "verification/supabase-release-20261023/ios-release-final.json": "e43f4bc4d23c9d3b7c8bcb12cf1b0a7894927198429daa72b2f0a8e3baf88ff1",
+    "verification/supabase-release-20261023/ios-debug-final.json": "074b8c836300a17eb151c08e91c08165ef6de358a9d14dc6103203a7344f3687",
+    "verification/supabase-release-20261023/ios-final-inputs.json": "4357d85abcd1bc547fafe417ba0b54f7b52a760a6159035720f623feec13e3f9",
+    "verification/supabase-release-20261023/ios-release-artifact-final.json": "60d0c76276ee3d4621452e96989624a1bf5cc3b44d0f84fb0d2f22cdef0fc78d",
     "verification/supabase-release-20261023/ios-refresh-delivery/final-manifest.json": "c8c052fd7c0e0539091e2fc377c38deccd825ef8c94ff0f9f40ee6de0494c2db",
     "verification/supabase-release-20261023/push-provider/result.json": "4b76b6bf5780250020f9c3b3893fdb9605491bee2b2a0dfa6f27aec31797b45a",
     "verification/supabase-release-20261023/supabase-v7-v8-review.json": "339be082199e43a54f394175fbd57c397703f7f9a3bd456adfcb6e9ba2394747",
@@ -347,13 +384,22 @@
     "verification/accessibility-navigation-20261023/pixel-person-exit-guard-journeys-receipt.json": "ebe687f0adb41f0ea3f9d3d05b64f5569823ff88143af52c5739dce4e471bded",
     "verification/accessibility-navigation-20261023/pixel-person-guard-settled-landscape-receipt.json": "0a6d0b1c7ff7a167ffbee7b8a1201ada37b875e5877b659b9d84ee8c220efe87",
     "verification/accessibility-navigation-20261023/pixel-final-environment-readback.json": "3b3e19863bef6c307747956501917ca80830b0bbcfb300ea83f5cc7e7e88340d",
-    "verification/accessibility-navigation-20261023/native-ui-person-exit-guard-source-hashes.json": "cef85078840fae3ee23d7d438d613dbb74b77c86a508d0d520e5005289d6523e",
     "verification/accessibility-navigation-20261023/person-gallery-preview/freeze.json": "35d7a08332aeb1d20d0cd5b75e6bd73bd9df20e23ad6bb1fa2855c058720b011",
     "verification/accessibility-navigation-20261023/person-gallery-preview/seven-person-counts-final.json": "62afd9adcb4ceab307925e76a3ecb7b2dbb7471cf8ac5d00bae3b49097975d2e",
     "verification/accessibility-navigation-20261023/person-gallery-preview/layouts-final.json": "bf11106e6323b8356e741207366b926e2322471eac922ec879944d91506d0a59",
     "verification/accessibility-navigation-20261023/person-gallery-preview/headings-axe-final.json": "b1cd2f82d2125e343fcb83100eefa00944edea3c873fdc8967f9aa2994c3b890",
     "verification/accessibility-navigation-20261023/person-gallery-preview/navigation-final.json": "6c02ef914bcafee3070d73e9c50ced0b9fa1871aa6e61a5d11a40c9aa84160bc",
-    "verification/accessibility-navigation-20261023/person-gallery-preview/served-and-review-final.json": "edf3f3b1d38b0d7114e9e8bc9bd592d6f25ef65af749d1dfddce44bdaff9a79f"
+    "verification/accessibility-navigation-20261023/person-gallery-preview/served-and-review-final.json": "edf3f3b1d38b0d7114e9e8bc9bd592d6f25ef65af749d1dfddce44bdaff9a79f",
+    "verification/supabase-release-20261023/device-checkpoint-person-gallery-final-ui-binding.json": "675ccb280fbbb8c24f44c1ae2e1e0938e34aa66ca8ef3afc3fb08b029fbed8fe",
+    "verification/supabase-release-20261023/q02-count-copy/freeze.json": "8a6d260426ca81c4879a34ce3ddc9292aec03afe26f2aba15e3ea1529cf37c00",
+    "verification/supabase-release-20261023/q02-count-copy/result.json": "0408d24c300d7c10ce3658d5317f4041513f8ec833cf77e5d2b63a8619f1e7d3",
+    "verification/supabase-release-20261023/q02-count-copy/source-binding.json": "4412603f7b5e69d26ca696bc46e2150b4781737370dbf650e6c515863d23254a",
+    "verification/supabase-release-20261023/q02-count-copy/packaged-resource-result.json": "bf08be28d5169eeac9d3e65de57ee1cca604797adda1a6c1697752b4877f3218",
+    "verification/supabase-release-20261023/q02-count-copy/ios-preflight.json": "941d390d28acdc34484769751f9e88c13aa073c20af70dd5437c449e5adcedbc",
+    "verification/supabase-release-20261023/q02-count-copy/qa-iphone-signing.json": "90262580c75f297a77a3e9fa0fe1632b67427937c417948a7a027410df43dfc0",
+    "verification/supabase-release-20261023/q02-count-copy/before-build/preservation.json": "0ed87d94bec39dc5043a7401832a09c88bddb1e10d742e41b8336e4069e137b3",
+    "verification/supabase-release-20261023/ios-simulator-smoke-checkpoint.json": "7cbc5fef107ad648c6205960e5cd6ab1f0b58eae833cfafabf4729ce4a61254f",
+    "verification/supabase-release-20261023/q02-count-copy/rw-draft/result.json": "42efb6a529ce5015f0ae069ddf683aff099c11b0809b4349b8bcb11a62c31cb5"
   },
   "current_tested_source_inputs": {
     "admin/app.js": "f7f148fee1709fe762e3421c2b36dd3b32f271a9cd9d642c8d85705bc54fa4b9",
@@ -582,7 +628,7 @@
     "android/app/src/main/java/com/lovelies/frontend/preview/GuestDeletion.kt": "36bb65327fc7651ce1d9eaae4dbe8e73929e9623ace0ac63b15db64134fd61cf",
     "android/app/src/main/java/com/lovelies/frontend/preview/LibraryState.kt": "08575ab553cb0b959f41401eb8a7c488284a5985215e2a7b7ff6969465a15416",
     "android/app/src/main/java/com/lovelies/frontend/preview/LiveController.kt": "cc5402ff3bb944e236aaf860184b6581c54ceaf1e3de16836ecbb70d98a170e7",
-    "android/app/src/main/java/com/lovelies/frontend/preview/LiveScreens.kt": "610dfe947a5959973370649c24c62bacecfad51f81c440a860dde8fbcffe76af",
+    "android/app/src/main/java/com/lovelies/frontend/preview/LiveScreens.kt": "a2606ae62a5a760ab290b902b9707591f7a923be9e306632f4f931c1058058d3",
     "android/app/src/main/java/com/lovelies/frontend/preview/MainActivity.kt": "84bd1f84327f71baf5adf6b7537ad9127838b4611d80609c25321e6808a106ce",
     "android/app/src/main/java/com/lovelies/frontend/preview/NativeCamera.kt": "70ae19de33c639611512cd2ec39dac1b195ac4a5ec70344ee1273f1bf17bf17b",
     "android/app/src/main/java/com/lovelies/frontend/preview/NativeProtocol.kt": "e91a10c977d7fbd6570f6fcd15a25bff63bb716ed89ab401f534e33709165a1b",
@@ -603,7 +649,7 @@
     "android/app/src/main/res/drawable/ic_notification.xml": "7e22557d0c56c93485f05eb516bab4acbc1d6ae068d1d17d3f0da9c32f196fea",
     "android/app/src/main/res/mipmap-anydpi-v26/ic_launcher.xml": "1a4271b1fa361b789e9e73047b77b427019a6eb18d9f1858299802d632bb3f29",
     "android/app/src/main/res/values/colors.xml": "7a217764fe1de68d0dd7c8298e1bf8b238e387696c46c93c3d7f6d1f2d3a5982",
-    "android/app/src/main/res/values/copy.xml": "15a6277cd280783291b1078213edde9bb8aae4a959a2bd91b5bb18cd78e75771",
+    "android/app/src/main/res/values/copy.xml": "a1f08ca94c3e0dfa8bc59a8ebe28607aa333fff4a4cb46aa65e143aec35884fc",
     "android/app/src/main/res/values/strings.xml": "f73f6579cb9634743aa368a21c1207444aa1cd986f884dce95cbf7d8f6fe8c4f",
     "android/app/src/main/res/values/styles.xml": "a0f37d122bb45ab7186a42b247536c4d2b3a1504277f6513ac4c8f6dcd12fa36",
     "android/app/src/main/res/xml/camera_paths.xml": "7b185a8145d21de438c1430e38baaf38726ebe463142f99998373154fca49850",
@@ -651,7 +697,7 @@
     "ios/.validation/macos-typecheck.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
     "ios/.validation/verification.json": "2ade6cb3ca64ed17b3ef9bfb9473643cb3d4a35a95f22f5120c42966f643ca3f",
     "ios/Configuration/Release.xcconfig": "b5e2783b7c15097dfa7ea34e39271103662250dfb6a93e7d5b3d0c285d5452da",
-    "ios/Lovelies.xcodeproj/project.pbxproj": "d9a23da9ed2766da968d4c165bd49ce382ae581b1611fe7595e0782972499758",
+    "ios/Lovelies.xcodeproj/project.pbxproj": "1c9c8980041e1d9aba921ff4a44e334bacd2cab69c7fd7d71acc01dc7a619da2",
     "ios/Lovelies.xcodeproj/xcshareddata/xcschemes/Lovelies.xcscheme": "61af7e54c2a0b730810c5c3a42cd44063ed1b497a83186c6ddc09ce6f5b45f0b",
     "ios/Lovelies/App/LoveliesApp.swift": "1ef42f6d4bad1b922b540c009a161a8d97578696e30884e6e90eedbab4d54827",
     "ios/Lovelies/Assets.xcassets/AppIcon.appiconset/Contents.json": "f3e191749b6c48d7fbec68efae731687ee2f707ba236630c22b7c97775c24090",
@@ -668,7 +714,7 @@
     "ios/Lovelies/Native/DeviceIdentity.swift": "6115947bb42a055240fad1110543c7e2235db4c77abc34d322e27492927a16dd",
     "ios/Lovelies/Native/LiveAppStore.swift": "3d9767b5189c2c157cdc3e33edc1312270e34efa49021060f7e2a6c837113751",
     "ios/Lovelies/Native/LiveOnboardingAndGallery.swift": "0dd2050d927b59e081d27ba2bf83460a2f10680bf7d727fd98ddfca9463b7016",
-    "ios/Lovelies/Native/LiveSharingAndSettings.swift": "10c7d0bedf0d50049c66e0da6504b073507488a6d916bd75a25b04d0d89e6529",
+    "ios/Lovelies/Native/LiveSharingAndSettings.swift": "3c5b89834f4603f552c70bfb363806160c7d9f184cccadf8bd1897fbb2d371e1",
     "ios/Lovelies/Native/NativeServices.swift": "0b95c71847871ee954be5831c435b172952c949ef2b8ea79939f512f564b36ac",
     "ios/Lovelies/Native/NativeSettingsPanels.swift": "8c10249d4a5e540420e402f29959623ce9634852f1cdc0e2e98facbfeb2a4791",
     "ios/Lovelies/Native/UploadFileTransport.swift": "bb6a750dc21ada30c983bf02cd3b4dcaf8ce32ed9d1afe65a377584069a53d2a",
@@ -1398,7 +1444,8 @@
     "supabase/migrations/20261023210000_refresh_delivery.sql": "96438cd659e8f767b8e3977127e2137d4acf40cd2532f1c7d2e094777f102969",
     "scripts/preflight-ios-release.py": "c78afb6ca9170d119e6a1a8879daf7f809ade893854b1b2bcf07e22f269e43d1",
     "android/app/src/androidTest/java/com/lovelies/frontend/preview/PersonNavigationAudit.kt": "782e5aa595f8e49ff123231fff80256d3b9d9319452753e952ea07e6226bdf97",
-    "preview/app.js": "93f280ad24edb8e13655f6fe38183e6e9ba0040bff9c9288f4a5d33c3f450c5f"
+    "preview/app.js": "93f280ad24edb8e13655f6fe38183e6e9ba0040bff9c9288f4a5d33c3f450c5f",
+    "ios/Lovelies/Resources/en.lproj/CountCopy.stringsdict": "f2aa433c01cc100e04702f472606b9ae2cfdfa712950cb7c496820557153ad0a"
   },
   "remaining_gates_document": "docs/release/backlog-disposition.md",
   "deployment_inputs_document": "docs/release/deployment-inputs.md",

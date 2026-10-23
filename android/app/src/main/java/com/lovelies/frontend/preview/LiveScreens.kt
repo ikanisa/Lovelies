@@ -483,7 +483,7 @@ private fun LiveUploadReview(state: PreviewState,choose: ()->Unit) {
             OutlinedTextField(value=live.caption,onValueChange=live::uploadCaption,label={Text(stringResource(R.string.copy_photo_title_optional_029237d2))},modifier=Modifier.fillMaxWidth().padding(vertical=12.dp),
                 colors=TextFieldDefaults.outlinedTextFieldColors(textColor=Color.White,focusedBorderColor=Pink,unfocusedBorderColor=Hairline,cursorColor=Pink))
             if(!live.processingConsent)SettingRow(stringResource(R.string.copy_enable_photo_processing_5ba32687),subtitle="Save this choice before uploading",icon=Glyph.SHIELD) { state.navigate(40) }
-            PinkButton("Upload ${live.selectedUploads.size} Photos",enabled=live.selectedUploads.isNotEmpty() && live.processingConsent && !live.busy) { live.upload() }
+            PinkButton(stringResource(R.string.copy_upload_photo_count,photoCount(live.selectedUploads.size)),enabled=live.selectedUploads.isNotEmpty() && live.processingConsent && !live.busy) { live.upload() }
         } else PinkButton(stringResource(R.string.copy_continue_2e026239),enabled=live.selectedUploads.isNotEmpty()) { state.navigate(22) }
         Spacer(Modifier.height(18.dp))
     }
@@ -613,7 +613,7 @@ private fun LiveFinalReview(state: PreviewState) {
             }
         }
         BodyText(stringResource(R.string.copy_each_person_receives_only_the_photo_cc4a906a),Modifier.padding(vertical=15.dp),size=12)
-        PinkButton("Share ${view.pairs.map { it.photo }.toSet().size} Photos",enabled=live.effective.isNotEmpty() && !live.busy) { live.commitShare() }
+        PinkButton(stringResource(R.string.copy_share_photo_count,photoCount(view.pairs.map { it.photo }.toSet().size)),enabled=live.effective.isNotEmpty() && !live.busy) { live.commitShare() }
         Spacer(Modifier.height(18.dp))
     }
 }

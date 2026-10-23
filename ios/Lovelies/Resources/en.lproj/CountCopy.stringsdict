@@ -1,0 +1,129 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>upload_photo_count</key>
+    <dict>
+        <key>NSStringLocalizedFormatKey</key>
+        <string>Upload %#@photos@</string>
+        <key>photos</key>
+        <dict>
+            <key>NSStringFormatSpecTypeKey</key>
+            <string>NSStringPluralRuleType</string>
+            <key>NSStringFormatValueTypeKey</key>
+            <string>ld</string>
+            <key>one</key>
+            <string>%ld Photo</string>
+            <key>other</key>
+            <string>%ld Photos</string>
+        </dict>
+    </dict>
+    <key>review_photo_people_count</key>
+    <dict>
+        <key>NSStringLocalizedFormatKey</key>
+        <string>%#@photos@ · %#@people@</string>
+        <key>photos</key>
+        <dict>
+            <key>NSStringFormatSpecTypeKey</key>
+            <string>NSStringPluralRuleType</string>
+            <key>NSStringFormatValueTypeKey</key>
+            <string>ld</string>
+            <key>one</key>
+            <string>%ld photo</string>
+            <key>other</key>
+            <string>%ld photos</string>
+        </dict>
+        <key>people</key>
+        <dict>
+            <key>NSStringFormatSpecTypeKey</key>
+            <string>NSStringPluralRuleType</string>
+            <key>NSStringFormatValueTypeKey</key>
+            <string>ld</string>
+            <key>one</key>
+            <string>%ld person</string>
+            <key>other</key>
+            <string>%ld people</string>
+        </dict>
+    </dict>
+    <key>limited_review_photo_count</key>
+    <dict>
+        <key>NSStringLocalizedFormatKey</key>
+        <string>This review covers %#@photos@. Choose another group to review more.</string>
+        <key>photos</key>
+        <dict>
+            <key>NSStringFormatSpecTypeKey</key>
+            <string>NSStringPluralRuleType</string>
+            <key>NSStringFormatValueTypeKey</key>
+            <string>ld</string>
+            <key>one</key>
+            <string>%ld photo</string>
+            <key>other</key>
+            <string>%ld photos</string>
+        </dict>
+    </dict>
+    <key>matched_photo_count</key>
+    <dict>
+        <key>NSStringLocalizedFormatKey</key>
+        <string>%#@photos@</string>
+        <key>photos</key>
+        <dict>
+            <key>NSStringFormatSpecTypeKey</key>
+            <string>NSStringPluralRuleType</string>
+            <key>NSStringFormatValueTypeKey</key>
+            <string>ld</string>
+            <key>one</key>
+            <string>%ld matched photo</string>
+            <key>other</key>
+            <string>%ld matched photos</string>
+        </dict>
+    </dict>
+    <key>photo_count</key>
+    <dict>
+        <key>NSStringLocalizedFormatKey</key>
+        <string>%#@photos@</string>
+        <key>photos</key>
+        <dict>
+            <key>NSStringFormatSpecTypeKey</key>
+            <string>NSStringPluralRuleType</string>
+            <key>NSStringFormatValueTypeKey</key>
+            <string>ld</string>
+            <key>one</key>
+            <string>%ld photo</string>
+            <key>other</key>
+            <string>%ld photos</string>
+        </dict>
+    </dict>
+    <key>photo_status_count</key>
+    <dict>
+        <key>NSStringLocalizedFormatKey</key>
+        <string>%#@photos@ · %@</string>
+        <key>photos</key>
+        <dict>
+            <key>NSStringFormatSpecTypeKey</key>
+            <string>NSStringPluralRuleType</string>
+            <key>NSStringFormatValueTypeKey</key>
+            <string>ld</string>
+            <key>one</key>
+            <string>%ld photo</string>
+            <key>other</key>
+            <string>%ld photos</string>
+        </dict>
+    </dict>
+    <key>reviewed_photo_count</key>
+    <dict>
+        <key>NSStringLocalizedFormatKey</key>
+        <string>%#@photos@</string>
+        <key>photos</key>
+        <dict>
+            <key>NSStringFormatSpecTypeKey</key>
+            <string>NSStringPluralRuleType</string>
+            <key>NSStringFormatValueTypeKey</key>
+            <string>ld</string>
+            <key>one</key>
+            <string>%ld reviewed photo</string>
+            <key>other</key>
+            <string>%ld reviewed photos</string>
+        </dict>
+    </dict>
+</dict>
+</plist>

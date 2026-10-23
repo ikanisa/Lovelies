@@ -163,4 +163,6 @@
     <string name="copy_your_preferences_41bc34e5">"Your preferences"</string>
     <string name="copy_your_requests_91d672ff">"Your requests"</string>
     <string name="copy_your_support_request_is_saved_9fb2c9cf">"Your support request is saved."</string>
+    <string name="copy_upload_photo_count">"Upload %1$s"</string>
+    <string name="copy_share_photo_count">"Share %1$s"</string>
 </resources>

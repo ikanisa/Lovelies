@@ -3,6 +3,28 @@ import UIKit
 import UniformTypeIdentifiers
 import ImageIO
 
+private enum NativeCountCopy {
+    enum Phrase: String {
+        case upload = "upload_photo_count"
+        case review = "review_photo_people_count"
+        case limitedReview = "limited_review_photo_count"
+        case matched = "matched_photo_count"
+        case photos = "photo_count"
+        case photoStatus = "photo_status_count"
+        case reviewed = "reviewed_photo_count"
+    }
+
+    static func text(_ phrase: Phrase, _ count: Int) -> String {
+        let format = NSLocalizedString(phrase.rawValue, tableName: "CountCopy", comment: "")
+        return String.localizedStringWithFormat(format, count)
+    }
+
+    static func text(_ phrase: Phrase, _ count: Int, _ detail: CVarArg) -> String {
+        let format = NSLocalizedString(phrase.rawValue, tableName: "CountCopy", comment: "")
+        return String.localizedStringWithFormat(format, count, detail)
+    }
+}
+
 struct LiveUploadView: View {
     @EnvironmentObject private var store: DemoStore
     @EnvironmentObject private var live: LiveAppStore
@@ -114,7 +136,7 @@ struct LiveUploadView: View {
                     TextField("Add a caption (optional)", text: Binding(get: { live.uploadCaption }, set: live.updateUploadCaption), axis: .vertical)
                         .loveliesFont(size: 15).padding(17).background(LoveliesTheme.surface, in: RoundedRectangle(cornerRadius: 14)).lineLimit(1...3)
                 Toggle("Allow processing of these photos to find their registered people", isOn: $live.processingConsent).loveliesFont(size: 14).tint(LoveliesTheme.pink)
-                PinkButton(title: "Upload \(live.selectedImports.count) Photos", enabled: !live.selectedImports.isEmpty && live.canEdit) { live.upload() }
+                PinkButton(title: NativeCountCopy.text(.upload, live.selectedImports.count), enabled: !live.selectedImports.isEmpty && live.canEdit) { live.upload() }
                     }
                 }.scrollDismissesKeyboard(.interactively)
             }.padding(.horizontal, 18).padding(.bottom, 16).foregroundStyle(.white)
@@ -239,8 +261,8 @@ struct LiveSharingView: View {
                 LoveliesPage(spacing: 20) { PageHeader(title: "Not Me"); Text("Exclude this photo/person pair before sharing.").foregroundStyle(LoveliesTheme.secondary); if let photo = live.currentPhoto, let person = live.currentPerson { ProtectedNativePhoto(photo: photo).frame(height: 260).clipped().clipShape(RoundedRectangle(cornerRadius: 18)); PinkButton(title: "Exclude this match") { live.togglePair(photo: photo.id, person: person.id); store.back() }; QuietButton(title: "Report incorrect match", enabled: live.canEdit) { live.reportCurrentPair() } } }.foregroundStyle(.white)
         } else if let snapshot = live.snapshot, let draft = live.draft {
             VStack(spacing: 10) {
-                PageHeader(title: title, subtitle: "\(Set(live.effective.map(\.asset_id)).count) photos · \(live.subsets.count) people")
-                if snapshot.limited { Text("This review covers \(snapshot.photos.count) photos. Choose another group to review more.").loveliesFont(size: 12).foregroundStyle(LoveliesTheme.secondary).padding(.horizontal, 18) }
+                PageHeader(title: title, subtitle: NativeCountCopy.text(.review, Set(live.effective.map(\.asset_id)).count, live.subsets.count))
+                if snapshot.limited { Text(NativeCountCopy.text(.limitedReview, snapshot.photos.count)).loveliesFont(size: 12).foregroundStyle(LoveliesTheme.secondary).padding(.horizontal, 18) }
                 ScrollView {
                     if screen == .shareReview { finalReview(snapshot, draft) }
                     else if screen == .peopleSelection || screen == .deselectPeople || screen == .photoPeople { people(snapshot, draft) }
@@ -275,7 +297,7 @@ struct LiveSharingView: View {
             ForEach(snapshot.people) { person in
                 HStack(spacing: 13) {
                     Button { live.currentPerson = person; store.go(.personPhotos, simulateProgress: false) } label: {
-                        HStack { NativePersonAvatar(person: person); VStack(alignment: .leading, spacing: 4) { Text(person.name.isEmpty ? "Matched person" : person.name).loveliesFont(size: 16, weight: .medium); Text("\(snapshot.pairs.filter { $0.recipient_id == person.id }.count) matched photos").loveliesFont(size: 12).foregroundStyle(LoveliesTheme.secondary) } }
+                        HStack { NativePersonAvatar(person: person); VStack(alignment: .leading, spacing: 4) { Text(person.name.isEmpty ? "Matched person" : person.name).loveliesFont(size: 16, weight: .medium); Text(NativeCountCopy.text(.matched, snapshot.pairs.filter { $0.recipient_id == person.id }.count)).loveliesFont(size: 12).foregroundStyle(LoveliesTheme.secondary) } }
                     }.buttonStyle(LoveliesPressStyle())
                     Spacer()
                     Button {
@@ -297,7 +319,7 @@ struct LiveSharingView: View {
             HStack { Text("People").loveliesFont(size: 17, weight: .semibold); Spacer(); QuietButton(title: "Edit") { store.go(.peopleSelection, simulateProgress: false) }.frame(width: 70) }
             ForEach(snapshot.people.filter { live.subsets[$0.id] != nil }) { person in
                 VStack(alignment: .leading, spacing: 9) {
-                    HStack { NativePersonAvatar(person: person, size: 40); Text(person.name); Spacer(); Text("\(live.subsets[person.id]?.count ?? 0) photos").foregroundStyle(LoveliesTheme.secondary) }
+                    HStack { NativePersonAvatar(person: person, size: 40); Text(person.name); Spacer(); Text(NativeCountCopy.text(.photos, live.subsets[person.id]?.count ?? 0)).foregroundStyle(LoveliesTheme.secondary) }
                     ScrollView(.horizontal) { HStack(spacing: 5) { ForEach(snapshot.photos.filter { live.subsets[person.id]?.contains($0.id) == true }) { photo in ProtectedNativePhoto(photo: photo, pixels: 300).frame(width: 65, height: 79).clipped().clipShape(RoundedRectangle(cornerRadius: 12)) } } }
                 }.padding(12).background(LoveliesTheme.surface, in: RoundedRectangle(cornerRadius: 16))
             }
@@ -323,7 +345,7 @@ struct LiveInboxView: View {
                     if let outcome = live.outcome { Text(outcome["status"].string == "pending_acceptance" ? "Requests submitted · awaiting recipient acceptance" : (outcome["status"].string ?? "Result not confirmed")).loveliesFont(size: 16, weight: .medium).padding(16).background(LoveliesTheme.surface, in: RoundedRectangle(cornerRadius: 16)) }
                     ForEach(Array((store.screen == .sharedHistory ? live.outgoing : live.inbox).enumerated()), id: \.offset) { _, item in
                         Button { if let id = item["id"].string { live.openReceipt(id) } } label: {
-                            HStack { Image(systemName: "person.crop.circle").font(.system(size: 36)); VStack(alignment: .leading, spacing: 4) { Text(item["person"]["name"].string ?? "Photo request"); Text("\(item["photo_count"].integer ?? 0) photos · \(item["status"].string ?? "unavailable")").loveliesFont(size: 13).foregroundStyle(LoveliesTheme.secondary); Text("\(item["available_count"].integer ?? 0) currently available").loveliesFont(size: 12).foregroundStyle(LoveliesTheme.secondary) }; Spacer(); Image(systemName: "chevron.right") }.padding(14).background(LoveliesTheme.surface, in: RoundedRectangle(cornerRadius: 16))
+                            HStack { Image(systemName: "person.crop.circle").font(.system(size: 36)); VStack(alignment: .leading, spacing: 4) { Text(item["person"]["name"].string ?? "Photo request"); Text(NativeCountCopy.text(.photoStatus, item["photo_count"].integer ?? 0, item["status"].string ?? "unavailable")).loveliesFont(size: 13).foregroundStyle(LoveliesTheme.secondary); Text("\(item["available_count"].integer ?? 0) currently available").loveliesFont(size: 12).foregroundStyle(LoveliesTheme.secondary) }; Spacer(); Image(systemName: "chevron.right") }.padding(14).background(LoveliesTheme.surface, in: RoundedRectangle(cornerRadius: 16))
                         }.buttonStyle(LoveliesPressStyle())
                     }
                     if (store.screen == .sharedHistory ? live.outgoing : live.inbox).isEmpty { Text("No photo requests yet").foregroundStyle(LoveliesTheme.secondary).padding(40) }
@@ -334,7 +356,7 @@ struct LiveInboxView: View {
             .sheet(isPresented: Binding(get: { live.receipt != nil }, set: { if !$0 { live.receipt = nil; live.pendingReceiptID = nil } })) {
                 VStack(spacing: 18) {
                     Text(live.receipt?["person"]["name"].string ?? "Photo request").loveliesFont(size: 22, weight: .semibold)
-                    Text("\(live.receipt?["photo_count"].integer ?? 0) reviewed photos").foregroundStyle(LoveliesTheme.secondary)
+                    Text(NativeCountCopy.text(.reviewed, live.receipt?["photo_count"].integer ?? 0)).foregroundStyle(LoveliesTheme.secondary)
                     Text(live.receipt?["status"].string ?? "Unavailable")
                     if live.receipt?["status"].string == "requested", live.receipt?["sender"].bool == false {
                         PinkButton(title: "Accept", enabled: live.canEdit) { live.decide("accept") }; QuietButton(title: "Decline", enabled: live.canEdit) { live.decide("decline") }
