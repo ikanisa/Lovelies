@@ -103,3 +103,10 @@ Save photo5 and actual visible Back to10 in every run, with preferences restored
 Root read/hash-checked all three raw reports; `device-checkpoint-v5-favorites.json`
 binds the result. Full48 V5 matrices/visual review are underway; connected
 Favorites and broader hosted/device/store acceptance remain open.
+
+The full V5 normal-text reference matrix now passes48/48 with48 uncapped scroll
+audits,44 actual visible callbacks and two primary physical Back fallbacks;
+all asserted destinations and rotation restoration pass. Root hash-checked the
+raw report and17 Android/12 iOS sources plus12 compile/package receipts in
+`device-checkpoint-v5-final-normal.json`. Enlarged text, landscape and full
+visual review remain in progress; connected/spoken/provider/store gates stay open.

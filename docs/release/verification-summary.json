@@ -153,7 +153,7 @@
           "bytes": 500669
         }
       ],
-      "physical_final_retests": "Historical pre-V5 product e7b11109: V3 normal48/48,font2 48/48,landscape45/48;46/46 physical Back;257 PNGs reviewed; V3 font2 keyboard15/22/45 pass. V4 targeted20/39 pass,14 fails Save photo5. V4.2 Cancel7 passes normal/font2;14landscape stillfails. V5 changed only the reference14 viewport and needs new APK-bound device retakes. No earlier matrix relabelled as V5 acceptance. V5 Favorites14 now passes all3 fresh variants on exact e47b514f appAPK, including full Save photo5 geometry and actual visible Back. Full48 V5 variants/visual review remain in progress.",
+      "physical_final_retests": "Historical pre-V5 product e7b11109: V3 normal48/48,font2 48/48,landscape45/48;46/46 physical Back;257 PNGs reviewed; V3 font2 keyboard15/22/45 pass. V4 targeted20/39 pass,14 fails Save photo5. V4.2 Cancel7 passes normal/font2;14landscape stillfails. V5 changed only the reference14 viewport and needs new APK-bound device retakes. No earlier matrix relabelled as V5 acceptance. V5 Favorites14 now passes all3 fresh variants on exact e47b514f appAPK, including full Save photo5 geometry and actual visible Back. Full48 V5 variants/visual review remain in progress. The exact V5 full normal matrix now passes48/48,48 scroll audits/no caps,44 actual visible callbacks+2 primary physical Back fallbacks; font2/landscape and full visual review remain pending.",
       "signed_store_artifact": false,
       "test_only_v4_build": "passed with unchanged frozen inputs; exact V3 product app hash retained; schema4/visible-exit physical execution pending",
       "test_only_v4_2_build": "passed with unchanged final frozen inputs; two-line descendant coverage key and visible Cancel7 expected5; physical Back7 still6; byte-identical V3 product APK; final4.2 device execution pending",
@@ -174,8 +174,33 @@
         "rotation_restored": true,
         "installed_in_place": true,
         "uninstall_or_clear": false,
-        "full48_matrices": "in_progress",
+        "full48_matrices": "normal48/48 passes; font2in_progress, landscape pending",
         "connected_favorites_geometry": "unchanged and unqualified"
+      },
+      "physical_v5_final_matrices": {
+        "normal": {
+          "screens": 48,
+          "passed": 48,
+          "failed": 0,
+          "scroll_audits": 48,
+          "capped_audits": 0,
+          "interactions": {
+            "no_exit_assertion": 2,
+            "visible_exit": 44,
+            "physical_back": 2
+          },
+          "all_expected_destinations_reached": true,
+          "rotation_restored": true,
+          "font_scale_override": 0,
+          "rotation_variant": "portrait",
+          "report": "verification/accessibility-navigation-20261023/pixel-v5-final-normal/report.json",
+          "report_sha256": "2f954f5b45df1eaadd10b5bf9376f6c4fcfd4f843bcdcaff11f81371a71e9ee3"
+        },
+        "font2": "in_progress",
+        "landscape": "pending",
+        "all_image_visual_review": "in_progress_under_UI_owner",
+        "receipt": "verification/supabase-release-20261023/device-checkpoint-v5-final-normal.json",
+        "scope": "Reference AX geometry and actual exit callbacks only; spoken AT/connected/provider/store acceptance open"
       }
     },
     "ios": {
@@ -289,7 +314,8 @@
     "verification/supabase-release-20261023/device-checkpoint-v4-2-targeted.json": "d375cc861d5791be2afcb88898fe87a53402c976151533830c339266c51d0477",
     "verification/accessibility-navigation-20261023/android-ui-v5-freeze.json": "cc87ad8278189811d7e4358d6a3ad84b5e32110b5e417239a625195c11ae7913",
     "verification/accessibility-navigation-20261023/favorites-viewport-v5/freeze.json": "fc31866a61aad98cd268f78422d94d81635bcd69e3f974c3142b006090010b68",
-    "verification/supabase-release-20261023/device-checkpoint-v5-favorites.json": "bedb70f54a27901cc802bad0346218e4fb06fa75e932bc8032a46d5391632a5e"
+    "verification/supabase-release-20261023/device-checkpoint-v5-favorites.json": "bedb70f54a27901cc802bad0346218e4fb06fa75e932bc8032a46d5391632a5e",
+    "verification/supabase-release-20261023/device-checkpoint-v5-final-normal.json": "281bf5e0c6357778b9a98d488fabce7b06058621e25677b912433e09589e3307"
   },
   "current_tested_source_inputs": {
     "admin/app.js": "f7f148fee1709fe762e3421c2b36dd3b32f271a9cd9d642c8d85705bc54fa4b9",

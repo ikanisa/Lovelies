@@ -279,3 +279,13 @@ restored. Root independently checked the exact artifact/report hashes and raw
 geometry in `device-checkpoint-v5-favorites.json`. Full48 V5 variants, visible
 callbacks and visual review are in progress. These targeted reference passes do
 not qualify connected Favorites, spoken accessibility or store-installed updates.
+
+The exact V5 full normal-text matrix now passes48/48, with48 uncapped schema4
+scroll audits,44 actual visible-exit callbacks and two primary-screen physical
+Back fallbacks; the remaining two roots have no exit assertion. All expected
+destinations are reached and rotation preferences restored. Root verified the
+raw report SHA256 `2f954f5b45df1eaadd10b5bf9376f6c4fcfd4f843bcdcaff11f81371a71e9ee3`
+and captured17 Android/12 iOS source hashes plus12 matching compile/package
+receipt digests in immutable `device-checkpoint-v5-final-normal.json`. Enlarged
+text, landscape and full visual review continue; the evolving UI matrix receipt
+is not bound as an immutable final receipt. No new source/build is required.
