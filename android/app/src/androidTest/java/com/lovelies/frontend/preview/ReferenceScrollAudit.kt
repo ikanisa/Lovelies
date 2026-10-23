@@ -479,7 +479,7 @@ private class ReferenceScrollAudit(private val instrumentation: Instrumentation,
             if(container==null) { reason="container_not_visible";break }
             state.containers.filter { it.parents.lastOrNull()==key }.forEach { nested ->
                 val visibleViewport=viewport(nested.bounds,listOf(container.bounds))
-                val visit="${nested.key}:${nested.bounds.wire()}:${visibleViewport.wire()}"
+                val visit="${nested.key}:${nested.bounds.wire()}:${visibleViewport.wire()}:${fingerprint(state,nested.key)}"
                 if(visited.add(visit))sweep(nested.key,depth+1)
             }
             state=snapshot()
@@ -494,7 +494,7 @@ private class ReferenceScrollAudit(private val instrumentation: Instrumentation,
                 // Inspect the actual last viewport, including its inner scroll regions, next iteration.
                 state=snapshot()
                 state.containers.filter { it.parents.lastOrNull()==key }.forEach { nested ->
-                    val visit="${nested.key}:${nested.bounds.wire()}:terminal"
+                    val visit="${nested.key}:${nested.bounds.wire()}:terminal:${fingerprint(state,nested.key)}"
                     if(visited.add(visit))sweep(nested.key,depth+1)
                 }
                 val remaining=state.containers.firstOrNull { it.key==key }

@@ -158,7 +158,9 @@ class FrontendAccessibilityJourney : Instrumentation() {
                             } finally { exit?.recycle();current.recycle() }
                         } else sendKeyDownUpSync(KeyEvent.KEYCODE_BACK)
                         waitForIdleSync();Thread.sleep(180)
-                        val expected="Screen ${back.toString().padStart(2,'0')}:"
+                        // Cancel exits enrollment to setup; ordinary Back returns to capture.
+                        val expectedRoute=if(useVisibleExit && route==7 && exitLabel=="Cancel face capture")5 else back
+                        val expected="Screen ${expectedRoute.toString().padStart(2,'0')}:"
                         var observed=emptyList<String>()
                         var activePackage: String?=null
                         var reached=false
@@ -175,10 +177,10 @@ class FrontendAccessibilityJourney : Instrumentation() {
                             if(reached || Build.VERSION.SDK_INT<28)break
                             Thread.sleep(60);waitForIdleSync()
                         } while(android.os.SystemClock.elapsedRealtime()-started<2000)
-                        backEvidence=mapOf("interaction" to if(useVisibleExit)"visible_exit" else "physical_back","visible_exit_label" to exitLabel,"expected_screen" to back,"observed_panes" to observed,"active_package" to activePackage,
+                        backEvidence=mapOf("interaction" to if(useVisibleExit)"visible_exit" else "physical_back","visible_exit_label" to exitLabel,"expected_screen" to expectedRoute,"observed_panes" to observed,"active_package" to activePackage,
                             "settle_ms" to android.os.SystemClock.elapsedRealtime()-started,"pane_assertion_supported" to (Build.VERSION.SDK_INT>=28),"reached_expected" to reached)
                         if(Build.VERSION.SDK_INT>=28 && !reached) {
-                            failures.add("${if(useVisibleExit)"Visible exit" else "Physical Back"} did not return to screen $back")
+                            failures.add("${if(useVisibleExit)"Visible exit" else "Physical Back"} did not return to screen $expectedRoute")
                             if(activePackage==targetContext.packageName)uiAutomation.takeScreenshot()?.let { bitmap ->
                                 File(output,"screen-${route.toString().padStart(2,'0')}-back-failure.png").outputStream().use { bitmap.compress(android.graphics.Bitmap.CompressFormat.PNG,100,it) };bitmap.recycle()
                             }

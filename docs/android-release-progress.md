@@ -216,3 +216,33 @@ outcomes remain pending; V3 physical results are not relabelled as V4 passes.
 Previous V3 artifacts, XML results, logs and proof are hash-preserved in
 `before-android-v4-test-only/`; `android-v4-test-only-review.json` records the
 compile/readback and unit-result reuse. No iOS or product app rebuild occurred.
+
+## Latest root V4.2 test-only checkpoint
+
+V4 targeted landscape20/39 pass,14 retains the Save photo5 failure, and all
+three actual visible exits reach their expected pane. Both V4 normal/font2
+visible-navigation matrices completed48 cases, recording44 actual visible
+callbacks and two primary-screen physical fallbacks per variant; only route7
+failed because the test incorrectly expected physical Back's route6 for named
+Cancel face capture, which correctly goes to route5 in unchanged product source.
+Raw failures remain; those full runs are not relabelled passes.
+
+The final V4.2 source freeze combines a two-line nested-visit fingerprint
+correction in the scroll helper with that exact named-Cancel expectation fix.
+Root's shared Gradle build passes with no changed inputs. Product app SHA256
+remains `e7b11109de7dac436d3cd51d8d55a577f03f1232af92063409b3952110c5c641`;
+final test APK SHA256 is
+`5201146deb3bf511cb0ed0df3c1fead601e0157b443b772040fdc5cdc675d610`.
+All14 unit XML hashes remain unchanged;156 prior unit results are reused
+UP-TO-DATE, with no fresh unit execution claimed. Final corrected device runs
+are pending under the UI owner. Intermediate V4.1 compiled but was never
+installed/executed; its artifacts and source preimages remain preserved.
+
+A source-backup guard caught a handoff race: one captured test source was already
+the V4.2 edit. The build runner started after that failed guard because the
+shell command continued. Root validated the actual build manifest against the
+final freeze, restored the exact V4.1 preimage by its compiled-manifest/Git hash,
+and independently compared it with the UI owner's retained preimage. The raced
+capture and initial failure remain. `android-v4-2-test-only-review.json` binds
+the passing build and reconciliation; `android-v4-2-preimage-handoff-failure.json`
+records the failed guard. No product input or app APK changed.

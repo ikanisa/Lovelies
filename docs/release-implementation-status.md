@@ -51,6 +51,16 @@ all14 unchanged unit-result XMLs (156 tests); no fresh unit execution is claimed
 `android-v4-test-only-review.json` binds the build and preserved V3 preimages.
 V4 physical acceptance remains pending.
 
+V4 targeted landscape20/39 then passed,14 retained Save photo5, and all three
+visible exits reached the expected pane. Normal/font2 actual visible-navigation
+matrices each completed48 cases with one incorrect Cancel7 assertion; unchanged
+product source sends named Cancel to5, while physical Back remains6. The final
+V4.2 test-only batch corrects that assertion and two nested coverage keys,
+compiles with unchanged frozen inputs, and retains the exact product APK hash.
+Its final corrected device runs are pending. Raw failures and the reconciled
+intermediate source-backup guard failure remain; no product change, hosted or
+store acceptance is inferred.
+
 ## Remaining release gates
 
 1. The approved schema is applied/read back; reconcile Supabase CLI history, retain the clean post-change security-linter receipt, complete API/Auth/Storage/configuration inventory and establish backup/restore. Supply server-only secrets through the deployment secret store, not chat or Git.
