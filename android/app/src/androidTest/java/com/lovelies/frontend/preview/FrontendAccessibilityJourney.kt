@@ -22,6 +22,7 @@ class FrontendAccessibilityJourney : Instrumentation() {
         val rotation=arguments.getString("rotation")
         require(rotation==null || rotation in setOf("portrait","landscape"))
         val keyboard=arguments.getString("keyboard")=="true"
+        val personLink=arguments.getString("person_link")=="true"
         val visibleExit=arguments.getString("visible_exit")=="true"
         val scanScroll=arguments.getString("scan_scroll")=="true"
         val resolver=targetContext.contentResolver
@@ -33,6 +34,7 @@ class FrontendAccessibilityJourney : Instrumentation() {
         val last=arguments.getString("last")?.toIntOrNull()?.coerceIn(first,48) ?: 48
         val density=targetContext.resources.displayMetrics.density
         try {
+            check(!personLink || first==27 && last==27) { "Person navigation probe is restricted to reference screen27" }
             val service=uiAutomation.serviceInfo
             service.flags=service.flags or android.accessibilityservice.AccessibilityServiceInfo.FLAG_REPORT_VIEW_IDS or android.accessibilityservice.AccessibilityServiceInfo.FLAG_RETRIEVE_INTERACTIVE_WINDOWS
             uiAutomation.serviceInfo=service
@@ -47,6 +49,7 @@ class FrontendAccessibilityJourney : Instrumentation() {
                 var keyboardEvidence: Map<String,Any?>?=null
                 var scrollEvidence: Map<String,Any?>?=null
                 var backEvidence: Map<String,Any?>?=null
+                var personEvidence: Map<String,Any?>?=null
                 try {
                     activity=startActivitySync(Intent(targetContext,MainActivity::class.java).putExtra("review",true)
                         .putExtra("screen",route).putExtra("reviewFontScale",scale).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
@@ -98,6 +101,11 @@ class FrontendAccessibilityJourney : Instrumentation() {
                         val audit=runReferenceScrollAudit(this,output,route,density)
                         scrollEvidence=audit
                         (audit["failures"] as? List<*>)?.forEach { failures.add("scroll: $it") }
+                    }
+                    if(personLink) {
+                        val audit=runPersonNavigationAudit(this,output,density)
+                        personEvidence=audit
+                        (audit["failures"] as? List<*>)?.forEach { failures.add("person_navigation: $it") }
                     }
                     if(keyboard) {
                         fun findEditable(node: AccessibilityNodeInfo): AccessibilityNodeInfo? {
@@ -189,7 +197,7 @@ class FrontendAccessibilityJourney : Instrumentation() {
                 } catch(problem: Throwable) { failures.add("${problem.javaClass.simpleName}: ${problem.message}") }
                 finally { activity?.let { owned -> runOnMainSync { owned.finish() } };waitForIdleSync() }
                 reports.add(mapOf("screen" to route,"status" to if(failures.isEmpty())"passed" else "failed","failures" to failures,
-                    "keyboard" to keyboardEvidence,"scroll_audit" to scrollEvidence,"back" to backEvidence,"small_targets" to small,"partial_scroll_items" to partial,"unnamed_actions" to unnamed,"nodes" to nodes))
+                    "keyboard" to keyboardEvidence,"scroll_audit" to scrollEvidence,"person_navigation" to personEvidence,"back" to backEvidence,"small_targets" to small,"partial_scroll_items" to partial,"unnamed_actions" to unnamed,"nodes" to nodes))
             }
         } catch(problem: Throwable) { reports.add(mapOf("status" to "failed","failure" to "${problem.javaClass.simpleName}: ${problem.message}")) }
         finally {
@@ -203,7 +211,7 @@ class FrontendAccessibilityJourney : Instrumentation() {
             } catch(problem: Throwable) { restored=false;reports.add(mapOf("status" to "failed","failure" to "rotation_restore: ${problem.message}")) }
         }
         val failed=reports.count { it["status"]=="failed" }
-        File(output,"report.json").writeText(NativeProtocol.canonical(mapOf("reference_only" to true,"font_scale_override" to scale,"scroll_scan_requested" to scanScroll,"visible_exit_requested" to visibleExit,"rotation_variant" to rotation,"rotation_preferences_restored" to restored,
+        File(output,"report.json").writeText(NativeProtocol.canonical(mapOf("reference_only" to true,"font_scale_override" to scale,"scroll_scan_requested" to scanScroll,"person_navigation_requested" to personLink,"visible_exit_requested" to visibleExit,"rotation_variant" to rotation,"rotation_preferences_restored" to restored,
             "rotation_before" to mapOf("auto" to oldAuto,"user" to oldUser,"display" to oldDisplay),
             "screens" to reports,"failed" to failed,"spoken_screen_reader_verified" to false)))
         finish(if(failed==0)Activity.RESULT_OK else Activity.RESULT_CANCELED,Bundle().apply {

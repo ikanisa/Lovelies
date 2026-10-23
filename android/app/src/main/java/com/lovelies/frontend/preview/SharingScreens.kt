@@ -20,6 +20,8 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.onClick
+import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.semantics.clearAndSetSemantics
@@ -103,8 +105,14 @@ private fun PhotoToPeople(state: PreviewState) {
             ScreenHeader("People in this photo",onBack = state::back,right = { Overflow(state) })
             val labels=List(8) { index -> if(index==7)"+2" else PeopleNames[index] }
             AdaptiveChoices(labels,Modifier.padding(bottom=15.dp),labelSize=12.sp,minimumItemWidth=72.dp,spacing=15.dp) { index,itemModifier ->
-                Column(itemModifier.then(if(index<7)Modifier.clickable(role=Role.Button) { state.openPerson(index) }
-                    .semantics { contentDescription=PeopleNames[index];selected=index==0 } else Modifier),
+                val openPerson = { state.openPerson(index) }
+                Column(itemModifier.then(if(index<7)Modifier.clickable(role=Role.Button,onClick=openPerson)
+                    .clearAndSetSemantics {
+                        contentDescription=PeopleNames[index]
+                        role=Role.Button
+                        selected=index==0
+                        onClick { openPerson();true }
+                    } else Modifier),
                     horizontalAlignment=Alignment.CenterHorizontally) {
                     if(index==7)Box(Modifier.size(60.dp).clip(CircleShape).background(Panel)
                         .clickable(role=Role.Button) { state.navigate(39) }

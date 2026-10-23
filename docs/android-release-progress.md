@@ -316,3 +316,35 @@ candidate will stabilize the person's name/state directly on the action and
 probe James→28/James/3 matched photos→Back27 using the same callback; global
 unnamed-action criteria and raw failure remain intact. No new build/source
 correction has yet been accepted.
+
+### V6 direct person-action ownership — 24 October 2026
+
+The exact three-file freeze stabilizes the seven reference27 person names,
+Button role/selection and the same pointer/semantic openPerson callback.
+Decorative child semantics are replaced; +2 and the visible design are unchanged.
+The optional reference27-only probe uses a fresh own-name/identity/window/bounds
+guard, accessibility-action James click, exact28/James/3 matched photos and
+physical Back27 before the ordinary visible exit26. It claims callback proof,
+not physical hit testing or spoken screen-reader acceptance. The scroll helper,
+global unnamed ledger,48dp rule, limits and default route behavior are unchanged.
+
+Root's shared V6 build passes with no changed frozen inputs and a fresh156-test/
+14-suite unit run, zero failures/errors/skips; all new XML hashes are bound in
+`android-v6-person-semantics-review.json`. App APK SHA256 is
+`a70c2f2e0e8d8825f7710ee8d6af793a43f0dfb4059e0cbccef00b2e49b5260d`;
+test APK SHA256 is
+`1284cd4dbad8dc76373e45a7a0bc316ba459d449e9c706b9dced45755d74390a`.
+All18 frozen UI/test inputs match; the new probe is the only added file.
+
+Device proof is pending: fresh27 normal/font2/landscape with all seven own names/
+states and destination/count/return; full48font2 for the failed variant; and
+keyboard15/22/45. V5 normal/landscape evidence may be reused only for the other47
+unchanged routes, explicitly bound to their original source/artifact/fixture/
+runtime/default-flag inputs. Root verified all SharingScreens source outside
+private PhotoToPeople remains byte-identical after removal of the two new
+semantics imports; `android-v6-unaffected-route-source-review.json` records the
+bounded input review. This is not one full V6 normal/landscape run or a single
+all-mode current-artifact aggregate. Broaden checks if a new affected consumer
+or outside27 failure appears. All254 V5 images (54normal/97font2/103landscape)
+are reviewed with no additional visible defects, while the raw font2 blank-name
+failure remains retained. iOS/backend/provider/store acceptance is separate.

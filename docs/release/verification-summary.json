@@ -144,23 +144,23 @@
       "artifacts": [
         {
           "path": "android/app/build/outputs/apk/debug/app-debug.apk",
-          "sha256": "e47b514f18234c719f6f53132e79b396598fdeae59b2900d8f0c3f049b169301",
-          "bytes": 14773223
+          "sha256": "a70c2f2e0e8d8825f7710ee8d6af793a43f0dfb4059e0cbccef00b2e49b5260d",
+          "bytes": 14773225
         },
         {
           "path": "android/app/build/outputs/apk/androidTest/debug/app-debug-androidTest.apk",
-          "sha256": "5201146deb3bf511cb0ed0df3c1fead601e0157b443b772040fdc5cdc675d610",
-          "bytes": 500669
+          "sha256": "1284cd4dbad8dc76373e45a7a0bc316ba459d449e9c706b9dced45755d74390a",
+          "bytes": 505650
         }
       ],
-      "physical_final_retests": "Historical pre-V5 product e7b11109: V3 normal48/48,font2 48/48,landscape45/48;46/46 physical Back;257 PNGs reviewed; V3 font2 keyboard15/22/45 pass. V4 targeted20/39 pass,14 fails Save photo5. V4.2 Cancel7 passes normal/font2;14landscape stillfails. V5 changed only the reference14 viewport and needs new APK-bound device retakes. No earlier matrix relabelled as V5 acceptance. V5 Favorites14 now passes all3 fresh variants on exact e47b514f appAPK, including full Save photo5 geometry and actual visible Back. Full48 V5 variants/visual review remain in progress. The exact V5 full normal matrix now passes48/48,48 scroll audits/no caps,44 actual visible callbacks+2 primary physical Back fallbacks; font2/landscape and full visual review remain pending. V5 font2 completes47/48,only27 unnamed action fails; all44 actual visible callbacks+2 primary physical fallbacks and rotation pass. Normal54 images/proof review complete with0 new blockers; landscape continues. No font2 pass is inferred. V5 landscape now also passes48/48 with48 uncapped scroll audits and all44 visible exits+2 primary physical fallbacks/restoration; font2 remains47/48 and no persistent missing source label is established. Explicit action-owned semantics plus callback probe are only proposed pending review.",
+      "physical_final_retests": "Historical pre-V5 product e7b11109: V3 normal48/48,font2 48/48,landscape45/48;46/46 physical Back;257 PNGs reviewed; V3 font2 keyboard15/22/45 pass. V4 targeted20/39 pass,14 fails Save photo5. V4.2 Cancel7 passes normal/font2;14landscape stillfails. V5 changed only the reference14 viewport and needs new APK-bound device retakes. No earlier matrix relabelled as V5 acceptance. V5 Favorites14 now passes all3 fresh variants on exact e47b514f appAPK, including full Save photo5 geometry and actual visible Back. Full48 V5 variants/visual review remain in progress. The exact V5 full normal matrix now passes48/48,48 scroll audits/no caps,44 actual visible callbacks+2 primary physical Back fallbacks; font2/landscape and full visual review remain pending. V5 font2 completes47/48,only27 unnamed action fails; all44 actual visible callbacks+2 primary physical fallbacks and rotation pass. Normal54 images/proof review complete with0 new blockers; landscape continues. No font2 pass is inferred. V5 landscape now also passes48/48 with48 uncapped scroll audits and all44 visible exits+2 primary physical fallbacks/restoration; font2 remains47/48 and no persistent missing source label is established. Explicit action-owned semantics plus callback probe are only proposed pending review. V6 localized explicit person-action ownership/probe compiles with fresh156/14-suite unit pass; new app/test pair awaits current27 three variants, full48font2 and keyboard checks. Only other47 normal/landscape V5 routes may be reused by documented provenance; no full V6 normal/landscape run or all-mode aggregate is claimed.",
       "signed_store_artifact": false,
       "test_only_v4_build": "passed with unchanged frozen inputs; exact V3 product app hash retained; schema4/visible-exit physical execution pending",
       "test_only_v4_2_build": "passed with unchanged final frozen inputs; two-line descendant coverage key and visible Cancel7 expected5; physical Back7 still6; byte-identical V3 product APK; final4.2 device execution pending",
       "physical_v4_targeted_receipt": "verification/supabase-release-20261023/device-checkpoint-v4-targeted.json",
       "physical_v4_visible_navigation_receipt": "verification/supabase-release-20261023/device-checkpoint-v4-visible-exits.json",
-      "current_product_checkpoint": "V5 reference Favorites14 available-height branch only; connected callsite/tests unchanged",
-      "unit_result_execution": "Fresh execution after actual one-file reference viewport product change; testDebugUnitTest executed, all14 XML mtimes follow build start",
+      "current_product_checkpoint": "V6 seven person27 actions own explicit AX names/role/selection and shared callback; opt-in27 destination probe added; no layout/helper/default-flow/dependency change",
+      "unit_result_execution": "Fresh156/14-suite execution after the localized SharingScreens product change; all14 XML reports newly written after build start and hashed",
       "reference_favorites_v5_compile": "passed; fresh156/14-suite unit execution; new appAPK e47b514f18234c719f6f53132e79b396598fdeae59b2900d8f0c3f049b169301; unchanged testAPK5201146deb3bf511cb0ed0df3c1fead601e0157b443b772040fdc5cdc675d610",
       "connected_favorites_viewport": "unchanged; broader candidate preserved unbuilt because dynamic fixed chrome needs separate connected qualification",
       "physical_v4_2_targeted_receipt": "verification/supabase-release-20261023/device-checkpoint-v4-2-targeted.json",
@@ -226,10 +226,31 @@
           "report": "verification/accessibility-navigation-20261023/pixel-v5-final-landscape/report.json",
           "report_sha256": "5bf3801054aaaa99a6f4a5bbe20aedaa88e74b5b5dd1c380b445280aef729f3e"
         },
-        "all_image_visual_review": "normal54 images/proof complete,0 new blockers; font2/landscape pending",
+        "all_image_visual_review": "All254 V5 images/proof reviewed:54normal,97font2,103landscape;0 new visible defects. V5font2 unnamed-action failure retained.",
         "receipt": "verification/supabase-release-20261023/device-checkpoint-v5-final-normal.json",
         "scope": "Reference AX geometry and actual exit callbacks only; spoken AT/connected/provider/store acceptance open",
         "landscape_receipt": "verification/supabase-release-20261023/device-checkpoint-v5-final-landscape.json"
+      },
+      "v6_build": {
+        "status": "passed",
+        "fresh_unit_tests": 156,
+        "suites": 14,
+        "source_mutations_during_build": [],
+        "changed_existing": [
+          "android/app/src/androidTest/java/com/lovelies/frontend/preview/FrontendAccessibilityJourney.kt",
+          "android/app/src/main/java/com/lovelies/frontend/preview/SharingScreens.kt"
+        ],
+        "added": [
+          "android/app/src/androidTest/java/com/lovelies/frontend/preview/PersonNavigationAudit.kt"
+        ],
+        "receipt": "verification/supabase-release-20261023/android-v6-person-semantics-review.json"
+      },
+      "v6_device_acceptance": {
+        "fresh_required": "route27 normal/font2/landscape with seven-own-name/state and James\u219228\u219227 probe; full48font2;keyboard15/22/45",
+        "reuse_permitted": "V5 normal/landscape only other47 unchanged routes with explicit old/new artifact and input provenance",
+        "reuse_source_review": "verification/supabase-release-20261023/android-v6-unaffected-route-source-review.json",
+        "status": "pending",
+        "not_claimed": "one full normal/landscape V6 run, one all-modes current-artifact aggregate, physical hit testing/spoken AT/connected/provider/store acceptance"
       }
     },
     "ios": {
@@ -296,8 +317,8 @@
     "verification/supabase-release-20261023/backend-account-recovery-final.json": "22adf0a5d0ea6c08e7a9bc6e02d8beee209f1e9ffec10e524f1e9001b568798d",
     "verification/supabase-release-20261023/backend-refresh-delivery/result.json": "d03bec24127b766e60b8b15976ff2cf75a963e66224b6f2d8318fc22bc6d5571",
     "verification/supabase-release-20261023/admin-integrated-final.json": "694ea637e53a4ca99d860dd5c7e766bc6f07d5a6f518069963aea20ae916599f",
-    "verification/supabase-release-20261023/android-final.json": "df6a4b1a30e87c1370fdd56d0cf508f9876c1aae3262c08fdebbb81929f41154",
-    "verification/supabase-release-20261023/android-final-inputs.json": "98816ab23161d1b7fd3cb2f5f60b028891ca35e12cd07c86294f6976afb14c87",
+    "verification/supabase-release-20261023/android-final.json": "68410190a2ca32dc920881fe09c1d227ce046ba6cf8d4524639c211304cbcf00",
+    "verification/supabase-release-20261023/android-final-inputs.json": "facf87c39ce12f74f221a2d37d37546a11f0ecc6540d8a8953e1cd37306dbaae",
     "verification/supabase-release-20261023/android-unit-results-final.json": "52950744d7e0d4022654ac0a36afffbf27eee7d66396c3ef0361573e8f1c7bb1",
     "verification/supabase-release-20261023/ios-release-final.json": "3c5766630f63c4877910f604e7206b158c0f713db57aa9fb5387fe26244cfe76",
     "verification/supabase-release-20261023/ios-debug-final.json": "3dc868fcd0e7722c15fe9a4e41e79e121cd8e315813e6fa25e4c39c307acf8b2",
@@ -346,7 +367,11 @@
     "verification/supabase-release-20261023/device-checkpoint-v5-favorites.json": "bedb70f54a27901cc802bad0346218e4fb06fa75e932bc8032a46d5391632a5e",
     "verification/supabase-release-20261023/device-checkpoint-v5-final-normal.json": "281bf5e0c6357778b9a98d488fabce7b06058621e25677b912433e09589e3307",
     "verification/supabase-release-20261023/device-checkpoint-v5-final-font2-failure.json": "5d310f9492a08404a6598ae9b899677b3ee6bc49f476f95f5f4a15427839b1f3",
-    "verification/supabase-release-20261023/device-checkpoint-v5-final-landscape.json": "12ce1ee9795fb3e4fe7d790b85fec687a28a23299266119b6cc28a9527b9ff4d"
+    "verification/supabase-release-20261023/device-checkpoint-v5-final-landscape.json": "12ce1ee9795fb3e4fe7d790b85fec687a28a23299266119b6cc28a9527b9ff4d",
+    "verification/supabase-release-20261023/android-v6-person-semantics-review.json": "bf56e3f877b240a1b0b4d40cf08c89ec95320636536f44843cd4675ec9d9bced",
+    "verification/supabase-release-20261023/android-v6-unaffected-route-source-review.json": "45a66535009d17d1a2c01059dff669ad5029f971ee7bdda9d81464d1d6c1aa91",
+    "verification/supabase-release-20261023/device-checkpoint-v5-all-visual-reviews.json": "d965d8c441d105ff42cad4b589cd36008b8e6c58dd5a56d25d519beb928392f7",
+    "verification/accessibility-navigation-20261023/android-ui-v6-freeze.json": "fc18284cf247c2e012f4f782c09ef9e01eef37d8b3662ad5df1ba77e6f489ff6"
   },
   "current_tested_source_inputs": {
     "admin/app.js": "f7f148fee1709fe762e3421c2b36dd3b32f271a9cd9d642c8d85705bc54fa4b9",
@@ -389,7 +414,7 @@
     "android/app/src/androidTest/java/com/lovelies/frontend/preview/CameraRecoveryJourney.kt": "0f34ad208152932111a222d9cad56a98ca245a108b1d6a45a6ea62dc0064a2f6",
     "android/app/src/androidTest/java/com/lovelies/frontend/preview/EnrollmentRecoveryJourney.kt": "bb9e9ec301c7df82b7b94a24660ae96f1616399f2804c3cea346e3a142e6ef3f",
     "android/app/src/androidTest/java/com/lovelies/frontend/preview/FaceLifecycleJourney.kt": "0cf1bc1de3e356833fd230f2c14dd94229931e6b3130cf803cd88bc0fedbbb8c",
-    "android/app/src/androidTest/java/com/lovelies/frontend/preview/FrontendAccessibilityJourney.kt": "b53a3c426940a3cd2fc0c0f28144f8b754e5d59b9bae98fd073bd647346e80dc",
+    "android/app/src/androidTest/java/com/lovelies/frontend/preview/FrontendAccessibilityJourney.kt": "fe30d1b1c3b82b80389280a337e04be132505314c182e15f47e279e11294a01e",
     "android/app/src/androidTest/java/com/lovelies/frontend/preview/GuestDeletionJourney.kt": "6259e3651d59ad4bf23566001004da6b47fabed5cd8319c6e4a7f0a1a1018951",
     "android/app/src/androidTest/java/com/lovelies/frontend/preview/NativeCloudflareJourney.kt": "cb683e7ff370c553b851271599aa80380f26196c246f41b749feada7c60eeb55",
     "android/app/src/androidTest/java/com/lovelies/frontend/preview/PhotoUploadRecoveryJourney.kt": "f8941926d9c6acbbc91b867df6aac27d1d405b2cff2985f6e40e06fa30b17eef",
@@ -587,7 +612,7 @@
     "android/app/src/main/java/com/lovelies/frontend/preview/PushMessaging.kt": "faedc7398d00e26b72f2afc44a457570f70bab25de954aa361df0bfa5d8dfdf9",
     "android/app/src/main/java/com/lovelies/frontend/preview/RefreshDelivery.kt": "236f3dd706736b65be0e5739af938ac2348d49d4a3fff76f0e70f0427f0fc287",
     "android/app/src/main/java/com/lovelies/frontend/preview/SecureSession.kt": "f3e7c000b3dc48d42affcc2d6b45424c75cbf3f6a6af26d2b48b1cdc89608c10",
-    "android/app/src/main/java/com/lovelies/frontend/preview/SharingScreens.kt": "92c2aa4f3570b4b27c30443db4f8a24f893b5b46b90827f28318ea9ab8f16c7c",
+    "android/app/src/main/java/com/lovelies/frontend/preview/SharingScreens.kt": "452fca97f85d9985d36ea82f05f05877c220025cc0e48b5f2ff9491b0461cd28",
     "android/app/src/main/java/com/lovelies/frontend/preview/SourcePhotoGrids.kt": "97357ebe1102e296de144c017990a0c375fd7949d60b7897c044a10b53c5eb41",
     "android/app/src/main/java/com/lovelies/frontend/preview/UiPresentation.kt": "665e6081c3721e649a0e358a12c35197907287a613124711f83df4ce594f136c",
     "android/app/src/main/java/com/lovelies/frontend/preview/UploadScreens.kt": "397185f230792ab5e594e47962c1879758e5fd97b8569cc3dba31c88c039f97b",
@@ -1389,7 +1414,8 @@
     "supabase/functions/lovelies-api/node_modules/.deno/undici-types@7.24.6/node_modules/undici-types/websocket.d.ts": "436d7b4543b340b0f3eef4310d524242e41369b9652aa9c70428767c4dcac455",
     "supabase/migrations/20261023162016_lovelies_private_core.sql": "ccd7d4b23b21bc65088fce436ade9019f0513e622140eb4e89c0048793bd9a6b",
     "supabase/migrations/20261023210000_refresh_delivery.sql": "96438cd659e8f767b8e3977127e2137d4acf40cd2532f1c7d2e094777f102969",
-    "scripts/preflight-ios-release.py": "c78afb6ca9170d119e6a1a8879daf7f809ade893854b1b2bcf07e22f269e43d1"
+    "scripts/preflight-ios-release.py": "c78afb6ca9170d119e6a1a8879daf7f809ade893854b1b2bcf07e22f269e43d1",
+    "android/app/src/androidTest/java/com/lovelies/frontend/preview/PersonNavigationAudit.kt": "a7ea09b7f2c7cdf2593d64582af161457201c8faf4cd0fb3dfdd8bf0b6d21c80"
   },
   "remaining_gates_document": "docs/release/backlog-disposition.md",
   "deployment_inputs_document": "docs/release/deployment-inputs.md",

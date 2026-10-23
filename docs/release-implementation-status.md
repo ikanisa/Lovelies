@@ -128,3 +128,13 @@ Installed-framework/source evidence shows the person label already exists and
 is exposed through a merging child; a persistent missing product label is not
 established. Direct action-owned semantics and a James→28→Back27 callback probe
 are proposed for review; no new source/build is accepted by this checkpoint.
+
+The reviewed V6 localized person27 semantics/callback-probe batch compiles with
+unchanged frozen inputs and fresh156/14-suite unit success. All seven action
+names/role/selection and shared callbacks are explicit; +2/layout/default paths
+and the strict scroll helper are unchanged. The new app/test pair awaits fresh27
+three variants, full48font2 and keyboard15/22/45. The other47 normal/landscape
+routes may reuse qualified V5 evidence with explicit per-route provenance;
+this is not a full normal/landscape V6 run or all-mode aggregate. Root source
+closure review and all254 V5 visual-review manifests are preserved; the V5
+font2 failure remains. No iOS/backend rebuild or deployment occurred.
