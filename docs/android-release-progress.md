@@ -301,3 +301,18 @@ progress and no source/build change has been made. Landscape continues on the
 immutable V5 pair. The UI reviewer completed all54 normal images and proof with
 zero new visual blockers; root bound the actual review manifests/receipt without
 claiming an independent root image review. Font2 is not a passing matrix.
+
+### V5 landscape outcome — 24 October 2026
+
+The immutable V5 full landscape run passes48/48,48 uncapped schema4 audits,
+44 actual visible-exit callbacks and two primary physical Back fallbacks; all
+asserted destinations and rotation restoration pass. Root verified raw report
+SHA256 `5bf3801054aaaa99a6f4a5bbe20aedaa88e74b5b5dd1c380b445280aef729f3e`
+and preserved `device-checkpoint-v5-final-landscape.json`. Normal remains48/48
+with54 images/proof reviewed; font2 remains47/48 with the unnamed-action27 read.
+Cached framework/source diagnosis shows an existing label exposed through child
+semantics, so persistent missing source labeling is not established. A reviewed
+candidate will stabilize the person's name/state directly on the action and
+probe James→28/James/3 matched photos→Back27 using the same callback; global
+unnamed-action criteria and raw failure remain intact. No new build/source
+correction has yet been accepted.

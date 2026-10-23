@@ -1,4 +1,4 @@
-# Lovelies readiness execution — 23 October 2026
+# Lovelies readiness execution — 23–24 October 2026
 
 **Local implementation has advanced; deployment and both store submissions remain blocked.** The full [90-ID disposition](release/backlog-disposition.md) names each retained obligation and its remaining acceptance. Local proof, hosted operation, physical-device behavior, signed upgrades and store acceptance are separate outcomes.
 
@@ -118,3 +118,13 @@ restoration pass. Root preserves the raw failure in
 landscape continues on the immutable pair, and no new source/build is accepted.
 The UI review of all54 normal images/proof is complete with zero new blockers.
 Font2 remains a failed matrix; connected/spoken/provider/store gates remain open.
+
+The V5 landscape matrix also passes48/48 with48 uncapped schema4 scroll audits,
+44 actual visible callbacks and two primary physical Back fallbacks; every
+asserted destination and preference restoration passes. Root hash-checked raw
+report `5bf3801054aaaa99a6f4a5bbe20aedaa88e74b5b5dd1c380b445280aef729f3e`
+in immutable `device-checkpoint-v5-final-landscape.json`. Font2 remains47/48.
+Installed-framework/source evidence shows the person label already exists and
+is exposed through a merging child; a persistent missing product label is not
+established. Direct action-owned semantics and a James→28→Back27 callback probe
+are proposed for review; no new source/build is accepted by this checkpoint.
