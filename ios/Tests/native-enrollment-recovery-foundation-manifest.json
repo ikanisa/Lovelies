@@ -1,0 +1,49 @@
+{
+  "schema": 1,
+  "status": "foundation-source-frozen-root-verification-pending",
+  "preimages": "verification/enrollment-recovery-20261014/preimages/ios/manifest.json",
+  "contract": "verification/enrollment-recovery-20261014/api-contract.md",
+  "inputs": [
+    {
+      "path": "ios/Lovelies/Native/CoreWire.swift",
+      "sha256": "13218c5ae3b7362e0b1400e17134d639f813e8ec67f4d4d868842dd7d71a54a6",
+      "bytes": 35014
+    },
+    {
+      "path": "ios/Lovelies/Native/DeviceIdentity.swift",
+      "sha256": "15b77970cd2f8d7ca7d9cf76582477b662e5376e3494393a67c0f8cd6baca72a",
+      "bytes": 6933
+    },
+    {
+      "path": "ios/Lovelies/Native/BackendRepository.swift",
+      "sha256": "8603527727989b419d59c628d6afe3d088762ac1cc1758dfb62181009ce5c82c",
+      "bytes": 75043
+    },
+    {
+      "path": "ios/Lovelies/Native/LiveAppStore.swift",
+      "sha256": "7be3bb1c84f07b363c85f492855b136be5b6eb76bb7d3d86d5d70a7f33e5fd67",
+      "bytes": 30942
+    },
+    {
+      "path": "ios/Lovelies/Native/LiveOnboardingAndGallery.swift",
+      "sha256": "f7e4e070fa478275fc4a146f262c0fea63243c40316c0d629a28f8bc5d8ffcb8",
+      "bytes": 21499
+    },
+    {
+      "path": "ios/Tests/NativeConnectionTests.swift",
+      "sha256": "c4fed6ca4d2d6a8b9da9c4ccacafe6923e0632ef3b29de62da2c065872e1d3f8",
+      "bytes": 22384
+    },
+    {
+      "path": "ios/Tests/NativeEnrollmentRecoveryTests.swift",
+      "sha256": "5c03c8826ab34081668af7c6d367b1fdd59e6da7a860b7bf0dc0c472ece4db7f",
+      "bytes": 42091
+    }
+  ],
+  "remaining_writable": [
+    "ios/Tests/NativeEnrollmentRecoveryHTTPJourney.swift",
+    "ios/Tests/native-enrollment-recovery-input-manifest.json"
+  ],
+  "checks_worker": "Static contract and source review only; no compiler, tests, app builds, model or HTTP runner executed",
+  "root_controlled_command": "swiftc ios/Lovelies/Native/CoreWire.swift ios/Lovelies/Native/DeviceIdentity.swift ios/Lovelies/Native/BackendRepository.swift ios/Tests/NativeEnrollmentRecoveryTests.swift -o /tmp/lovelies-ios-enrollment-recovery-tests && /tmp/lovelies-ios-enrollment-recovery-tests"
+}

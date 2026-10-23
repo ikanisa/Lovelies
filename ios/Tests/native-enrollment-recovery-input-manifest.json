@@ -1,0 +1,141 @@
+{
+  "schema": 1,
+  "status": "foundation-root-verified-http-constructor-fix-source-frozen",
+  "scope": "A01 original-account/key enrollment recovery; no OTP or liveness requirement; preserved D04 deletion and exact sharing guards",
+  "inputs": [
+    {
+      "path": "ios/Lovelies/Native/CoreWire.swift",
+      "bytes": 35014,
+      "sha256": "13218c5ae3b7362e0b1400e17134d639f813e8ec67f4d4d868842dd7d71a54a6"
+    },
+    {
+      "path": "ios/Lovelies/Native/DeviceIdentity.swift",
+      "bytes": 6933,
+      "sha256": "15b77970cd2f8d7ca7d9cf76582477b662e5376e3494393a67c0f8cd6baca72a"
+    },
+    {
+      "path": "ios/Lovelies/Native/BackendRepository.swift",
+      "bytes": 75043,
+      "sha256": "8603527727989b419d59c628d6afe3d088762ac1cc1758dfb62181009ce5c82c"
+    },
+    {
+      "path": "ios/Lovelies/Native/LiveAppStore.swift",
+      "bytes": 30942,
+      "sha256": "7be3bb1c84f07b363c85f492855b136be5b6eb76bb7d3d86d5d70a7f33e5fd67"
+    },
+    {
+      "path": "ios/Lovelies/Native/LiveOnboardingAndGallery.swift",
+      "bytes": 21499,
+      "sha256": "f7e4e070fa478275fc4a146f262c0fea63243c40316c0d629a28f8bc5d8ffcb8"
+    },
+    {
+      "path": "ios/Tests/NativeConnectionTests.swift",
+      "bytes": 22384,
+      "sha256": "c4fed6ca4d2d6a8b9da9c4ccacafe6923e0632ef3b29de62da2c065872e1d3f8"
+    },
+    {
+      "path": "ios/Tests/NativeEnrollmentRecoveryTests.swift",
+      "bytes": 42091,
+      "sha256": "5c03c8826ab34081668af7c6d367b1fdd59e6da7a860b7bf0dc0c472ece4db7f"
+    },
+    {
+      "path": "ios/Tests/NativeEnrollmentRecoveryHTTPJourney.swift",
+      "bytes": 51033,
+      "sha256": "5da6872f532bb4ed469c84e4623fa4f13d26d9e8b29121d2d9540292295727d5"
+    }
+  ],
+  "unchanged_affected_consumers": [
+    {
+      "path": "ios/Tests/NativeProtocolTests.swift",
+      "bytes": 10428,
+      "sha256": "62d49665bbf598e4d0ca9a34931cec707e16b05f3066889a7dce6af75286c644"
+    },
+    {
+      "path": "ios/Tests/NativeGuestDeletionTests.swift",
+      "bytes": 34849,
+      "sha256": "e7c878d402512b8cd2911a4f15c3e0a118e1d5ee994fb45f7f22947d9495bc06"
+    },
+    {
+      "path": "ios/Tests/NativeGuestDeletionHTTPJourney.swift",
+      "bytes": 10711,
+      "sha256": "91e104c63898d3482306133f86c7eb75a53cd2e9c01d3220e6b4531e9e6a7ecf"
+    },
+    {
+      "path": "ios/Tests/NativeLiveHTTPJourney.swift",
+      "bytes": 33897,
+      "sha256": "82865b9471e26251bf73b7b391d576c0bb86dacb3f1f7a820a77c0742a4baf0d"
+    }
+  ],
+  "contract": {
+    "path": "verification/enrollment-recovery-20261014/api-contract.md",
+    "bytes": 7455,
+    "sha256": "bb24628980149059eab2e2eb444f15460e19fd1e3771a68f1c199842560ae0cc"
+  },
+  "preimage_manifest": {
+    "path": "verification/enrollment-recovery-20261014/preimages/ios/manifest.json",
+    "bytes": 3681,
+    "sha256": "1a2db6763a0efd0c20f28c838e84a9db04ff9c018ce5c654a638a9ac08024119"
+  },
+  "fixture_configuration": {
+    "path": "verification/enrollment-recovery-20261014/ios-recovery-fixtures.json",
+    "bytes": 4279,
+    "sha256": "5d7b029b935fde73d9d78021b382ffa8311e88eb928409ab65a9e89b8e93cc86"
+  },
+  "foundation_manifest": {
+    "path": "ios/Tests/native-enrollment-recovery-foundation-manifest.json",
+    "bytes": 2079,
+    "sha256": "57492c47561b388c94eb2631fa50861533da6f0d2a4c0624f9cd6647cc8f14f2"
+  },
+  "worker_checks": [
+    "Read authoritative wire contract and current affected source",
+    "Preserved source preimages",
+    "Static capture ACK/current-session/source/account/key checks",
+    "Frozen input hashes; no compiler/build/test/model/HTTP execution by worker"
+  ],
+  "root_commands": {
+    "controlled_compile": "swiftc ios/Lovelies/Native/CoreWire.swift ios/Lovelies/Native/DeviceIdentity.swift ios/Lovelies/Native/BackendRepository.swift ios/Tests/NativeEnrollmentRecoveryTests.swift -o /tmp/lovelies-ios-enrollment-recovery-tests",
+    "controlled_run": "/tmp/lovelies-ios-enrollment-recovery-tests",
+    "http_compile": "swiftc ios/Lovelies/Native/CoreWire.swift ios/Lovelies/Native/DeviceIdentity.swift ios/Lovelies/Native/BackendRepository.swift ios/Tests/NativeEnrollmentRecoveryHTTPJourney.swift -o /tmp/lovelies-ios-enrollment-recovery-http",
+    "http_private_directory": "Use a NEW private directory, e.g. mktemp -d /tmp/lovelies-ios-a01.XXXXXX. Never include its secrets in public reports/source manifests. Directory must0700; sealed slots/master fixture key0600. Preserve failed private evidence without printing it.",
+    "http_process_phases": [
+      "/tmp/lovelies-ios-enrollment-recovery-http verification/enrollment-recovery-20261014/ios-recovery-fixtures.json <same-private-directory> start verification/enrollment-recovery-20261014/ios-http-start-result.json",
+      "/tmp/lovelies-ios-enrollment-recovery-http verification/enrollment-recovery-20261014/ios-recovery-fixtures.json <same-private-directory> capture verification/enrollment-recovery-20261014/ios-http-capture-result.json",
+      "/tmp/lovelies-ios-enrollment-recovery-http verification/enrollment-recovery-20261014/ios-recovery-fixtures.json <same-private-directory> complete verification/enrollment-recovery-20261014/ios-http-complete-result.json",
+      "/tmp/lovelies-ios-enrollment-recovery-http verification/enrollment-recovery-20261014/ios-recovery-fixtures.json <same-private-directory> finish verification/enrollment-recovery-20261014/ios-http-finish-result.json"
+    ],
+    "wire_regression": "swiftc ios/Lovelies/Native/CoreWire.swift ios/Tests/NativeProtocolTests.swift -o /tmp/lovelies-ios-wire-tests && /tmp/lovelies-ios-wire-tests",
+    "connection_regression": "swiftc ios/Lovelies/Native/CoreWire.swift ios/Lovelies/Native/DeviceIdentity.swift ios/Lovelies/Native/BackendRepository.swift ios/Tests/NativeConnectionTests.swift -o /tmp/lovelies-ios-connection-tests && /tmp/lovelies-ios-connection-tests",
+    "guest_regression": "swiftc ios/Lovelies/Native/CoreWire.swift ios/Lovelies/Native/DeviceIdentity.swift ios/Lovelies/Native/BackendRepository.swift ios/Tests/NativeGuestDeletionTests.swift -o /tmp/lovelies-ios-guest-tests && /tmp/lovelies-ios-guest-tests"
+  },
+  "controlled_scenarios": [
+    "Durable start before dispatch; original-body committed/absent response loss and delayed access-token expiry",
+    "Lost first start with expired null challenge details; authoritative predecessor adoption",
+    "Terminal empty/sparse physical proof cleanup; three fresh same-device successor captures",
+    "Capture response loss, confirmed absent slot, unresolved writer/verifier holds and strict 2xx ACK binding",
+    "Completion response loss; read-only registered status never grants credentials; fresh one-selfie same-profile authentication",
+    "Staged credential/device promotion write/delete failures across reconstruction",
+    "Single-use anonymous and registered refresh; journal-first credential survives stale separate slot/write failure",
+    "Binding errors, transient/unknown denial, missing/changed/orphaned original key never create replacement account",
+    "Deletion priority, own confirmed deletion cleanup and explicit same-account rejected deletion resume",
+    "Production UI publication-generation/cancellation guard"
+  ],
+  "http_scenarios": [
+    "Separate start process: real Cloudflare anonymous/bootstrap + registration POST; actual2xx response discarded; durable metadata/key checkpoint",
+    "Separate capture process: signed status restores original enrollment; real protected first capture accepted then actual2xx reply discarded; no durable JPEG",
+    "Separate complete process: signed capture receipt reconciliation; remaining original three captures; actual model completion commits then response discarded",
+    "Separate finish process: read-only committed enrollment has no credentials; fresh one-selfie against exact reference restores original account/key; exact real-model candidate graph/P3 global exclusion/P4Eric pair exclusion/Aline[P1,P2,P4]Eric[P2] preview/zero-grant pending commit/recipient acceptance/private rendition approvals/original entitlement denial"
+  ],
+  "remaining_gates": [
+    "Root HTTP recompile/four separate process journey pending after constructor-only fix; Foundation controlled and affected host regressions reported passed",
+    "No complete Xcode/iOS SDK app compile, simulator/app restart, physical camera, Keychain/Secure Enclave, App Store signing/archive proof",
+    "No hosted API/deployment or store entitlement qualification; release origin remains explicit/unconfigured unless provided"
+  ],
+  "design_preservation": "No new sign-in route or redesign; added recovery actions within existing enrollment/processing/error states. Existing project/resources unchanged.",
+  "root_reported_checks": [
+    "Root Foundation compile passed",
+    "Controlled recovery204 checks passed",
+    "Wire26/Connection25/Guest85 passed on unchanged Foundation/UI inputs",
+    "First HTTP compile failed on missing optional initializer arguments; failure/preimage retained; explicit nil constructor fix awaits root recompile"
+  ],
+  "http_compile_fix_preimage": "verification/enrollment-recovery-20261014/preimages/ios-http-compile-fix-1/manifest.json"
+}

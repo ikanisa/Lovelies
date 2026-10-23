@@ -1,0 +1,49 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Lovelies</string>
+    <string name="search_photos">Search your photos</string>
+    <string name="add_photos">Add Photos</string>
+    <string name="previous">Previous</string>
+    <string name="next">Next</string>
+    <string name="show_controls">Show controls</string>
+    <string name="save_original">Save Original</string>
+    <string name="share_original">Share Original</string>
+    <string name="notification_channel">Lovelies updates</string>
+    <string name="notification_title">Lovelies</string>
+    <string name="notification_body">Open Lovelies to check your updates.</string>
+    <string name="back">Back</string>
+    <string name="clear_search">Clear search</string>
+    <string name="filters">Filters</string>
+    <string name="zoom_photo">Zoom photo</string>
+    <string name="reset_zoom">Reset zoom</string>
+    <string name="show_photo_controls">Show photo controls</string>
+    <string name="hide_photo_controls">Hide photo controls</string>
+    <string name="privacy_policy">Privacy Policy</string>
+    <string name="terms_of_use">Terms of Use</string>
+    <string name="account_deletion_help">Account Deletion</string>
+    <string name="legal_link_unavailable">Policy unavailable</string>
+    <string name="legal_link_unavailable_detail">This policy has not been configured for this build. Contact support from Help Center.</string>
+    <string name="legal_link_open_failed">A browser could not open this policy. Please try again when a browser is available.</string>
+    <string name="loaded_photo_count">%1$s loaded</string>
+    <string name="photo_status">%1$s · %2$s</string>
+    <string name="photo_summary">%1$s · %2$s</string>
+    <string name="photos_processed">%1$s processed. Review matched people before sharing.</string>
+    <string name="photos_in_subset">%1$s in their subset</string>
+    <string name="photos_available">%1$s available</string>
+    <string name="include_person">Include %1$s</string>
+    <string name="open_person">Open %1$s</string>
+    <string name="photo_of_total">Photo %1$d of %2$d</string>
+    <string name="selected">Selected</string>
+    <string name="not_selected">Not selected</string>
+    <plurals name="photo_count"><item quantity="one">%d photo</item><item quantity="other">%d photos</item></plurals>
+    <plurals name="person_count"><item quantity="one">%d person</item><item quantity="other">%d people</item></plurals>
+    <string name="a11y_close">Close</string>
+    <string name="a11y_continue_preview">Continue preview</string>
+    <string name="a11y_preview_paused">Preview paused. This screen uses sample progress.</string>
+    <string name="a11y_loading">Loading</string>
+    <string name="a11y_camera_loading">Preparing camera</string>
+    <string name="a11y_profile_photos">Profile photos</string>
+    <string name="a11y_profile_favorites">Profile favorites</string>
+    <string name="a11y_profile_people">Profile people</string>
+    <string name="a11y_more_matched_people">More matched people</string>
+</resources>

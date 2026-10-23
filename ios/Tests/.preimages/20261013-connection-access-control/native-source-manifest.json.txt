@@ -1,0 +1,126 @@
+{
+  "schema": 1,
+  "status": "frozen-awaiting-root-qa",
+  "created_at": "2026-10-13T20:33:47.484645+00:00",
+  "write_boundary": [
+    "ios/Lovelies/**",
+    "ios/Tests/**"
+  ],
+  "inputs": [
+    {
+      "path": "ios/Lovelies/App/LoveliesApp.swift",
+      "sha256": "39fd27e243b837b0efcc924142b0986f745ac60299b919b64a293269b1501d03",
+      "bytes": 4146
+    },
+    {
+      "path": "ios/Lovelies/Models/DemoStore.swift",
+      "sha256": "7d35266c90a2f353d6752478a0b87e2b2bfb6057822c4128803f5b989ccc688e",
+      "bytes": 14903
+    },
+    {
+      "path": "ios/Lovelies/Native/BackendRepository.swift",
+      "sha256": "499407b49dc59bba47159d77e3b89b83c19b75b12cc9baaba767c4746b85cd96",
+      "bytes": 31401
+    },
+    {
+      "path": "ios/Lovelies/Native/CameraAndPhotos.swift",
+      "sha256": "94ec7aa1f16e541d93242fa5cdb976116a78a6fe2b57629532430ffcb12b43e4",
+      "bytes": 11701
+    },
+    {
+      "path": "ios/Lovelies/Native/CoreWire.swift",
+      "sha256": "44092efb7634ae47d971a6692c00f456f8fb369f370fee79ae77f3c521bb09e5",
+      "bytes": 17145
+    },
+    {
+      "path": "ios/Lovelies/Native/DeviceIdentity.swift",
+      "sha256": "9c9df1a448c0345970827a1b1a31a978c8b232cbd5fe55897d67ee2264030fcb",
+      "bytes": 5681
+    },
+    {
+      "path": "ios/Lovelies/Native/LiveAppStore.swift",
+      "sha256": "f6c8486dee545edcf167e10678b55bf6418be4b370f4fcc4455376fd95fc9503",
+      "bytes": 22212
+    },
+    {
+      "path": "ios/Lovelies/Native/LiveOnboardingAndGallery.swift",
+      "sha256": "27252e29ab85a5e916e0aa7addadee978c2517ad7e815b3ca116c0cbaa43baa5",
+      "bytes": 20116
+    },
+    {
+      "path": "ios/Lovelies/Native/LiveSharingAndSettings.swift",
+      "sha256": "74db6b4c6b19f7a0344665f248ba08535b331812bb2290bc4d6c4fe5900d9f83",
+      "bytes": 29259
+    },
+    {
+      "path": "ios/Lovelies/Views/Components.swift",
+      "sha256": "830bc27b24cb8eabc63e067af87539520a8e2599e9627940b2a903bbb5915015",
+      "bytes": 29944
+    },
+    {
+      "path": "ios/Lovelies/Views/GalleryViews.swift",
+      "sha256": "5d5a5d0841d67e827c313b8eeb431c4399c223334319d824d0349dc97b178334",
+      "bytes": 31408
+    },
+    {
+      "path": "ios/Lovelies/Views/OnboardingViews.swift",
+      "sha256": "3813dd1e169cf931148a4232132928cb65ba7f6b3db65750ff685b3637107b7f",
+      "bytes": 16033
+    },
+    {
+      "path": "ios/Lovelies/Views/SettingsViews.swift",
+      "sha256": "c7164d50e6a910d8218356ed1bc640fa8dc06d5a25941d5f3752baccc82fed61",
+      "bytes": 37989
+    },
+    {
+      "path": "ios/Lovelies/Views/SharingViews.swift",
+      "sha256": "a3125e6fb5061de0f9b158f4eebe127a76ac1b5b59c69efca78066ac06d72417",
+      "bytes": 23522
+    },
+    {
+      "path": "ios/Lovelies/Views/UploadViews.swift",
+      "sha256": "19b6c58b71f41da45fa328f1ae918108aaa75b85e22232a2dcb6fc4037075717",
+      "bytes": 12748
+    },
+    {
+      "path": "ios/Lovelies/Info-Debug.plist",
+      "sha256": "a3f31e53150585f62a414c435121f4311f2136a6558a75c699308dcccbbd6f1c",
+      "bytes": 2091
+    },
+    {
+      "path": "ios/Lovelies/Info.plist",
+      "sha256": "13b94e9a0de86edbe902ba206c137122a6a001df4c8f8b87329eee557ac44aee",
+      "bytes": 1832
+    },
+    {
+      "path": "ios/Tests/NativeConnectionTests.swift",
+      "sha256": "f0de20f9fdaa1bb938fa3499055ff32fa6ffead768c38cb3ba3e634330d46448",
+      "bytes": 19341
+    },
+    {
+      "path": "ios/Tests/NativeProtocolTests.swift",
+      "sha256": "810f6f0f1cf231b48f2c7c692ae3169bb1679a591451bc6f199d0255acc3e0bf",
+      "bytes": 9535
+    }
+  ],
+  "read_only_project_input": {
+    "path": "ios/Lovelies.xcodeproj/project.pbxproj",
+    "sha256": "7e1d5d4857f2d3b5c801091ba391369b1ea3b4edfc43598c494f9f6681e45ed4"
+  },
+  "worker_checks": [
+    "Current native and Cloudflare auth/challenge/proof/complete contract inspected",
+    "Signature canonical envelope and response field names compared against active server source",
+    "Source/config hashes recorded; existing screenshot assets untouched"
+  ],
+  "worker_tests_run": false,
+  "worker_builds_run": false,
+  "remaining_gates": [
+    "Root Swift syntax/property-list/protocol test run pending",
+    "Full Xcode and iOS SDK unavailable on this host",
+    "Physical iPhone camera, Secure Enclave, Keychain and Photos integration not executed",
+    "No hosted HTTPS backend origin authorized; Release refuses requests until explicitly configured",
+    "Store signing, subscription purchase/receipt and distribution acceptance not established",
+    "Foreground import/upload flow does not claim OS background transfer or process-restart import-queue restoration",
+    "48-screen reference layouts remain separate fixtures; actual iOS rendering parity not established"
+  ]
+}

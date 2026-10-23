@@ -1,0 +1,81 @@
+{
+  "schema_version": "2026-05-25",
+  "model_version": "opencv-yunet-sface-2021dec-v1",
+  "model_manifest_path": "services/ml-face/models/model-manifest.json",
+  "dataset": {
+    "name": "content-required-approved-rwanda-or-target-market-evaluation-dataset",
+    "data_residency": "Rwanda or approved target-region",
+    "event_count": 0,
+    "identity_count": 0,
+    "image_count": 0,
+    "camera_source_mix_reviewed": false,
+    "lighting_pose_occlusion_reviewed": false,
+    "three_selfie_source_reviewed": false,
+    "holdout_split_verified": false,
+    "consent_evidence_verified": false,
+    "consent_evidence_uri": "content-required-secure-consent-evidence-uri"
+  },
+  "review_protocol": {
+    "review_matrix_uri": "docs/ML_EVALUATION_REVIEW_MATRIX.md",
+    "frte_1_1_reviewed": false,
+    "frte_1_n_reviewed": false,
+    "fate_quality_reviewed": false,
+    "fate_morph_reviewed": false,
+    "threshold_decision_record_uri": "content-required-secure-evidence-uri",
+    "prohibited_output_review_uri": "content-required-secure-evidence-uri"
+  },
+  "thresholds": {
+    "auto_match_threshold": 0.42,
+    "review_threshold": 0.32,
+    "minimum_margin": 0.08,
+    "minimum_quality_score": 0.72,
+    "duplicate_similarity_threshold": 0.8,
+    "exact_duplicate_threshold": 0.95,
+    "threshold_dataset_reviewed": false,
+    "top2_margin_policy_reviewed": false,
+    "threshold_change_control_approved": false,
+    "threshold_freeze_approved": false,
+    "reviewer_capacity_reviewed": false
+  },
+  "results": {
+    "false_positive_rate": 1,
+    "false_negative_rate": 1,
+    "review_rate": 1,
+    "not_me_dispute_rate": 1,
+    "max_false_positive_rate_allowed": 0.001,
+    "max_false_negative_rate_allowed": 0.05,
+    "false_positive_reviewed": false,
+    "false_negative_reviewed": false
+  },
+  "bias_review": {
+    "status": "blocked_until_completed",
+    "reviewer": "content-required",
+    "completed_at": "content-required",
+    "evidence_uri": "content-required-secure-evidence-uri"
+  },
+  "policy_checks": {
+    "profile_based_matching_only": true,
+    "no_demographic_outputs": true,
+    "no_emotion_age_gender_ethnicity": true,
+    "no_global_identity_search": true,
+    "source_license_notice_verified": true,
+    "consent_scope_verified": true
+  },
+  "operations": {
+    "status": "blocked_until_completed",
+    "health_check_passed": false,
+    "queue_to_gallery_smoke_passed": false,
+    "admin_review_queue_smoke_passed": false,
+    "not_me_dispute_smoke_passed": false,
+    "drift_monitoring_configured": false,
+    "drift_monitoring_plan_uri": "content-required-secure-evidence-uri",
+    "alert_owner": "content-required",
+    "rollback_drill_passed": false,
+    "rollback_model_version": "opencv-yunet-sface-2021dec-v1"
+  },
+  "approval": {
+    "status": "blocked_until_approved",
+    "approver": "content-required",
+    "approved_at": "content-required"
+  }
+}

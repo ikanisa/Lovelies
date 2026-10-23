@@ -1,0 +1,89 @@
+{
+  "schema": "lovelies-retained-cpp-header-template-source-scope-v1",
+  "advisory": "DEBIAN-CVE-2026-102010",
+  "scope": "Source and Debian patch reference review; compiled consumer absence is not asserted for unrelated or unrecorded sources",
+  "sources": [
+    {
+      "archive": "outputs/ml-license-distribution-kit-20260930/debian-sources/libheif_1.23.4-1~deb13u1/libheif_1.23.4-1~deb13u1.debian.tar.xz",
+      "sha256": "5102677f6e7e98b9b80d19e7579617ae07fe56199e9c9ce91ce59c1e7a6e24aa",
+      "reviewed_files": 0,
+      "matches": []
+    },
+    {
+      "archive": "outputs/ml-license-distribution-kit-20260930/debian-sources/libheif_1.23.4-1~deb13u1/libheif_1.23.4.orig.tar.gz",
+      "sha256": "d0c02b4b0e978f34a1974b6f3eea7975a537bf7a9195ffeea38e7242ff316fdd",
+      "reviewed_files": 423,
+      "matches": []
+    },
+    {
+      "archive": "outputs/ml-license-distribution-kit-20260930/debian-sources/libde265_1.0.15-1+deb13u2/libde265_1.0.15-1+deb13u2.debian.tar.xz",
+      "sha256": "108b5d4d71243554110e2899e20d3f409c8368573bfddc98473eb1637b902ba9",
+      "reviewed_files": 15,
+      "matches": []
+    },
+    {
+      "archive": "outputs/ml-license-distribution-kit-20260930/debian-sources/libde265_1.0.15-1+deb13u2/libde265_1.0.15.orig.tar.gz",
+      "sha256": "00251986c29d34d3af7117ed05874950c875dd9292d016be29d3b3762666511d",
+      "reviewed_files": 151,
+      "matches": []
+    },
+    {
+      "archive": "outputs/ml-license-distribution-kit-20260930/debian-sources/protobuf_3.21.12-11+deb13u1/protobuf_3.21.12-11+deb13u1.debian.tar.xz",
+      "sha256": "52c7c9377a2cb93649fb778baf4fe76d4489893ef04bad675acfa9b16e6313d5",
+      "reviewed_files": 31,
+      "matches": []
+    },
+    {
+      "archive": "outputs/ml-license-distribution-kit-20260930/debian-sources/protobuf_3.21.12-11+deb13u1/protobuf_3.21.12.orig.tar.gz",
+      "sha256": "930c2c3b5ecc6c9c12615cf5ad93f1cd6e12d0aba862b572e076259970ac3a53",
+      "reviewed_files": 630,
+      "matches": []
+    }
+  ],
+  "selected_protobuf_sources": [
+    {
+      "path": "protobuf-3.21.12/src/google/protobuf/compiler/cpp/message.cc",
+      "sha256": "78d65781699ab0b11b8ef60ffc4cc4518faffccc6574c9627ee2dddd0e3d48f8"
+    },
+    {
+      "path": "protobuf-3.21.12/src/google/protobuf/compiler/csharp/csharp_message.cc",
+      "sha256": "df2e626448b0ef75bf163cd11fa36d822fc81b62c580c6c60edf4f568f3777be"
+    },
+    {
+      "path": "protobuf-3.21.12/src/google/protobuf/compiler/java/message.cc",
+      "sha256": "d12f580b6b059fa441e989a492f34a2c7d89f177bb0ef88b18304c204ab083c7"
+    },
+    {
+      "path": "protobuf-3.21.12/src/google/protobuf/compiler/java/message_lite.cc",
+      "sha256": "442d490e12e597f203636873e6efa6838572e513ea3235651ba385c4e709d860"
+    },
+    {
+      "path": "protobuf-3.21.12/src/google/protobuf/compiler/java/message_lite.h",
+      "sha256": "a116c43e3107fc3f231f498388972659627a4ba23320613b543fbee3a5781160"
+    },
+    {
+      "path": "protobuf-3.21.12/src/google/protobuf/compiler/objectivec/objectivec_message.cc",
+      "sha256": "fbf737642f33a48e6114e25df8e90b02574099e61b7f3f57da0b5d59462a49fb"
+    },
+    {
+      "path": "protobuf-3.21.12/src/google/protobuf/dynamic_message.cc",
+      "sha256": "d060de6b2079e9ff81f4fb36a914cb1acb6a2a6dc31b29a247eff3c681eb4602"
+    },
+    {
+      "path": "protobuf-3.21.12/src/google/protobuf/implicit_weak_message.cc",
+      "sha256": "9eb0cd7a5b0c86e9a7b0b2773c3cd16b36912d1f02bcff73922f4c817d122182"
+    },
+    {
+      "path": "protobuf-3.21.12/src/google/protobuf/message.cc",
+      "sha256": "9a8e42a73aca7f32915461dddec7ec3bda7d4e807fd74022275eb6950717c7fe"
+    },
+    {
+      "path": "protobuf-3.21.12/src/google/protobuf/message_lite.cc",
+      "sha256": "f4b9938f0d0260cdf7f5149b0256f0dc0227a247a3df1faf5173ab004cd33344"
+    },
+    {
+      "path": "protobuf-3.21.12/src/google/protobuf/message_lite.h",
+      "sha256": "970d367165ccd5ed0cfc5f036f187cc70e601422ed68cc58afc4ec64c77e5ed8"
+    }
+  ]
+}

@@ -1,0 +1,16 @@
+{
+  "applinks": {
+    "details": [
+      {
+        "appIDs": ["63STJ5N27W.com.lovelies.memories"],
+        "components": [
+          {"/": "/support", "exclude": true},
+          {"/": "/support/", "exclude": true},
+          {"/": "/match/*"},
+          {"/": "/support/*"},
+          {"/": "/payment/*"}
+        ]
+      }
+    ]
+  }
+}

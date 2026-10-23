@@ -1,0 +1,64 @@
+{
+  "schema": 1,
+  "status": "explicit-logout-repair-frozen-root-verification-pending",
+  "preimages": [
+    "verification/face-profile-lifecycle-20261014/preimages/ios/manifest.json",
+    "verification/face-profile-lifecycle-20261014/preimages/ios-before-control-renewal/manifest.json",
+    "verification/face-profile-lifecycle-20261014/preimages/ios-pending-writer-correction/manifest.json",
+    "verification/face-profile-lifecycle-20261014/preimages/ios-controlled-compile-fix-1/manifest.json",
+    "verification/face-profile-lifecycle-20261014/preimages/ios-initial-digest-contract-fix/manifest.json",
+    "verification/face-profile-lifecycle-20261014/preimages/ios-explicit-logout-fix-1/manifest.json"
+  ],
+  "contract": {
+    "path": "verification/face-profile-lifecycle-20261014/api-contract.md",
+    "sha256": "27c98ec15ed798c1e289ef9840e9e10ca27a38cc33db879b73d5d000ab81d8d9",
+    "bytes": 12342
+  },
+  "inputs": [
+    {
+      "path": "ios/Lovelies/Native/CoreWire.swift",
+      "sha256": "ba319bfa328bdad6af4c61715593bbad9347b2f2b805908c784a38a2d6649785",
+      "bytes": 60098
+    },
+    {
+      "path": "ios/Lovelies/Native/DeviceIdentity.swift",
+      "sha256": "e6cc45d5a3673866216f5892b9546846d46dccca20d1c7f05f8b722d1610e473",
+      "bytes": 9233
+    },
+    {
+      "path": "ios/Lovelies/Native/BackendRepository.swift",
+      "sha256": "19a914c5c60627895bdf9f1525473644e1bef6892011c6102bd56cd4a2584d4f",
+      "bytes": 166034
+    },
+    {
+      "path": "ios/Lovelies/Native/LiveAppStore.swift",
+      "sha256": "bea66095124fbb71854d1f635ea1a58d082b65258a047464d865f667eaa6209b",
+      "bytes": 43698
+    },
+    {
+      "path": "ios/Lovelies/Native/LiveOnboardingAndGallery.swift",
+      "sha256": "d0545bbc2d892adefbc1587d1b3c18764898827ade45acd78698aa2d6947d768",
+      "bytes": 23636
+    },
+    {
+      "path": "ios/Lovelies/Native/LiveSharingAndSettings.swift",
+      "sha256": "6729c59a0f253ce1110e03b1b8c6c40030c08a3f67ecbfccb4ebe48159656185",
+      "bytes": 55007
+    },
+    {
+      "path": "ios/Tests/NativeFaceProfileLifecycleTests.swift",
+      "sha256": "5c8c8c0dfd2f0b808623f0d4fc3fdd293a2be9ee6dc13f688eb3ed2936c63eb4",
+      "bytes": 61685
+    }
+  ],
+  "worker_checks": "Static wire/source review only. No compilers, tests, builds, HTTP/model/simulator runners.",
+  "root_compile": "swiftc ios/Lovelies/Native/CoreWire.swift ios/Lovelies/Native/DeviceIdentity.swift ios/Lovelies/Native/BackendRepository.swift ios/Tests/NativeFaceProfileLifecycleTests.swift -o /tmp/lovelies-ios-face-profile-tests",
+  "root_run": "/tmp/lovelies-ios-face-profile-tests",
+  "remaining_writable": [],
+  "gates": [
+    "Root final compilation/controlled/actual HTTP proof pending",
+    "Full iPhoneOS SDK, app UI, camera, Keychain, Secure Enclave, background/device lifecycle, hosted deployment and store acceptance unverified"
+  ],
+  "frozen_at": "2026-10-14T16:11:36.421735+00:00",
+  "repair": "Explicit logout retires staged/ordinary lifecycle credentials and ordinary login camera state before awaits. Internal failure clearSession retains staged repair. Original control/key/pending operation preserved for readonly reconciliation and explicit fresh login."
+}

@@ -1,0 +1,37 @@
+[
+  {
+    "name": "exact_match_clear_margin",
+    "query": "unit_x",
+    "threshold": 0.42,
+    "review_margin": 0.05,
+    "candidates": [
+      { "user_id": "user-best", "face_profile_id": "profile-best", "embedding": "unit_x" },
+      { "user_id": "user-far", "face_profile_id": "profile-far", "embedding": "unit_y" }
+    ],
+    "expected_decision": "auto_matched",
+    "expected_user_id": "user-best"
+  },
+  {
+    "name": "exact_match_close_second_candidate",
+    "query": "unit_x",
+    "threshold": 0.42,
+    "review_margin": 0.05,
+    "candidates": [
+      { "user_id": "user-best", "face_profile_id": "profile-best", "embedding": "unit_x" },
+      { "user_id": "user-close", "face_profile_id": "profile-close", "embedding": "near_x" }
+    ],
+    "expected_decision": "needs_review",
+    "expected_user_id": "user-best"
+  },
+  {
+    "name": "outside_threshold",
+    "query": "unit_x",
+    "threshold": 0.42,
+    "review_margin": 0.05,
+    "candidates": [
+      { "user_id": "user-far", "face_profile_id": "profile-far", "embedding": "unit_y" }
+    ],
+    "expected_decision": "rejected",
+    "expected_user_id": null
+  }
+]

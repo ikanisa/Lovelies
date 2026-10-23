@@ -1,0 +1,109 @@
+{
+  "schema": 1,
+  "status": "foundation-root-verified-http-source-frozen-pending-root-compile-run",
+  "scope": "A02 saved private recovery key plus one fresh selfie restores exact original account; no OTP/public face search/profile replacement",
+  "inputs": [
+    {
+      "path": "ios/Lovelies/Native/CoreWire.swift",
+      "sha256": "bade0dbb90a141421421da3196159c9e85399455d35d84ab95ec68a0eb52f42f",
+      "bytes": 44604
+    },
+    {
+      "path": "ios/Lovelies/Native/DeviceIdentity.swift",
+      "sha256": "e6cc45d5a3673866216f5892b9546846d46dccca20d1c7f05f8b722d1610e473",
+      "bytes": 9233
+    },
+    {
+      "path": "ios/Lovelies/Native/BackendRepository.swift",
+      "sha256": "d0a365ebc63b2e608d0ffb96d6bf6cc6f99729d76b44c8703ba86197879d9412",
+      "bytes": 107559
+    },
+    {
+      "path": "ios/Lovelies/Native/LiveAppStore.swift",
+      "sha256": "28739e02f0702ad88b73368715c863b5aa28098dfb55dbad33f910116cdecb33",
+      "bytes": 36286
+    },
+    {
+      "path": "ios/Lovelies/Native/LiveOnboardingAndGallery.swift",
+      "sha256": "a9ed510ccbe381b747587dc38076bc8627c6dbcb084ebaa11dad5deb2383774e",
+      "bytes": 22442
+    },
+    {
+      "path": "ios/Lovelies/Native/LiveSharingAndSettings.swift",
+      "sha256": "d04c4c3239d4b536c0eded4c30294326abddbc16c7cb08d8f125ed2e97d7ec78",
+      "bytes": 41883
+    },
+    {
+      "path": "ios/Tests/NativeAccountRecoveryTests.swift",
+      "sha256": "75b2c7bf6ddf879e8510ec457fbbd9b6a8da5e86d538b712669cab8df6f3c0c9",
+      "bytes": 39735
+    },
+    {
+      "path": "ios/Tests/NativeAccountRecoveryHTTPJourney.swift",
+      "sha256": "86705f8c408a58b74c4c87a9f5cacf4b9ca138be2a4ee8efea7f6b243fbbb039",
+      "bytes": 56671
+    }
+  ],
+  "preimage_manifest": {
+    "path": "verification/account-recovery-20261014/preimages/ios/manifest.json",
+    "sha256": "3088da3b55aebb5ac48521d7f3e133d96907fdf23fd1bc6b64e17e49e7f743c6",
+    "bytes": 3081
+  },
+  "contract": {
+    "path": "verification/account-recovery-20261014/api-contract.md",
+    "sha256": "8627e7d809a1c6fbef7e57ef1c685e7115d961b657a386c345b13ad5ae85c453",
+    "bytes": 6727
+  },
+  "configuration": {
+    "path": "verification/account-recovery-20261014/ios-account-recovery-fixtures.json",
+    "sha256": "d919f957fb5904d918fdfeee99113b8432e3d1919271fb934648ffe8570d42e9",
+    "bytes": 4325
+  },
+  "foundation_manifest": {
+    "path": "ios/Tests/native-account-recovery-foundation-manifest.json",
+    "sha256": "1b45f8c0f4dc3b3edb8bde2d7f8126b7da12b6691c085a1d8741d753305e54a5",
+    "bytes": 1954
+  },
+  "worker_checks": [
+    "Read exact current wire and amendments",
+    "Saved source preimages",
+    "Static strict source/account/key/nonce/profile/device/capture receipt/current-session/promotion review",
+    "Confirmed frozen Foundation hashes unchanged",
+    "No worker compile/build/test/HTTP/model runner executed"
+  ],
+  "root_reported_checks": [
+    "Foundation compiled",
+    "A02 controlled98 checks passed",
+    "A01 controlled204 checks passed",
+    "Guest85/Connection25/Wire26 checks passed",
+    "iPhoneOS SDK remains unavailable"
+  ],
+  "root_commands": {
+    "controlled_compile": "swiftc ios/Lovelies/Native/CoreWire.swift ios/Lovelies/Native/DeviceIdentity.swift ios/Lovelies/Native/BackendRepository.swift ios/Tests/NativeAccountRecoveryTests.swift -o /tmp/lovelies-ios-account-recovery-tests",
+    "controlled_run": "/tmp/lovelies-ios-account-recovery-tests",
+    "http_compile": "swiftc ios/Lovelies/Native/CoreWire.swift ios/Lovelies/Native/DeviceIdentity.swift ios/Lovelies/Native/BackendRepository.swift ios/Tests/NativeAccountRecoveryHTTPJourney.swift -o /tmp/lovelies-ios-account-recovery-http",
+    "private_directory": "Use one NEW0700 directory, e.g. mktemp -d /tmp/lovelies-ios-a02.XXXXXX; each process retains private encrypted0600 fixture vaults/key maps. Do not publish/hash/dump secret slots or private master keys. Preserve failed evidence privately. No JPEG persistence.",
+    "http_processes": [
+      "/tmp/lovelies-ios-account-recovery-http verification/account-recovery-20261014/ios-account-recovery-fixtures.json <same-private-root-directory> owner verification/account-recovery-20261014/artifacts/ios-http-owner-result.json",
+      "/tmp/lovelies-ios-account-recovery-http verification/account-recovery-20261014/ios-account-recovery-fixtures.json <same-private-root-directory> start verification/account-recovery-20261014/artifacts/ios-http-start-result.json",
+      "/tmp/lovelies-ios-account-recovery-http verification/account-recovery-20261014/ios-account-recovery-fixtures.json <same-private-root-directory> capture verification/account-recovery-20261014/artifacts/ios-http-capture-result.json",
+      "/tmp/lovelies-ios-account-recovery-http verification/account-recovery-20261014/ios-account-recovery-fixtures.json <same-private-root-directory> complete verification/account-recovery-20261014/artifacts/ios-http-complete-result.json",
+      "/tmp/lovelies-ios-account-recovery-http verification/account-recovery-20261014/ios-account-recovery-fixtures.json <same-private-root-directory> finish verification/account-recovery-20261014/artifacts/ios-http-finish-result.json"
+    ]
+  },
+  "scenarios": [
+    "Original owner actual anonymous\u21923-capture enrollment\u2192private key generated/saved before POST; actual2xx key reply lost then same-operation/secret idempotent retry",
+    "Separate new-device process starts ordinary anonymous by default, has no original device key, imports private fixture backup explicitly, saves distinct request/P256 alias before actual recovery start; actual2xx reply discarded",
+    "Separate process reconciles exact original account/profile/newkey, actual one-front capture reply lost; only metadata persists",
+    "Separate process recovers signed accepted receipt, actual original-reference comparison commits newdevice/consumes key/revokes oldsessions; credential reply lost",
+    "Separate process observes readonly registered status with no original-account authentication; ordinary new-key fresh selfie restores exact original account/profile; current active device confirmed; oldsession and consumed old-key operation denied",
+    "Recovered original account runs unchanged exact6-candidate/4-approved-pair P1-P4 sharing/global/P4Eric exclusions/zero-grant pending acceptance/real recipient decisions/private rendition permission/original entitlement denial/logout-fresh-login replay rejection"
+  ],
+  "design": "Existing black/pink Lovelies routes and camera preserved. Added quiet Recover my account input/status sheet, explicit confirmed Use another key with encrypted bounded retired history, Account & security key management and user-initiated local-only expiring clipboard copy. No automatic clipboard export/secret logging.",
+  "remaining_gates": [
+    "Root new HTTP harness compile and five separate-process actual-model journey pending",
+    "No iOS SDK app/SwiftUI compilation or actual camera/Keychain/SecureEnclave/new-device/reinstall qualification",
+    "No hosted deployment/AppStore signing/archive/store entitlement release acceptance. Release origin remains explicit.",
+    "Fully lost devices without a previously saved private recovery backup remain unavailable; private recovery key alone never authenticates"
+  ]
+}

@@ -1,0 +1,176 @@
+{
+  "prepared_on": "2026-10-23",
+  "scope": "Local file, route, metadata, mailto syntax, fragment and asset integrity checks; no browser/mailbox/hosting/legal acceptance",
+  "result": "pass",
+  "pages": [
+    {
+      "path": "index.html",
+      "links_checked": 18,
+      "result": "pass",
+      "issues": []
+    },
+    {
+      "path": "privacy/index.html",
+      "links_checked": 23,
+      "result": "pass",
+      "issues": []
+    },
+    {
+      "path": "terms/index.html",
+      "links_checked": 19,
+      "result": "pass",
+      "issues": []
+    },
+    {
+      "path": "account-deletion/index.html",
+      "links_checked": 18,
+      "result": "pass",
+      "issues": []
+    },
+    {
+      "path": "support/index.html",
+      "links_checked": 17,
+      "result": "pass",
+      "issues": []
+    }
+  ],
+  "external_links": [
+    "https://www.apple.com/legal/internet-services/itunes/dev/stdeula/"
+  ],
+  "mailto_links": [
+    {
+      "page": "index.html",
+      "recipient": "info@ikanisa.com",
+      "subject": ""
+    },
+    {
+      "page": "privacy/index.html",
+      "recipient": "info@ikanisa.com",
+      "subject": ""
+    },
+    {
+      "page": "privacy/index.html",
+      "recipient": "info@ikanisa.com",
+      "subject": ""
+    },
+    {
+      "page": "terms/index.html",
+      "recipient": "info@ikanisa.com",
+      "subject": ""
+    },
+    {
+      "page": "terms/index.html",
+      "recipient": "info@ikanisa.com",
+      "subject": ""
+    },
+    {
+      "page": "account-deletion/index.html",
+      "recipient": "info@ikanisa.com",
+      "subject": ""
+    },
+    {
+      "page": "account-deletion/index.html",
+      "recipient": "info@ikanisa.com",
+      "subject": "Lovelies account deletion"
+    },
+    {
+      "page": "account-deletion/index.html",
+      "recipient": "info@ikanisa.com",
+      "subject": ""
+    },
+    {
+      "page": "support/index.html",
+      "recipient": "info@ikanisa.com",
+      "subject": ""
+    },
+    {
+      "page": "support/index.html",
+      "recipient": "info@ikanisa.com",
+      "subject": "Lovelies support"
+    },
+    {
+      "page": "support/index.html",
+      "recipient": "info@ikanisa.com",
+      "subject": ""
+    }
+  ],
+  "assets": [
+    {
+      "path": "assets/wordmark.png",
+      "sha256": "0b85eb48e8609cba285b78cc1f586da6991a0af9def20c1395b6b6fb19a5a105",
+      "matches_authorized_source": true
+    },
+    {
+      "path": "assets/photo-heart.png",
+      "sha256": "f8970a77cb78738d4beac5e46c24aa5caf4e0cb63a44f62f097b8ee7aa3f5d13",
+      "matches_authorized_source": true
+    }
+  ],
+  "draft_config_verified": true,
+  "local_http": {
+    "origin": "http://127.0.0.1:8768/web/",
+    "responses": [
+      {
+        "path": "/web/",
+        "status": 200,
+        "content_type": "text/html; charset=utf-8",
+        "bytes": 3399
+      },
+      {
+        "path": "/web/privacy/",
+        "status": 200,
+        "content_type": "text/html; charset=utf-8",
+        "bytes": 8410
+      },
+      {
+        "path": "/web/terms/",
+        "status": 200,
+        "content_type": "text/html; charset=utf-8",
+        "bytes": 4955
+      },
+      {
+        "path": "/web/account-deletion/",
+        "status": 200,
+        "content_type": "text/html; charset=utf-8",
+        "bytes": 5269
+      },
+      {
+        "path": "/web/support/",
+        "status": 200,
+        "content_type": "text/html; charset=utf-8",
+        "bytes": 4519
+      },
+      {
+        "path": "/web/site.css",
+        "status": 200,
+        "content_type": "text/css; charset=utf-8",
+        "bytes": 7070
+      },
+      {
+        "path": "/web/assets/wordmark.png",
+        "status": 200,
+        "content_type": "image/png",
+        "bytes": 23051
+      },
+      {
+        "path": "/web/assets/photo-heart.png",
+        "status": 200,
+        "content_type": "image/png",
+        "bytes": 26339
+      }
+    ],
+    "result": "pass",
+    "scope": "Local root-coordinator preview server only; not public hosting/header acceptance"
+  },
+  "visual": {
+    "result": "observed",
+    "browser": "Chrome",
+    "scope": "Desktop viewport home and account-deletion route; screenshot and accessibility-tree inspection via CUA; no email links activated",
+    "remaining": [
+      "compact/mobile viewport and zoom matrix",
+      "real assistive-technology traversal",
+      "mailbox and operational request handling",
+      "approved public hosting and final header validation"
+    ]
+  }
+}

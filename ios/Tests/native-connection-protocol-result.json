@@ -1,0 +1,37 @@
+{
+  "schema": 1,
+  "checked_at": "2026-10-13T20:36:05.749482+00:00",
+  "scope": "macOS host native API consumer protocol executable; controlled transport and in-memory secrets; actual CryptoKit P256 signatures",
+  "compiler_command": "swiftc ios/Lovelies/Native/CoreWire.swift ios/Lovelies/Native/DeviceIdentity.swift ios/Lovelies/Native/BackendRepository.swift ios/Tests/NativeConnectionTests.swift -o /tmp/lovelies-native-connection-protocol-tests",
+  "compile_exit_code": 0,
+  "run_command": "/tmp/lovelies-native-connection-protocol-tests",
+  "run_exit_code": 0,
+  "stdout": "Native connection protocol checks passed: 25\n",
+  "checks_passed": 25,
+  "inputs": [
+    {
+      "path": "ios/Lovelies/Native/CoreWire.swift",
+      "sha256": "44092efb7634ae47d971a6692c00f456f8fb369f370fee79ae77f3c521bb09e5"
+    },
+    {
+      "path": "ios/Lovelies/Native/DeviceIdentity.swift",
+      "sha256": "9c9df1a448c0345970827a1b1a31a978c8b232cbd5fe55897d67ee2264030fcb"
+    },
+    {
+      "path": "ios/Lovelies/Native/BackendRepository.swift",
+      "sha256": "499407b49dc59bba47159d77e3b89b83c19b75b12cc9baaba767c4746b85cd96"
+    },
+    {
+      "path": "ios/Tests/NativeConnectionTests.swift",
+      "sha256": "9f299ebf1044392f18e28859fe9044adaf0b98e2ecf6d848ba05818e813ea457"
+    }
+  ],
+  "executable_sha256": "77619ec5a1c4f1db3466cc242d3ef8d501493a11d62c962f98d9c853534b2ca8",
+  "failed_compile_preimage": "ios/Tests/.preimages/20261013-connection-access-control/preimage.json",
+  "does_not_establish": [
+    "iOS SDK compilation",
+    "SwiftUI/AVFoundation/Photos runtime",
+    "Physical device or Keychain/Secure Enclave behavior",
+    "Real model/provider/hosted authorization or release acceptance"
+  ]
+}

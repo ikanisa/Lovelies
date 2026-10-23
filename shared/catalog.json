@@ -1,0 +1,434 @@
+[
+  {
+    "id": 1,
+    "title": "Splash",
+    "filename": "01-splash.png",
+    "group": "Setup",
+    "width": 217,
+    "height": 390,
+    "aspectRatio": 0.5564102564102564
+  },
+  {
+    "id": 2,
+    "title": "Introduction and how it works",
+    "filename": "02-introduction-and-how-it-works.png",
+    "group": "Setup",
+    "width": 229,
+    "height": 391,
+    "aspectRatio": 0.5856777493606138
+  },
+  {
+    "id": 3,
+    "title": "Sign in and join",
+    "filename": "03-sign-in-and-join.png",
+    "group": "Setup",
+    "width": 235,
+    "height": 389,
+    "aspectRatio": 0.6041131105398457
+  },
+  {
+    "id": 4,
+    "title": "Photo access prompt",
+    "filename": "04-photo-access-prompt.png",
+    "group": "Setup",
+    "width": 237,
+    "height": 390,
+    "aspectRatio": 0.6076923076923076
+  },
+  {
+    "id": 5,
+    "title": "Photo access options",
+    "filename": "05-photo-access-options.png",
+    "group": "Setup",
+    "width": 231,
+    "height": 390,
+    "aspectRatio": 0.5923076923076923
+  },
+  {
+    "id": 6,
+    "title": "Face enrollment",
+    "filename": "06-face-enrollment.png",
+    "group": "Setup",
+    "width": 214,
+    "height": 389,
+    "aspectRatio": 0.5501285347043702
+  },
+  {
+    "id": 7,
+    "title": "Face quality retry",
+    "filename": "07-face-quality-retry.png",
+    "group": "Setup",
+    "width": 216,
+    "height": 361,
+    "aspectRatio": 0.5983379501385041
+  },
+  {
+    "id": 8,
+    "title": "Processing",
+    "filename": "08-processing.png",
+    "group": "Setup",
+    "width": 228,
+    "height": 361,
+    "aspectRatio": 0.631578947368421
+  },
+  {
+    "id": 9,
+    "title": "Setup complete",
+    "filename": "09-setup-complete.png",
+    "group": "Setup",
+    "width": 236,
+    "height": 360,
+    "aspectRatio": 0.6555555555555556
+  },
+  {
+    "id": 10,
+    "title": "Home gallery",
+    "filename": "10-home-gallery.png",
+    "group": "Library",
+    "width": 247,
+    "height": 361,
+    "aspectRatio": 0.6842105263157895
+  },
+  {
+    "id": 11,
+    "title": "New matches",
+    "filename": "11-new-matches.png",
+    "group": "Library",
+    "width": 240,
+    "height": 361,
+    "aspectRatio": 0.6648199445983379
+  },
+  {
+    "id": 12,
+    "title": "Photo viewer",
+    "filename": "12-photo-viewer.png",
+    "group": "Library",
+    "width": 227,
+    "height": 360,
+    "aspectRatio": 0.6305555555555555
+  },
+  {
+    "id": 13,
+    "title": "All photos",
+    "filename": "13-all-photos.png",
+    "group": "Library",
+    "width": 258,
+    "height": 487,
+    "aspectRatio": 0.5297741273100616
+  },
+  {
+    "id": 14,
+    "title": "Favorites and saved",
+    "filename": "14-favorites-and-saved.png",
+    "group": "Library",
+    "width": 258,
+    "height": 487,
+    "aspectRatio": 0.5297741273100616
+  },
+  {
+    "id": 15,
+    "title": "Search",
+    "filename": "15-search.png",
+    "group": "Library",
+    "width": 258,
+    "height": 487,
+    "aspectRatio": 0.5297741273100616
+  },
+  {
+    "id": 16,
+    "title": "Filters",
+    "filename": "16-filters.png",
+    "group": "Library",
+    "width": 259,
+    "height": 487,
+    "aspectRatio": 0.5318275154004107
+  },
+  {
+    "id": 17,
+    "title": "Activity inbox",
+    "filename": "17-activity-inbox.png",
+    "group": "Library",
+    "width": 259,
+    "height": 486,
+    "aspectRatio": 0.5329218106995884
+  },
+  {
+    "id": 18,
+    "title": "Notifications",
+    "filename": "18-notifications.png",
+    "group": "Library",
+    "width": 257,
+    "height": 486,
+    "aspectRatio": 0.5288065843621399
+  },
+  {
+    "id": 19,
+    "title": "Upload entry",
+    "filename": "19-upload-entry.png",
+    "group": "Upload",
+    "width": 256,
+    "height": 314,
+    "aspectRatio": 0.8152866242038217
+  },
+  {
+    "id": 20,
+    "title": "Upload source picker",
+    "filename": "20-upload-source-picker.png",
+    "group": "Upload",
+    "width": 255,
+    "height": 314,
+    "aspectRatio": 0.8121019108280255
+  },
+  {
+    "id": 21,
+    "title": "Select upload photos",
+    "filename": "21-select-upload-photos.png",
+    "group": "Upload",
+    "width": 258,
+    "height": 314,
+    "aspectRatio": 0.821656050955414
+  },
+  {
+    "id": 22,
+    "title": "Review upload",
+    "filename": "22-review-upload.png",
+    "group": "Upload",
+    "width": 259,
+    "height": 314,
+    "aspectRatio": 0.8248407643312102
+  },
+  {
+    "id": 23,
+    "title": "Upload progress",
+    "filename": "23-upload-progress.png",
+    "group": "Upload",
+    "width": 258,
+    "height": 313,
+    "aspectRatio": 0.8242811501597445
+  },
+  {
+    "id": 24,
+    "title": "Upload complete",
+    "filename": "24-upload-complete.png",
+    "group": "Upload",
+    "width": 257,
+    "height": 313,
+    "aspectRatio": 0.8210862619808307
+  },
+  {
+    "id": 25,
+    "title": "Match results summary",
+    "filename": "25-match-results-summary.png",
+    "group": "Sharing",
+    "width": 239,
+    "height": 377,
+    "aspectRatio": 0.6339522546419099
+  },
+  {
+    "id": 26,
+    "title": "Matched photos gallery",
+    "filename": "26-matched-photos-gallery.png",
+    "group": "Sharing",
+    "width": 236,
+    "height": 377,
+    "aspectRatio": 0.6259946949602122
+  },
+  {
+    "id": 27,
+    "title": "Photo to people",
+    "filename": "27-photo-to-people.png",
+    "group": "Sharing",
+    "width": 243,
+    "height": 377,
+    "aspectRatio": 0.6445623342175066
+  },
+  {
+    "id": 28,
+    "title": "Person to photos",
+    "filename": "28-person-to-photos.png",
+    "group": "Sharing",
+    "width": 246,
+    "height": 377,
+    "aspectRatio": 0.6525198938992043
+  },
+  {
+    "id": 29,
+    "title": "Select photos to share",
+    "filename": "29-select-photos-to-share.png",
+    "group": "Sharing",
+    "width": 239,
+    "height": 377,
+    "aspectRatio": 0.6339522546419099
+  },
+  {
+    "id": 30,
+    "title": "Deselect photos",
+    "filename": "30-deselect-photos.png",
+    "group": "Sharing",
+    "width": 240,
+    "height": 377,
+    "aspectRatio": 0.636604774535809
+  },
+  {
+    "id": 31,
+    "title": "Select people to share with",
+    "filename": "31-select-people-to-share-with.png",
+    "group": "Sharing",
+    "width": 239,
+    "height": 378,
+    "aspectRatio": 0.6322751322751323
+  },
+  {
+    "id": 32,
+    "title": "Deselect people",
+    "filename": "32-deselect-people.png",
+    "group": "Sharing",
+    "width": 237,
+    "height": 378,
+    "aspectRatio": 0.626984126984127
+  },
+  {
+    "id": 33,
+    "title": "Review and share",
+    "filename": "33-review-and-share.png",
+    "group": "Sharing",
+    "width": 240,
+    "height": 378,
+    "aspectRatio": 0.6349206349206349
+  },
+  {
+    "id": 34,
+    "title": "Sharing progress",
+    "filename": "34-sharing-progress.png",
+    "group": "Sharing",
+    "width": 246,
+    "height": 380,
+    "aspectRatio": 0.6473684210526316
+  },
+  {
+    "id": 35,
+    "title": "Shared history",
+    "filename": "35-shared-history.png",
+    "group": "Sharing",
+    "width": 240,
+    "height": 379,
+    "aspectRatio": 0.633245382585752
+  },
+  {
+    "id": 36,
+    "title": "Report incorrect match",
+    "filename": "36-report-incorrect-match.png",
+    "group": "Sharing",
+    "width": 240,
+    "height": 379,
+    "aspectRatio": 0.633245382585752
+  },
+  {
+    "id": 37,
+    "title": "Profile overview",
+    "filename": "37-profile-overview.png",
+    "group": "Profile",
+    "width": 256,
+    "height": 447,
+    "aspectRatio": 0.5727069351230425
+  },
+  {
+    "id": 38,
+    "title": "Face management",
+    "filename": "38-face-management.png",
+    "group": "Profile",
+    "width": 249,
+    "height": 447,
+    "aspectRatio": 0.5570469798657718
+  },
+  {
+    "id": 39,
+    "title": "Manage allowed recipients",
+    "filename": "39-manage-allowed-recipients.png",
+    "group": "Profile",
+    "width": 249,
+    "height": 446,
+    "aspectRatio": 0.5582959641255605
+  },
+  {
+    "id": 40,
+    "title": "Privacy and sharing",
+    "filename": "40-privacy-and-sharing.png",
+    "group": "Profile",
+    "width": 251,
+    "height": 447,
+    "aspectRatio": 0.5615212527964206
+  },
+  {
+    "id": 41,
+    "title": "Photo access settings",
+    "filename": "41-photo-access-settings.png",
+    "group": "Profile",
+    "width": 250,
+    "height": 446,
+    "aspectRatio": 0.5605381165919282
+  },
+  {
+    "id": 42,
+    "title": "Notification settings",
+    "filename": "42-notification-settings.png",
+    "group": "Profile",
+    "width": 255,
+    "height": 447,
+    "aspectRatio": 0.5704697986577181
+  },
+  {
+    "id": 43,
+    "title": "Storage",
+    "filename": "43-storage.png",
+    "group": "Profile",
+    "width": 255,
+    "height": 348,
+    "aspectRatio": 0.7327586206896551
+  },
+  {
+    "id": 44,
+    "title": "Data export",
+    "filename": "44-data-export.png",
+    "group": "Profile",
+    "width": 253,
+    "height": 348,
+    "aspectRatio": 0.7270114942528736
+  },
+  {
+    "id": 45,
+    "title": "Help center",
+    "filename": "45-help-center.png",
+    "group": "Profile",
+    "width": 252,
+    "height": 348,
+    "aspectRatio": 0.7241379310344828
+  },
+  {
+    "id": 46,
+    "title": "Account security and devices",
+    "filename": "46-account-security-and-devices.png",
+    "group": "Profile",
+    "width": 253,
+    "height": 348,
+    "aspectRatio": 0.7270114942528736
+  },
+  {
+    "id": 47,
+    "title": "No matches",
+    "filename": "47-no-matches.png",
+    "group": "Profile",
+    "width": 254,
+    "height": 348,
+    "aspectRatio": 0.7298850574712644
+  },
+  {
+    "id": 48,
+    "title": "Offline and error",
+    "filename": "48-offline-and-error.png",
+    "group": "Profile",
+    "width": 254,
+    "height": 349,
+    "aspectRatio": 0.7277936962750716
+  }
+]

@@ -1,0 +1,51 @@
+{
+  "schema": "lovelies-zlib-backport-manifest-v1",
+  "advisory_id": "CVE-2026-27171",
+  "tracker_url": "https://security-tracker.debian.org/tracker/CVE-2026-27171",
+  "upstream_fix_commit": "ba829a458576d1ff0f26fc7230c6de816d1f6a77",
+  "upstream_patch_url": "https://github.com/madler/zlib/commit/ba829a458576d1ff0f26fc7230c6de816d1f6a77.patch",
+  "patch_sha256": "4c4a40b7329015fd89070667dd32e9307819e699d3ec4118af0a959f5fe1608c",
+  "source_version": "1:1.3.dfsg+really1.3.1-1",
+  "package_version": "1:1.3.dfsg+really1.3.1-1+lovelies1",
+  "source_archives": [
+    {
+      "filename": "zlib_1.3.dfsg+really1.3.1.orig.tar.gz",
+      "sha256": "60dd315c07f616887caa029408308a018ace66e3d142726a97db164b3b8f69fb",
+      "url": "https://deb.debian.org/debian/pool/main/z/zlib/zlib_1.3.dfsg+really1.3.1.orig.tar.gz"
+    },
+    {
+      "filename": "zlib_1.3.dfsg+really1.3.1-1.debian.tar.xz",
+      "sha256": "9ed525955ce9fb0c1b39be8ff98f73450dbfc6305a9a27e6149c8972d38a0a9e",
+      "url": "https://deb.debian.org/debian/pool/main/z/zlib/zlib_1.3.dfsg+really1.3.1-1.debian.tar.xz"
+    },
+    {
+      "filename": "zlib_1.3.dfsg+really1.3.1-1.dsc",
+      "sha256": "ede2791e29c1d3b422f9208bdd7edf040c20445ea1e7453a72037576e64fa197",
+      "url": "https://deb.debian.org/debian/pool/main/z/zlib/zlib_1.3.dfsg+really1.3.1-1.dsc"
+    }
+  ],
+  "source_before": {
+    "crc32.c": "8fd16f0a7714d51c89c2eb37eb98ec15e8a4dc57ba343e7b7398b19144039fda",
+    "zlib.h": "8a5579af72ea4f427ff00a4150f0ccb3fc5c1e4379f726e101133b1ab9fc600c",
+    "LICENSE": "845efc77857d485d91fb3e0b884aaa929368c717ae8186b66fe1ed2495753243"
+  },
+  "source_after": {
+    "crc32.c": "c22779085fe88efe499c67a95bd6d5e752ffb62149b4d24e715178285a9247ab",
+    "zlib.h": "55190843e28bfeb23d0fc1afb7d067f4443462b42ad81515cc80872da71c95bf",
+    "LICENSE": "845efc77857d485d91fb3e0b884aaa929368c717ae8186b66fe1ed2495753243"
+  },
+  "local_patch_application": {
+    "zero_context_fuzz": true,
+    "exit_code": 0
+  },
+  "version_upgrade_avoided_reason": "CVE-2026-85091 describes gz_vacate introduced after1.3.1; retained1.3.1 doesnotcontainit. This tinyCRCpatch preserves that source prerequisite exclusion.",
+  "required_new_artifact_checks": [
+    "upstreammake test",
+    "bounded negative-length andnormal CRC/compression API checks",
+    "exactversionedexportedAPI parity",
+    "SONAME libz.so.1",
+    "RELRO/BIND_NOW/stackcanary",
+    "finalruntime linkage anddecoderconsumer tests"
+  ],
+  "status": "source_patch_verified_build_not_yet_executed"
+}

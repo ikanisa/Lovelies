@@ -1,0 +1,453 @@
+--- a/nptl/allocatestack.c
++++ b/nptl/allocatestack.c
+@@ -35,6 +35,7 @@
+ #include <tls-internal.h>
+ #include <intprops.h>
+ #include <setvmaname.h>
++#include <sysdep.h>
+ 
+ /* Default alignment of stack.  */
+ #ifndef STACK_ALIGN
+@@ -54,96 +55,90 @@
+ # define MAP_STACK 0
+ #endif
+ 
+-/* Get a stack frame from the cache.  We have to match by size since
+-   some blocks might be too small or far too large.  */
++/* Local ML profile: finished mappings are reaped, never recycled.  */
+ static struct pthread *
+ get_cached_stack (size_t *sizep, void **memp)
+ {
+-  size_t size = *sizep;
+-  struct pthread *result = NULL;
+-  list_t *entry;
+-
++  (void) sizep;
++  (void) memp;
+   lll_lock (GL (dl_stack_cache_lock), LLL_PRIVATE);
+-
+-  /* Search the cache for a matching entry.  We search for the
+-     smallest stack which has at least the required size.  Note that
+-     in normal situations the size of all allocated stacks is the
+-     same.  As the very least there are only a few different sizes.
+-     Therefore this loop will exit early most of the time with an
+-     exact match.  */
+-  list_for_each (entry, &GL (dl_stack_cache))
+-    {
+-      struct pthread *curr;
+-
+-      curr = list_entry (entry, struct pthread, list);
+-      if (__nptl_stack_in_use (curr) && curr->stackblock_size >= size)
+-	{
+-	  if (curr->stackblock_size == size)
+-	    {
+-	      result = curr;
+-	      break;
+-	    }
+-
+-	  if (result == NULL
+-	      || result->stackblock_size > curr->stackblock_size)
+-	    result = curr;
+-	}
+-    }
+-
+-  if (__builtin_expect (result == NULL, 0)
+-      /* Make sure the size difference is not too excessive.  In that
+-	 case we do not use the block.  */
+-      || __builtin_expect (result->stackblock_size > 4 * size, 0))
+-    {
+-      /* Release the lock.  */
+-      lll_unlock (GL (dl_stack_cache_lock), LLL_PRIVATE);
+-
+-      return NULL;
+-    }
+-
+-  /* Don't allow setxid until cloned.  */
+-  result->setxid_futex = -1;
+-
+-  /* Dequeue the entry.  */
+-  __nptl_stack_list_del (&result->list);
+-
+-  /* And add to the list of stacks in use.  */
+-  __nptl_stack_list_add (&result->list, &GL (dl_stack_used));
+-
+-  /* And decrease the cache size.  */
+-  GL (dl_stack_cache_actsize) -= result->stackblock_size;
+-
+-  /* Release the lock early.  */
++  __nptl_free_stacks (0);
+   lll_unlock (GL (dl_stack_cache_lock), LLL_PRIVATE);
+-
+-  /* Report size and location of the stack to the caller.  */
+-  *sizep = result->stackblock_size;
+-  *memp = result->stackblock;
+-
+-  /* Cancellation handling is back to the default.  */
+-  result->cancelhandling = 0;
+-  result->cleanup = NULL;
+-  result->setup_failed = 0;
+-
+-  /* No pending event.  */
+-  result->nextevent = NULL;
+-
+-  result->exiting = false;
+-  __libc_lock_init (result->exit_lock);
+-  memset (&result->tls_state, 0, sizeof result->tls_state);
+-
+-  result->getrandom_buf = NULL;
+-
+-  /* Clear the DTV.  */
+-  dtv_t *dtv = GET_DTV (TLS_TPADJ (result));
+-  for (size_t cnt = 0; cnt < dtv[-1].counter; ++cnt)
+-    free (dtv[1 + cnt].pointer.to_free);
+-  memset (dtv, '\0', (dtv[-1].counter + 1) * sizeof (dtv_t));
+-
+-  /* Re-initialize the TLS.  */
+-  _dl_allocate_tls_init (TLS_TPADJ (result), false);
+-
+-  return result;
++  return NULL;
++}
++
++/* Anonymous thread mappings use allocation-free kernel randomness.  A hint
++   is accepted only at the selected address; an occupied hint must not fall
++   back to the deterministic kernel search area.  Never use MAP_FIXED.  */
++static void *
++thread_mapping (size_t size, int prot, int extra_flags)
++{
++#if !defined __x86_64__ || !TLS_TCB_AT_TP || !_STACK_GROWS_DOWN
++# error This local thread storage profile requires Linux x86_64 TLS_TCB_AT_TP
++#endif
++  const uintptr_t low = UINT64_C (0x100000000000);
++  const uintptr_t high = UINT64_C (0x700000000000);
++  size_t page = __getpagesize ();
++  if (size == 0 || size >= high - low || size > SIZE_MAX - (page - 1))
++    { __set_errno (ENOMEM); return MAP_FAILED; }
++  size_t rounded = (size + page - 1) & ~(page - 1);
++  uintptr_t slots = (high - low - rounded) / page + 1;
++  for (unsigned int attempt = 0; attempt < 64; ++attempt)
++    {
++      uint64_t random_value;
++      size_t have = 0;
++      while (have < sizeof random_value)
++        {
++          long n = INTERNAL_SYSCALL_CALL (getrandom,
++              (char *) &random_value + have, sizeof random_value - have, 0);
++          if (INTERNAL_SYSCALL_ERROR_P (n))
++            {
++              int error = INTERNAL_SYSCALL_ERRNO (n);
++              if (error == EINTR) continue;
++              __set_errno (error);
++              return MAP_FAILED;
++            }
++          if (n == 0) { __set_errno (EIO); return MAP_FAILED; }
++          have += n;
++        }
++      void *hint = (void *) (low + (random_value % slots) * page);
++      void *mapped = __mmap (hint, rounded, prot,
++          MAP_PRIVATE | MAP_ANONYMOUS | extra_flags, -1, 0);
++      if (mapped == hint) return mapped;
++      if (mapped != MAP_FAILED) __munmap (mapped, rounded);
++      else if (errno != ENOMEM && errno != EAGAIN)
++        return MAP_FAILED;
++    }
++  __set_errno (ENOMEM);
++  return MAP_FAILED;
++}
++
++/* Keep the static TLS/TCB ABI intact, in an independently owned mapping
++   with inaccessible pages on both sides.  Caller stack memory is untouched;
++   the lower stack guard setting does not disable TLS isolation.  */
++static int
++thread_descriptor (size_t tls_size, size_t align_mask, struct pthread **out)
++{
++  size_t page = __getpagesize ();
++  if (tls_size > SIZE_MAX - align_mask - (page - 1) - 2 * page)
++    return EINVAL;
++  size_t payload = (tls_size + align_mask + page - 1) & ~(page - 1);
++  size_t total = payload + 2 * page;
++  void *block = thread_mapping (total, PROT_NONE, 0);
++  if (block == MAP_FAILED) return errno;
++  if (__mprotect ((char *) block + page, payload, PROT_READ | PROT_WRITE))
++    {
++      int error = errno;
++      __munmap (block, total);
++      return error;
++    }
++  struct pthread *pd = (struct pthread *)
++      ((((uintptr_t) block + page + payload) - TLS_TCB_SIZE) & ~align_mask);
++  assert ((char *) pd - tls_size + TLS_TCB_SIZE >= (char *) block + page);
++  pd->tls_stackblock = block;
++  pd->tls_stackblock_size = total;
++  *out = pd;
++  return 0;
+ }
+ 
+ /* Return the guard page position on allocated stack.  */
+@@ -239,48 +234,16 @@
+   /* Get memory for the stack.  */
+   if (__glibc_unlikely (attr->flags & ATTR_FLAG_STACKADDR))
+     {
+-      uintptr_t adj;
+       char *stackaddr = (char *) attr->stackaddr;
+-
+-      /* Assume the same layout as the _STACK_GROWS_DOWN case, with struct
+-	 pthread at the top of the stack block.  Later we adjust the guard
+-	 location and stack address to match the _STACK_GROWS_UP case.  */
+       if (_STACK_GROWS_UP)
+-	stackaddr += attr->stacksize;
+-
+-      /* If the user also specified the size of the stack make sure it
+-	 is large enough.  */
++        stackaddr += attr->stacksize;
+       if (attr->stacksize != 0
+-	  && attr->stacksize < (tls_static_size_for_stack
+-				+ MINIMAL_REST_STACK))
+-	return EINVAL;
+-
+-      /* Adjust stack size for alignment of the TLS block.  */
+-#if TLS_TCB_AT_TP
+-      adj = ((uintptr_t) stackaddr - TLS_TCB_SIZE)
+-	    & tls_static_align_m1;
+-      assert (size > adj + TLS_TCB_SIZE);
+-#elif TLS_DTV_AT_TP
+-      adj = ((uintptr_t) stackaddr - tls_static_size_for_stack)
+-	    & tls_static_align_m1;
+-      assert (size > adj);
+-#endif
+-
+-      /* The user provided some memory.  Let's hope it matches the
+-	 size...  We do not allocate guard pages if the user provided
+-	 the stack.  It is the user's responsibility to do this if it
+-	 is wanted.  */
+-#if TLS_TCB_AT_TP
+-      pd = (struct pthread *) ((uintptr_t) stackaddr
+-			       - TLS_TCB_SIZE - adj);
+-#elif TLS_DTV_AT_TP
+-      pd = (struct pthread *) (((uintptr_t) stackaddr
+-				- tls_static_size_for_stack - adj)
+-			       - TLS_PRE_TCB_SIZE);
+-#endif
+-
+-      /* The user provided stack memory needs to be cleared.  */
+-      memset (pd, '\0', sizeof (struct pthread));
++          && attr->stacksize < tls_static_size_for_stack + MINIMAL_REST_STACK)
++        return EINVAL;
++      int error = thread_descriptor (tls_static_size_for_stack,
++                                     tls_static_align_m1, &pd);
++      if (error != 0) return error;
++      /* Fresh anonymous storage is zeroed; keep its ownership metadata. */
+ 
+       /* The first TSD block is included in the TCB.  */
+       pd->specific[0] = pd->specific_1stblock;
+@@ -307,16 +270,18 @@
+       if (_dl_allocate_tls (TLS_TPADJ (pd)) == NULL)
+ 	{
+ 	  /* Something went wrong.  */
+-	  assert (errno == ENOMEM);
+-	  return errno;
+-	}
++          int error = errno;
++          assert (error == ENOMEM);
++          __munmap (pd->tls_stackblock, pd->tls_stackblock_size);
++          return error;
++        }
+ 
+ 
+       /* Prepare to modify global data.  */
+       lll_lock (GL (dl_stack_cache_lock), LLL_PRIVATE);
+ 
+       /* And add to the list of stacks in use.  */
+-      list_add (&pd->list, &GL (dl_stack_user));
++      __nptl_stack_list_add (&pd->list, &GL (dl_stack_user));
+ 
+       lll_unlock (GL (dl_stack_cache_lock), LLL_PRIVATE);
+     }
+@@ -365,8 +330,8 @@
+ 	  /* If a guard page is required, avoid committing memory by first
+ 	     allocate with PROT_NONE and then reserve with required permission
+ 	     excluding the guard page.  */
+-	  mem = __mmap (NULL, size, (guardsize == 0) ? prot : PROT_NONE,
+-			MAP_PRIVATE | MAP_ANONYMOUS | MAP_STACK, -1, 0);
++	  mem = thread_mapping (size, (guardsize == 0) ? prot : PROT_NONE,
++                                MAP_STACK);
+ 
+ 	  if (__glibc_unlikely (mem == MAP_FAILED))
+ 	    return errno;
+@@ -375,23 +340,23 @@
+ 	     set to 0, disabling hugetlb.  */
+ 	  if (__glibc_unlikely (__nptl_stack_hugetlb == 0)
+ 	      && __madvise (mem, size, MADV_NOHUGEPAGE) != 0)
+-	    return errno;
++            {
++              int error = errno;
++              __munmap (mem, size);
++              return error;
++            }
+ 
+ 	  /* SIZE is guaranteed to be greater than zero.
+ 	     So we can never get a null pointer back from mmap.  */
+ 	  assert (mem != NULL);
+ 
+-	  /* Place the thread descriptor at the end of the stack.  */
+-#if TLS_TCB_AT_TP
+-	  pd = (struct pthread *) ((((uintptr_t) mem + size)
+-				    - TLS_TCB_SIZE)
+-				   & ~tls_static_align_m1);
+-#elif TLS_DTV_AT_TP
+-	  pd = (struct pthread *) ((((uintptr_t) mem + size
+-				    - tls_static_size_for_stack)
+-				    & ~tls_static_align_m1)
+-				   - TLS_PRE_TCB_SIZE);
+-#endif
++          int descriptor_error = thread_descriptor (tls_static_size_for_stack,
++                                                     tls_static_align_m1, &pd);
++          if (descriptor_error != 0)
++            {
++              __munmap (mem, size);
++              return descriptor_error;
++            }
+ 
+ 	  /* Now mprotect the required region excluding the guard area.  */
+ 	  if (__glibc_likely (guardsize > 0))
+@@ -400,8 +365,10 @@
+ 					    pagesize_m1);
+ 	      if (setup_stack_prot (mem, size, guard, guardsize, prot) != 0)
+ 		{
+-		  __munmap (mem, size);
+-		  return errno;
++                  int error = errno;
++                  __munmap (mem, size);
++                  __munmap (pd->tls_stackblock, pd->tls_stackblock_size);
++                  return error;
+ 		}
+ 	    }
+ 
+@@ -434,9 +401,10 @@
+ 	      assert (errno == ENOMEM);
+ 
+ 	      /* Free the stack memory we just allocated.  */
+-	      (void) __munmap (mem, size);
+-
+-	      return errno;
++              int error = errno;
++              (void) __munmap (mem, size);
++              __munmap (pd->tls_stackblock, pd->tls_stackblock_size);
++              return error;
+ 	    }
+ 
+ 
+@@ -479,9 +447,10 @@
+ 		 of memory caused problems we better do not use it
+ 		 anymore.  Uh, and we ignore possible errors.  There
+ 		 is nothing we could do.  */
+-	      (void) __munmap (mem, size);
+-
+-	      return errno;
++              int error = errno;
++              (void) __munmap (mem, size);
++              __munmap (pd->tls_stackblock, pd->tls_stackblock_size);
++              return error;
+ 	    }
+ 
+ 	  pd->guardsize = guardsize;
+@@ -531,17 +500,10 @@
+ #endif
+   pd->robust_head.list = &pd->robust_head;
+ 
+-  /* We place the thread descriptor at the end of the stack.  */
++  /* The descriptor/TLS is separately owned; the original stack range
++     and pthread_getattr_np reporting now describe usable stack memory. */
+   *pdp = pd;
+-
+-  void *stacktop;
+-
+-#if TLS_TCB_AT_TP
+-  /* The stack begins before the TCB and the static TLS block.  */
+-  stacktop = ((char *) (pd + 1) - tls_static_size_for_stack);
+-#elif TLS_DTV_AT_TP
+-  stacktop = (char *) (pd - 1);
+-#endif
++  void *stacktop = (char *) pd->stackblock + pd->stackblock_size;
+ 
+   *stacksize = stacktop - pd->stackblock;
+   *stack = pd->stackblock;
+--- a/nptl/descr.h
++++ b/nptl/descr.h
+@@ -404,6 +404,11 @@
+   /* Used on strsignal.  */
+   struct tls_internal_t tls_state;
+ 
++  /* Local separate TLS/TCB mapping, reclaimed only after kernel TID clear.
++     Keep getrandom_buf last for PTHREAD_STRUCT_END_PADDING. */
++  void *tls_stackblock;
++  size_t tls_stackblock_size;
++
+   /* getrandom vDSO per-thread opaque state.  */
+   void *getrandom_buf;
+ 
+--- a/sysdeps/nptl/fork.h
++++ b/sysdeps/nptl/fork.h
+@@ -25,6 +25,7 @@
+ #include <list.h>
+ #include <mqueue.h>
+ #include <pthreadP.h>
++#include <nptl/nptl-stack.h>
+ #include <sysdep.h>
+ #include <getrandom-internal.h>
+ 
+@@ -79,6 +80,8 @@
+ 	    l = &GL (dl_stack_used);
+ 	  else if (GL (dl_stack_cache).next->prev != &GL (dl_stack_cache))
+ 	    l = &GL (dl_stack_cache);
++          else if (GL (dl_stack_user).next->prev != &GL (dl_stack_user))
++            l = &GL (dl_stack_user);
+ 
+ 	  if (l != NULL)
+ 	    {
+@@ -109,7 +112,8 @@
+ 	  curp->tid = 0;
+ 
+ 	  /* Account for the size of the stack.  */
+-	  GL (dl_stack_cache_actsize) += curp->stackblock_size;
++	  GL (dl_stack_cache_actsize) += (curp->stackblock_size
++                                       + curp->tls_stackblock_size);
+ 
+ 	  if (curp->specific_used)
+ 	    {
+@@ -135,12 +139,32 @@
+ 	}
+     }
+ 
+-  /* Also reset stale getrandom states for user stack threads.  */
+-  list_for_each (runp, &GL (dl_stack_user))
++  /* Vanished caller-stack threads still own separate TLS mappings.
++     Queue those descriptors for normal reaping, preserving caller memory. */
++  list_t *nextp;
++  list_for_each_prev_safe (runp, nextp, &GL (dl_stack_user))
+     {
+       struct pthread *curp = list_entry (runp, struct pthread, list);
+       if (curp != self)
+-	call_function_static_weak (__getrandom_reset_state, curp);
++        {
++          call_function_static_weak (__getrandom_reset_state, curp);
++          if (curp->tls_stackblock != NULL)
++            {
++              curp->tid = 0;
++              __nptl_stack_list_del (&curp->list);
++              __nptl_stack_list_add (&curp->list, &GL (dl_stack_cache));
++              GL (dl_stack_cache_actsize) += curp->tls_stackblock_size;
++            }
++        }
++    }
++
++  /* Pending detached exits inherited from the parent have no surviving
++     kernel task in the child to clear their TIDs.  Reaping remains safe. */
++  list_for_each (runp, &GL (dl_stack_cache))
++    {
++      struct pthread *curp = list_entry (runp, struct pthread, list);
++      if (curp != self)
++        curp->tid = 0;
+     }
+ 
+   /* Add the stack of all running threads to the cache.  */

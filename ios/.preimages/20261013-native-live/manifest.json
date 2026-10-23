@@ -1,0 +1,57 @@
+{
+  "purpose": "Preserve 48-screen native fixture prototype before live Cloudflare integration",
+  "files": [
+    {
+      "path": "Lovelies/App/LoveliesApp.swift",
+      "sha256": "19f97c3293223e0b5a8f30cebb1f8cb74ace30dd568a67c23079c0c953dc6019"
+    },
+    {
+      "path": "Lovelies/Info.plist",
+      "sha256": "e3ff6a89cb78579497782061805a6ab99dff54b9c86694c9343f7d02bee133b9"
+    },
+    {
+      "path": "Lovelies/Models/DemoStore.swift",
+      "sha256": "59a8462ed801b20272b46e074e154c9941b363dd408a5f723021e72f62f04576"
+    },
+    {
+      "path": "Lovelies/Views/Components.swift",
+      "sha256": "afbdbb0a2c7b5b19db6ad48b8cd3297bd8f3f7fa60e624ddc049335c2de69821"
+    },
+    {
+      "path": "Lovelies/Views/GalleryViews.swift",
+      "sha256": "5d5a5d0841d67e827c313b8eeb431c4399c223334319d824d0349dc97b178334"
+    },
+    {
+      "path": "Lovelies/Views/OnboardingViews.swift",
+      "sha256": "3813dd1e169cf931148a4232132928cb65ba7f6b3db65750ff685b3637107b7f"
+    },
+    {
+      "path": "Lovelies/Views/SettingsViews.swift",
+      "sha256": "c7164d50e6a910d8218356ed1bc640fa8dc06d5a25941d5f3752baccc82fed61"
+    },
+    {
+      "path": "Lovelies/Views/SharingViews.swift",
+      "sha256": "a3125e6fb5061de0f9b158f4eebe127a76ac1b5b59c69efca78066ac06d72417"
+    },
+    {
+      "path": "Lovelies/Views/UploadViews.swift",
+      "sha256": "19b6c58b71f41da45fa328f1ae918108aaa75b85e22232a2dcb6fc4037075717"
+    },
+    {
+      "path": "Lovelies.xcodeproj/project.pbxproj",
+      "sha256": "484741816acfb1ab12e74c12752416ea32c66eef597daae7312f5134dae56f6c"
+    },
+    {
+      "path": "Lovelies.xcodeproj/xcshareddata/xcschemes/Lovelies.xcscheme",
+      "sha256": "0feeb5bb31189a04705197991f92709ce73837565ccc486d00acaaed8d0f1b71"
+    },
+    {
+      "path": "README.md",
+      "sha256": "ef2974fbc601b54f582cf304a2fe07ac2533df00fba7c047fca90c3b26c4236a"
+    },
+    {
+      "path": "scripts/update_resources.py",
+      "sha256": "1691ff26b969a1540f08b22019ff251f3e7e5acf51c14490c440c001f74afa13"
+    }
+  ]
+}

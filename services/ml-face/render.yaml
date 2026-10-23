@@ -1,0 +1,15 @@
+services:
+  - type: web
+    name: lovelies-ml-face
+    runtime: docker
+    plan: free
+    dockerfilePath: ./Dockerfile
+    dockerContext: .
+    healthCheckPath: /health
+    envVars:
+      - key: APP_ENV
+        value: production
+      - key: ML_REQUIRE_MODEL_ARTIFACTS
+        value: "true"
+      - key: MODEL_MANIFEST_PATH
+        value: /app/models/model-manifest.json

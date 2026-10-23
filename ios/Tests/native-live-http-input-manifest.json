@@ -1,0 +1,156 @@
+{
+  "schema": 1,
+  "status": "explicit-source-compatibility-frozen-awaiting-root-rebuild-and-live-rerun",
+  "frozen_at": "2026-10-13T21:52:22.191988+00:00",
+  "write_boundary": "ios/Lovelies/Native/{CoreWire,BackendRepository}.swift + ios/Tests/**; root-authorized compatibility fix",
+  "source": [
+    {
+      "path": "ios/Lovelies/Native/CoreWire.swift",
+      "sha256": "501cddc863124cb9706825211a3cb8f6586a9ec4fd01c50515c80b4cef0d9000",
+      "bytes": 17078,
+      "role": "production-native-client"
+    },
+    {
+      "path": "ios/Lovelies/Native/DeviceIdentity.swift",
+      "sha256": "9c9df1a448c0345970827a1b1a31a978c8b232cbd5fe55897d67ee2264030fcb",
+      "bytes": 5681,
+      "role": "production-native-client"
+    },
+    {
+      "path": "ios/Lovelies/Native/BackendRepository.swift",
+      "sha256": "1df365255e903c34b5284841ad9a7c47b7ebc54805b61e1fd097d255c9be7383",
+      "bytes": 31339,
+      "role": "production-native-client"
+    },
+    {
+      "path": "ios/Tests/NativeLiveHTTPJourney.swift",
+      "sha256": "82865b9471e26251bf73b7b391d576c0bb86dacb3f1f7a820a77c0742a4baf0d",
+      "bytes": 33897,
+      "role": "actual-http-journey-source"
+    },
+    {
+      "path": "verification/docker-native-journey-20261013/native-fixtures.json",
+      "sha256": "b50d3352487d86d9f4141d9f7036b44cd5a3e7226481fe37033fd600c2cb64f4",
+      "bytes": 4279,
+      "role": "authoritative-fixture-config"
+    },
+    {
+      "path": "verification/docker-native-journey-20261013/fixtures/P1.jpg",
+      "sha256": "63230694d6dc199a756f300ae9347b16c8547b278f0c4e0bc25abde0834e3289",
+      "bytes": 4006,
+      "role": "static-reference-jpeg-no-camera-claim"
+    },
+    {
+      "path": "verification/docker-native-journey-20261013/fixtures/P2.jpg",
+      "sha256": "4600d649f0d09686898ba1bb62e05ee04ebe88a9ec265f97019ef94e3f30c3da",
+      "bytes": 48041,
+      "role": "static-reference-jpeg-no-camera-claim"
+    },
+    {
+      "path": "verification/docker-native-journey-20261013/fixtures/P3.jpg",
+      "sha256": "18faea647237fb21850bde4f2c844a869feed477e45ff4db98b2a5bf1bbd6e82",
+      "bytes": 29871,
+      "role": "static-reference-jpeg-no-camera-claim"
+    },
+    {
+      "path": "verification/docker-native-journey-20261013/fixtures/aline-selfie-0.jpg",
+      "sha256": "5bfa4519e03a6ac5dc752c2d125ed70c9f84700560041d850ee51ba23ae5d5b5",
+      "bytes": 4017,
+      "role": "static-reference-jpeg-no-camera-claim"
+    },
+    {
+      "path": "verification/docker-native-journey-20261013/fixtures/aline-selfie-1.jpg",
+      "sha256": "dd2534f9711ec63853cb980ee32040427dee589b948f5eb1367af1b67f7d519e",
+      "bytes": 3284,
+      "role": "static-reference-jpeg-no-camera-claim"
+    },
+    {
+      "path": "verification/docker-native-journey-20261013/fixtures/aline-selfie-2.jpg",
+      "sha256": "3f61135106f3d3600212de6dd93c076d0d56597b13bc1348b3c3754ed10d70e7",
+      "bytes": 2726,
+      "role": "static-reference-jpeg-no-camera-claim"
+    },
+    {
+      "path": "verification/docker-native-journey-20261013/fixtures/eric-selfie-0.jpg",
+      "sha256": "91e2268d094695085f6ea2b1eebf2c8e5471c3ed25aec3c4c8655c08a865ed11",
+      "bytes": 29939,
+      "role": "static-reference-jpeg-no-camera-claim"
+    },
+    {
+      "path": "verification/docker-native-journey-20261013/fixtures/eric-selfie-1.jpg",
+      "sha256": "c616a6aacf5f71172f7c49ecfe3687f9918beb6efab9bbdcd3f105d915838ddb",
+      "bytes": 23518,
+      "role": "static-reference-jpeg-no-camera-claim"
+    },
+    {
+      "path": "verification/docker-native-journey-20261013/fixtures/eric-selfie-2.jpg",
+      "sha256": "48cd1350a0ba29318dd8e381214d8d66a0f9011600c2797258ada3d766e20bdc",
+      "bytes": 18408,
+      "role": "static-reference-jpeg-no-camera-claim"
+    },
+    {
+      "path": "verification/docker-native-journey-20261013/fixtures/P4.jpg",
+      "sha256": "7a0b6eb38ad5d7fd71d0e7917ccbd8516d1a06ae728dd77191f5ea0057d9ee1d",
+      "bytes": 36126,
+      "role": "static-reference-jpeg-no-camera-claim"
+    }
+  ],
+  "compile_command": "swiftc ios/Lovelies/Native/CoreWire.swift ios/Lovelies/Native/DeviceIdentity.swift ios/Lovelies/Native/BackendRepository.swift ios/Tests/NativeLiveHTTPJourney.swift -o /tmp/lovelies-native-live-http-journey",
+  "run_workdir": "/Users/jeanbosco/Documents/Lovelies",
+  "run_command": "/tmp/lovelies-native-live-http-journey verification/docker-native-journey-20261013/native-fixtures.json verification/docker-native-journey-20261013/ios-live-http-journey-attempt-1.json",
+  "api_origin": "http://127.0.0.1:18887",
+  "root_prerequisites": [
+    "Separate empty DO/R2 state-ios workerd on explicit loopback API",
+    "Actual PHOTO_QUEUE consumer and private ML worker bindings to actual configured host or Docker YuNet/SFace service (Root records actual provider source)",
+    "Public anonymous/face/processing/sharing endpoints enabled; no seed/admin grant or fake entitlement",
+    "Root retains each failed attempt/log before a rerun"
+  ],
+  "expected_candidate_pairs": 6,
+  "expected_unique_approved_photos": 3,
+  "expected_approved_recipients": 2,
+  "expected_approved_pairs": 4,
+  "strict_candidate_graph": true,
+  "fixture_scope": "Supplied screen-reference photo fixtures; no live-camera/identity/liveness claim",
+  "mocked_transport": false,
+  "mocked_server_or_verifier": false,
+  "host_substitutes": [
+    "in-memory token/device reference/intents secret store",
+    "actual CryptoKit software P256 device signing instead of physical Secure Enclave"
+  ],
+  "proofs_authored": [
+    "anonymous backend denies gallery",
+    "three real signed JPEG uploads and backend same-account registered-face upgrade for owner and two recipients",
+    "separate current matching/processing/receiving consents from live policy",
+    "actual upload/queue/model gallery and six-edge snapshot",
+    "P3 global exclusion; P4-Eric pair exclusion; edit-retained exact Aline[P1,P2,P4]/Eric[P2] subsets",
+    "server final preview; explicit commit pending_acceptance with zero grants; original-key reconciliation",
+    "actual private HTTP deny before approval and outside approved subsets",
+    "recipient acceptance and actual received gallery/exact decodable protected pixels",
+    "partial/final receipt counts and immutable approved manifest",
+    "actual 403 missing_entitlement after accepted media access",
+    "actual fresh one-capture same-account reference login and one-use replay denial"
+  ],
+  "worker_builds_or_live_runs": false,
+  "remaining_gates": [
+    "Root compile and actual HTTP journey not yet run",
+    "Full Xcode/iOS SDK and app UI/device unavailable",
+    "No live camera input, Keychain/Secure Enclave or sensor provenance qualification",
+    "No hosted deployment or verified store purchase/release proof"
+  ],
+  "compatibility_change": {
+    "server_contract": "sharing.ts sourceWire always returns source:personal or source:professional",
+    "client_fix": "Snapshot, preview and commit/operation validate explicit source exactly equals expected; never accept missing or wrong source",
+    "failed_attempt": "verification/docker-native-journey-20261013/ios-host-live-http-attempt-1.json",
+    "preimages": "verification/docker-native-journey-20261013/preimages/ios-explicit-personal-source-attempt-1/preimages.json",
+    "unit_fixtures": [
+      "ios/Tests/NativeProtocolTests.swift",
+      "ios/Tests/NativeConnectionTests.swift"
+    ],
+    "new_negative_checks": [
+      "missing explicit snapshot source",
+      "missing explicit preview source",
+      "wrong preview source"
+    ],
+    "worker_runs": false
+  }
+}

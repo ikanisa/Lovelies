@@ -1,0 +1,339 @@
+import SwiftUI
+
+struct SharingViews: View {
+    @EnvironmentObject private var store: DemoStore
+    let screen: Screen
+    @State private var reportSaved = false
+
+    @ViewBuilder var body: some View {
+        switch screen {
+        case .matchSummary: summary
+        case .matchedPhotos: matchedPhotos
+        case .photoPeople: photoPeople
+        case .personPhotos: personPhotos
+        case .shareSelection, .deselectPhotos: photoSelection
+        case .peopleSelection, .deselectPeople: peopleSelection
+        case .shareReview: review
+        case .sharingProgress: progress
+        case .sharedHistory: history
+        default: report
+        }
+    }
+
+    private var summary: some View {
+        GeometryReader { geometry in
+            ZStack {
+                GlowBackground(strong: true)
+                VStack(spacing: 12) {
+                    AssetImage(name: "matches-hero").scaledToFit().frame(width: geometry.size.width * 0.531).padding(.top, geometry.size.height * 0.02).accessibilityHidden(true)
+                    VStack(spacing: 0) { Text("12").font(.system(size: 33, weight: .semibold)); Text("Photos Matched").font(.system(size: 20)) }
+                    VStack(spacing: 0) { Text("8").font(.system(size: 32, weight: .semibold)); Text("People Found").font(.system(size: 20)) }
+                    HStack(spacing: -6) {
+                        ForEach(Array(store.people.prefix(5))) { person in
+                            Button { store.openPerson(person) } label: { Avatar(asset: person.asset, size: 58, pink: true) }.accessibilityLabel(person.name)
+                        }
+                        Button { store.go(.photoPeople) } label: { Text("+3").font(.system(size: 16)).frame(width: 49, height: 49).background(.white.opacity(0.1), in: Circle()) }.accessibilityLabel("3 more people")
+                    }.padding(.vertical, 7)
+                    Text("Great matches!\nYour photos found people\nin your memories.").font(.system(size: 16)).multilineTextAlignment(.center).foregroundStyle(LoveliesTheme.secondary).lineSpacing(2)
+                    Spacer(minLength: 10)
+                    PinkButton(title: "View Matches") { store.go(.matchedPhotos) }.padding(.bottom, 19)
+                }.padding(.horizontal, 23).frame(maxWidth: .infinity).foregroundStyle(.white)
+            }
+        }
+    }
+
+    private var matchedPhotos: some View {
+        VStack(spacing: 6) {
+            PageHeader(title: "Matched Photos", subtitle: "12 photos")
+            ScrollView {
+                if SourceReferenceCatalog.layout(26) != nil {
+                    SourcePhotoGrid(route: 26) { store.openPhoto($0, destination: .photoPeople) }.padding(.horizontal, 12).padding(.bottom, 10)
+                } else {
+                    MasonryPhotos(photos: matchedOrder, people: true) { store.openPhoto($0, destination: .photoPeople) }.padding(.horizontal, 12).padding(.bottom, 10)
+                }
+            }.scrollIndicators(.hidden)
+        }.foregroundStyle(.white)
+    }
+    private var matchedOrder: [DemoPhoto] { store.matchingPhotos }
+
+    private var photoPeople: some View {
+        GeometryReader { geometry in
+            VStack(spacing: 0) {
+                ZStack(alignment: .top) {
+                    AssetImage(name: store.currentPhoto.asset).scaledToFill().frame(width: geometry.size.width, height: geometry.size.height * 0.53).clipped()
+                    HStack {
+                        Button { store.back() } label: { Image(systemName: "chevron.left").font(.system(size: 22)).frame(width: 35, height: 43) }.accessibilityLabel("Back")
+                        Spacer()
+                        Text("\(max(1, store.matchingPhotos.firstIndex(of: store.currentPhoto).map { $0 + 1 } ?? 1))/12")
+                            .font(.system(size: 15, weight: .medium)).padding(.horizontal, 12).padding(.vertical, 9).background(.black.opacity(0.3), in: Capsule())
+                    }.padding(.horizontal, 13).padding(.top, 7)
+                }.clipShape(RoundedRectangle(cornerRadius: 16))
+                VStack(spacing: 15) {
+                    HStack {
+                        Button { store.back() } label: { Image(systemName: "chevron.left").font(.system(size: 21)).frame(width: 35, height: 38) }.accessibilityLabel("Back to photo")
+                        Text("People in this photo").font(.system(size: 19, weight: .semibold)).frame(maxWidth: .infinity)
+                        Menu {
+                            Button("Share this photo", systemImage: "square.and.arrow.up") { store.beginSharing(store.currentPhoto); store.go(.peopleSelection) }
+                            Button("Report incorrect match", systemImage: "flag") { store.go(.incorrectMatch) }
+                            Button("Screen gallery", systemImage: "rectangle.grid.2x2") { store.showGallery = true }
+                        } label: { Image(systemName: "ellipsis").frame(width: 32, height: 32).background(.white.opacity(0.08), in: Circle()) }.accessibilityLabel("Photo options")
+                    }
+                    LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 15), count: 4), spacing: 17) {
+                        ForEach(Array(store.people.prefix(7))) { person in
+                            Button { store.openPerson(person) } label: {
+                                VStack(spacing: 6) { Avatar(asset: person.asset, size: 60); Text(person.name).font(.system(size: 13)) }
+                            }.buttonStyle(.plain)
+                        }
+                        Button { store.go(.allowedPeople) } label: { Text("+2").font(.system(size: 18)).frame(width: 60, height: 60).background(LoveliesTheme.raised, in: Circle()).padding(.bottom, 23) }.accessibilityLabel("More people")
+                    }.padding(.horizontal, 7)
+                    Spacer(minLength: 0)
+                }.padding(.horizontal, 14).padding(.top, 6).frame(maxWidth: .infinity).background(LoveliesTheme.canvas, in: RoundedRectangle(cornerRadius: 24))
+            }.foregroundStyle(.white)
+        }
+    }
+
+    private var personPhotos: some View {
+        VStack(spacing: 10) {
+            PageHeader(title: "")
+            Avatar(asset: store.currentPerson.asset, size: 119).padding(.top, -20)
+            Text(store.currentPerson.name).font(.system(size: 22, weight: .medium))
+            Text("\(store.currentPerson.matches) matched photos").font(.system(size: 17)).foregroundStyle(LoveliesTheme.secondary)
+            ScrollView {
+                if SourceReferenceCatalog.layout(28) != nil, store.currentPerson.id == 1 {
+                    SourcePhotoGrid(route: 28) { store.openPhoto($0) }.padding(.horizontal, 13).padding(.bottom, 12)
+                } else {
+                    MasonryPhotos(photos: Array([1, 2, 4, 13, 16, 7, 11, 8].prefix(store.currentPerson.matches)).map { DemoPhoto.all[$0 - 1] }) { store.openPhoto($0) }
+                        .padding(.horizontal, 13).padding(.bottom, 12)
+                }
+            }.scrollIndicators(.hidden)
+        }.foregroundStyle(.white)
+    }
+
+    private var photoSelection: some View {
+        VStack(spacing: 6) {
+            PageHeader(title: screen == .deselectPhotos ? "Deselect Photos" : "Select Photos to Share", subtitle: "\(store.sharePhotoIDs.count) of 12 selected")
+            ScrollView {
+                if SourceReferenceCatalog.layout(screen.rawValue) != nil {
+                    let overrides = Dictionary(uniqueKeysWithValues: store.sharingPhotos.filter { store.sharingPhotoAssets[$0.id] != nil }.map { ($0.id, $0) })
+                    SourcePhotoGrid(route: screen.rawValue, selection: store.sharePhotoIDs, badge: .check, showUnselectedBadges: true, dimUnselected: screen == .deselectPhotos, photoOverrides: overrides, badgeAction: { store.toggleSharePhoto($0) }) { store.toggleSharePhoto($0) }.padding(.horizontal, 13).padding(.bottom, 80)
+                } else {
+                    MasonryPhotos(photos: matchedOrder, selected: store.sharePhotoIDs, people: true) { store.toggleSharePhoto($0.id) }
+                        .padding(.horizontal, 13).padding(.bottom, 80)
+                }
+                let outsideIDs = store.sharePhotoIDs.subtracting(Set(matchedOrder.map(\.id)))
+                if !outsideIDs.isEmpty {
+                    MasonryPhotos(photos: store.sharingPhotos.filter { outsideIDs.contains($0.id) }, selected: store.sharePhotoIDs) { store.toggleSharePhoto($0) }.padding(.horizontal, 13).padding(.bottom, 80)
+                }
+            }.scrollIndicators(.hidden)
+        }.foregroundStyle(.white)
+            .overlay(alignment: .bottom) {
+                HStack(spacing: 15) {
+                    Menu {
+                        Button("Select all photos") { store.sharePhotoIDs = Set(matchedOrder.map(\.id)) }
+                        Button("Deselect all photos") { store.sharePhotoIDs = [] }
+                        Button("Deselect photos") { store.go(.deselectPhotos) }
+                    } label: { Image(systemName: "square.and.arrow.up").font(.system(size: 24)).frame(width: 42, height: 42).background(.white.opacity(0.04), in: Circle()) }.accessibilityLabel("Selection options")
+                    Spacer()
+                    Text("\(store.sharePhotoIDs.count) selected").font(.system(size: 16)).foregroundStyle(LoveliesTheme.secondary)
+                    Spacer()
+                    Button { store.go(.peopleSelection) } label: {
+                        Image(systemName: "arrow.right").font(.system(size: 25, weight: .light)).foregroundStyle(.black)
+                            .frame(width: 57, height: 50).background(LoveliesTheme.pink.opacity(store.sharePhotoIDs.isEmpty ? 0.35 : 1), in: Capsule())
+                    }.disabled(store.sharePhotoIDs.isEmpty).accessibilityLabel("Choose people to share with")
+                }.padding(11).background(.ultraThinMaterial, in: Capsule()).overlay(Capsule().stroke(LoveliesTheme.stroke)).padding(.horizontal, 12).padding(.bottom, 3)
+            }
+    }
+
+    private var peopleSelection: some View {
+        VStack(spacing: 7) {
+            PageHeader(title: screen == .deselectPeople ? "Deselect People" : "Choose People to Share With", subtitle: "\(store.sharePersonIDs.count) of \(store.people.count) selected")
+            ScrollView {
+                VStack(spacing: 3) {
+                    ForEach(store.people) { person in personSelectionRow(person) }
+                }.padding(.horizontal, 14)
+            }.scrollIndicators(.hidden)
+            PinkButton(title: "Continue", enabled: !store.sharePersonIDs.isEmpty && !store.sharePhotoIDs.isEmpty) { store.go(.shareReview) }.padding(.horizontal, 19).padding(.bottom, 14)
+        }.foregroundStyle(.white)
+    }
+    private func personSelectionRow(_ person: DemoPerson) -> some View {
+        let selected = store.sharePersonIDs.contains(person.id)
+        let blocked = store.blockedIDs.contains(person.id)
+        return Button { store.toggleSharePerson(person.id) } label: {
+            HStack(spacing: 14) {
+                Avatar(asset: person.asset, size: 45, pink: selected)
+                VStack(alignment: .leading, spacing: 3) {
+                    Text(person.name).font(.system(size: 16, weight: .medium))
+                    Text(blocked ? "Blocked" : "Matched in \(person.matches) \(person.matches == 1 ? "photo" : "photos")").font(.system(size: 12)).foregroundStyle(LoveliesTheme.secondary)
+                }
+                Spacer()
+                RoundedRectangle(cornerRadius: 8).fill(selected ? LoveliesTheme.pink : .clear).frame(width: 28, height: 28)
+                    .overlay(RoundedRectangle(cornerRadius: 8).stroke(selected ? .clear : .white.opacity(0.6), lineWidth: 1.3))
+                    .overlay { if selected { Image(systemName: "checkmark").font(.system(size: 15, weight: .semibold)).foregroundStyle(.black) } }
+            }.padding(.horizontal, 9).padding(.vertical, 5).frame(minHeight: 62)
+                .background(selected ? LoveliesTheme.surface : .clear, in: RoundedRectangle(cornerRadius: 12)).opacity(blocked ? 0.4 : 1).contentShape(Rectangle())
+        }.buttonStyle(.plain).disabled(blocked).accessibilityAddTraits(selected ? .isSelected : [])
+    }
+
+    private var review: some View {
+        VStack(spacing: 10) {
+            PageHeader(title: "Review & Share", trailing: false)
+            ScrollView {
+                VStack(alignment: .leading, spacing: 8) {
+                    reviewSectionHeader("Photos (\(store.sharePhotoIDs.count))") { store.go(.shareSelection) }
+                    if let layout = SourceReferenceCatalog.layout(33) {
+                        if store.referenceReview33 {
+                            SourcePhotoGrid(route: 33, filterIDs: store.sharePhotoIDs) { store.openPhoto($0) }
+                            let extra = store.sharePhotoIDs.subtracting(Set(layout.tiles.map(\.id)))
+                            if !extra.isEmpty {
+                                MasonryPhotos(photos: store.sharingPhotos.filter { extra.contains($0.id) }) { store.openPhoto($0) }
+                            }
+                        } else {
+                            // Measured source slots retain the user's actual crop/ID.
+                            let photos = store.sharingPhotos
+                            let slots = Dictionary(uniqueKeysWithValues: Array(photos.prefix(6)).enumerated().map { ($0.offset + 1, $0.element) })
+                            SourcePhotoGrid(route: 33, photoOverrides: slots, requirePhotoOverrides: true) { store.openPhoto($0) }
+                            if photos.count > 6 { MasonryPhotos(photos: Array(photos.dropFirst(6))) { store.openPhoto($0) } }
+                        }
+                    } else {
+                        PhotoReviewMosaic(photos: store.sharingPhotos) { store.openPhoto($0) }.frame(height: 165)
+                    }
+                    reviewSectionHeader("People (\(store.sharePersonIDs.count))") { store.go(.peopleSelection) }.padding(.top, 7)
+                    ScrollView(.horizontal) {
+                        HStack(spacing: 22) {
+                            ForEach(store.sharingPeople) { person in
+                                Button { store.openPerson(person) } label: { VStack(spacing: 6) { Avatar(asset: person.asset, size: 65, pink: true); Text(person.name).font(.system(size: 14)) } }.buttonStyle(.plain)
+                            }
+                        }.padding(.horizontal, 4).padding(.vertical, 2)
+                    }.scrollIndicators(.hidden)
+                }.padding(.horizontal, 21)
+            }.scrollIndicators(.hidden)
+            Text("You're about to share \(store.sharePhotoIDs.count) photos\nwith \(store.sharePersonIDs.count) people.")
+                .font(.system(size: 15)).multilineTextAlignment(.center).foregroundStyle(LoveliesTheme.secondary)
+                .frame(maxWidth: .infinity).padding(.vertical, 21).background(LoveliesTheme.raised, in: RoundedRectangle(cornerRadius: 15))
+                .overlay(RoundedRectangle(cornerRadius: 15).stroke(LoveliesTheme.stroke)).padding(.horizontal, 21)
+            PinkButton(title: "Share Photos", icon: "square.and.arrow.up", enabled: !store.sharePhotoIDs.isEmpty && !store.sharePersonIDs.isEmpty) { store.go(.sharingProgress) }.padding(.horizontal, 21).padding(.bottom, 15)
+        }.foregroundStyle(.white)
+    }
+    private func reviewSectionHeader(_ title: String, action: @escaping () -> Void) -> some View {
+        HStack {
+            Text(title).font(.system(size: 16, weight: .medium))
+            Spacer()
+            Button(action: action) {
+                Text("Edit").font(.system(size: 12)).foregroundStyle(.white.opacity(0.9))
+                    .padding(.horizontal, 14).padding(.vertical, 5).background(LoveliesTheme.surface, in: Capsule())
+                    .overlay(Capsule().stroke(LoveliesTheme.stroke, lineWidth: 1))
+            }.buttonStyle(.plain)
+        }
+    }
+
+    private var progress: some View {
+        GeometryReader { geometry in
+            ZStack {
+                GlowBackground(strong: true)
+                VStack(spacing: 18) {
+                    Text("Sharing Your Photos").font(.system(size: 20, weight: .medium)).padding(.top, geometry.size.height * 0.11)
+                    AssetImage(name: "sharing-hero").scaledToFit().frame(width: geometry.size.width * 0.683).accessibilityHidden(true)
+                    Text("Sharing with \(store.sharePersonIDs.count) people...").font(.system(size: 20))
+                    Text("This won't take long").font(.system(size: 15)).foregroundStyle(LoveliesTheme.secondary)
+                    VStack(alignment: .leading, spacing: 16) {
+                        sharingStep("Preparing photos", index: 0)
+                        sharingStep("Finding your people", index: 1)
+                        sharingStep("Sending...", index: 2)
+                        sharingStep("Almost there!", index: 3)
+                    }.padding(.top, 13).padding(.horizontal, 20)
+                    Spacer(minLength: 0)
+                }.padding(.horizontal, 29).frame(maxWidth: .infinity).foregroundStyle(.white)
+            }.contentShape(Rectangle()).onLongPressGesture { store.showGallery = true }
+        }
+    }
+    private func sharingStep(_ title: String, index: Int) -> some View {
+        let completed = index < 2 || store.progress > 0.8
+        return HStack(spacing: 13) {
+            ZStack {
+                Circle().fill(completed ? LoveliesTheme.pink : .clear)
+                if completed { Image(systemName: "checkmark").font(.system(size: 12, weight: .semibold)).foregroundStyle(.black) }
+                else { Circle().stroke(.white.opacity(0.5), lineWidth: 1.4); if index == 2 { Circle().trim(from: 0, to: CGFloat(max(0.2, store.progress))).stroke(LoveliesTheme.pink, lineWidth: 2).rotationEffect(.degrees(-90)) } }
+            }.frame(width: 25, height: 25)
+            Text(title).font(.system(size: 14)).foregroundStyle(LoveliesTheme.secondary)
+        }
+    }
+
+    private var history: some View {
+        VStack(spacing: 9) {
+            PageHeader(title: "Shared with People")
+            ScrollView {
+                VStack(alignment: .leading, spacing: 0) {
+                    ForEach(Array([DemoPerson.all[0], DemoPerson.all[4], DemoPerson.all[6]].enumerated()), id: \.offset) { index, person in
+                        sharedRow(person, photo: [1, 6, 16][index], detail: "\(store.shared ? store.sharePhotoIDs.count : 6) photos · \(index == 0 ? "Just now" : "2m ago")", status: "Delivered")
+                    }
+                    Text("Earlier").font(.system(size: 18, weight: .semibold)).padding(.vertical, 18)
+                    sharedRow(DemoPerson.all[1], photo: nil, detail: "4 photos · 1d ago", status: "Viewed")
+                    sharedRow(DemoPerson.all[2], photo: nil, detail: "3 photos · 1d ago", status: "Viewed")
+                    sharedRow(DemoPerson.all[3], photo: nil, detail: "5 photos · 2d ago", status: "Sent")
+                }.padding(.horizontal, 20)
+            }.scrollIndicators(.hidden)
+        }.foregroundStyle(.white)
+    }
+    private func sharedRow(_ person: DemoPerson, photo: Int?, detail: String, status: String) -> some View {
+        Button { store.openPerson(person) } label: {
+            HStack(spacing: 13) {
+                if let photo {
+                    HStack(spacing: -30) {
+                        AssetImage(name: DemoPhoto.all[photo - 1].asset).scaledToFill().frame(width: 45, height: 60).clipped().clipShape(RoundedRectangle(cornerRadius: 7))
+                        Avatar(asset: person.asset, size: 53)
+                    }.frame(width: 73)
+                } else { Avatar(asset: person.asset, size: 51) }
+                VStack(alignment: .leading, spacing: 6) { Text(person.name).font(.system(size: 17, weight: .medium)); Text(detail).font(.system(size: 12)).foregroundStyle(LoveliesTheme.secondary) }
+                Spacer(minLength: 0)
+                Label(status, systemImage: status == "Delivered" ? "circle.fill" : status == "Viewed" ? "eye" : "circle.fill")
+                    .font(.system(size: 11, weight: .medium)).foregroundStyle(status == "Delivered" ? LoveliesTheme.pink : .black)
+                    .padding(.horizontal, 10).padding(.vertical, 7)
+                    .background(status == "Delivered" ? LoveliesTheme.pink.opacity(0.14) : status == "Sent" ? Color(red: 0.7, green: 0.56, blue: 1) : LoveliesTheme.pink, in: Capsule())
+            }.padding(.vertical, 14).contentShape(Rectangle())
+        }.buttonStyle(.plain).overlay(alignment: .bottom) { Rectangle().fill(.white.opacity(0.08)).frame(height: 1) }
+    }
+
+    private var report: some View {
+        VStack(spacing: 18) {
+            PageHeader(title: "")
+            Avatar(asset: "person02", size: 110).padding(.top, -13)
+            Text("Not this person?").font(.system(size: 24, weight: .medium))
+            Text("Help us improve by letting us know\nthis isn't the right match.").font(.system(size: 16)).foregroundStyle(LoveliesTheme.secondary).multilineTextAlignment(.center)
+            VStack(spacing: 8) {
+                ForEach([("This isn't me", "hand.raised"), ("Wrong person", "person.crop.circle.badge.questionmark"), ("Not in this photo", "photo"), ("Other issue", "exclamationmark.circle")], id: \.0) { item in
+                    Button { store.reportReason = item.0 } label: {
+                        HStack(spacing: 14) {
+                            Image(systemName: item.1).font(.system(size: 19)).frame(width: 27)
+                            Text(item.0).font(.system(size: 15))
+                            Spacer()
+                            Circle().stroke(.white.opacity(0.65), lineWidth: 1.5).frame(width: 27, height: 27)
+                                .overlay { if store.reportReason == item.0 { Circle().fill(LoveliesTheme.pink).overlay(Circle().fill(.white.opacity(0.8)).frame(width: 9, height: 9)) } }
+                        }.padding(16).background(LoveliesTheme.surface, in: RoundedRectangle(cornerRadius: 13))
+                    }.buttonStyle(.plain).accessibilityAddTraits(store.reportReason == item.0 ? .isSelected : [])
+                }
+            }.padding(.top, 2)
+            Spacer(minLength: 0)
+            PinkButton(title: "Submit") { reportSaved = true }.padding(.bottom, 15)
+        }.padding(.horizontal, 20).foregroundStyle(.white)
+            .alert("Report saved in this preview", isPresented: $reportSaved) { Button("Done") { store.go(.matchedPhotos) } } message: { Text("Selected reason: \(store.reportReason). No report or photo has been sent. This is a local frontend demonstration.") }
+    }
+}
+
+private struct PhotoReviewMosaic: View {
+    var photos: [DemoPhoto]
+    var action: (DemoPhoto) -> Void
+    var body: some View {
+        GeometryReader { geometry in
+            let width = (geometry.size.width - 12) / 3
+            HStack(alignment: .top, spacing: 6) {
+                if let first = photos.first { PhotoTile(photo: first, height: geometry.size.height) { action(first) }.frame(width: width) }
+                VStack(spacing: 6) {
+                    ForEach(Array(photos.dropFirst().prefix(2))) { photo in PhotoTile(photo: photo, height: (geometry.size.height - 6) / 2) { action(photo) }.frame(width: width) }
+                }
+                VStack(spacing: 6) {
+                    ForEach(Array(photos.dropFirst(3).prefix(3))) { photo in PhotoTile(photo: photo, height: (geometry.size.height - 12) / 3) { action(photo) }.frame(width: width) }
+                }
+            }
+        }
+    }
+}

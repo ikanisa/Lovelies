@@ -1,0 +1,2078 @@
+{
+  "schema": 1,
+  "sourcePreservation": "Original PNGs are unchanged. Crops retain source resolution and no enhancement is applied.",
+  "controlCoordinates": "controlBounds and peopleBadgeBounds are [x,y,width,height] normalized to the tile image; badgeX and badgeY are normalized center coordinates; badgeSize is diameter divided by min(tile width,tile height). Baked source controls must be fully covered by an opaque actual interactive control.",
+  "assets": [
+    {
+      "asset": "ref11_01.jpg",
+      "source": "Lovelies-48-Screen-PNGs/screens/11-new-matches.png",
+      "sourceSha256": "cd380489559f47cca941437a05b4c0f499868c7e224ff1ef0e64077e6388821b",
+      "crop": [
+        11,
+        123,
+        85,
+        197
+      ],
+      "sourceResolution": [
+        240,
+        361
+      ],
+      "pixelSize": [
+        74,
+        74
+      ],
+      "sha256": "2d7a1c825cc543a246b49dd334381d7f5c2f89983dd2e10b2e5405eabff1ca21"
+    },
+    {
+      "asset": "ref11_02.jpg",
+      "source": "Lovelies-48-Screen-PNGs/screens/11-new-matches.png",
+      "sourceSha256": "cd380489559f47cca941437a05b4c0f499868c7e224ff1ef0e64077e6388821b",
+      "crop": [
+        90,
+        123,
+        160,
+        224
+      ],
+      "sourceResolution": [
+        240,
+        361
+      ],
+      "pixelSize": [
+        70,
+        101
+      ],
+      "sha256": "eb73e2359dba02819882bba21dab198996688f2245518a1059e7946f48fae5b8"
+    },
+    {
+      "asset": "ref11_03.jpg",
+      "source": "Lovelies-48-Screen-PNGs/screens/11-new-matches.png",
+      "sourceSha256": "cd380489559f47cca941437a05b4c0f499868c7e224ff1ef0e64077e6388821b",
+      "crop": [
+        165,
+        123,
+        232,
+        199
+      ],
+      "sourceResolution": [
+        240,
+        361
+      ],
+      "pixelSize": [
+        67,
+        76
+      ],
+      "sha256": "10af326ce27d7882fcb31d65c282622da4a511fe96969bd2ff3b41cfd8320ead"
+    },
+    {
+      "asset": "ref11_04.jpg",
+      "source": "Lovelies-48-Screen-PNGs/screens/11-new-matches.png",
+      "sourceSha256": "cd380489559f47cca941437a05b4c0f499868c7e224ff1ef0e64077e6388821b",
+      "crop": [
+        11,
+        201,
+        85,
+        269
+      ],
+      "sourceResolution": [
+        240,
+        361
+      ],
+      "pixelSize": [
+        74,
+        68
+      ],
+      "sha256": "4ba43c5afe319870589ed6d83ad651f47944a8cb8e410179ef2aaa7ed60d4e6f"
+    },
+    {
+      "asset": "ref11_05.jpg",
+      "source": "Lovelies-48-Screen-PNGs/screens/11-new-matches.png",
+      "sourceSha256": "cd380489559f47cca941437a05b4c0f499868c7e224ff1ef0e64077e6388821b",
+      "crop": [
+        90,
+        229,
+        160,
+        299
+      ],
+      "sourceResolution": [
+        240,
+        361
+      ],
+      "pixelSize": [
+        70,
+        70
+      ],
+      "sha256": "93cd9bd2058e93e844f3c2b4d7e493ff66632a668d99e444c657fb3c0efef980"
+    },
+    {
+      "asset": "ref11_06.jpg",
+      "source": "Lovelies-48-Screen-PNGs/screens/11-new-matches.png",
+      "sourceSha256": "cd380489559f47cca941437a05b4c0f499868c7e224ff1ef0e64077e6388821b",
+      "crop": [
+        165,
+        203,
+        232,
+        269
+      ],
+      "sourceResolution": [
+        240,
+        361
+      ],
+      "pixelSize": [
+        67,
+        66
+      ],
+      "sha256": "03305846b54096148824cfcffe01d87db7adedcab5256639514b8fa0cab0e5d2"
+    },
+    {
+      "asset": "ref11_07.jpg",
+      "source": "Lovelies-48-Screen-PNGs/screens/11-new-matches.png",
+      "sourceSha256": "cd380489559f47cca941437a05b4c0f499868c7e224ff1ef0e64077e6388821b",
+      "crop": [
+        11,
+        273,
+        85,
+        316
+      ],
+      "sourceResolution": [
+        240,
+        361
+      ],
+      "pixelSize": [
+        74,
+        43
+      ],
+      "sha256": "edce4b1d6b86fc3f96a7b0b7ea29cc3de636caa70395f391d89361b837e3c51d"
+    },
+    {
+      "asset": "ref11_08.jpg",
+      "source": "Lovelies-48-Screen-PNGs/screens/11-new-matches.png",
+      "sourceSha256": "cd380489559f47cca941437a05b4c0f499868c7e224ff1ef0e64077e6388821b",
+      "crop": [
+        90,
+        304,
+        160,
+        317
+      ],
+      "sourceResolution": [
+        240,
+        361
+      ],
+      "pixelSize": [
+        70,
+        13
+      ],
+      "sha256": "a2d0d29d7ea3e59ef176935b8b29944cc32ff97b0aaeae616c687006f390fd26"
+    },
+    {
+      "asset": "ref11_09.jpg",
+      "source": "Lovelies-48-Screen-PNGs/screens/11-new-matches.png",
+      "sourceSha256": "cd380489559f47cca941437a05b4c0f499868c7e224ff1ef0e64077e6388821b",
+      "crop": [
+        165,
+        274,
+        232,
+        317
+      ],
+      "sourceResolution": [
+        240,
+        361
+      ],
+      "pixelSize": [
+        67,
+        43
+      ],
+      "sha256": "3a4db45736ec6fddc8cbd1916bede79da1814dccf78b6e21598c0d348e31e8dd"
+    },
+    {
+      "asset": "ref14_01.jpg",
+      "source": "Lovelies-48-Screen-PNGs/screens/14-favorites-and-saved.png",
+      "sourceSha256": "90a0a02d9c54a6ebf94f92459764827c937661e3739271c0ed2f10021a2f2287",
+      "crop": [
+        11,
+        100,
+        80,
+        189
+      ],
+      "sourceResolution": [
+        258,
+        487
+      ],
+      "pixelSize": [
+        69,
+        89
+      ],
+      "sha256": "a959e1315c296ab5267c1e625e3dd1f86982ff3bbf756b6321e70dd07336d0c1"
+    },
+    {
+      "asset": "ref14_02.jpg",
+      "source": "Lovelies-48-Screen-PNGs/screens/14-favorites-and-saved.png",
+      "sourceSha256": "90a0a02d9c54a6ebf94f92459764827c937661e3739271c0ed2f10021a2f2287",
+      "crop": [
+        87,
+        100,
+        164,
+        166
+      ],
+      "sourceResolution": [
+        258,
+        487
+      ],
+      "pixelSize": [
+        77,
+        66
+      ],
+      "sha256": "8a836093d1e9681b85db3cfe4924a4b06b73aeeb565d25df216a9da542be6e8a"
+    },
+    {
+      "asset": "ref14_03.jpg",
+      "source": "Lovelies-48-Screen-PNGs/screens/14-favorites-and-saved.png",
+      "sourceSha256": "90a0a02d9c54a6ebf94f92459764827c937661e3739271c0ed2f10021a2f2287",
+      "crop": [
+        170,
+        100,
+        240,
+        196
+      ],
+      "sourceResolution": [
+        258,
+        487
+      ],
+      "pixelSize": [
+        70,
+        96
+      ],
+      "sha256": "ea2683409c2fe2d78cd7b50133a1b2c5bebb9a2f0ffefdfcf26b3314d891ff84"
+    },
+    {
+      "asset": "ref14_04.jpg",
+      "source": "Lovelies-48-Screen-PNGs/screens/14-favorites-and-saved.png",
+      "sourceSha256": "90a0a02d9c54a6ebf94f92459764827c937661e3739271c0ed2f10021a2f2287",
+      "crop": [
+        11,
+        196,
+        80,
+        276
+      ],
+      "sourceResolution": [
+        258,
+        487
+      ],
+      "pixelSize": [
+        69,
+        80
+      ],
+      "sha256": "6029a22640cb712b2dfb13e081e8cbe0686f37552e310bdfa67e64200d2e33fb"
+    },
+    {
+      "asset": "ref14_05.jpg",
+      "source": "Lovelies-48-Screen-PNGs/screens/14-favorites-and-saved.png",
+      "sourceSha256": "90a0a02d9c54a6ebf94f92459764827c937661e3739271c0ed2f10021a2f2287",
+      "crop": [
+        11,
+        282,
+        80,
+        368
+      ],
+      "sourceResolution": [
+        258,
+        487
+      ],
+      "pixelSize": [
+        69,
+        86
+      ],
+      "sha256": "ad87c2eb3964e803c2de099fa50914171580d4de05755716a622347b6352379a"
+    },
+    {
+      "asset": "ref14_06.jpg",
+      "source": "Lovelies-48-Screen-PNGs/screens/14-favorites-and-saved.png",
+      "sourceSha256": "90a0a02d9c54a6ebf94f92459764827c937661e3739271c0ed2f10021a2f2287",
+      "crop": [
+        87,
+        172,
+        164,
+        247
+      ],
+      "sourceResolution": [
+        258,
+        487
+      ],
+      "pixelSize": [
+        77,
+        75
+      ],
+      "sha256": "4ac2c648bbdda1e6b31825b8cdbff5d9bf0548c3f165e08a7e5fb511ada94e93"
+    },
+    {
+      "asset": "ref14_07.jpg",
+      "source": "Lovelies-48-Screen-PNGs/screens/14-favorites-and-saved.png",
+      "sourceSha256": "90a0a02d9c54a6ebf94f92459764827c937661e3739271c0ed2f10021a2f2287",
+      "crop": [
+        87,
+        253,
+        164,
+        330
+      ],
+      "sourceResolution": [
+        258,
+        487
+      ],
+      "pixelSize": [
+        77,
+        77
+      ],
+      "sha256": "288a041ba991f3b081f95609af8711aea18c99078ea88d67bf6d8c83ee7003d1"
+    },
+    {
+      "asset": "ref14_08.jpg",
+      "source": "Lovelies-48-Screen-PNGs/screens/14-favorites-and-saved.png",
+      "sourceSha256": "90a0a02d9c54a6ebf94f92459764827c937661e3739271c0ed2f10021a2f2287",
+      "crop": [
+        170,
+        202,
+        240,
+        307
+      ],
+      "sourceResolution": [
+        258,
+        487
+      ],
+      "pixelSize": [
+        70,
+        105
+      ],
+      "sha256": "293fbf40633e34cc078c8b9c02a5f64064a3b1d6d2f230d7fc1524810f0aa939"
+    },
+    {
+      "asset": "ref14_09.jpg",
+      "source": "Lovelies-48-Screen-PNGs/screens/14-favorites-and-saved.png",
+      "sourceSha256": "90a0a02d9c54a6ebf94f92459764827c937661e3739271c0ed2f10021a2f2287",
+      "crop": [
+        11,
+        374,
+        80,
+        449
+      ],
+      "sourceResolution": [
+        258,
+        487
+      ],
+      "pixelSize": [
+        69,
+        75
+      ],
+      "sha256": "681da4395830bfd2a66655f651e1e03305a565e86c27a940e47a18777ccef01e"
+    },
+    {
+      "asset": "ref14_10.jpg",
+      "source": "Lovelies-48-Screen-PNGs/screens/14-favorites-and-saved.png",
+      "sourceSha256": "90a0a02d9c54a6ebf94f92459764827c937661e3739271c0ed2f10021a2f2287",
+      "crop": [
+        87,
+        337,
+        164,
+        392
+      ],
+      "sourceResolution": [
+        258,
+        487
+      ],
+      "pixelSize": [
+        77,
+        55
+      ],
+      "sha256": "7ddd878da25c4485d6a69e585b3ef0728d35b63829f002442fa7cd615c5834d6"
+    },
+    {
+      "asset": "ref14_11.jpg",
+      "source": "Lovelies-48-Screen-PNGs/screens/14-favorites-and-saved.png",
+      "sourceSha256": "90a0a02d9c54a6ebf94f92459764827c937661e3739271c0ed2f10021a2f2287",
+      "crop": [
+        170,
+        313,
+        240,
+        407
+      ],
+      "sourceResolution": [
+        258,
+        487
+      ],
+      "pixelSize": [
+        70,
+        94
+      ],
+      "sha256": "337f825310a318962edf6fbdb6a98b352bc458ea15aa3204eb784b0f915067c6"
+    },
+    {
+      "asset": "ref14_12.jpg",
+      "source": "Lovelies-48-Screen-PNGs/screens/14-favorites-and-saved.png",
+      "sourceSha256": "90a0a02d9c54a6ebf94f92459764827c937661e3739271c0ed2f10021a2f2287",
+      "crop": [
+        87,
+        398,
+        164,
+        484
+      ],
+      "sourceResolution": [
+        258,
+        487
+      ],
+      "pixelSize": [
+        77,
+        86
+      ],
+      "sha256": "2ef5f39e37d50304529cc557ac734615b53aa99a6d4fe6adda5d7398e1f055c5"
+    },
+    {
+      "asset": "ref14_13.jpg",
+      "source": "Lovelies-48-Screen-PNGs/screens/14-favorites-and-saved.png",
+      "sourceSha256": "90a0a02d9c54a6ebf94f92459764827c937661e3739271c0ed2f10021a2f2287",
+      "crop": [
+        170,
+        414,
+        240,
+        484
+      ],
+      "sourceResolution": [
+        258,
+        487
+      ],
+      "pixelSize": [
+        70,
+        70
+      ],
+      "sha256": "4e9dd8c246da6106dd71ce70a2b211690fe5c1c028802fe874310b299200f2a7"
+    },
+    {
+      "asset": "ref14_14.jpg",
+      "source": "Lovelies-48-Screen-PNGs/screens/14-favorites-and-saved.png",
+      "sourceSha256": "90a0a02d9c54a6ebf94f92459764827c937661e3739271c0ed2f10021a2f2287",
+      "crop": [
+        11,
+        456,
+        80,
+        484
+      ],
+      "sourceResolution": [
+        258,
+        487
+      ],
+      "pixelSize": [
+        69,
+        28
+      ],
+      "sha256": "e2a5f30b30f16173bf53fb95d982bf12862d9ab3198955d2b981f2530af8ed05"
+    },
+    {
+      "asset": "ref15_01.jpg",
+      "source": "Lovelies-48-Screen-PNGs/screens/15-search.png",
+      "sourceSha256": "621f57ec86c1e2350d8ebe40b5353241f363b544d60fa15ddef882a746a5a84b",
+      "crop": [
+        10,
+        311,
+        84,
+        412
+      ],
+      "sourceResolution": [
+        258,
+        487
+      ],
+      "pixelSize": [
+        74,
+        101
+      ],
+      "sha256": "2f2fd926b15e8bab97e1a5baca18c0e61a90878f0d8fe6b12368de11d5147d4c"
+    },
+    {
+      "asset": "ref15_02.jpg",
+      "source": "Lovelies-48-Screen-PNGs/screens/15-search.png",
+      "sourceSha256": "621f57ec86c1e2350d8ebe40b5353241f363b544d60fa15ddef882a746a5a84b",
+      "crop": [
+        89,
+        311,
+        163,
+        372
+      ],
+      "sourceResolution": [
+        258,
+        487
+      ],
+      "pixelSize": [
+        74,
+        61
+      ],
+      "sha256": "dfb435c91990d4fbf4dd6bf00c70d3ff41728c7aa3e0e4e9bf19fb27710aa1ad"
+    },
+    {
+      "asset": "ref15_03.jpg",
+      "source": "Lovelies-48-Screen-PNGs/screens/15-search.png",
+      "sourceSha256": "621f57ec86c1e2350d8ebe40b5353241f363b544d60fa15ddef882a746a5a84b",
+      "crop": [
+        169,
+        311,
+        242,
+        372
+      ],
+      "sourceResolution": [
+        258,
+        487
+      ],
+      "pixelSize": [
+        73,
+        61
+      ],
+      "sha256": "dcf5bfa1394c75a71e1afe6056eb06a39e1c80d82defc2df9ee459f27a89f44b"
+    },
+    {
+      "asset": "ref15_04.jpg",
+      "source": "Lovelies-48-Screen-PNGs/screens/15-search.png",
+      "sourceSha256": "621f57ec86c1e2350d8ebe40b5353241f363b544d60fa15ddef882a746a5a84b",
+      "crop": [
+        10,
+        418,
+        84,
+        480
+      ],
+      "sourceResolution": [
+        258,
+        487
+      ],
+      "pixelSize": [
+        74,
+        62
+      ],
+      "sha256": "7d329577f48385f3a7d5e6a8a41f75b31a153c633cd7cd8ab56d87def31762b2"
+    },
+    {
+      "asset": "ref15_05.jpg",
+      "source": "Lovelies-48-Screen-PNGs/screens/15-search.png",
+      "sourceSha256": "621f57ec86c1e2350d8ebe40b5353241f363b544d60fa15ddef882a746a5a84b",
+      "crop": [
+        89,
+        378,
+        163,
+        480
+      ],
+      "sourceResolution": [
+        258,
+        487
+      ],
+      "pixelSize": [
+        74,
+        102
+      ],
+      "sha256": "13424c07f3b7d5741796679230202aaa784f6f5f4fec6a5fe4bb9a11fa312ca1"
+    },
+    {
+      "asset": "ref15_06.jpg",
+      "source": "Lovelies-48-Screen-PNGs/screens/15-search.png",
+      "sourceSha256": "621f57ec86c1e2350d8ebe40b5353241f363b544d60fa15ddef882a746a5a84b",
+      "crop": [
+        169,
+        378,
+        242,
+        441
+      ],
+      "sourceResolution": [
+        258,
+        487
+      ],
+      "pixelSize": [
+        73,
+        63
+      ],
+      "sha256": "ab7ea715ab5925e64b6bba07b496069c8f841886304bd903423b5c37db6f0dbc"
+    },
+    {
+      "asset": "ref15_07.jpg",
+      "source": "Lovelies-48-Screen-PNGs/screens/15-search.png",
+      "sourceSha256": "621f57ec86c1e2350d8ebe40b5353241f363b544d60fa15ddef882a746a5a84b",
+      "crop": [
+        169,
+        447,
+        242,
+        482
+      ],
+      "sourceResolution": [
+        258,
+        487
+      ],
+      "pixelSize": [
+        73,
+        35
+      ],
+      "sha256": "22c0dc2a73e78b613c5a9c07490930d869545ea70c4cd491d4b6bc4017ab227a"
+    },
+    {
+      "asset": "ref21_01.jpg",
+      "source": "Lovelies-48-Screen-PNGs/screens/21-select-upload-photos.png",
+      "sourceSha256": "928975680ed077bf2658f38ff17d2e8793abd49f173c4063eb7872ef17a948bb",
+      "crop": [
+        8,
+        75,
+        62,
+        143
+      ],
+      "sourceResolution": [
+        258,
+        314
+      ],
+      "pixelSize": [
+        54,
+        68
+      ],
+      "sha256": "b73c51a8ed69ec43b47ea7945eaf94d19709d302ec0a8339e343e2c9aaac558f"
+    },
+    {
+      "asset": "ref21_02.jpg",
+      "source": "Lovelies-48-Screen-PNGs/screens/21-select-upload-photos.png",
+      "sourceSha256": "928975680ed077bf2658f38ff17d2e8793abd49f173c4063eb7872ef17a948bb",
+      "crop": [
+        68,
+        75,
+        123,
+        143
+      ],
+      "sourceResolution": [
+        258,
+        314
+      ],
+      "pixelSize": [
+        55,
+        68
+      ],
+      "sha256": "79a766796d0e5a6a9fc71c6553353d6075d519c5f420df24fee3ad542904a3e1"
+    },
+    {
+      "asset": "ref21_03.jpg",
+      "source": "Lovelies-48-Screen-PNGs/screens/21-select-upload-photos.png",
+      "sourceSha256": "928975680ed077bf2658f38ff17d2e8793abd49f173c4063eb7872ef17a948bb",
+      "crop": [
+        129,
+        75,
+        184,
+        153
+      ],
+      "sourceResolution": [
+        258,
+        314
+      ],
+      "pixelSize": [
+        55,
+        78
+      ],
+      "sha256": "d840b02efc27e1d9bb5d5cde01747b3d2873be88c42f999d25cfa319686ef21f"
+    },
+    {
+      "asset": "ref21_04.jpg",
+      "source": "Lovelies-48-Screen-PNGs/screens/21-select-upload-photos.png",
+      "sourceSha256": "928975680ed077bf2658f38ff17d2e8793abd49f173c4063eb7872ef17a948bb",
+      "crop": [
+        191,
+        75,
+        246,
+        152
+      ],
+      "sourceResolution": [
+        258,
+        314
+      ],
+      "pixelSize": [
+        55,
+        77
+      ],
+      "sha256": "dfde27ac990ea702afb9e1eda0b75f460a2968bd220a4525a403fc32c6518512"
+    },
+    {
+      "asset": "ref21_05.jpg",
+      "source": "Lovelies-48-Screen-PNGs/screens/21-select-upload-photos.png",
+      "sourceSha256": "928975680ed077bf2658f38ff17d2e8793abd49f173c4063eb7872ef17a948bb",
+      "crop": [
+        8,
+        149,
+        62,
+        216
+      ],
+      "sourceResolution": [
+        258,
+        314
+      ],
+      "pixelSize": [
+        54,
+        67
+      ],
+      "sha256": "cdba7773e8d83f381a54d84dc2283e389cd31d838d0628905313419e7a0fe15d"
+    },
+    {
+      "asset": "ref21_06.jpg",
+      "source": "Lovelies-48-Screen-PNGs/screens/21-select-upload-photos.png",
+      "sourceSha256": "928975680ed077bf2658f38ff17d2e8793abd49f173c4063eb7872ef17a948bb",
+      "crop": [
+        68,
+        149,
+        123,
+        216
+      ],
+      "sourceResolution": [
+        258,
+        314
+      ],
+      "pixelSize": [
+        55,
+        67
+      ],
+      "sha256": "998673e264e77a27e9ad2e1f75d8c8c63397f4dc2df1d4201a93092f7d5c09b4"
+    },
+    {
+      "asset": "ref21_07.jpg",
+      "source": "Lovelies-48-Screen-PNGs/screens/21-select-upload-photos.png",
+      "sourceSha256": "928975680ed077bf2658f38ff17d2e8793abd49f173c4063eb7872ef17a948bb",
+      "crop": [
+        129,
+        159,
+        184,
+        249
+      ],
+      "sourceResolution": [
+        258,
+        314
+      ],
+      "pixelSize": [
+        55,
+        90
+      ],
+      "sha256": "1225f6bf4a8d754b1ddfd2fea7a8d9b4815f76dbf3f4f7d86c7f4d61d797e7c4"
+    },
+    {
+      "asset": "ref21_08.jpg",
+      "source": "Lovelies-48-Screen-PNGs/screens/21-select-upload-photos.png",
+      "sourceSha256": "928975680ed077bf2658f38ff17d2e8793abd49f173c4063eb7872ef17a948bb",
+      "crop": [
+        191,
+        158,
+        246,
+        230
+      ],
+      "sourceResolution": [
+        258,
+        314
+      ],
+      "pixelSize": [
+        55,
+        72
+      ],
+      "sha256": "685ecaec2190974b863f21da56fc1a2f7589758095eb818472c51badbe9c590f"
+    },
+    {
+      "asset": "ref21_09.jpg",
+      "source": "Lovelies-48-Screen-PNGs/screens/21-select-upload-photos.png",
+      "sourceSha256": "928975680ed077bf2658f38ff17d2e8793abd49f173c4063eb7872ef17a948bb",
+      "crop": [
+        8,
+        221,
+        62,
+        286
+      ],
+      "sourceResolution": [
+        258,
+        314
+      ],
+      "pixelSize": [
+        54,
+        65
+      ],
+      "sha256": "c700270a3766f5d5c5bfa270368eee20f6cfbbc8bbad558ecd9ac2bd68dba0a3"
+    },
+    {
+      "asset": "ref21_10.jpg",
+      "source": "Lovelies-48-Screen-PNGs/screens/21-select-upload-photos.png",
+      "sourceSha256": "928975680ed077bf2658f38ff17d2e8793abd49f173c4063eb7872ef17a948bb",
+      "crop": [
+        68,
+        221,
+        123,
+        286
+      ],
+      "sourceResolution": [
+        258,
+        314
+      ],
+      "pixelSize": [
+        55,
+        65
+      ],
+      "sha256": "a9ee7afe57c5aaf8de900747d95da397f43ca52274fcb4d64fa10cb1791e3d44"
+    },
+    {
+      "asset": "ref21_11.jpg",
+      "source": "Lovelies-48-Screen-PNGs/screens/21-select-upload-photos.png",
+      "sourceSha256": "928975680ed077bf2658f38ff17d2e8793abd49f173c4063eb7872ef17a948bb",
+      "crop": [
+        129,
+        254,
+        184,
+        311
+      ],
+      "sourceResolution": [
+        258,
+        314
+      ],
+      "pixelSize": [
+        55,
+        57
+      ],
+      "sha256": "27ac4a320a46c55697f31beefb74dc46ee220b198d10b360b7643f7a16564f87"
+    },
+    {
+      "asset": "ref21_12.jpg",
+      "source": "Lovelies-48-Screen-PNGs/screens/21-select-upload-photos.png",
+      "sourceSha256": "928975680ed077bf2658f38ff17d2e8793abd49f173c4063eb7872ef17a948bb",
+      "crop": [
+        191,
+        236,
+        246,
+        311
+      ],
+      "sourceResolution": [
+        258,
+        314
+      ],
+      "pixelSize": [
+        55,
+        75
+      ],
+      "sha256": "91ccb6e795a449625fb19ed4d71c6791e5e2d6ae4c18feeebeb3b18b4f41e654"
+    },
+    {
+      "asset": "ref21_13.jpg",
+      "source": "Lovelies-48-Screen-PNGs/screens/21-select-upload-photos.png",
+      "sourceSha256": "928975680ed077bf2658f38ff17d2e8793abd49f173c4063eb7872ef17a948bb",
+      "crop": [
+        8,
+        292,
+        62,
+        312
+      ],
+      "sourceResolution": [
+        258,
+        314
+      ],
+      "pixelSize": [
+        54,
+        20
+      ],
+      "sha256": "1bfaac6aeb4be2654f0dfdb4855b9dc740bea51af2bf15e59106392ad16d9dbf"
+    },
+    {
+      "asset": "ref21_14.jpg",
+      "source": "Lovelies-48-Screen-PNGs/screens/21-select-upload-photos.png",
+      "sourceSha256": "928975680ed077bf2658f38ff17d2e8793abd49f173c4063eb7872ef17a948bb",
+      "crop": [
+        68,
+        292,
+        123,
+        312
+      ],
+      "sourceResolution": [
+        258,
+        314
+      ],
+      "pixelSize": [
+        55,
+        20
+      ],
+      "sha256": "69eb14f7e107b6ff325dd5bf0867e91e94cbdbdfee39c9a2fca5c9558b2c26ca"
+    },
+    {
+      "asset": "ref21_15.jpg",
+      "source": "Lovelies-48-Screen-PNGs/screens/21-select-upload-photos.png",
+      "sourceSha256": "928975680ed077bf2658f38ff17d2e8793abd49f173c4063eb7872ef17a948bb",
+      "crop": [
+        8,
+        221,
+        62,
+        286
+      ],
+      "sourceResolution": [
+        258,
+        314
+      ],
+      "pixelSize": [
+        54,
+        65
+      ],
+      "sha256": "c700270a3766f5d5c5bfa270368eee20f6cfbbc8bbad558ecd9ac2bd68dba0a3"
+    },
+    {
+      "asset": "ref21_16.jpg",
+      "source": "Lovelies-48-Screen-PNGs/screens/21-select-upload-photos.png",
+      "sourceSha256": "928975680ed077bf2658f38ff17d2e8793abd49f173c4063eb7872ef17a948bb",
+      "crop": [
+        68,
+        221,
+        123,
+        286
+      ],
+      "sourceResolution": [
+        258,
+        314
+      ],
+      "pixelSize": [
+        55,
+        65
+      ],
+      "sha256": "a9ee7afe57c5aaf8de900747d95da397f43ca52274fcb4d64fa10cb1791e3d44"
+    },
+    {
+      "asset": "ref21_17.jpg",
+      "source": "Lovelies-48-Screen-PNGs/screens/21-select-upload-photos.png",
+      "sourceSha256": "928975680ed077bf2658f38ff17d2e8793abd49f173c4063eb7872ef17a948bb",
+      "crop": [
+        129,
+        254,
+        184,
+        311
+      ],
+      "sourceResolution": [
+        258,
+        314
+      ],
+      "pixelSize": [
+        55,
+        57
+      ],
+      "sha256": "27ac4a320a46c55697f31beefb74dc46ee220b198d10b360b7643f7a16564f87"
+    },
+    {
+      "asset": "ref21_18.jpg",
+      "source": "Lovelies-48-Screen-PNGs/screens/21-select-upload-photos.png",
+      "sourceSha256": "928975680ed077bf2658f38ff17d2e8793abd49f173c4063eb7872ef17a948bb",
+      "crop": [
+        191,
+        236,
+        246,
+        311
+      ],
+      "sourceResolution": [
+        258,
+        314
+      ],
+      "pixelSize": [
+        55,
+        75
+      ],
+      "sha256": "91ccb6e795a449625fb19ed4d71c6791e5e2d6ae4c18feeebeb3b18b4f41e654"
+    },
+    {
+      "asset": "ref26_01.jpg",
+      "source": "Lovelies-48-Screen-PNGs/screens/26-matched-photos-gallery.png",
+      "sourceSha256": "fd6590e76eb110018e7d6e0978bed52ff4b6c926e205a3e23680410742d8e56e",
+      "crop": [
+        9,
+        73,
+        112,
+        191
+      ],
+      "sourceResolution": [
+        236,
+        377
+      ],
+      "pixelSize": [
+        103,
+        118
+      ],
+      "sha256": "fcf39a4fa3e70e33ce3f2b54a65da51e2b7ea1c85730cca32c91569fe7fa4330"
+    },
+    {
+      "asset": "ref26_02.jpg",
+      "source": "Lovelies-48-Screen-PNGs/screens/26-matched-photos-gallery.png",
+      "sourceSha256": "fd6590e76eb110018e7d6e0978bed52ff4b6c926e205a3e23680410742d8e56e",
+      "crop": [
+        117,
+        73,
+        226,
+        148
+      ],
+      "sourceResolution": [
+        236,
+        377
+      ],
+      "pixelSize": [
+        109,
+        75
+      ],
+      "sha256": "b61811eefb9cfd9050d333fa28c9949e8822237dff6997f507ded9b3b91b4689"
+    },
+    {
+      "asset": "ref26_03.jpg",
+      "source": "Lovelies-48-Screen-PNGs/screens/26-matched-photos-gallery.png",
+      "sourceSha256": "fd6590e76eb110018e7d6e0978bed52ff4b6c926e205a3e23680410742d8e56e",
+      "crop": [
+        9,
+        196,
+        112,
+        248
+      ],
+      "sourceResolution": [
+        236,
+        377
+      ],
+      "pixelSize": [
+        103,
+        52
+      ],
+      "sha256": "76e6eee0fded3c59c2723e53420f31c23ce1d5d3d4cff89a6c2ff04564e4d9d7"
+    },
+    {
+      "asset": "ref26_04.jpg",
+      "source": "Lovelies-48-Screen-PNGs/screens/26-matched-photos-gallery.png",
+      "sourceSha256": "fd6590e76eb110018e7d6e0978bed52ff4b6c926e205a3e23680410742d8e56e",
+      "crop": [
+        117,
+        153,
+        167,
+        207
+      ],
+      "sourceResolution": [
+        236,
+        377
+      ],
+      "pixelSize": [
+        50,
+        54
+      ],
+      "sha256": "83d29594cb32ef1821587fa1ed586c6b2f851e2712e0cd952ee8019a06bfc816"
+    },
+    {
+      "asset": "ref26_05.jpg",
+      "source": "Lovelies-48-Screen-PNGs/screens/26-matched-photos-gallery.png",
+      "sourceSha256": "fd6590e76eb110018e7d6e0978bed52ff4b6c926e205a3e23680410742d8e56e",
+      "crop": [
+        173,
+        153,
+        226,
+        231
+      ],
+      "sourceResolution": [
+        236,
+        377
+      ],
+      "pixelSize": [
+        53,
+        78
+      ],
+      "sha256": "15663b1f0aa78c0992a9117095e9019e3c85d176fc8464693b0191ec05c17b52"
+    },
+    {
+      "asset": "ref26_06.jpg",
+      "source": "Lovelies-48-Screen-PNGs/screens/26-matched-photos-gallery.png",
+      "sourceSha256": "fd6590e76eb110018e7d6e0978bed52ff4b6c926e205a3e23680410742d8e56e",
+      "crop": [
+        118,
+        212,
+        166,
+        291
+      ],
+      "sourceResolution": [
+        236,
+        377
+      ],
+      "pixelSize": [
+        48,
+        79
+      ],
+      "sha256": "f724efd14180617cc5abd5208c630cb240d47eff1a4423e3c74989e6a89e1ce5"
+    },
+    {
+      "asset": "ref26_07.jpg",
+      "source": "Lovelies-48-Screen-PNGs/screens/26-matched-photos-gallery.png",
+      "sourceSha256": "fd6590e76eb110018e7d6e0978bed52ff4b6c926e205a3e23680410742d8e56e",
+      "crop": [
+        172,
+        237,
+        226,
+        291
+      ],
+      "sourceResolution": [
+        236,
+        377
+      ],
+      "pixelSize": [
+        54,
+        54
+      ],
+      "sha256": "1d9bcb4c1cd60c206815c96de46b5928762f56da75b5b5e61c520bea74a428e3"
+    },
+    {
+      "asset": "ref26_08.jpg",
+      "source": "Lovelies-48-Screen-PNGs/screens/26-matched-photos-gallery.png",
+      "sourceSha256": "fd6590e76eb110018e7d6e0978bed52ff4b6c926e205a3e23680410742d8e56e",
+      "crop": [
+        9,
+        254,
+        86,
+        327
+      ],
+      "sourceResolution": [
+        236,
+        377
+      ],
+      "pixelSize": [
+        77,
+        73
+      ],
+      "sha256": "6cda0a81554eecfba5614c5de678fa27cdc593fffb2d7c4dea4bdbe83b311921"
+    },
+    {
+      "asset": "ref26_09.jpg",
+      "source": "Lovelies-48-Screen-PNGs/screens/26-matched-photos-gallery.png",
+      "sourceSha256": "fd6590e76eb110018e7d6e0978bed52ff4b6c926e205a3e23680410742d8e56e",
+      "crop": [
+        91,
+        254,
+        113,
+        374
+      ],
+      "sourceResolution": [
+        236,
+        377
+      ],
+      "pixelSize": [
+        22,
+        120
+      ],
+      "sha256": "b917affbda889609d1f51fedfb717217bd7339523aded09800c81f857db19e9f"
+    },
+    {
+      "asset": "ref26_10.jpg",
+      "source": "Lovelies-48-Screen-PNGs/screens/26-matched-photos-gallery.png",
+      "sourceSha256": "fd6590e76eb110018e7d6e0978bed52ff4b6c926e205a3e23680410742d8e56e",
+      "crop": [
+        117,
+        296,
+        226,
+        355
+      ],
+      "sourceResolution": [
+        236,
+        377
+      ],
+      "pixelSize": [
+        109,
+        59
+      ],
+      "sha256": "5a0a162d7438a152006d756d1c1f8dc559c1183f1628b3e93c2e8ae7e253c63f"
+    },
+    {
+      "asset": "ref26_11.jpg",
+      "source": "Lovelies-48-Screen-PNGs/screens/26-matched-photos-gallery.png",
+      "sourceSha256": "fd6590e76eb110018e7d6e0978bed52ff4b6c926e205a3e23680410742d8e56e",
+      "crop": [
+        9,
+        333,
+        86,
+        374
+      ],
+      "sourceResolution": [
+        236,
+        377
+      ],
+      "pixelSize": [
+        77,
+        41
+      ],
+      "sha256": "09c967f9ffa24b986e210bd1dc0c5d1b8c572b5fd007644e9d81da409c76d705"
+    },
+    {
+      "asset": "ref26_12.jpg",
+      "source": "Lovelies-48-Screen-PNGs/screens/26-matched-photos-gallery.png",
+      "sourceSha256": "fd6590e76eb110018e7d6e0978bed52ff4b6c926e205a3e23680410742d8e56e",
+      "crop": [
+        118,
+        361,
+        154,
+        377
+      ],
+      "sourceResolution": [
+        236,
+        377
+      ],
+      "pixelSize": [
+        36,
+        16
+      ],
+      "sha256": "5e7c7ceec9482fde1df1d6c7b4359bbac66a2bb2bdcefc20ee86a401a9f19d9b"
+    },
+    {
+      "asset": "ref26_13.jpg",
+      "source": "Lovelies-48-Screen-PNGs/screens/26-matched-photos-gallery.png",
+      "sourceSha256": "fd6590e76eb110018e7d6e0978bed52ff4b6c926e205a3e23680410742d8e56e",
+      "crop": [
+        159,
+        361,
+        189,
+        377
+      ],
+      "sourceResolution": [
+        236,
+        377
+      ],
+      "pixelSize": [
+        30,
+        16
+      ],
+      "sha256": "5a87829be8dd3c933288c21252c6a82538b37b23c9ac03da10476decd300b1cc"
+    },
+    {
+      "asset": "ref26_14.jpg",
+      "source": "Lovelies-48-Screen-PNGs/screens/26-matched-photos-gallery.png",
+      "sourceSha256": "fd6590e76eb110018e7d6e0978bed52ff4b6c926e205a3e23680410742d8e56e",
+      "crop": [
+        192,
+        361,
+        226,
+        377
+      ],
+      "sourceResolution": [
+        236,
+        377
+      ],
+      "pixelSize": [
+        34,
+        16
+      ],
+      "sha256": "dddd68e46ae6417d058d66014fdfc72ca7e79a56334f6ebe889534e845aeb942"
+    },
+    {
+      "asset": "ref28_01.jpg",
+      "source": "Lovelies-48-Screen-PNGs/screens/28-person-to-photos.png",
+      "sourceSha256": "c1ee5a64ed747dbc02f43ef70290f516d919852ca0e36846affe4e1f30fdb7a9",
+      "crop": [
+        13,
+        164,
+        86,
+        287
+      ],
+      "sourceResolution": [
+        246,
+        377
+      ],
+      "pixelSize": [
+        73,
+        123
+      ],
+      "sha256": "5b708372d943c157674bacff041ca8d52a11a2e172bdef157d8180f314895ae8"
+    },
+    {
+      "asset": "ref28_02.jpg",
+      "source": "Lovelies-48-Screen-PNGs/screens/28-person-to-photos.png",
+      "sourceSha256": "c1ee5a64ed747dbc02f43ef70290f516d919852ca0e36846affe4e1f30fdb7a9",
+      "crop": [
+        91,
+        164,
+        159,
+        249
+      ],
+      "sourceResolution": [
+        246,
+        377
+      ],
+      "pixelSize": [
+        68,
+        85
+      ],
+      "sha256": "6146651695ae90429586470ae511e9875dc5fb518ecb5be7a8acb1725ceebe1b"
+    },
+    {
+      "asset": "ref28_03.jpg",
+      "source": "Lovelies-48-Screen-PNGs/screens/28-person-to-photos.png",
+      "sourceSha256": "c1ee5a64ed747dbc02f43ef70290f516d919852ca0e36846affe4e1f30fdb7a9",
+      "crop": [
+        165,
+        164,
+        235,
+        226
+      ],
+      "sourceResolution": [
+        246,
+        377
+      ],
+      "pixelSize": [
+        70,
+        62
+      ],
+      "sha256": "83392f5d7d37a3e37577346b101056b44f637ecc69b16000d12391781e45efc5"
+    },
+    {
+      "asset": "ref28_04.jpg",
+      "source": "Lovelies-48-Screen-PNGs/screens/28-person-to-photos.png",
+      "sourceSha256": "c1ee5a64ed747dbc02f43ef70290f516d919852ca0e36846affe4e1f30fdb7a9",
+      "crop": [
+        13,
+        293,
+        86,
+        369
+      ],
+      "sourceResolution": [
+        246,
+        377
+      ],
+      "pixelSize": [
+        73,
+        76
+      ],
+      "sha256": "59f2cc0f9f1598800eaa7b2a628f0d34c9f3b9665e2611fe9a81c6189028c2c6"
+    },
+    {
+      "asset": "ref28_05.jpg",
+      "source": "Lovelies-48-Screen-PNGs/screens/28-person-to-photos.png",
+      "sourceSha256": "c1ee5a64ed747dbc02f43ef70290f516d919852ca0e36846affe4e1f30fdb7a9",
+      "crop": [
+        91,
+        254,
+        159,
+        369
+      ],
+      "sourceResolution": [
+        246,
+        377
+      ],
+      "pixelSize": [
+        68,
+        115
+      ],
+      "sha256": "bc6d710dea7f0c29e7a43f04c674a9dd89512ae7fa0849f1501e2da9f551ed9f"
+    },
+    {
+      "asset": "ref28_06.jpg",
+      "source": "Lovelies-48-Screen-PNGs/screens/28-person-to-photos.png",
+      "sourceSha256": "c1ee5a64ed747dbc02f43ef70290f516d919852ca0e36846affe4e1f30fdb7a9",
+      "crop": [
+        165,
+        232,
+        235,
+        316
+      ],
+      "sourceResolution": [
+        246,
+        377
+      ],
+      "pixelSize": [
+        70,
+        84
+      ],
+      "sha256": "d69d703618a4608e543d2c71463dd8d494abdc5de5d81f7c59d11da2daa77e5e"
+    },
+    {
+      "asset": "ref28_07.jpg",
+      "source": "Lovelies-48-Screen-PNGs/screens/28-person-to-photos.png",
+      "sourceSha256": "c1ee5a64ed747dbc02f43ef70290f516d919852ca0e36846affe4e1f30fdb7a9",
+      "crop": [
+        165,
+        321,
+        235,
+        375
+      ],
+      "sourceResolution": [
+        246,
+        377
+      ],
+      "pixelSize": [
+        70,
+        54
+      ],
+      "sha256": "15a5e759f847c77ec12841f497cc59b3c9fb835924870c0fe8568f8624f900f7"
+    },
+    {
+      "asset": "ref29_01.jpg",
+      "source": "Lovelies-48-Screen-PNGs/screens/29-select-photos-to-share.png",
+      "sourceSha256": "bd180d06526b2b913675289de7640ca6f451d15fbd46dcd87d5099fb27cd0102",
+      "crop": [
+        9,
+        73,
+        98,
+        191
+      ],
+      "sourceResolution": [
+        239,
+        377
+      ],
+      "pixelSize": [
+        89,
+        118
+      ],
+      "sha256": "325d001de80115e153a62e1e98e17c7a83568261c5b998e00c3d4679c0e5de80"
+    },
+    {
+      "asset": "ref29_02.jpg",
+      "source": "Lovelies-48-Screen-PNGs/screens/29-select-photos-to-share.png",
+      "sourceSha256": "bd180d06526b2b913675289de7640ca6f451d15fbd46dcd87d5099fb27cd0102",
+      "crop": [
+        102,
+        73,
+        163,
+        147
+      ],
+      "sourceResolution": [
+        239,
+        377
+      ],
+      "pixelSize": [
+        61,
+        74
+      ],
+      "sha256": "8a8f1f6f88e3bfd290ef7f4ec97938a89881d4715f3b2baa39e3eba1067faa97"
+    },
+    {
+      "asset": "ref29_03.jpg",
+      "source": "Lovelies-48-Screen-PNGs/screens/29-select-photos-to-share.png",
+      "sourceSha256": "bd180d06526b2b913675289de7640ca6f451d15fbd46dcd87d5099fb27cd0102",
+      "crop": [
+        168,
+        73,
+        229,
+        139
+      ],
+      "sourceResolution": [
+        239,
+        377
+      ],
+      "pixelSize": [
+        61,
+        66
+      ],
+      "sha256": "822106b33b1dac4284895672101510af91eaa538a0e4ad2ab9f68d0983a9ebbb"
+    },
+    {
+      "asset": "ref29_04.jpg",
+      "source": "Lovelies-48-Screen-PNGs/screens/29-select-photos-to-share.png",
+      "sourceSha256": "bd180d06526b2b913675289de7640ca6f451d15fbd46dcd87d5099fb27cd0102",
+      "crop": [
+        9,
+        196,
+        98,
+        254
+      ],
+      "sourceResolution": [
+        239,
+        377
+      ],
+      "pixelSize": [
+        89,
+        58
+      ],
+      "sha256": "c5983d275e64c36df374fcb25b14e8cba35993ff8c482f0806bda00c8778a320"
+    },
+    {
+      "asset": "ref29_05.jpg",
+      "source": "Lovelies-48-Screen-PNGs/screens/29-select-photos-to-share.png",
+      "sourceSha256": "bd180d06526b2b913675289de7640ca6f451d15fbd46dcd87d5099fb27cd0102",
+      "crop": [
+        102,
+        152,
+        163,
+        208
+      ],
+      "sourceResolution": [
+        239,
+        377
+      ],
+      "pixelSize": [
+        61,
+        56
+      ],
+      "sha256": "564222bc846ec76a3268e491581598bc79c01e1bd6ecb652e1d36571ee97a4ea"
+    },
+    {
+      "asset": "ref29_06.jpg",
+      "source": "Lovelies-48-Screen-PNGs/screens/29-select-photos-to-share.png",
+      "sourceSha256": "bd180d06526b2b913675289de7640ca6f451d15fbd46dcd87d5099fb27cd0102",
+      "crop": [
+        168,
+        144,
+        229,
+        207
+      ],
+      "sourceResolution": [
+        239,
+        377
+      ],
+      "pixelSize": [
+        61,
+        63
+      ],
+      "sha256": "f17cdf682706d91a5c7c9d84313a5947332474aaae3386c5ace1d7af3374e2c9"
+    },
+    {
+      "asset": "ref29_07.jpg",
+      "source": "Lovelies-48-Screen-PNGs/screens/29-select-photos-to-share.png",
+      "sourceSha256": "bd180d06526b2b913675289de7640ca6f451d15fbd46dcd87d5099fb27cd0102",
+      "crop": [
+        102,
+        211,
+        163,
+        292
+      ],
+      "sourceResolution": [
+        239,
+        377
+      ],
+      "pixelSize": [
+        61,
+        81
+      ],
+      "sha256": "5d3f8e3e15b511eb0fa05d93a457fcded1138c3189a455836bf9c1048d838a5f"
+    },
+    {
+      "asset": "ref29_08.jpg",
+      "source": "Lovelies-48-Screen-PNGs/screens/29-select-photos-to-share.png",
+      "sourceSha256": "bd180d06526b2b913675289de7640ca6f451d15fbd46dcd87d5099fb27cd0102",
+      "crop": [
+        168,
+        213,
+        229,
+        265
+      ],
+      "sourceResolution": [
+        239,
+        377
+      ],
+      "pixelSize": [
+        61,
+        52
+      ],
+      "sha256": "03004d6bfe1f981a1737da547cc49e03bba6c554b985cfcb2377ab53414bad32"
+    },
+    {
+      "asset": "ref29_09.jpg",
+      "source": "Lovelies-48-Screen-PNGs/screens/29-select-photos-to-share.png",
+      "sourceSha256": "bd180d06526b2b913675289de7640ca6f451d15fbd46dcd87d5099fb27cd0102",
+      "crop": [
+        9,
+        259,
+        98,
+        328
+      ],
+      "sourceResolution": [
+        239,
+        377
+      ],
+      "pixelSize": [
+        89,
+        69
+      ],
+      "sha256": "3f0994f5cde61d64fbf0aa2e662eb6ecfff93cd2663593d3775a3b651aed8843"
+    },
+    {
+      "asset": "ref29_10.jpg",
+      "source": "Lovelies-48-Screen-PNGs/screens/29-select-photos-to-share.png",
+      "sourceSha256": "bd180d06526b2b913675289de7640ca6f451d15fbd46dcd87d5099fb27cd0102",
+      "crop": [
+        168,
+        270,
+        229,
+        328
+      ],
+      "sourceResolution": [
+        239,
+        377
+      ],
+      "pixelSize": [
+        61,
+        58
+      ],
+      "sha256": "cc725c5be7440b9b350688803cb2c441990920cb5b7a0cb9913821b92e2969b4"
+    },
+    {
+      "asset": "ref29_11.jpg",
+      "source": "Lovelies-48-Screen-PNGs/screens/26-matched-photos-gallery.png",
+      "sourceSha256": "fd6590e76eb110018e7d6e0978bed52ff4b6c926e205a3e23680410742d8e56e",
+      "crop": [
+        117,
+        296,
+        226,
+        355
+      ],
+      "sourceResolution": [
+        236,
+        377
+      ],
+      "pixelSize": [
+        109,
+        59
+      ],
+      "sha256": "5a0a162d7438a152006d756d1c1f8dc559c1183f1628b3e93c2e8ae7e253c63f"
+    },
+    {
+      "asset": "ref29_12.jpg",
+      "source": "Lovelies-48-Screen-PNGs/screens/33-review-and-share.png",
+      "sourceSha256": "4236a3842b08f95aec1e775da29ed3726e115e4ddb17831389fa39dbcd8eeef4",
+      "crop": [
+        124,
+        130,
+        174,
+        172
+      ],
+      "sourceResolution": [
+        240,
+        378
+      ],
+      "pixelSize": [
+        50,
+        42
+      ],
+      "sha256": "a0d86ab28730c1e53c406dc743c6436027c3dfc1ee25aab80d383c5ba735d7e7"
+    },
+    {
+      "asset": "ref33_01.jpg",
+      "source": "Lovelies-48-Screen-PNGs/screens/33-review-and-share.png",
+      "sourceSha256": "4236a3842b08f95aec1e775da29ed3726e115e4ddb17831389fa39dbcd8eeef4",
+      "crop": [
+        15,
+        83,
+        66,
+        173
+      ],
+      "sourceResolution": [
+        240,
+        378
+      ],
+      "pixelSize": [
+        51,
+        90
+      ],
+      "sha256": "e489b2c29c12c3e1364cbb246968bc470f630cfcd9c04991e69193e64a6e705b"
+    },
+    {
+      "asset": "ref33_02.jpg",
+      "source": "Lovelies-48-Screen-PNGs/screens/33-review-and-share.png",
+      "sourceSha256": "4236a3842b08f95aec1e775da29ed3726e115e4ddb17831389fa39dbcd8eeef4",
+      "crop": [
+        70,
+        83,
+        120,
+        112
+      ],
+      "sourceResolution": [
+        240,
+        378
+      ],
+      "pixelSize": [
+        50,
+        29
+      ],
+      "sha256": "5bc0ada2129c81587a5e1906af356ff6c31ab6323da0ac97b60aeac3aaf2dcaf"
+    },
+    {
+      "asset": "ref33_03.jpg",
+      "source": "Lovelies-48-Screen-PNGs/screens/33-review-and-share.png",
+      "sourceSha256": "4236a3842b08f95aec1e775da29ed3726e115e4ddb17831389fa39dbcd8eeef4",
+      "crop": [
+        70,
+        116,
+        120,
+        173
+      ],
+      "sourceResolution": [
+        240,
+        378
+      ],
+      "pixelSize": [
+        50,
+        57
+      ],
+      "sha256": "651f54d9211a8ba5991418301e378b928fb827b35a02d6e911be58c87374fd28"
+    },
+    {
+      "asset": "ref33_04.jpg",
+      "source": "Lovelies-48-Screen-PNGs/screens/33-review-and-share.png",
+      "sourceSha256": "4236a3842b08f95aec1e775da29ed3726e115e4ddb17831389fa39dbcd8eeef4",
+      "crop": [
+        124,
+        83,
+        174,
+        128
+      ],
+      "sourceResolution": [
+        240,
+        378
+      ],
+      "pixelSize": [
+        50,
+        45
+      ],
+      "sha256": "7e4bc98999b06895416b84b0e312574d3153dcac43f980d9483b40db04604a34"
+    },
+    {
+      "asset": "ref33_05.jpg",
+      "source": "Lovelies-48-Screen-PNGs/screens/33-review-and-share.png",
+      "sourceSha256": "4236a3842b08f95aec1e775da29ed3726e115e4ddb17831389fa39dbcd8eeef4",
+      "crop": [
+        124,
+        131,
+        174,
+        173
+      ],
+      "sourceResolution": [
+        240,
+        378
+      ],
+      "pixelSize": [
+        50,
+        42
+      ],
+      "sha256": "fdf205c10a0e431dfe51475f071494bd578f5bd11d5bce2b3504c5c044fe2b24"
+    },
+    {
+      "asset": "ref33_06.jpg",
+      "source": "Lovelies-48-Screen-PNGs/screens/33-review-and-share.png",
+      "sourceSha256": "4236a3842b08f95aec1e775da29ed3726e115e4ddb17831389fa39dbcd8eeef4",
+      "crop": [
+        178,
+        83,
+        228,
+        130
+      ],
+      "sourceResolution": [
+        240,
+        378
+      ],
+      "pixelSize": [
+        50,
+        47
+      ],
+      "sha256": "622b209e43f58ec463562363a73798c369bab0cffe411e9828f9a444b3e01b45"
+    },
+    {
+      "asset": "ref33_07.jpg",
+      "source": "Lovelies-48-Screen-PNGs/screens/33-review-and-share.png",
+      "sourceSha256": "4236a3842b08f95aec1e775da29ed3726e115e4ddb17831389fa39dbcd8eeef4",
+      "crop": [
+        178,
+        134,
+        228,
+        173
+      ],
+      "sourceResolution": [
+        240,
+        378
+      ],
+      "pixelSize": [
+        50,
+        39
+      ],
+      "sha256": "003035461fa9095e5e9bb4af16ebb88599c32527c06ff986e57ca3ec6c1608a9"
+    },
+    {
+      "asset": "ref37_01.jpg",
+      "source": "Lovelies-48-Screen-PNGs/screens/37-profile-overview.png",
+      "sourceSha256": "e6b2e910dce69efbcdfbab67f3f75ff080b7b2d4f09471f62e4ec32de094319c",
+      "crop": [
+        13,
+        302,
+        86,
+        374
+      ],
+      "sourceResolution": [
+        256,
+        447
+      ],
+      "pixelSize": [
+        73,
+        72
+      ],
+      "sha256": "c2dd9846ba5a435f908d486b5fd3b2092a9ff90afde675e04c344defcb792db6"
+    },
+    {
+      "asset": "ref37_02.jpg",
+      "source": "Lovelies-48-Screen-PNGs/screens/37-profile-overview.png",
+      "sourceSha256": "e6b2e910dce69efbcdfbab67f3f75ff080b7b2d4f09471f62e4ec32de094319c",
+      "crop": [
+        91,
+        302,
+        167,
+        350
+      ],
+      "sourceResolution": [
+        256,
+        447
+      ],
+      "pixelSize": [
+        76,
+        48
+      ],
+      "sha256": "3a69a1fee8d71049bfceca30e1643052808e553b9cb862e06ffbbea19f524a0b"
+    },
+    {
+      "asset": "ref37_03.jpg",
+      "source": "Lovelies-48-Screen-PNGs/screens/37-profile-overview.png",
+      "sourceSha256": "e6b2e910dce69efbcdfbab67f3f75ff080b7b2d4f09471f62e4ec32de094319c",
+      "crop": [
+        173,
+        302,
+        245,
+        376
+      ],
+      "sourceResolution": [
+        256,
+        447
+      ],
+      "pixelSize": [
+        72,
+        74
+      ],
+      "sha256": "ec6e7b192faa252c49cd8a440ce5f69e06d5059bc5ff93405d4eae282ffac401"
+    },
+    {
+      "asset": "ref37_04.jpg",
+      "source": "Lovelies-48-Screen-PNGs/screens/37-profile-overview.png",
+      "sourceSha256": "e6b2e910dce69efbcdfbab67f3f75ff080b7b2d4f09471f62e4ec32de094319c",
+      "crop": [
+        13,
+        379,
+        86,
+        410
+      ],
+      "sourceResolution": [
+        256,
+        447
+      ],
+      "pixelSize": [
+        73,
+        31
+      ],
+      "sha256": "ba88e6cff79cb3d140d2246afa2eb71b830154419faf5736eff1ea598c15db47"
+    },
+    {
+      "asset": "ref37_05.jpg",
+      "source": "Lovelies-48-Screen-PNGs/screens/37-profile-overview.png",
+      "sourceSha256": "e6b2e910dce69efbcdfbab67f3f75ff080b7b2d4f09471f62e4ec32de094319c",
+      "crop": [
+        91,
+        355,
+        167,
+        410
+      ],
+      "sourceResolution": [
+        256,
+        447
+      ],
+      "pixelSize": [
+        76,
+        55
+      ],
+      "sha256": "ec393dfa8150d7d47c2566e709b2f9a51b30acc4615b5d6ac82b08b8e7033bef"
+    },
+    {
+      "asset": "ref37_06.jpg",
+      "source": "Lovelies-48-Screen-PNGs/screens/37-profile-overview.png",
+      "sourceSha256": "e6b2e910dce69efbcdfbab67f3f75ff080b7b2d4f09471f62e4ec32de094319c",
+      "crop": [
+        173,
+        381,
+        245,
+        410
+      ],
+      "sourceResolution": [
+        256,
+        447
+      ],
+      "pixelSize": [
+        72,
+        29
+      ],
+      "sha256": "c412190cac4c6b8e8790ff983b4cebc2da0b6de79f28d7638685ea12184c006a"
+    },
+    {
+      "asset": "ref38_01.jpg",
+      "source": "Lovelies-48-Screen-PNGs/screens/38-face-management.png",
+      "sourceSha256": "19d075ac7d1bbc871f1bfeebf64f82a872907ce5b470aec79fdbef223b29c740",
+      "crop": [
+        29,
+        281,
+        65,
+        317
+      ],
+      "sourceResolution": [
+        249,
+        447
+      ],
+      "pixelSize": [
+        36,
+        36
+      ],
+      "sha256": "27020eb12ef120677bb75ed47a712c2fd5b06a0938f5956a65feb67a038437b6"
+    },
+    {
+      "asset": "ref38_02.jpg",
+      "source": "Lovelies-48-Screen-PNGs/screens/38-face-management.png",
+      "sourceSha256": "19d075ac7d1bbc871f1bfeebf64f82a872907ce5b470aec79fdbef223b29c740",
+      "crop": [
+        84,
+        279,
+        123,
+        320
+      ],
+      "sourceResolution": [
+        249,
+        447
+      ],
+      "pixelSize": [
+        39,
+        41
+      ],
+      "sha256": "20159357ac4300fd184a015b3bcbeef24c33ff684a189882b6922a6cfacd51cb"
+    },
+    {
+      "asset": "ref38_03.jpg",
+      "source": "Lovelies-48-Screen-PNGs/screens/38-face-management.png",
+      "sourceSha256": "19d075ac7d1bbc871f1bfeebf64f82a872907ce5b470aec79fdbef223b29c740",
+      "crop": [
+        133,
+        279,
+        174,
+        320
+      ],
+      "sourceResolution": [
+        249,
+        447
+      ],
+      "pixelSize": [
+        41,
+        41
+      ],
+      "sha256": "ea9967a5676d605677338cf301f2ff02774d101aa02b18ed04bf78d526c896c5"
+    },
+    {
+      "asset": "ref38_04.jpg",
+      "source": "Lovelies-48-Screen-PNGs/screens/38-face-management.png",
+      "sourceSha256": "19d075ac7d1bbc871f1bfeebf64f82a872907ce5b470aec79fdbef223b29c740",
+      "crop": [
+        184,
+        279,
+        224,
+        320
+      ],
+      "sourceResolution": [
+        249,
+        447
+      ],
+      "pixelSize": [
+        40,
+        41
+      ],
+      "sha256": "4dede6d154c3774d9e80c339dedae18059558b82be5e80d37452db689b34766f"
+    },
+    {
+      "asset": "ref38_camera.jpg",
+      "source": "Lovelies-48-Screen-PNGs/screens/38-face-management.png",
+      "sourceSha256": "19d075ac7d1bbc871f1bfeebf64f82a872907ce5b470aec79fdbef223b29c740",
+      "crop": [
+        39,
+        111,
+        210,
+        265
+      ],
+      "sourceResolution": [
+        249,
+        447
+      ],
+      "pixelSize": [
+        171,
+        154
+      ],
+      "sha256": "2e11061329d5579ac9bc5e804aeb1e48c287c2f5a37f0d2cb620780d393d637f",
+      "note": "Own Jasmine camera photograph with its noninteractive face bracket depiction."
+    },
+    {
+      "asset": "ref15_recent01.jpg",
+      "source": "Lovelies-48-Screen-PNGs/screens/15-search.png",
+      "sourceSha256": "621f57ec86c1e2350d8ebe40b5353241f363b544d60fa15ddef882a746a5a84b",
+      "crop": [
+        12,
+        199,
+        63,
+        251
+      ],
+      "sourceResolution": [
+        258,
+        487
+      ],
+      "pixelSize": [
+        51,
+        52
+      ],
+      "sha256": "0c93c66d98f8759229816319dc667136010e9e35c910a0498d10c46f71f319eb"
+    },
+    {
+      "asset": "ref15_recent02.jpg",
+      "source": "Lovelies-48-Screen-PNGs/screens/15-search.png",
+      "sourceSha256": "621f57ec86c1e2350d8ebe40b5353241f363b544d60fa15ddef882a746a5a84b",
+      "crop": [
+        75,
+        199,
+        128,
+        251
+      ],
+      "sourceResolution": [
+        258,
+        487
+      ],
+      "pixelSize": [
+        53,
+        52
+      ],
+      "sha256": "2b47d66e3ff47170f2f7d1745de00e7a73a26f4aa4777ad771c76330cc7b27ac"
+    },
+    {
+      "asset": "ref15_recent03.jpg",
+      "source": "Lovelies-48-Screen-PNGs/screens/15-search.png",
+      "sourceSha256": "621f57ec86c1e2350d8ebe40b5353241f363b544d60fa15ddef882a746a5a84b",
+      "crop": [
+        137,
+        199,
+        189,
+        251
+      ],
+      "sourceResolution": [
+        258,
+        487
+      ],
+      "pixelSize": [
+        52,
+        52
+      ],
+      "sha256": "6d5c578f474477fdca0017345567276f00b78d7553dfed8f2ab8b00ed2354b01"
+    },
+    {
+      "asset": "ref15_recent04.jpg",
+      "source": "Lovelies-48-Screen-PNGs/screens/15-search.png",
+      "sourceSha256": "621f57ec86c1e2350d8ebe40b5353241f363b544d60fa15ddef882a746a5a84b",
+      "crop": [
+        202,
+        199,
+        242,
+        251
+      ],
+      "sourceResolution": [
+        258,
+        487
+      ],
+      "pixelSize": [
+        40,
+        52
+      ],
+      "sha256": "f40c9e1229719408eb49fa4e4ecaf62c511dfc301a93a47b29b0697986e6576d"
+    }
+  ],
+  "reconciliations": [
+    {
+      "screen": 26,
+      "detail": "The source depicts 14 photo rectangles while labelling 12 matched photos. Two partial bottom fragments are render variants: nearest city fragment uses logical photo 2 and cathedral fragment uses logical photo 5. This logical identity is a demo presentation assumption because the supplied source is partial; exact individual crop bytes and positions are retained."
+    },
+    {
+      "screen": 33,
+      "detail": "Seven source photo rectangles represent six logical photos. Hero and upper-right hat portrait are two crops/variants of logical photo 1, as visually reconciled by the coordinating owner. Both obey the same selection state."
+    }
+  ]
+}

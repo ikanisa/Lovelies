@@ -1,0 +1,76 @@
+{
+  "status": "locally_verified_by_root",
+  "purpose": "Active Cloudflare SQLite DO anonymous enrollment and automatic registered-face authentication; native/browser demo stores unchanged",
+  "files": [
+    {
+      "path": "services/cloudflare-api/src/auth.ts",
+      "sha256": "6668b559d91273dba8c111992b803b9ff0857d11935335063ced14bf5db0af1e",
+      "bytes": 15321
+    },
+    {
+      "path": "services/cloudflare-api/src/face-auth.ts",
+      "sha256": "9db5fb68f63d9187e797e36c15f3bf32e556deb27092ecc2875c3b9366946ef2",
+      "bytes": 35163
+    },
+    {
+      "path": "services/cloudflare-api/test/face-runtime.test.mjs",
+      "sha256": "bb0f14f67d532c664a14792aa8f8e435160097697a08910e1a925b481347f86a",
+      "bytes": 16466
+    },
+    {
+      "path": "clients/backend/client.mjs",
+      "sha256": "4bb7ca6d3a737ea4ee9c4c22c098871074e2605d95d483ae81fa8c57a0dec306",
+      "bytes": 27843
+    },
+    {
+      "path": "clients/backend/contracts.mjs",
+      "sha256": "dd0fd3de0f3ba7f0eaf0535103569ec84a787c9929127f3cdcf886559b850367",
+      "bytes": 14807
+    },
+    {
+      "path": "clients/backend/face-contracts.mjs",
+      "sha256": "5b4cbd45ed73920523bbf223e87cbe90902bd7ad22b19deb6cb25fb8d84516d3",
+      "bytes": 5002
+    },
+    {
+      "path": "clients/backend/client.test.mjs",
+      "sha256": "2221ee740438df4f111f5a29884b43d6535fb7c86b4e4f7f378eb9d322e40e88",
+      "bytes": 26382
+    },
+    {
+      "path": "docs/backend-reuse-client.md",
+      "sha256": "17156093726dd910dd2308bd102e94a08150d9feecd79b0cc06161f29d9537a8",
+      "bytes": 10182
+    },
+    {
+      "path": "docs/registered-face-auth.md",
+      "sha256": "32f0fc4756aca0689e3633cbd6be3d0ea3e596c929cf67e7a5da0047b039eafc",
+      "bytes": 9348
+    }
+  ],
+  "test_command": [
+    "node",
+    "--test",
+    "clients/backend/client.test.mjs"
+  ],
+  "runtime_test_command": [
+    "node",
+    "--test",
+    "services/cloudflare-api/test/face-runtime.test.mjs"
+  ],
+  "tests_run_by_author": false,
+  "verification_owner": "root",
+  "native_or_preview_integration": false,
+  "transport_fixture_boundary": "SDK transport/loopback fixtures plus actual workerd/SQLiteDO/R2 handler tests with explicitly synthetic private face/PAD/injection verdicts; no live biometric, physical-device or hosted-provider acceptance.",
+  "previous_client_preimages": "clients/backend/preimages/20261013-cloudflare-anonymous-face/manifest.json",
+  "verification": {
+    "runtime_log": "verification/cloudflare-face-auth/logs/runtime-final.log",
+    "runtime_tests": 38,
+    "face_runtime_cases": 20,
+    "client_log": "verification/cloudflare-face-auth/logs/client-second.log",
+    "client_tests": 27,
+    "real_biometric_qualification": false,
+    "native_capture_keychain_integration": false,
+    "hosted_deployment": false
+  }
+}

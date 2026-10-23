@@ -1,0 +1,46 @@
+.DS_Store
+android/.gradle/
+android/local.properties
+android/**/build/
+android/verification/
+**/*.class
+ios/build/
+ios/DerivedData/
+ios/**/*.xcuserstate
+ios/**/xcuserdata/
+# Preserve local historical evidence/builds outside the canonical source commit.
+/verification/
+/deliverables/
+node_modules/
+**/node_modules/
+**/.wrangler/
+.env
+.env.*
+!.env.example
+**/.dev.vars
+**/.dev.vars.*
+!**/.dev.vars.example
+
+**/__pycache__/
+**/.pytest_cache/
+**/.ruff_cache/
+services/ml-face/.venv/
+
+# Runtime credentials and local evidence are never release source inputs.
+verification/**/private/
+verification/**/private-*/
+supabase/.temp/
+supabase/.branches/
+.release-secrets/
+
+# Never capture generated ML evaluation reports, local build outputs or signing material.
+services/ml-face/models/evaluation/production-evaluation.json*
+services/ml-face/models/evaluation/production-readiness.json*
+services/ml-face/.security-build/
+services/ml-face/build/
+services/ml-face/dist/
+**/*.jks
+**/*.keystore
+**/*.p12
+**/*.p8
+!**/.env.supabase.example

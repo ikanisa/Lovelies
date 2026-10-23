@@ -1,0 +1,77 @@
+{
+  "active_model_version": "opencv-yunet-sface-2021dec-v1",
+  "models": [
+    {
+      "version": "opencv-yunet-sface-2021dec-v1",
+      "detector": "OpenCV Zoo YuNet",
+      "recognizer": "OpenCV Zoo SFace",
+      "runtime": "opencv-dnn",
+      "runtime_acceleration": "none",
+      "future_scale_runtime": "tensorrt",
+      "embedding_dimensions": 128,
+      "checksum_sha256": "593015a70032de71159240f7fabae3059c44b9343787578ed4ebfc14bc0bf4ba",
+      "license_metadata": {
+        "name": "OpenCV Zoo YuNet/SFace model licenses",
+        "components": [
+          {
+            "name": "OpenCV Zoo YuNet",
+            "spdx": "MIT",
+            "license_url": "https://github.com/opencv/opencv_zoo/blob/main/models/face_detection_yunet/LICENSE"
+          },
+          {
+            "name": "OpenCV Zoo SFace",
+            "spdx": "Apache-2.0",
+            "license_url": "https://github.com/opencv/opencv_zoo/blob/main/models/face_recognition_sface/LICENSE"
+          }
+        ],
+        "source": "OpenCV Zoo",
+        "review_status": "source_license_verified_2026-05-25",
+        "approval_gate": "not_required"
+      },
+      "detector_path": "models/face_detection_yunet_2023mar.onnx",
+      "detector_sha256": "8f2383e4dd3cfbb4553ea8718107fc0423210dc964f9f4280604804ed2552fa4",
+      "recognizer_path": "models/face_recognition_sface_2021dec.onnx",
+      "recognizer_sha256": "0ba9fbfa01b5270c96627c4ef784da859931e02f04419c829e83484087c34e79",
+      "mobile_artifact": {
+        "path": "apps/user_flutter/assets/runtime/photo_identity_sface_2021dec_float16.tflite",
+        "runtime": "tflite_flutter",
+        "sha256": "98b4e9016f6ababc6707eaa10b76a89191aae35e1d135c3981078686e8469230",
+        "input_shape": [
+          1,
+          112,
+          112,
+          3
+        ],
+        "output_shape": [
+          1,
+          128
+        ],
+        "alignment": "opencv_sface_5_point_v1",
+        "conversion": "OpenCV Zoo SFace ONNX to TensorFlow Lite float16",
+        "license_notice": "apps/user_flutter/assets/runtime/NOTICE-opencv-zoo-sface.txt"
+      },
+      "modules": {
+        "detector": "opencv-yunet-2023mar-v1",
+        "aligner": "opencv-sface-align-crop-2021dec-v1",
+        "quality_scorer": "opencv-laplacian-brightness-quality-v1",
+        "embedding_model": "opencv-sface-2021dec-128-v1",
+        "vector_matcher": "matcher.cosine-bounded-v2",
+        "decision_engine": "decision.positive-identity-margin-v2"
+      },
+      "default_threshold": 0.42,
+      "review_margin": 0.05,
+      "notes": "The service executes the ONNX model artifacts through OpenCV FaceDetectorYN and FaceRecognizerSF using the OpenCV DNN backend. TensorRT is only a separately evaluated future scale path. No emotion, demographic, age, gender, ethnicity, or global search capability is implemented."
+    }
+  ],
+  "blocked_models": [],
+  "production_evidence": {
+    "evaluation_report_path": "models/evaluation/blocked-production-evaluation.example.json",
+    "minimum_dataset_events": 5,
+    "minimum_dataset_identities": 50,
+    "minimum_dataset_images": 500,
+    "maximum_false_positive_rate": 0.001,
+    "maximum_false_negative_rate": 0.05,
+    "required_bias_review": true,
+    "status": "monitored_pilot"
+  }
+}

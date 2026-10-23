@@ -1,0 +1,48 @@
+{
+  "schema": 1,
+  "status": "foundation-source-frozen-root-verification-pending",
+  "preimages": "verification/account-recovery-20261014/preimages/ios/manifest.json",
+  "inputs": [
+    {
+      "path": "ios/Lovelies/Native/CoreWire.swift",
+      "sha256": "bade0dbb90a141421421da3196159c9e85399455d35d84ab95ec68a0eb52f42f",
+      "bytes": 44604
+    },
+    {
+      "path": "ios/Lovelies/Native/DeviceIdentity.swift",
+      "sha256": "e6cc45d5a3673866216f5892b9546846d46dccca20d1c7f05f8b722d1610e473",
+      "bytes": 9233
+    },
+    {
+      "path": "ios/Lovelies/Native/BackendRepository.swift",
+      "sha256": "d0a365ebc63b2e608d0ffb96d6bf6cc6f99729d76b44c8703ba86197879d9412",
+      "bytes": 107559
+    },
+    {
+      "path": "ios/Lovelies/Native/LiveAppStore.swift",
+      "sha256": "28739e02f0702ad88b73368715c863b5aa28098dfb55dbad33f910116cdecb33",
+      "bytes": 36286
+    },
+    {
+      "path": "ios/Lovelies/Native/LiveOnboardingAndGallery.swift",
+      "sha256": "a9ed510ccbe381b747587dc38076bc8627c6dbcb084ebaa11dad5deb2383774e",
+      "bytes": 22442
+    },
+    {
+      "path": "ios/Lovelies/Native/LiveSharingAndSettings.swift",
+      "sha256": "d04c4c3239d4b536c0eded4c30294326abddbc16c7cb08d8f125ed2e97d7ec78",
+      "bytes": 41883
+    },
+    {
+      "path": "ios/Tests/NativeAccountRecoveryTests.swift",
+      "sha256": "75b2c7bf6ddf879e8510ec457fbbd9b6a8da5e86d538b712669cab8df6f3c0c9",
+      "bytes": 39735
+    }
+  ],
+  "remaining_writable": [
+    "ios/Tests/NativeAccountRecoveryHTTPJourney.swift",
+    "ios/Tests/native-account-recovery-input-manifest.json"
+  ],
+  "worker_checks": "Static source/wire review only; no compile/build/test/HTTP/model runner",
+  "root_command": "swiftc ios/Lovelies/Native/CoreWire.swift ios/Lovelies/Native/DeviceIdentity.swift ios/Lovelies/Native/BackendRepository.swift ios/Tests/NativeAccountRecoveryTests.swift -o /tmp/lovelies-ios-account-recovery-tests && /tmp/lovelies-ios-account-recovery-tests"
+}

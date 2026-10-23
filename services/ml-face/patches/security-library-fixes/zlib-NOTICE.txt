@@ -1,0 +1,11 @@
+Lovelies local zlib source build
+
+Base: Debian zlib 1:1.3.dfsg+really1.3.1-1, corresponding upstream 1.3.1.
+Modification: exact upstream commit ba829a458576d1ff0f26fc7230c6de816d1f6a77
+adds negative-length validation to the CRC combine APIs (CVE-2026-27171).
+The source remains identified as a modified 1.3.1 build. It is not represented
+as an official Debian package or unmodified upstream release.
+
+The package contains the original license, Debian copyright, exact source
+archives, descriptor, patch, recipe, manifest and test evidence. The original
+zlib license applies. No blanket absence of vulnerabilities is claimed.

@@ -1,0 +1,166 @@
+import { ApiError, digest, stable, type Actor, type AppContext } from './types';
+import { assertEnrollmentActor } from './auth';
+
+export type PreparedOperation = Readonly<{
+  key: string; action: string; source: string; hash: string; payloadJson: string;
+}>;
+
+/** Anonymous credentials can enroll, but do not authorize private data mutation
+ * or release. The durable row is checked in addition to the signed credential. */
+export function assertRegisteredActor(ctx: AppContext, actor: Actor): void {
+  ctx.assertActor(actor);
+  const account = ctx.db.one<{ identity_state: string; disabled_at: number | null }>(
+    'SELECT identity_state,disabled_at FROM accounts WHERE id=?', actor.accountId,
+  );
+  if (actor.authMethod !== 'registered_face' || account?.identity_state !== 'registered_face' || account.disabled_at !== null) {
+    throw new ApiError(403, 'registered_face_required');
+  }
+}
+
+/** Register before a private R2 PUT. Erasure cannot finish while a writer is
+ * unresolved; current-session guards still control metadata publication. */
+function mediaWrite(ctx: AppContext, actor: Actor, bucket: 'PHOTOS' | 'QUARANTINE' | 'PRIVACY_EXPORTS', objectKey: string, enrollment: boolean): string {
+  return ctx.db.transaction(() => {
+    if (enrollment) assertEnrollmentActor(actor, ctx); else assertRegisteredActor(ctx, actor);
+    const account = ctx.db.one<{ disabled_at: number | null }>('SELECT disabled_at FROM accounts WHERE id=?', actor.accountId);
+    if (!account || account.disabled_at !== null) throw new ApiError(401, 'account_disabled');
+    const id = crypto.randomUUID();
+    ctx.db.run('INSERT INTO media_write_intents(id,account_id,bucket,object_key,status,created_at) VALUES(?,?,?,?,?,?)',
+      id, actor.accountId, bucket, objectKey, 'pending', ctx.now());
+    return id;
+  });
+}
+
+export function beginMediaWrite(ctx: AppContext, actor: Actor, bucket: 'PHOTOS' | 'QUARANTINE' | 'PRIVACY_EXPORTS', objectKey: string): string {
+  return mediaWrite(ctx, actor, bucket, objectKey, false);
+}
+
+/** Weaker admission is confined to the enrollment module's private captures
+ * and derived templates; it does not authorize gallery/share/privacy reads. */
+export function beginEnrollmentMediaWrite(ctx: AppContext, actor: Actor, bucket: 'PHOTOS' | 'QUARANTINE', objectKey: string): string {
+  return mediaWrite(ctx, actor, bucket, objectKey, true);
+}
+
+/** Face login has a signed, bound challenge before it has a session. The face
+ * module must also check exact device/profile/consent and signature. */
+export function beginFaceChallengeMediaWrite(ctx: AppContext, challengeId: string, bucket: 'PHOTOS' | 'QUARANTINE', objectKey: string, guard?: () => void): string {
+  return ctx.db.transaction(() => {
+    const challenge = ctx.db.one<{ account_id: string; auth_epoch: number; status: string; used_at: number | null; expires_at: number }>(
+      'SELECT account_id,auth_epoch,status,used_at,expires_at FROM auth_challenges WHERE id=?', challengeId,
+    );
+    const account = challenge && ctx.db.one<{ auth_epoch: number; disabled_at: number | null }>('SELECT auth_epoch,disabled_at FROM accounts WHERE id=?', challenge.account_id);
+    if (!challenge || !account || account.disabled_at !== null || challenge.auth_epoch !== account.auth_epoch ||
+        !['pending','verifying'].includes(challenge.status) || challenge.used_at !== null || challenge.expires_at <= ctx.now()) {
+      throw new ApiError(401, 'face_challenge_unavailable');
+    }
+    if (guard) {
+      if (guard.constructor.name === 'AsyncFunction') throw new ApiError(500,'async_operation_forbidden');
+      const guarded = guard() as unknown;
+      if (guarded && typeof (guarded as {then?:unknown}).then === 'function') throw new ApiError(500,'async_operation_forbidden');
+    }
+    const id = crypto.randomUUID();
+    ctx.db.run('INSERT INTO media_write_intents(id,account_id,bucket,object_key,status,created_at) VALUES(?,?,?,?,?,?)',
+      id, challenge.account_id, bucket, objectKey, 'pending', ctx.now());
+    return id;
+  });
+}
+
+/** Call only after the actual PUT promise settles, including rejection. This
+ * durable completion marker does not grant access or bypass revocation. */
+export function settleMediaWrite(ctx: AppContext, id: string): void {
+  ctx.db.transaction(() => ctx.db.run("UPDATE media_write_intents SET status='settled',settled_at=? WHERE id=?", ctx.now(), id));
+}
+
+export async function prepareOperation(
+  action: string,
+  payload: Record<string, unknown>,
+  source = 'personal',
+): Promise<PreparedOperation> {
+  const key = payload.operation_key;
+  if (typeof key !== 'string' || !/^[A-Za-z0-9._:-]{16,128}$/.test(key)) {
+    throw new ApiError(400, 'operation_key_required');
+  }
+  if (!action || action.length > 128 || !/^[a-zA-Z0-9._:-]{1,128}$/.test(source)) {
+    throw new ApiError(400, 'operation_scope_invalid');
+  }
+  const payloadJson = stable(payload);
+  if (new TextEncoder().encode(payloadJson).byteLength > 1024 * 1024) throw new ApiError(413, 'request_too_large');
+  const hash = await digest(stable({ action, source, payload }));
+  return Object.freeze({ key, action, source, hash, payloadJson });
+}
+
+function relatedSubjects(value: unknown, subjects: Set<string>, parent = ''): void {
+  if (Array.isArray(value)) {
+    for (const item of value) {
+      if (typeof item === 'string' && ['selected_recipient_ids','recipient_ids'].includes(parent)) subjects.add(item.toLowerCase());
+      else relatedSubjects(item, subjects, parent);
+    }
+  } else if (value && typeof value === 'object') {
+    for (const [key, item] of Object.entries(value)) {
+      if (typeof item === 'string' && (['recipient_id','sender_id','owner_id','subject_user_id','subject_id','account_id'].includes(key) || key === 'id' && parent === 'recipients')) subjects.add(item.toLowerCase());
+      else relatedSubjects(item, subjects, key);
+    }
+  }
+}
+
+/** Uses the same durable key after ambiguity. The callback and all authorizing
+ * reads/writes are synchronous inside one authority transaction. */
+function executeAuthorizedOperation<T extends Record<string, unknown>>(
+  ctx: AppContext,
+  actor: Actor,
+  intent: PreparedOperation,
+  callback: () => T,
+  subjectIds: readonly string[],
+  assertAuthority: () => void,
+): T {
+  return ctx.db.transaction(() => {
+    assertAuthority();
+    const previous = ctx.db.one<{ action: string; payload_hash: string; payload_json: string; response_json: string }>(
+      'SELECT action,payload_hash,payload_json,response_json FROM operations WHERE actor_id=? AND source=? AND operation_key=?',
+      actor.accountId, intent.source, intent.key,
+    );
+    if (previous) {
+      if (previous.action !== intent.action || previous.payload_hash !== intent.hash || previous.payload_json !== intent.payloadJson) {
+        throw new ApiError(409, 'operation_key_conflict');
+      }
+      assertAuthority();
+      return JSON.parse(previous.response_json) as T;
+    }
+    if (callback.constructor.name === 'AsyncFunction') throw new ApiError(500, 'async_operation_forbidden');
+    const result = callback();
+    if (!result || typeof result !== 'object' || Array.isArray(result) || typeof (result as { then?: unknown }).then === 'function') {
+      throw new ApiError(500, 'invalid_operation_result');
+    }
+    assertAuthority();
+    const responseJson = stable(result);
+    if (new TextEncoder().encode(intent.payloadJson + responseJson).byteLength > 1900000) throw new ApiError(500,'operation_result_too_large');
+    ctx.db.run('INSERT INTO operations(actor_id,source,operation_key,action,payload_hash,payload_json,response_json,created_at) VALUES(?,?,?,?,?,?,?,?)',
+      actor.accountId, intent.source, intent.key, intent.action, intent.hash, intent.payloadJson, responseJson, ctx.now());
+    const subjects = new Set([actor.accountId, ...subjectIds]);
+    relatedSubjects(JSON.parse(intent.payloadJson), subjects);
+    relatedSubjects(result, subjects);
+    for (const subject of subjects) {
+      if (ctx.db.one('SELECT id FROM accounts WHERE id=?', subject)) {
+        ctx.db.run('INSERT INTO operation_subjects(actor_id,source,operation_key,subject_id) VALUES(?,?,?,?)',
+          actor.accountId, intent.source, intent.key, subject);
+      }
+    }
+    return JSON.parse(responseJson) as T;
+  });
+}
+
+/** Protected product operations retain registered-face authority. */
+export function executeOperation<T extends Record<string, unknown>>(
+  ctx: AppContext, actor: Actor, intent: PreparedOperation, callback: () => T,
+  subjectIds: readonly string[] = [],
+): T {
+  return executeAuthorizedOperation(ctx, actor, intent, callback, subjectIds, () => assertRegisteredActor(ctx, actor));
+}
+
+/** Anonymous admission is confined to deleting the actor's own account. */
+export function executeAccountDeletionOperation<T extends Record<string, unknown>>(
+  ctx: AppContext, actor: Actor, intent: PreparedOperation, callback: () => T,
+): T {
+  if (intent.action !== 'privacy.request.delete' || intent.source !== 'privacy') throw new ApiError(400, 'operation_scope_invalid');
+  return executeAuthorizedOperation(ctx, actor, intent, callback, [], () => assertEnrollmentActor(actor, ctx));
+}

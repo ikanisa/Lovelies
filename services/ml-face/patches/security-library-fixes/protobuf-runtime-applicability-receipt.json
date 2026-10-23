@@ -1,0 +1,45 @@
+{
+  "schema": "lovelies-protobuf-oversize-runtime-applicability-v1",
+  "advisory": "CVE-2015-5237",
+  "primary_issue": "https://github.com/protocolbuffers/protobuf/issues/760",
+  "result": "PASS_NARROW_SERIALIZATION_SCOPE",
+  "runtime_library": {
+    "path": "/usr/lib/x86_64-linux-gnu/libprotobuf.so.32.0.12",
+    "sha256": "993fe6c3aa495bf8efac8a0b73f14a1a12a4d028816eb4f55c704ddbf1403e3a",
+    "bytes": 3524496,
+    "package": "libprotobuf32t64",
+    "version": "3.21.12-11+deb13u1"
+  },
+  "probe": {
+    "source_sha256": "fd2a2314b4f52ca1522657bef0c80e20a30877fca9e94fceb705ea65a2be7251",
+    "binary_sha256": "ce24bd2b278c809c863b6b4d7f9beb9f4716416bf290196d0b234cab7046bf4c",
+    "result_sha256": "3dd1342f3c5512d3f5867be9069e11c8637494a9e8a324943bfe9edb4abecbc9",
+    "zero_size_control": true,
+    "synthetic_message_sizes": [
+      2147483648,
+      4294967297
+    ],
+    "checked_methods": [
+      "AppendPartialToString",
+      "SerializeToString",
+      "SerializePartialToString",
+      "SerializeToArray",
+      "SerializePartialToArray"
+    ],
+    "oversize_result": false,
+    "serializer_reached": false,
+    "payload_allocated": false,
+    "resource_bound": "RLIMIT_DATA512MiB; timeout5seconds"
+  },
+  "reuse_condition": "Final runtime library bytes must match this exact sha256; retained cache-only APIs are not covered by this checked-entrypoint probe",
+  "excluded_methods": [
+    "SerializeWithCachedSizes",
+    "SerializeWithCachedSizesToArray",
+    "direct generated _InternalSerialize"
+  ],
+  "limitations": [
+    "Synthetic test-only MessageLite validates central checked serialization entrypoints, not every generated serializer",
+    "Caller-managed cached serialization requires valid previously computed sizes and sufficient output buffer; no blanket whole-library unaffected claim",
+    "No protobuf source/library modification or rebuild was performed"
+  ]
+}

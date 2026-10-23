@@ -1,0 +1,49 @@
+{
+  "schema": 1,
+  "status": "source-frozen-awaiting-root-validation",
+  "frozen_at": "2026-10-13T21:52:22.191988+00:00",
+  "observed_failure": {
+    "path": "verification/docker-native-journey-20261013/ios-host-live-http-attempt-1.json",
+    "sha256": "f8c1e04e85b9aee5fc383ed83b039689550d1ffc964824337a55f0e4bcb8864b",
+    "stage": "gallery-and-snapshot",
+    "passed_stages": 7,
+    "passed_assertions": 43
+  },
+  "cause": "Current Worker returns explicit personal source; client required null for personal snapshot/preview/outcome",
+  "fix": "Exact explicit source equality for personal and professional; all missing/wrong-source, scope, current-session and approved-pair guards retained",
+  "inputs": [
+    {
+      "path": "ios/Lovelies/Native/CoreWire.swift",
+      "sha256": "501cddc863124cb9706825211a3cb8f6586a9ec4fd01c50515c80b4cef0d9000",
+      "bytes": 17078
+    },
+    {
+      "path": "ios/Lovelies/Native/BackendRepository.swift",
+      "sha256": "1df365255e903c34b5284841ad9a7c47b7ebc54805b61e1fd097d255c9be7383",
+      "bytes": 31339
+    },
+    {
+      "path": "ios/Tests/NativeProtocolTests.swift",
+      "sha256": "62d49665bbf598e4d0ca9a34931cec707e16b05f3066889a7dce6af75286c644",
+      "bytes": 10428
+    },
+    {
+      "path": "ios/Tests/NativeConnectionTests.swift",
+      "sha256": "a033e643248761ce1c9b1d87ee9fc3a0d47ac2b5e02249af2f6ba1748cc4d346",
+      "bytes": 19396
+    },
+    {
+      "path": "ios/Tests/native-live-http-input-manifest.json",
+      "sha256": "42b6dc99e8034420a8d97cf6633f43e5865fa72573e94aadc74aeb050e4e11b8",
+      "bytes": 7535
+    },
+    {
+      "path": "ios/Tests/native-source-manifest.json",
+      "sha256": "af1897b29daa704fcfd90fd127e26737b86ca6ef36d28cc990b58d28fa8ddc21",
+      "bytes": 5440
+    }
+  ],
+  "no_shared_runs_by_worker": true,
+  "provider_note": "Actual failed run used real host YuNet/SFace; Docker build failure is preserved separately by Root; no fake verifier success",
+  "preimages": "verification/docker-native-journey-20261013/preimages/ios-explicit-personal-source-attempt-1/preimages.json"
+}

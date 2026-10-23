@@ -1,0 +1,48 @@
+HEIF runtime packaging notice
+30 September 2026
+
+The ML service decodes contributed HEIC/HEIF originals. It does not require
+HEIC/HEIF encoding. The Dockerfile builds the locked pillow-heif source
+distribution against shared Debian libheif libraries, instead of installing
+the upstream wheel that bundles native libraries and a GPL x265 encoder.
+
+pillow-heif adapter
+  Version: 1.5.0
+  Source distribution SHA-256:
+  16b11a37b762ff42da2d36527bb5cb14bd9194c24c389ee911155d6e23c53065
+  Source URL and hashes are retained in /app/uv.lock.
+  The adapter's upstream license/notice files remain in its installed metadata.
+
+Shared native decoder packages
+  libheif1 and libheif-plugin-libde265: 1.23.4-1~deb13u1
+  libde265-0: 1.0.15-1+deb13u2+lovelies1 (Lovelies modified build)
+  Includes the original Debian security patch series and upstream fix
+  f8d324914e43d92af23614f22959cf9eee7bf9ea for CVE-2026-88373.
+  Original sources, Debian patches, the exact upstream fix and build script
+  are retained in /usr/share/doc/libde265-0/source. The modification notice
+  and unchanged exported decoder API inventory are in that same doc folder.
+  This custom package is not an official Debian security release.
+  Required AV1 decoder dependencies are installed by Debian package metadata.
+  --no-install-recommends excludes optional encoder plugins, including x265.
+  Complete installed package copyright/license files are retained under
+  /usr/share/doc/<package>/copyright and /usr/share/common-licenses.
+
+The adapter source includes LICENSES_bundled.txt describing the upstream
+binary wheels that bundle native encoder libraries. Preserve that upstream
+file. Use the final image inventory and linkage evidence to identify the
+actual shared native libraries in this source-built container.
+
+The exact libheif original source and Debian packaging archives, with their
+descriptor and checksum manifest, accompany this image under
+/app/licenses/sources. The full original libheif COPYING and Debian copyright
+records are also retained under /app/licenses. The decoder source payload is
+readable by the service's UID 10001.
+
+The shared-library replacement route and build/installation instructions are
+documented in /app/licenses/RELINKING.md. Preserve these materials, licence
+texts, source access and recipients' ability to modify or replace LGPL
+components when distributing an image. The complete image's Python and Debian
+notices are inventoried by scripts/validate-ml-runtime-licenses.py. Removing
+x265 does not make the whole image permissively licensed. Publication of a
+recipient-facing source channel and independent legal clearance are not
+established by this local packaging work.

@@ -1,0 +1,9 @@
+project_id = "lovelies"
+
+[functions.lovelies-api]
+# App-signed anonymous/registered-face JWTs are verified by the backend against
+# current PostgreSQL authority on every protected operation. Supabase Auth JWT
+# verification cannot validate this custom capture/consent/device contract.
+verify_jwt = false
+entrypoint = "./functions/lovelies-api/index.ts"
+import_map = "./functions/lovelies-api/deno.json"

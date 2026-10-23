@@ -1,0 +1,50 @@
+{
+  "schema": "lovelies-libpng-backport-manifest-v1",
+  "base_source_package": "libpng1.6",
+  "base_debian_version": "1.6.48-1+deb13u5",
+  "local_binary_package": "libpng16-16t64",
+  "local_binary_version": "1.6.48-1+deb13u5+lovelies1",
+  "aliases": [
+    "CVE-2026-46675",
+    "GHSA-qvg3-h654-xq3j"
+  ],
+  "upstream_advisory_url": "https://github.com/pnggroup/libpng/security/advisories/GHSA-qvg3-h654-xq3j",
+  "upstream_fix_commit": "aa77ef38c17ab2fc1b41bec09fb973c6a386641d",
+  "upstream_fix_url": "https://github.com/pnggroup/libpng/commit/aa77ef38c17ab2fc1b41bec09fb973c6a386641d",
+  "upstream_patch": {
+    "file": "libpng-CVE-2026-46675-upstream.patch",
+    "sha256": "dded9c3cd0106f078a73559abaa713dd8712c9c12c0335d92fcf6ce9258ad7a4",
+    "bytes": 4469
+  },
+  "adaptation": "None. Complete upstream patch applies unchanged to exact Debian u5-patched pngrutil.c with zero context fuzz.",
+  "modified_file": {
+    "path": "pngrutil.c",
+    "debian_original_sha256": "3b42bc9881042ecd853cefae8e756888f0ccddf4df096a289a64dcde28f3a135",
+    "patched_sha256": "d776c2fb7eb9290c5a346c7ad27f48ef6dadeb5d5186f90e2213eae1ca015bc4"
+  },
+  "sources": [
+    {
+      "file": "libpng1.6_1.6.48.orig.tar.gz",
+      "url": "https://deb.debian.org/debian-security/pool/updates/main/libp/libpng1.6/libpng1.6_1.6.48.orig.tar.gz",
+      "sha256": "b17e99026055727e8cba99160c3a9a7f9af788e9f786daeadded5a42243f1dd0",
+      "bytes": 1572923
+    },
+    {
+      "file": "libpng1.6_1.6.48-1+deb13u5.debian.tar.xz",
+      "url": "https://deb.debian.org/debian-security/pool/updates/main/libp/libpng1.6/libpng1.6_1.6.48-1+deb13u5.debian.tar.xz",
+      "sha256": "b38d5929b9a6139f2ce02a0e831d0f3f5365410b050dc429ea079a73253fe97a",
+      "bytes": 52468
+    },
+    {
+      "file": "libpng1.6_1.6.48-1+deb13u5.dsc",
+      "url": "https://deb.debian.org/debian-security/pool/updates/main/libp/libpng1.6/libpng1.6_1.6.48-1+deb13u5.dsc",
+      "sha256": "746ec351ac044becb16725b903aee2c53815da9f89630767b6edbb317a50f98e",
+      "bytes": 2305
+    }
+  ],
+  "expected_soname": "libpng16.so.16",
+  "runtime_document_directory": "/usr/share/doc/libpng16-16t64",
+  "runtime_receipt": "/usr/share/doc/libpng16-16t64/lovelies-libpng-backport-receipt.json",
+  "verification_scope": "Exact source/hash and zero-fuzz patch application, unchanged shared ABI/SONAME, ELF hardening and normal upstream CTest. Security exploit reproduction was not run. Final image bytes and architecture require independent artifact binding.",
+  "security_reproduction_status": "not_run"
+}

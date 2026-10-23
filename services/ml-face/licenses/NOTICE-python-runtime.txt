@@ -1,0 +1,64 @@
+Python runtime dependency notice — 30 September 2026
+
+This service uses the following locked Linux runtime distribution versions.
+The listed licence names are publisher metadata declarations. Retain each
+distribution's complete original licence/notice files in installed metadata;
+the names below do not replace them or conclude the licence of every bundled
+native file. The exact image-bound verifier inventories their paths and hashes.
+
+annotated-doc 0.0.4          MIT
+annotated-types 0.7.0        MIT
+anyio 4.14.2                MIT
+click 8.4.1                 BSD-3-Clause
+fastapi 0.136.3             MIT
+h11 0.16.0                  MIT
+idna 3.16                   BSD-3-Clause
+numpy 2.4.6                 BSD-3-Clause AND 0BSD AND MIT AND Zlib AND CC0-1.0
+opencv-python-headless
+  4.13.0.92                 Apache-2.0 (OpenCV); MIT build scripts;
+                            separate complete third-party notices apply
+pillow 12.3.0               MIT-CMU; separate bundled codec notices apply
+pillow-heif 1.5.0           BSD-3-Clause source-built adapter;
+                            LGPL-3.0-or-later shared decoders
+pydantic 2.13.4             MIT
+pydantic-core 2.46.4        MIT
+starlette 1.7.0             BSD-3-Clause
+typing-extensions 4.15.0    PSF-2.0
+typing-inspection 0.4.2     MIT
+uvicorn 0.48.0              BSD-3-Clause
+
+NumPy's Linux wheels include shared OpenBLAS/LAPACK under their BSD
+terms and a GCC libgfortran runtime with GPL-3.0-or-later and GCC-exception-3.1.
+Its complete installed licence includes a libquadmath LGPL notice for wheel
+variants that carry that library. Use the final architecture's native payload
+inventory to identify its presence; the common notice alone does not establish
+which libraries are actually present in a particular wheel.
+
+Pillow's complete wheel licence contains individual codec, font and compression
+library attributions, including the chosen FreeType terms and XZ/liblzma
+licensing record. Preserve the complete supplied text and the actual binary
+inventory, rather than assigning every component the Pillow MIT-CMU label.
+
+The source-built pillow-heif adapter retains upstream LICENSES_bundled.txt,
+which describes wheels containing x265 and therefore says GPLv2. The revised
+container does not install those wheels or encoder libraries. Its actual
+dynamic linkage, source archives and LGPL decoder notices are recorded in the
+image-bound report and NOTICE-heif-runtime.txt.
+
+Supplemental original Rust crate notices for Pydantic-core are under
+rust-source-notices. The same folder retains previously reviewed watchfiles,
+uvloop and httptools source notices, including vendored libuv and HTTP-parser
+notices. Those three Python distributions are absent from the final runtime;
+their original notices remain as historical source evidence. The manifest binds
+all files and source archives. Its Cargo.lock candidate set includes build,
+test, unused-distribution and alternative-platform crates; it is a conservative
+notice superset, not an assertion that every crate is compiled into the image.
+
+The final 17-distribution runtime uses Uvicorn's asyncio/h11 HTTP stack with
+WebSocket handling disabled. It excludes the standard extras: httptools,
+uvloop, watchfiles, websockets, PyYAML and python-dotenv.
+
+SciPy and developer tools are outside the production runtime set. CPython's
+complete licence is retained in the installed standard library. The Lovelies
+application is company-owned; this notice does not assign it an open-source
+licence or permit application redistribution.

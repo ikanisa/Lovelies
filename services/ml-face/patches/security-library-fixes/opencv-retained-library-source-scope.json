@@ -1,0 +1,981 @@
+{
+  "schema": "lovelies-opencv-retained-library-source-scope-v1",
+  "source_archive": "outputs/ml-license-distribution-kit-20260930/custom-native-sources/opencv/opencv.tar.gz",
+  "archive_sha256": "4f2a381ce3377e6f22d0718fe7101e97a21968a21c81f0356f2787bb21024dc4",
+  "source_files_reviewed": 4213,
+  "pbds_matches": [],
+  "protobuf_serialization_matches": [
+    {
+      "path": "opencv-b4c5ec4042f097e2a5b386b9d413ec7333d0a184/modules/dnn/misc/caffe/opencv-caffe.pb.cc",
+      "sha256": "5da6964e1ecb2cd1269bc1b462cbd7dfc069209a664ff60f83530be18b09f9ff",
+      "matches": [
+        {
+          "line": 4154,
+          "text": "size_t BlobShape::ByteSizeLong() const {"
+        },
+        {
+          "line": 4583,
+          "text": "size_t BlobProto::ByteSizeLong() const {"
+        },
+        {
+          "line": 4897,
+          "text": "size_t BlobProtoVector::ByteSizeLong() const {"
+        },
+        {
+          "line": 5083,
+          "text": "size_t PermuteParameter::ByteSizeLong() const {"
+        },
+        {
+          "line": 5353,
+          "text": "size_t NormalizeBBoxParameter::ByteSizeLong() const {"
+        },
+        {
+          "line": 5938,
+          "text": "size_t PriorBoxParameter::ByteSizeLong() const {"
+        },
+        {
+          "line": 6533,
+          "text": "size_t DetectionOutputParameter::ByteSizeLong() const {"
+        },
+        {
+          "line": 6969,
+          "text": "size_t Datum::ByteSizeLong() const {"
+        },
+        {
+          "line": 7395,
+          "text": "size_t FillerParameter::ByteSizeLong() const {"
+        },
+        {
+          "line": 7895,
+          "text": "size_t NetParameter::ByteSizeLong() const {"
+        },
+        {
+          "line": 9156,
+          "text": "size_t SolverParameter::ByteSizeLong() const {"
+        },
+        {
+          "line": 9874,
+          "text": "size_t SolverState::ByteSizeLong() const {"
+        },
+        {
+          "line": 10169,
+          "text": "size_t NetState::ByteSizeLong() const {"
+        },
+        {
+          "line": 10496,
+          "text": "size_t NetStateRule::ByteSizeLong() const {"
+        },
+        {
+          "line": 10825,
+          "text": "size_t ParamSpec::ByteSizeLong() const {"
+        },
+        {
+          "line": 13206,
+          "text": "size_t LayerParameter::ByteSizeLong() const {"
+        },
+        {
+          "line": 14237,
+          "text": "size_t TransformationParameter::ByteSizeLong() const {"
+        },
+        {
+          "line": 14552,
+          "text": "size_t LossParameter::ByteSizeLong() const {"
+        },
+        {
+          "line": 14816,
+          "text": "size_t AccuracyParameter::ByteSizeLong() const {"
+        },
+        {
+          "line": 15078,
+          "text": "size_t ArgMaxParameter::ByteSizeLong() const {"
+        },
+        {
+          "line": 15321,
+          "text": "size_t ConcatParameter::ByteSizeLong() const {"
+        },
+        {
+          "line": 15594,
+          "text": "size_t BatchNormParameter::ByteSizeLong() const {"
+        },
+        {
+          "line": 15881,
+          "text": "size_t BiasParameter::ByteSizeLong() const {"
+        },
+        {
+          "line": 16122,
+          "text": "size_t ContrastiveLossParameter::ByteSizeLong() const {"
+        },
+        {
+          "line": 16721,
+          "text": "size_t ConvolutionParameter::ByteSizeLong() const {"
+        },
+        {
+          "line": 17110,
+          "text": "size_t CropParameter::ByteSizeLong() const {"
+        },
+        {
+          "line": 17542,
+          "text": "size_t DataParameter::ByteSizeLong() const {"
+        },
+        {
+          "line": 17884,
+          "text": "size_t NonMaximumSuppressionParameter::ByteSizeLong() const {"
+        },
+        {
+          "line": 18306,
+          "text": "size_t SaveOutputParameter::ByteSizeLong() const {"
+        },
+        {
+          "line": 18604,
+          "text": "size_t DropoutParameter::ByteSizeLong() const {"
+        },
+        {
+          "line": 18930,
+          "text": "size_t DummyDataParameter::ByteSizeLong() const {"
+        },
+        {
+          "line": 19226,
+          "text": "size_t EltwiseParameter::ByteSizeLong() const {"
+        },
+        {
+          "line": 19443,
+          "text": "size_t ELUParameter::ByteSizeLong() const {"
+        },
+        {
+          "line": 19751,
+          "text": "size_t EmbedParameter::ByteSizeLong() const {"
+        },
+        {
+          "line": 20034,
+          "text": "size_t ExpParameter::ByteSizeLong() const {"
+        },
+        {
+          "line": 20273,
+          "text": "size_t FlattenParameter::ByteSizeLong() const {"
+        },
+        {
+          "line": 20547,
+          "text": "size_t HDF5DataParameter::ByteSizeLong() const {"
+        },
+        {
+          "line": 20794,
+          "text": "size_t HDF5OutputParameter::ByteSizeLong() const {"
+        },
+        {
+          "line": 20997,
+          "text": "size_t HingeLossParameter::ByteSizeLong() const {"
+        },
+        {
+          "line": 21476,
+          "text": "size_t ImageDataParameter::ByteSizeLong() const {"
+        },
+        {
+          "line": 21817,
+          "text": "size_t InfogainLossParameter::ByteSizeLong() const {"
+        },
+        {
+          "line": 22153,
+          "text": "size_t InnerProductParameter::ByteSizeLong() const {"
+        },
+        {
+          "line": 22397,
+          "text": "size_t InputParameter::ByteSizeLong() const {"
+        },
+        {
+          "line": 22630,
+          "text": "size_t LogParameter::ByteSizeLong() const {"
+        },
+        {
+          "line": 22962,
+          "text": "size_t LRNParameter::ByteSizeLong() const {"
+        },
+        {
+          "line": 23273,
+          "text": "size_t MemoryDataParameter::ByteSizeLong() const {"
+        },
+        {
+          "line": 23543,
+          "text": "size_t MVNParameter::ByteSizeLong() const {"
+        },
+        {
+          "line": 23772,
+          "text": "size_t ParameterParameter::ByteSizeLong() const {"
+        },
+        {
+          "line": 24209,
+          "text": "size_t PoolingParameter::ByteSizeLong() const {"
+        },
+        {
+          "line": 24560,
+          "text": "size_t PowerParameter::ByteSizeLong() const {"
+        },
+        {
+          "line": 24900,
+          "text": "size_t PythonParameter::ByteSizeLong() const {"
+        },
+        {
+          "line": 25259,
+          "text": "size_t RecurrentParameter::ByteSizeLong() const {"
+        },
+        {
+          "line": 25546,
+          "text": "size_t ReductionParameter::ByteSizeLong() const {"
+        },
+        {
+          "line": 25794,
+          "text": "size_t ReLUParameter::ByteSizeLong() const {"
+        },
+        {
+          "line": 26066,
+          "text": "size_t ReshapeParameter::ByteSizeLong() const {"
+        },
+        {
+          "line": 26404,
+          "text": "size_t ScaleParameter::ByteSizeLong() const {"
+        },
+        {
+          "line": 26648,
+          "text": "size_t SigmoidParameter::ByteSizeLong() const {"
+        },
+        {
+          "line": 26889,
+          "text": "size_t SliceParameter::ByteSizeLong() const {"
+        },
+        {
+          "line": 27135,
+          "text": "size_t SoftmaxParameter::ByteSizeLong() const {"
+        },
+        {
+          "line": 27346,
+          "text": "size_t TanHParameter::ByteSizeLong() const {"
+        },
+        {
+          "line": 27562,
+          "text": "size_t TileParameter::ByteSizeLong() const {"
+        },
+        {
+          "line": 27767,
+          "text": "size_t ThresholdParameter::ByteSizeLong() const {"
+        },
+        {
+          "line": 28283,
+          "text": "size_t WindowDataParameter::ByteSizeLong() const {"
+        },
+        {
+          "line": 28675,
+          "text": "size_t SPPParameter::ByteSizeLong() const {"
+        },
+        {
+          "line": 30274,
+          "text": "size_t V1LayerParameter::ByteSizeLong() const {"
+        },
+        {
+          "line": 31815,
+          "text": "size_t V0LayerParameter::ByteSizeLong() const {"
+        },
+        {
+          "line": 32454,
+          "text": "size_t PReLUParameter::ByteSizeLong() const {"
+        },
+        {
+          "line": 32801,
+          "text": "size_t NormalizedBBox::ByteSizeLong() const {"
+        },
+        {
+          "line": 33106,
+          "text": "size_t ROIPoolingParameter::ByteSizeLong() const {"
+        },
+        {
+          "line": 33479,
+          "text": "size_t ProposalParameter::ByteSizeLong() const {"
+        },
+        {
+          "line": 33812,
+          "text": "size_t PSROIPoolingParameter::ByteSizeLong() const {"
+        }
+      ]
+    },
+    {
+      "path": "opencv-b4c5ec4042f097e2a5b386b9d413ec7333d0a184/modules/dnn/misc/caffe/opencv-caffe.pb.h",
+      "sha256": "53f6bbfc73a5dc6165a005c2141b2f208101676e047e6011f043a9928c5b3be2",
+      "matches": [
+        {
+          "line": 1126,
+          "text": "  size_t ByteSizeLong() const final;"
+        },
+        {
+          "line": 1293,
+          "text": "  size_t ByteSizeLong() const final;"
+        },
+        {
+          "line": 1647,
+          "text": "  size_t ByteSizeLong() const final;"
+        },
+        {
+          "line": 1809,
+          "text": "  size_t ByteSizeLong() const final;"
+        },
+        {
+          "line": 1975,
+          "text": "  size_t ByteSizeLong() const final;"
+        },
+        {
+          "line": 2183,
+          "text": "  size_t ByteSizeLong() const final;"
+        },
+        {
+          "line": 2683,
+          "text": "  size_t ByteSizeLong() const final;"
+        },
+        {
+          "line": 3001,
+          "text": "  size_t ByteSizeLong() const final;"
+        },
+        {
+          "line": 3263,
+          "text": "  size_t ByteSizeLong() const final;"
+        },
+        {
+          "line": 3564,
+          "text": "  size_t ByteSizeLong() const final;"
+        },
+        {
+          "line": 3887,
+          "text": "  size_t ByteSizeLong() const final;"
+        },
+        {
+          "line": 4814,
+          "text": "  size_t ByteSizeLong() const final;"
+        },
+        {
+          "line": 5027,
+          "text": "  size_t ByteSizeLong() const final;"
+        },
+        {
+          "line": 5226,
+          "text": "  size_t ByteSizeLong() const final;"
+        },
+        {
+          "line": 5466,
+          "text": "  size_t ByteSizeLong() const final;"
+        },
+        {
+          "line": 5704,
+          "text": "  size_t ByteSizeLong() const final;"
+        },
+        {
+          "line": 7162,
+          "text": "  size_t ByteSizeLong() const final;"
+        },
+        {
+          "line": 7424,
+          "text": "  size_t ByteSizeLong() const final;"
+        },
+        {
+          "line": 7646,
+          "text": "  size_t ByteSizeLong() const final;"
+        },
+        {
+          "line": 7834,
+          "text": "  size_t ByteSizeLong() const final;"
+        },
+        {
+          "line": 8022,
+          "text": "  size_t ByteSizeLong() const final;"
+        },
+        {
+          "line": 8195,
+          "text": "  size_t ByteSizeLong() const final;"
+        },
+        {
+          "line": 8398,
+          "text": "  size_t ByteSizeLong() const final;"
+        },
+        {
+          "line": 8591,
+          "text": "  size_t ByteSizeLong() const final;"
+        },
+        {
+          "line": 8764,
+          "text": "  size_t ByteSizeLong() const final;"
+        },
+        {
+          "line": 9255,
+          "text": "  size_t ByteSizeLong() const final;"
+        },
+        {
+          "line": 9437,
+          "text": "  size_t ByteSizeLong() const final;"
+        },
+        {
+          "line": 9770,
+          "text": "  size_t ByteSizeLong() const final;"
+        },
+        {
+          "line": 9958,
+          "text": "  size_t ByteSizeLong() const final;"
+        },
+        {
+          "line": 10216,
+          "text": "  size_t ByteSizeLong() const final;"
+        },
+        {
+          "line": 10389,
+          "text": "  size_t ByteSizeLong() const final;"
+        },
+        {
+          "line": 10667,
+          "text": "  size_t ByteSizeLong() const final;"
+        },
+        {
+          "line": 10896,
+          "text": "  size_t ByteSizeLong() const final;"
+        },
+        {
+          "line": 11054,
+          "text": "  size_t ByteSizeLong() const final;"
+        },
+        {
+          "line": 11282,
+          "text": "  size_t ByteSizeLong() const final;"
+        },
+        {
+          "line": 11470,
+          "text": "  size_t ByteSizeLong() const final;"
+        },
+        {
+          "line": 11643,
+          "text": "  size_t ByteSizeLong() const final;"
+        },
+        {
+          "line": 11836,
+          "text": "  size_t ByteSizeLong() const final;"
+        },
+        {
+          "line": 11999,
+          "text": "  size_t ByteSizeLong() const final;"
+        },
+        {
+          "line": 12187,
+          "text": "  size_t ByteSizeLong() const final;"
+        },
+        {
+          "line": 12525,
+          "text": "  size_t ByteSizeLong() const final;"
+        },
+        {
+          "line": 12688,
+          "text": "  size_t ByteSizeLong() const final;"
+        },
+        {
+          "line": 12931,
+          "text": "  size_t ByteSizeLong() const final;"
+        },
+        {
+          "line": 13093,
+          "text": "  size_t ByteSizeLong() const final;"
+        },
+        {
+          "line": 13281,
+          "text": "  size_t ByteSizeLong() const final;"
+        },
+        {
+          "line": 13576,
+          "text": "  size_t ByteSizeLong() const final;"
+        },
+        {
+          "line": 13779,
+          "text": "  size_t ByteSizeLong() const final;"
+        },
+        {
+          "line": 13967,
+          "text": "  size_t ByteSizeLong() const final;"
+        },
+        {
+          "line": 14130,
+          "text": "  size_t ByteSizeLong() const final;"
+        },
+        {
+          "line": 14532,
+          "text": "  size_t ByteSizeLong() const final;"
+        },
+        {
+          "line": 14720,
+          "text": "  size_t ByteSizeLong() const final;"
+        },
+        {
+          "line": 14938,
+          "text": "  size_t ByteSizeLong() const final;"
+        },
+        {
+          "line": 15166,
+          "text": "  size_t ByteSizeLong() const final;"
+        },
+        {
+          "line": 15388,
+          "text": "  size_t ByteSizeLong() const final;"
+        },
+        {
+          "line": 15593,
+          "text": "  size_t ByteSizeLong() const final;"
+        },
+        {
+          "line": 15786,
+          "text": "  size_t ByteSizeLong() const final;"
+        },
+        {
+          "line": 16014,
+          "text": "  size_t ByteSizeLong() const final;"
+        },
+        {
+          "line": 16204,
+          "text": "  size_t ByteSizeLong() const final;"
+        },
+        {
+          "line": 16401,
+          "text": "  size_t ByteSizeLong() const final;"
+        },
+        {
+          "line": 16606,
+          "text": "  size_t ByteSizeLong() const final;"
+        },
+        {
+          "line": 16796,
+          "text": "  size_t ByteSizeLong() const final;"
+        },
+        {
+          "line": 16969,
+          "text": "  size_t ByteSizeLong() const final;"
+        },
+        {
+          "line": 17127,
+          "text": "  size_t ByteSizeLong() const final;"
+        },
+        {
+          "line": 17486,
+          "text": "  size_t ByteSizeLong() const final;"
+        },
+        {
+          "line": 17738,
+          "text": "  size_t ByteSizeLong() const final;"
+        },
+        {
+          "line": 18901,
+          "text": "  size_t ByteSizeLong() const final;"
+        },
+        {
+          "line": 19710,
+          "text": "  size_t ByteSizeLong() const final;"
+        },
+        {
+          "line": 19888,
+          "text": "  size_t ByteSizeLong() const final;"
+        },
+        {
+          "line": 20151,
+          "text": "  size_t ByteSizeLong() const final;"
+        },
+        {
+          "line": 20339,
+          "text": "  size_t ByteSizeLong() const final;"
+        },
+        {
+          "line": 20620,
+          "text": "  size_t ByteSizeLong() const final;"
+        },
+        {
+          "line": 20702,
+          "text": "  // helper for ByteSizeLong()"
+        }
+      ]
+    },
+    {
+      "path": "opencv-b4c5ec4042f097e2a5b386b9d413ec7333d0a184/modules/dnn/misc/onnx/opencv-onnx.pb.cc",
+      "sha256": "c3255db0ec4130e60b72e3341bf2a1f96912fccce16e7a83e06accb326537e0a",
+      "matches": [
+        {
+          "line": 1193,
+          "text": "size_t AttributeProto::ByteSizeLong() const {"
+        },
+        {
+          "line": 1642,
+          "text": "size_t ValueInfoProto::ByteSizeLong() const {"
+        },
+        {
+          "line": 2101,
+          "text": "size_t NodeProto::ByteSizeLong() const {"
+        },
+        {
+          "line": 2654,
+          "text": "size_t ModelProto::ByteSizeLong() const {"
+        },
+        {
+          "line": 3017,
+          "text": "size_t StringStringEntryProto::ByteSizeLong() const {"
+        },
+        {
+          "line": 3419,
+          "text": "size_t GraphProto::ByteSizeLong() const {"
+        },
+        {
+          "line": 3710,
+          "text": "size_t TensorProto_Segment::ByteSizeLong() const {"
+        },
+        {
+          "line": 4235,
+          "text": "size_t TensorProto::ByteSizeLong() const {"
+        },
+        {
+          "line": 4690,
+          "text": "size_t TensorShapeProto_Dimension::ByteSizeLong() const {"
+        },
+        {
+          "line": 4917,
+          "text": "size_t TensorShapeProto::ByteSizeLong() const {"
+        },
+        {
+          "line": 5148,
+          "text": "size_t TypeProto_Tensor::ByteSizeLong() const {"
+        },
+        {
+          "line": 5449,
+          "text": "size_t TypeProto::ByteSizeLong() const {"
+        },
+        {
+          "line": 5712,
+          "text": "size_t OperatorSetIdProto::ByteSizeLong() const {"
+        }
+      ]
+    },
+    {
+      "path": "opencv-b4c5ec4042f097e2a5b386b9d413ec7333d0a184/modules/dnn/misc/onnx/opencv-onnx.pb.h",
+      "sha256": "58618bc8f434f46ca20ca71a42e17014a3509ddaff231c8fa71ae41c0e673a9e",
+      "matches": [
+        {
+          "line": 305,
+          "text": "  size_t ByteSizeLong() const final;"
+        },
+        {
+          "line": 775,
+          "text": "  size_t ByteSizeLong() const final;"
+        },
+        {
+          "line": 978,
+          "text": "  size_t ByteSizeLong() const final;"
+        },
+        {
+          "line": 1273,
+          "text": "  size_t ByteSizeLong() const final;"
+        },
+        {
+          "line": 1586,
+          "text": "  size_t ByteSizeLong() const final;"
+        },
+        {
+          "line": 1769,
+          "text": "  size_t ByteSizeLong() const final;"
+        },
+        {
+          "line": 2052,
+          "text": "  size_t ByteSizeLong() const final;"
+        },
+        {
+          "line": 2225,
+          "text": "  size_t ByteSizeLong() const final;"
+        },
+        {
+          "line": 2702,
+          "text": "  size_t ByteSizeLong() const final;"
+        },
+        {
+          "line": 2913,
+          "text": "  size_t ByteSizeLong() const final;"
+        },
+        {
+          "line": 3077,
+          "text": "  size_t ByteSizeLong() const final;"
+        },
+        {
+          "line": 3260,
+          "text": "  size_t ByteSizeLong() const final;"
+        },
+        {
+          "line": 3457,
+          "text": "  size_t ByteSizeLong() const final;"
+        }
+      ]
+    },
+    {
+      "path": "opencv-b4c5ec4042f097e2a5b386b9d413ec7333d0a184/modules/dnn/misc/tensorflow/attr_value.pb.cc",
+      "sha256": "3ac27919335419633ac82e4e388692b7b48db79dbdfe8e136c2b5ef52b4eba35",
+      "matches": [
+        {
+          "line": 448,
+          "text": "size_t AttrValue_ListValue::ByteSizeLong() const {"
+        },
+        {
+          "line": 1060,
+          "text": "size_t AttrValue::ByteSizeLong() const {"
+        },
+        {
+          "line": 1437,
+          "text": "size_t NameAttrList::ByteSizeLong() const {"
+        },
+        {
+          "line": 1451,
+          "text": "    total_size += NameAttrList_AttrEntry_DoNotUse::Funcs::ByteSizeLong(it->first, it->second);"
+        }
+      ]
+    },
+    {
+      "path": "opencv-b4c5ec4042f097e2a5b386b9d413ec7333d0a184/modules/dnn/misc/tensorflow/attr_value.pb.h",
+      "sha256": "76170917228ee7fc0727eafc61276b541b2dbd7bca2e630e87f68eb849223aaf",
+      "matches": [
+        {
+          "line": 173,
+          "text": "  size_t ByteSizeLong() const final;"
+        },
+        {
+          "line": 481,
+          "text": "  size_t ByteSizeLong() const final;"
+        },
+        {
+          "line": 844,
+          "text": "  size_t ByteSizeLong() const final;"
+        }
+      ]
+    },
+    {
+      "path": "opencv-b4c5ec4042f097e2a5b386b9d413ec7333d0a184/modules/dnn/misc/tensorflow/function.pb.cc",
+      "sha256": "da6fe7a4943444acf8f4a1ccb19422dd0017fe2fb7a1a4751f896d34ff501112",
+      "matches": [
+        {
+          "line": 336,
+          "text": "size_t FunctionDefLibrary::ByteSizeLong() const {"
+        },
+        {
+          "line": 703,
+          "text": "size_t FunctionDef_Node::ByteSizeLong() const {"
+        },
+        {
+          "line": 741,
+          "text": "    total_size += FunctionDef_Node_AttrEntry_DoNotUse::Funcs::ByteSizeLong(it->first, it->second);"
+        },
+        {
+          "line": 975,
+          "text": "size_t FunctionDef::ByteSizeLong() const {"
+        },
+        {
+          "line": 1215,
+          "text": "size_t GradientDef::ByteSizeLong() const {"
+        }
+      ]
+    },
+    {
+      "path": "opencv-b4c5ec4042f097e2a5b386b9d413ec7333d0a184/modules/dnn/misc/tensorflow/function.pb.h",
+      "sha256": "1c2ef3f5e37463d3a32569c8214e84968e7fa5f646526e057f7227ad444e6e06",
+      "matches": [
+        {
+          "line": 176,
+          "text": "  size_t ByteSizeLong() const final;"
+        },
+        {
+          "line": 376,
+          "text": "  size_t ByteSizeLong() const final;"
+        },
+        {
+          "line": 629,
+          "text": "  size_t ByteSizeLong() const final;"
+        },
+        {
+          "line": 806,
+          "text": "  size_t ByteSizeLong() const final;"
+        }
+      ]
+    },
+    {
+      "path": "opencv-b4c5ec4042f097e2a5b386b9d413ec7333d0a184/modules/dnn/misc/tensorflow/graph.pb.cc",
+      "sha256": "48d02236be921fdeea19da279f32b7243d6369215041708b618fd8f3044a0ec9",
+      "matches": [
+        {
+          "line": 362,
+          "text": "size_t GraphDef::ByteSizeLong() const {"
+        },
+        {
+          "line": 766,
+          "text": "size_t NodeDef::ByteSizeLong() const {"
+        },
+        {
+          "line": 788,
+          "text": "    total_size += NodeDef_AttrEntry_DoNotUse::Funcs::ByteSizeLong(it->first, it->second);"
+        }
+      ]
+    },
+    {
+      "path": "opencv-b4c5ec4042f097e2a5b386b9d413ec7333d0a184/modules/dnn/misc/tensorflow/graph.pb.h",
+      "sha256": "84accef9af15629216422bceaa76b785ba402af307e00cb2954ce0530c258ef5",
+      "matches": [
+        {
+          "line": 169,
+          "text": "  size_t ByteSizeLong() const final;"
+        },
+        {
+          "line": 400,
+          "text": "  size_t ByteSizeLong() const final;"
+        }
+      ]
+    },
+    {
+      "path": "opencv-b4c5ec4042f097e2a5b386b9d413ec7333d0a184/modules/dnn/misc/tensorflow/op_def.pb.cc",
+      "sha256": "c506928bd212b3fda8d8dd2073546e63ff9b067ed4d61496b05b987847376791",
+      "matches": [
+        {
+          "line": 538,
+          "text": "size_t OpDef_ArgDef::ByteSizeLong() const {"
+        },
+        {
+          "line": 1004,
+          "text": "size_t OpDef_AttrDef::ByteSizeLong() const {"
+        },
+        {
+          "line": 1516,
+          "text": "size_t OpDef::ByteSizeLong() const {"
+        },
+        {
+          "line": 1841,
+          "text": "size_t OpDeprecation::ByteSizeLong() const {"
+        },
+        {
+          "line": 2043,
+          "text": "size_t OpList::ByteSizeLong() const {"
+        }
+      ]
+    },
+    {
+      "path": "opencv-b4c5ec4042f097e2a5b386b9d413ec7333d0a184/modules/dnn/misc/tensorflow/op_def.pb.h",
+      "sha256": "808b98239da4ceb9cc4b700816e1365db642367b9d9bde85d229d6f1b1d58a8b",
+      "matches": [
+        {
+          "line": 173,
+          "text": "  size_t ByteSizeLong() const final;"
+        },
+        {
+          "line": 410,
+          "text": "  size_t ByteSizeLong() const final;"
+        },
+        {
+          "line": 655,
+          "text": "  size_t ByteSizeLong() const final;"
+        },
+        {
+          "line": 965,
+          "text": "  size_t ByteSizeLong() const final;"
+        },
+        {
+          "line": 1127,
+          "text": "  size_t ByteSizeLong() const final;"
+        }
+      ]
+    },
+    {
+      "path": "opencv-b4c5ec4042f097e2a5b386b9d413ec7333d0a184/modules/dnn/misc/tensorflow/tensor.pb.cc",
+      "sha256": "4cb2b40a2ab3f2de10be2f7206db03ebc9118b3e1d4d105d5a331e9c0fd5f0c3",
+      "matches": [
+        {
+          "line": 506,
+          "text": "size_t TensorProto::ByteSizeLong() const {"
+        }
+      ]
+    },
+    {
+      "path": "opencv-b4c5ec4042f097e2a5b386b9d413ec7333d0a184/modules/dnn/misc/tensorflow/tensor.pb.h",
+      "sha256": "c06af12f81cd0977ecf7ca92103bbc97f7e5bf14a150e42b2f34523e4d70e5af",
+      "matches": [
+        {
+          "line": 157,
+          "text": "  size_t ByteSizeLong() const final;"
+        }
+      ]
+    },
+    {
+      "path": "opencv-b4c5ec4042f097e2a5b386b9d413ec7333d0a184/modules/dnn/misc/tensorflow/tensor_shape.pb.cc",
+      "sha256": "2727cc57b0007770df4763f5108b941cbbc869187ca25db5a47172d325595ea0",
+      "matches": [
+        {
+          "line": 250,
+          "text": "size_t TensorShapeProto_Dim::ByteSizeLong() const {"
+        },
+        {
+          "line": 469,
+          "text": "size_t TensorShapeProto::ByteSizeLong() const {"
+        }
+      ]
+    },
+    {
+      "path": "opencv-b4c5ec4042f097e2a5b386b9d413ec7333d0a184/modules/dnn/misc/tensorflow/tensor_shape.pb.h",
+      "sha256": "46120e1a2e1085a8d96cb9372f7993158803522382b53559353cc7b4374374b5",
+      "matches": [
+        {
+          "line": 159,
+          "text": "  size_t ByteSizeLong() const final;"
+        },
+        {
+          "line": 321,
+          "text": "  size_t ByteSizeLong() const final;"
+        }
+      ]
+    },
+    {
+      "path": "opencv-b4c5ec4042f097e2a5b386b9d413ec7333d0a184/modules/dnn/misc/tensorflow/versions.pb.cc",
+      "sha256": "2bef98989c6365bac52a4bb2d60f8dc971d073a524690716747456dd2063b23b",
+      "matches": [
+        {
+          "line": 239,
+          "text": "size_t VersionDef::ByteSizeLong() const {"
+        }
+      ]
+    },
+    {
+      "path": "opencv-b4c5ec4042f097e2a5b386b9d413ec7333d0a184/modules/dnn/misc/tensorflow/versions.pb.h",
+      "sha256": "541a736574c4ec41617bc080aa9ac9a1338cd30a3fd94d62e977703bda162a17",
+      "matches": [
+        {
+          "line": 155,
+          "text": "  size_t ByteSizeLong() const final;"
+        }
+      ]
+    },
+    {
+      "path": "opencv-b4c5ec4042f097e2a5b386b9d413ec7333d0a184/modules/dnn/src/caffe/caffe_shrinker.cpp",
+      "sha256": "987714701ab44436c4809bc492958526adb649d20b10bb51f2e2fa4132ad8406",
+      "matches": [
+        {
+          "line": 60,
+          "text": "    size_t msgSize = net.ByteSizeLong();"
+        },
+        {
+          "line": 63,
+          "text": "    net.SerializeWithCachedSizesToArray(&output[0]);"
+        }
+      ]
+    },
+    {
+      "path": "opencv-b4c5ec4042f097e2a5b386b9d413ec7333d0a184/modules/dnn/src/tensorflow/tf_importer.cpp",
+      "sha256": "0fce756d12f7e54ed07c50dccdefd0bfa7185421ae422203979d0110037650a1",
+      "matches": [
+        {
+          "line": 3042,
+          "text": "    size_t netBinSize = netBin.ByteSizeLong();"
+        },
+        {
+          "line": 3043,
+          "text": "    size_t netTxtSize = netTxt.ByteSizeLong();"
+        },
+        {
+          "line": 3185,
+          "text": "    size_t netTxtSize = netTxt.ByteSizeLong();"
+        }
+      ]
+    }
+  ]
+}

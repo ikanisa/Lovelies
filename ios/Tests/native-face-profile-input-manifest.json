@@ -1,0 +1,114 @@
+{
+  "schema": 1,
+  "status": "explicit-logout-repair-frozen-root-verification-pending",
+  "task": "A03 native iOS face-profile lifecycle",
+  "contract": {
+    "path": "verification/face-profile-lifecycle-20261014/api-contract.md",
+    "sha256": "27c98ec15ed798c1e289ef9840e9e10ca27a38cc33db879b73d5d000ab81d8d9",
+    "bytes": 12342
+  },
+  "preimages": [
+    "verification/face-profile-lifecycle-20261014/preimages/ios/manifest.json",
+    "verification/face-profile-lifecycle-20261014/preimages/ios-before-control-renewal/manifest.json",
+    "verification/face-profile-lifecycle-20261014/preimages/ios-pending-writer-correction/manifest.json",
+    "verification/face-profile-lifecycle-20261014/preimages/ios-controlled-compile-fix-1/manifest.json",
+    "verification/face-profile-lifecycle-20261014/preimages/ios-initial-digest-contract-fix/manifest.json",
+    "verification/face-profile-lifecycle-20261014/preimages/ios-explicit-logout-fix-1/manifest.json"
+  ],
+  "foundation_manifest": "ios/Tests/native-face-profile-foundation-manifest.json",
+  "inputs": [
+    {
+      "path": "ios/Lovelies/Native/CoreWire.swift",
+      "sha256": "ba319bfa328bdad6af4c61715593bbad9347b2f2b805908c784a38a2d6649785",
+      "bytes": 60098
+    },
+    {
+      "path": "ios/Lovelies/Native/DeviceIdentity.swift",
+      "sha256": "e6cc45d5a3673866216f5892b9546846d46dccca20d1c7f05f8b722d1610e473",
+      "bytes": 9233
+    },
+    {
+      "path": "ios/Lovelies/Native/BackendRepository.swift",
+      "sha256": "19a914c5c60627895bdf9f1525473644e1bef6892011c6102bd56cd4a2584d4f",
+      "bytes": 166034
+    },
+    {
+      "path": "ios/Lovelies/Native/LiveAppStore.swift",
+      "sha256": "bea66095124fbb71854d1f635ea1a58d082b65258a047464d865f667eaa6209b",
+      "bytes": 43698
+    },
+    {
+      "path": "ios/Lovelies/Native/LiveOnboardingAndGallery.swift",
+      "sha256": "d0545bbc2d892adefbc1587d1b3c18764898827ade45acd78698aa2d6947d768",
+      "bytes": 23636
+    },
+    {
+      "path": "ios/Lovelies/Native/LiveSharingAndSettings.swift",
+      "sha256": "6729c59a0f253ce1110e03b1b8c6c40030c08a3f67ecbfccb4ebe48159656185",
+      "bytes": 55007
+    },
+    {
+      "path": "ios/Tests/NativeFaceProfileLifecycleTests.swift",
+      "sha256": "5c8c8c0dfd2f0b808623f0d4fc3fdd293a2be9ee6dc13f688eb3ed2936c63eb4",
+      "bytes": 61685
+    },
+    {
+      "path": "ios/Tests/NativeFaceProfileLifecycleHTTPJourney.swift",
+      "sha256": "874a2b412e5a517d858216d8846d1a35dbb49aa02f44a8c69a211cbd9d70e765",
+      "bytes": 63652
+    }
+  ],
+  "configuration": {
+    "path": "verification/face-profile-lifecycle-20261014/ios-face-profile-fixtures.json",
+    "sha256": "89005e776db4b0c79a2550f2adb5ef110fb36ee3b3cd8a635f02b64de718f739",
+    "bytes": 4323
+  },
+  "controlled_scenarios": [
+    "Same-device no-new-key control creation and current account/device binding",
+    "Independent matching pause/current-policy regrant; no old grant resurrection inferred by client",
+    "Signed action/capture/completion loss and repository reconstruction with original operation/key",
+    "No anonymous fallback on revoked, unavailable, corrupt or missing original identity",
+    "Exact protocol/nonce/account/device/keydigest/version/profile/capture ACK/manifest fences",
+    "Terminal empty/sparse cleanup retires progress and only same-key fresh successor captures",
+    "Real reference removal unavailable until signed verified cleanup; auth-only withdrawal shares this privacy rule",
+    "Staged credentials, exact /me/profile/current active device before promotion and journal-first refresh survival",
+    "D04 priority; active A03 hold blocks A02; stable same-account A02 archives previous control only after current promotion",
+    "Explicit signed cancel and logout generation fences; no completion undo",
+    "Expired control renewal keeps old private binding, journal-first new secret/op/predecessor, original key and exact lost-reply retry",
+    "Explicit ordinary one-selfie expiry login only for already-current auth/reference; no withdrawn/removal bypass or automatic renewal",
+    "Rendered version and shutter operation/generation fences",
+    "Interrupted current-profile/device-slot promotion -> internal clear keeps stage -> explicit logout retires stage before server revoke -> restart readonly completed status -> fresh same-account/original-key one-selfie login; actual pending ordinary login camera state retires on explicit logout"
+  ],
+  "root_compile_commands": {
+    "controlled": "swiftc ios/Lovelies/Native/CoreWire.swift ios/Lovelies/Native/DeviceIdentity.swift ios/Lovelies/Native/BackendRepository.swift ios/Tests/NativeFaceProfileLifecycleTests.swift -o /tmp/lovelies-ios-face-profile-tests",
+    "http": "swiftc ios/Lovelies/Native/CoreWire.swift ios/Lovelies/Native/DeviceIdentity.swift ios/Lovelies/Native/BackendRepository.swift ios/Tests/NativeFaceProfileLifecycleHTTPJourney.swift -o /tmp/lovelies-ios-face-profile-http"
+  },
+  "root_controlled_run": "/tmp/lovelies-ios-face-profile-tests",
+  "http_process_phases": [
+    "owner",
+    "replace",
+    "capture",
+    "complete",
+    "finish"
+  ],
+  "root_http_command_template": "/tmp/lovelies-ios-face-profile-http verification/face-profile-lifecycle-20261014/ios-face-profile-fixtures.json <PRIVATE-0700-vault-directory> <owner|replace|capture|complete|finish> verification/face-profile-lifecycle-20261014/artifacts/ios-http-<phase>.json",
+  "http_uses": "Actual production BackendRepository + NativeURLTransport/URLSession and current local Cloudflare API/private actual YuNet-SFace model. Only successful replies are discarded by the loss wrapper; no successful server/model transport is replaced. Private encrypted host vault/software keys persist across five separate processes.",
+  "changed_production_paths": [
+    "ios/Lovelies/Native/CoreWire.swift",
+    "ios/Lovelies/Native/BackendRepository.swift",
+    "ios/Lovelies/Native/LiveAppStore.swift",
+    "ios/Lovelies/Native/LiveOnboardingAndGallery.swift",
+    "ios/Lovelies/Native/LiveSharingAndSettings.swift"
+  ],
+  "does_not_establish": [
+    "iPhoneOS SDK app build",
+    "SwiftUI UI/device navigation",
+    "Real camera input/sensor provenance",
+    "Physical Keychain/Secure Enclave",
+    "Hosted deployment or production model-service deployment",
+    "Store archive/signing/subscription/release acceptance"
+  ],
+  "root_qa_status": "New explicit-logout repair pending root verification. Earlier root 154 controlled checks and 23-stage/227-assertion HTTP proof are preserved historical results against the prior source; not inferred for this changed source.",
+  "frozen_at": "2026-10-14T16:11:36.421735+00:00",
+  "repair": "Explicit logout retires staged/ordinary lifecycle credentials and ordinary login camera state before awaits. Internal failure clearSession retains staged repair. Original control/key/pending operation preserved for readonly reconciliation and explicit fresh login."
+}

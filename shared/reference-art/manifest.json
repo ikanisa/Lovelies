@@ -1,0 +1,178 @@
+[
+  {
+    "asset": "intro-collage.png",
+    "screen": 2,
+    "source": "Lovelies-48-Screen-PNGs/screens/02-introduction-and-how-it-works.png",
+    "crop_xyxy": [
+      5,
+      28,
+      225,
+      195
+    ],
+    "source_dimensions": [
+      229,
+      391
+    ],
+    "size": [
+      220,
+      167
+    ],
+    "role": "Noninteractive illustration artwork only",
+    "source_sha256": "6fe45195f41989c5dd99b2ff35edccdad36af957c663a406b9d59c970ea4f586",
+    "asset_sha256": "a79785e61c084c590dbe03300ce5d3b17bf499d9db0a61e2ed3155fca019c471"
+  },
+  {
+    "asset": "processing-hero.png",
+    "screen": 8,
+    "source": "Lovelies-48-Screen-PNGs/screens/08-processing.png",
+    "crop_xyxy": [
+      36,
+      55,
+      190,
+      218
+    ],
+    "source_dimensions": [
+      228,
+      361
+    ],
+    "size": [
+      154,
+      163
+    ],
+    "role": "Noninteractive illustration artwork only",
+    "source_sha256": "3dd38e362900b9cf7f34f2434a6cdd9dfb2e4fe335bb36b73ad4be22ebf0d8a9",
+    "asset_sha256": "dee93b638647e7840273742fbef2e41ca72b36d60652a0205854ba9f5955a8bf"
+  },
+  {
+    "asset": "setup-hero.png",
+    "screen": 9,
+    "source": "Lovelies-48-Screen-PNGs/screens/09-setup-complete.png",
+    "crop_xyxy": [
+      34,
+      44,
+      207,
+      217
+    ],
+    "source_dimensions": [
+      236,
+      360
+    ],
+    "size": [
+      173,
+      173
+    ],
+    "role": "Noninteractive illustration artwork only",
+    "source_sha256": "0c5ab847770c534db8035bc3cc5b496c386603d209c5cdd9d1275d0d53dcad86",
+    "asset_sha256": "3867a4518a97ab2b6edab0f7a9fe0a9fc4b8ae25b0cef25524d9a91c7d05ecb9"
+  },
+  {
+    "asset": "upload-hero.png",
+    "screen": 24,
+    "source": "Lovelies-48-Screen-PNGs/screens/24-upload-complete.png",
+    "crop_xyxy": [
+      38,
+      27,
+      222,
+      128
+    ],
+    "source_dimensions": [
+      257,
+      313
+    ],
+    "size": [
+      184,
+      101
+    ],
+    "role": "Noninteractive illustration artwork only",
+    "source_sha256": "669a89672a69972580cf6d4b1b97fb8a42bb6b9d45e2090bbcb5636527087dc6",
+    "asset_sha256": "7363aa7d889d490759740810678515319029b2b44d00ee48ce2c0d37e6e2238d"
+  },
+  {
+    "asset": "matches-hero.png",
+    "screen": 25,
+    "source": "Lovelies-48-Screen-PNGs/screens/25-match-results-summary.png",
+    "crop_xyxy": [
+      60,
+      30,
+      187,
+      136
+    ],
+    "source_dimensions": [
+      239,
+      377
+    ],
+    "size": [
+      127,
+      106
+    ],
+    "role": "Noninteractive illustration artwork only",
+    "source_sha256": "63184917cbff566fc8c0719330f64a6daed7cb53fb207992ffd0d95501687bd9",
+    "asset_sha256": "79e5a29c3ac92b537ffe18cdc70fee68267b2e239559313dcead1e41927e3279"
+  },
+  {
+    "asset": "sharing-hero.png",
+    "screen": 34,
+    "source": "Lovelies-48-Screen-PNGs/screens/34-sharing-progress.png",
+    "crop_xyxy": [
+      36,
+      74,
+      204,
+      191
+    ],
+    "source_dimensions": [
+      246,
+      380
+    ],
+    "size": [
+      168,
+      117
+    ],
+    "role": "Noninteractive illustration artwork only",
+    "source_sha256": "e47a1f3d2c406c4c2d6a2868da35ea3b2d41aefffd92870a6baf24ab11f78213",
+    "asset_sha256": "040fbd27e180ac0d23d9d263cc97d6184d8a94f7eccec8f3d9931df7626d2f23"
+  },
+  {
+    "asset": "empty-hero.png",
+    "screen": 47,
+    "source": "Lovelies-48-Screen-PNGs/screens/47-no-matches.png",
+    "crop_xyxy": [
+      51,
+      38,
+      203,
+      182
+    ],
+    "source_dimensions": [
+      254,
+      348
+    ],
+    "size": [
+      152,
+      144
+    ],
+    "role": "Noninteractive illustration artwork only",
+    "source_sha256": "429a14047f029dace199b7f6b4d5ba21b28f587fa5be19e0bb85e1cf6d093565",
+    "asset_sha256": "2ce0a5206f712d7ebdd7acb53c2cb605b90aeaf9d63c35143ad7a3d7dd551d9d"
+  },
+  {
+    "asset": "offline-hero.png",
+    "screen": 48,
+    "source": "Lovelies-48-Screen-PNGs/screens/48-offline-and-error.png",
+    "crop_xyxy": [
+      64,
+      70,
+      192,
+      163
+    ],
+    "source_dimensions": [
+      254,
+      349
+    ],
+    "size": [
+      128,
+      93
+    ],
+    "role": "Noninteractive illustration artwork only",
+    "source_sha256": "f65770517f27ee339c58bd68d800d1e1dd98b49069500c699126cc6cebdfb460",
+    "asset_sha256": "7b90dcad6beb86d2af61216b7134153f38c1d1e8b28cc78522a8be2acabeb62a"
+  }
+]

@@ -1,0 +1,49 @@
+number,title,source_board,filename,width,height
+1,Splash,1,01-splash.png,217,390
+2,Introduction and how it works,1,02-introduction-and-how-it-works.png,229,391
+3,Sign in and join,1,03-sign-in-and-join.png,235,389
+4,Photo access prompt,1,04-photo-access-prompt.png,237,390
+5,Photo access options,1,05-photo-access-options.png,231,390
+6,Face enrollment,1,06-face-enrollment.png,214,389
+7,Face quality retry,1,07-face-quality-retry.png,216,361
+8,Processing,1,08-processing.png,228,361
+9,Setup complete,1,09-setup-complete.png,236,360
+10,Home gallery,1,10-home-gallery.png,247,361
+11,New matches,1,11-new-matches.png,240,361
+12,Photo viewer,1,12-photo-viewer.png,227,360
+13,All photos,2,13-all-photos.png,258,487
+14,Favorites and saved,2,14-favorites-and-saved.png,258,487
+15,Search,2,15-search.png,258,487
+16,Filters,2,16-filters.png,259,487
+17,Activity inbox,2,17-activity-inbox.png,259,486
+18,Notifications,2,18-notifications.png,257,486
+19,Upload entry,2,19-upload-entry.png,256,314
+20,Upload source picker,2,20-upload-source-picker.png,255,314
+21,Select upload photos,2,21-select-upload-photos.png,258,314
+22,Review upload,2,22-review-upload.png,259,314
+23,Upload progress,2,23-upload-progress.png,258,313
+24,Upload complete,2,24-upload-complete.png,257,313
+25,Match results summary,3,25-match-results-summary.png,239,377
+26,Matched photos gallery,3,26-matched-photos-gallery.png,236,377
+27,Photo to people,3,27-photo-to-people.png,243,377
+28,Person to photos,3,28-person-to-photos.png,246,377
+29,Select photos to share,3,29-select-photos-to-share.png,239,377
+30,Deselect photos,3,30-deselect-photos.png,240,377
+31,Select people to share with,3,31-select-people-to-share-with.png,239,378
+32,Deselect people,3,32-deselect-people.png,237,378
+33,Review and share,3,33-review-and-share.png,240,378
+34,Sharing progress,3,34-sharing-progress.png,246,380
+35,Shared history,3,35-shared-history.png,240,379
+36,Report incorrect match,3,36-report-incorrect-match.png,240,379
+37,Profile overview,4,37-profile-overview.png,256,447
+38,Face management,4,38-face-management.png,249,447
+39,Manage allowed recipients,4,39-manage-allowed-recipients.png,249,446
+40,Privacy and sharing,4,40-privacy-and-sharing.png,251,447
+41,Photo access settings,4,41-photo-access-settings.png,250,446
+42,Notification settings,4,42-notification-settings.png,255,447
+43,Storage,4,43-storage.png,255,348
+44,Data export,4,44-data-export.png,253,348
+45,Help center,4,45-help-center.png,252,348
+46,Account security and devices,4,46-account-security-and-devices.png,253,348
+47,No matches,4,47-no-matches.png,254,348
+48,Offline and error,4,48-offline-and-error.png,254,349

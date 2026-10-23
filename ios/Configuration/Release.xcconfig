@@ -1,0 +1,16 @@
+// Existing Memories app identity. Verify the next unused version in App Store Connect.
+PRODUCT_BUNDLE_IDENTIFIER = com.lovelies.memories
+MARKETING_VERSION = 1.1.0
+CURRENT_PROJECT_VERSION = 18
+// Supply the verified team with -configuration Release DEVELOPMENT_TEAM=...
+LOVELIES_APNS_ENVIRONMENT = production
+LOVELIES_SUBSCRIPTION_PRODUCT = com.lovelies.memories.pro.monthly
+LOVELIES_API_ORIGIN = https:/$()/ltqfplqevxztlswlzexn.supabase.co/functions/v1/lovelies-api
+// Configure only after domain ownership and AASA are verified.
+LOVELIES_LINK_HOST =
+
+// Public app-policy URLs are supplied only after content/hosting qualification.
+LOVELIES_PRIVACY_POLICY_URL =
+LOVELIES_TERMS_URL =
+LOVELIES_SUPPORT_URL =
+LOVELIES_ACCOUNT_DELETION_URL =

@@ -1,0 +1,54 @@
+{
+  "id": "/admin/",
+  "name": "Lovelies Admin",
+  "short_name": "Lovelies Admin",
+  "description": "Lovelies operator workspace. Registered-face sign-in and server-provisioned administrator authority required.",
+  "lang": "en",
+  "start_url": "/admin/",
+  "scope": "/admin/",
+  "display": "standalone",
+  "background_color": "#0d0e10",
+  "theme_color": "#0d0e10",
+  "shortcuts": [
+    {
+      "name": "Overview",
+      "url": "/admin/#overview",
+      "description": "Open the admin overview"
+    },
+    {
+      "name": "Users",
+      "url": "/admin/#users",
+      "description": "Manage accounts and sessions"
+    },
+    {
+      "name": "Match reports",
+      "url": "/admin/#match-reports",
+      "description": "Review match reports"
+    },
+    {
+      "name": "Privacy",
+      "url": "/admin/#privacy",
+      "description": "Review privacy requests"
+    }
+  ],
+  "icons": [
+    {
+      "src": "/admin/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/admin/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/admin/icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    }
+  ]
+}

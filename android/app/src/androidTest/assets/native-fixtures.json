@@ -1,0 +1,116 @@
+{
+  "api_origin": "http://127.0.0.1:18887",
+  "scope": "Supplied screen-reference photo fixtures; no live-camera/identity/liveness claim",
+  "owner": {
+    "selfies": [
+      "verification/docker-native-journey-20261013/fixtures/aline-selfie-0.jpg",
+      "verification/docker-native-journey-20261013/fixtures/aline-selfie-1.jpg",
+      "verification/docker-native-journey-20261013/fixtures/aline-selfie-2.jpg"
+    ],
+    "fresh_selfie": "verification/docker-native-journey-20261013/fixtures/aline-selfie-0.jpg"
+  },
+  "recipients": {
+    "aline": {
+      "selfies": [
+        "verification/docker-native-journey-20261013/fixtures/aline-selfie-0.jpg",
+        "verification/docker-native-journey-20261013/fixtures/aline-selfie-1.jpg",
+        "verification/docker-native-journey-20261013/fixtures/aline-selfie-2.jpg"
+      ],
+      "fresh_selfie": "verification/docker-native-journey-20261013/fixtures/aline-selfie-0.jpg"
+    },
+    "eric": {
+      "selfies": [
+        "verification/docker-native-journey-20261013/fixtures/eric-selfie-0.jpg",
+        "verification/docker-native-journey-20261013/fixtures/eric-selfie-1.jpg",
+        "verification/docker-native-journey-20261013/fixtures/eric-selfie-2.jpg"
+      ],
+      "fresh_selfie": "verification/docker-native-journey-20261013/fixtures/eric-selfie-0.jpg"
+    }
+  },
+  "photos": [
+    {
+      "name": "P1",
+      "path": "verification/docker-native-journey-20261013/fixtures/P1.jpg",
+      "matches": [
+        "aline"
+      ]
+    },
+    {
+      "name": "P2",
+      "path": "verification/docker-native-journey-20261013/fixtures/P2.jpg",
+      "matches": [
+        "aline",
+        "eric"
+      ]
+    },
+    {
+      "name": "P3",
+      "path": "verification/docker-native-journey-20261013/fixtures/P3.jpg",
+      "matches": [
+        "eric"
+      ]
+    }
+  ],
+  "exclusions": [
+    {
+      "photo": "P2",
+      "recipient": "aline"
+    }
+  ],
+  "approved": {
+    "aline": [
+      "P1"
+    ],
+    "eric": [
+      "P2",
+      "P3"
+    ]
+  },
+  "files": [
+    {
+      "path": "verification/docker-native-journey-20261013/fixtures/P1.jpg",
+      "sha256": "63230694d6dc199a756f300ae9347b16c8547b278f0c4e0bc25abde0834e3289",
+      "bytes": 4006
+    },
+    {
+      "path": "verification/docker-native-journey-20261013/fixtures/P2.jpg",
+      "sha256": "4600d649f0d09686898ba1bb62e05ee04ebe88a9ec265f97019ef94e3f30c3da",
+      "bytes": 48041
+    },
+    {
+      "path": "verification/docker-native-journey-20261013/fixtures/P3.jpg",
+      "sha256": "18faea647237fb21850bde4f2c844a869feed477e45ff4db98b2a5bf1bbd6e82",
+      "bytes": 29871
+    },
+    {
+      "path": "verification/docker-native-journey-20261013/fixtures/aline-selfie-0.jpg",
+      "sha256": "5bfa4519e03a6ac5dc752c2d125ed70c9f84700560041d850ee51ba23ae5d5b5",
+      "bytes": 4017
+    },
+    {
+      "path": "verification/docker-native-journey-20261013/fixtures/aline-selfie-1.jpg",
+      "sha256": "dd2534f9711ec63853cb980ee32040427dee589b948f5eb1367af1b67f7d519e",
+      "bytes": 3284
+    },
+    {
+      "path": "verification/docker-native-journey-20261013/fixtures/aline-selfie-2.jpg",
+      "sha256": "3f61135106f3d3600212de6dd93c076d0d56597b13bc1348b3c3754ed10d70e7",
+      "bytes": 2726
+    },
+    {
+      "path": "verification/docker-native-journey-20261013/fixtures/eric-selfie-0.jpg",
+      "sha256": "91e2268d094695085f6ea2b1eebf2c8e5471c3ed25aec3c4c8655c08a865ed11",
+      "bytes": 29939
+    },
+    {
+      "path": "verification/docker-native-journey-20261013/fixtures/eric-selfie-1.jpg",
+      "sha256": "c616a6aacf5f71172f7c49ecfe3687f9918beb6efab9bbdcd3f105d915838ddb",
+      "bytes": 23518
+    },
+    {
+      "path": "verification/docker-native-journey-20261013/fixtures/eric-selfie-2.jpg",
+      "sha256": "48cd1350a0ba29318dd8e381214d8d66a0f9011600c2797258ada3d766e20bdc",
+      "bytes": 18408
+    }
+  ]
+}

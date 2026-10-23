@@ -1,0 +1,22 @@
+Lovelies modified shared libpng build, 30 September 2026.
+
+Base: exact Debian libpng1.6 1.6.48-1+deb13u5 source archives and all
+Debian patches, with their SHA-256 checksums retained in the source manifest.
+Modification: unchanged upstream fix aa77ef38c17ab2fc1b41bec09fb973c6a386641d
+for CVE-2026-46675 / GHSA-qvg3-h654-xq3j. Stream acquisition and release
+clear stale zlib input/output pointers and counters. No public API or ABI
+change is intended; the original SONAME and nonempty exported versioned API
+are verified against the installed Debian library before packaging.
+
+Local package version: 1.6.48-1+deb13u5+lovelies1. This is a Lovelies build;
+it is not an official Debian security update or upstream release.
+Complete original source archives, Debian source descriptor and patches,
+immutable upstream patch, build script and manifest are retained in source/.
+The full upstream libpng licence and Debian copyright evidence remain
+available in this directory.
+
+Validation covers exact source hashes, complete zero-fuzz patch application,
+normal upstream codec tests, unchanged public API and ELF hardening.
+Security reproduction was not run. Exact final-image library hashes and
+ordinary valid-codec runtime tests are checked separately. Verification
+does not imply independent security or legal acceptance.

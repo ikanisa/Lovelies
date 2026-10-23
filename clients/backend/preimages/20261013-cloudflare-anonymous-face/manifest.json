@@ -1,0 +1,30 @@
+{
+  "purpose": "Preserve donor-compatible client before latest anonymous/registered-face owner direction",
+  "files": [
+    {
+      "source": "clients/backend/client.mjs",
+      "preimage": "clients/backend/preimages/20261013-cloudflare-anonymous-face/client.mjs",
+      "sha256": "74d6b88a6d64aea43f7409f046a59556938392ff76ca01a94380faf45e8ffb5b"
+    },
+    {
+      "source": "clients/backend/contracts.mjs",
+      "preimage": "clients/backend/preimages/20261013-cloudflare-anonymous-face/contracts.mjs",
+      "sha256": "3833eabb370a7eb20f27ad08df293e56adb970fa8cc90c898e3c2af87e96bf6b"
+    },
+    {
+      "source": "clients/backend/client.test.mjs",
+      "preimage": "clients/backend/preimages/20261013-cloudflare-anonymous-face/client.test.mjs",
+      "sha256": "54ab627981b54beda5260a36ddb515c9015f493572a74335bd95ee3dc29b54f0"
+    },
+    {
+      "source": "clients/backend/source-manifest.json",
+      "preimage": "clients/backend/preimages/20261013-cloudflare-anonymous-face/source-manifest.json",
+      "sha256": "65216cf157719d8466ec2c78ab9782cdbc4c74057f6b2ba06b5a8c2c88075eae"
+    },
+    {
+      "source": "docs/backend-reuse-client.md",
+      "preimage": "clients/backend/preimages/20261013-cloudflare-anonymous-face/backend-reuse-client.md",
+      "sha256": "c28557b2cd33de1a4e9b286e46324647792ef4517958f9f21803d83ac0abe201"
+    }
+  ]
+}

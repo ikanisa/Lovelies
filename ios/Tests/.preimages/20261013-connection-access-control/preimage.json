@@ -1,0 +1,6 @@
+{
+  "path": "ios/Tests/NativeConnectionTests.swift",
+  "sha256": "f0de20f9fdaa1bb938fa3499055ff32fa6ffead768c38cb3ba3e634330d46448",
+  "captured_at": "2026-10-13T20:35:10.873833+00:00",
+  "reason": "Preserve root compile failure source before narrow private-helper repair"
+}

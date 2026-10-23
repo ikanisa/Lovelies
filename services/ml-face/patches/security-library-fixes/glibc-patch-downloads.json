@@ -1,0 +1,155 @@
+[
+  {
+    "label": "6 weeks agoresolv: Declare __p_class_syms, __p_type_syms for internal use",
+    "commit": "127d20da1c7f55008e723a0b7a3f693256323a2b",
+    "url": "https://sourceware.org/git/?p=glibc.git;a=commitdiff_plain;h=127d20da1c7f55008e723a0b7a3f693256323a2b",
+    "filename": "glibc-ns-print-prerequisite-4-upstream.patch",
+    "sha256": "a82781fdef05e583b5f9fe20034b4e0724ae768602bc748e1358c2fabff3e3a7",
+    "bytes": 2158,
+    "status": "downloaded"
+  },
+  {
+    "label": "6 weeks agoresolv: Fix ns_sprintrrf formatting of class, type values (bug 34289)",
+    "commit": "2b789d4ca95c73dc6fc456bf8a767e8b586e2539",
+    "url": "https://sourceware.org/git/?p=glibc.git;a=commitdiff_plain;h=2b789d4ca95c73dc6fc456bf8a767e8b586e2539",
+    "filename": "glibc-ns-print-prerequisite-3-upstream.patch",
+    "sha256": "c314f3dc4afc02e0068fea44389f053682c221c11827e499af6aa079c00afa47",
+    "bytes": 2548,
+    "status": "downloaded"
+  },
+  {
+    "label": "6 weeks agoresolv: Improve formatting of unknown records in ns_sprintrrf",
+    "commit": "6448c1174ae74756e9db3ba26463a450e38be6c1",
+    "url": "https://sourceware.org/git/?p=glibc.git;a=commitdiff_plain;h=6448c1174ae74756e9db3ba26463a450e38be6c1",
+    "filename": "glibc-ns-print-prerequisite-2-upstream.patch",
+    "sha256": "511a435a952668e3af771d7a0491dfeacde28a6f4919a5697523ca2f642a94a0",
+    "bytes": 1554,
+    "status": "downloaded"
+  },
+  {
+    "label": "6 weeks agoresolv: Check for inet_ntop failure in ns_sprintrrf",
+    "commit": "1c77f57252fd8cfeb30c988a001cd1aab172483b",
+    "url": "https://sourceware.org/git/?p=glibc.git;a=commitdiff_plain;h=1c77f57252fd8cfeb30c988a001cd1aab172483b",
+    "filename": "glibc-ns-print-prerequisite-1-upstream.patch",
+    "sha256": "c4602c1214f534843a4a23c5c67a40f7955bf5275f13ae7eb15b1f50e46e5150",
+    "bytes": 2198,
+    "status": "downloaded"
+  },
+  {
+    "label": "CVE-2026-5435",
+    "commit": "0e8c56b386d72ba2ddf15784423f2e894c63a241",
+    "url": "https://sourceware.org/git/?p=glibc.git;a=commitdiff_plain;h=0e8c56b386d72ba2ddf15784423f2e894c63a241",
+    "filename": "glibc-CVE-2026-5435-upstream.patch",
+    "sha256": "10ba43f4f9c499de1d8d6e39249af85fb3204c88ea5fca805313180063cbcaa4",
+    "bytes": 3651,
+    "status": "downloaded"
+  },
+  {
+    "label": "CVE-2026-6238",
+    "commit": "05e1eaea619072a92ff1f5fefe1ac2dd5758829c",
+    "url": "https://sourceware.org/git/?p=glibc.git;a=commitdiff_plain;h=05e1eaea619072a92ff1f5fefe1ac2dd5758829c",
+    "filename": "glibc-CVE-2026-6238-upstream.patch",
+    "sha256": "d2aa0954676b568617897074b3e9b23e1b71cc42613ca701185e259ef92b1162",
+    "bytes": 2225,
+    "status": "downloaded"
+  },
+  {
+    "label": "ns-print-tests",
+    "commit": "ca40a1976888c62c3de02a3d3341282ce7590b4a",
+    "url": "https://sourceware.org/git/?p=glibc.git;a=commitdiff_plain;h=ca40a1976888c62c3de02a3d3341282ce7590b4a",
+    "filename": "glibc-ns-print-tests-upstream.patch",
+    "sha256": "0c89b575d5e48d34b278b22ce6a163ec3461bbf75208e028e56414b281217efc",
+    "bytes": 15137,
+    "status": "downloaded"
+  },
+  {
+    "label": "CVE-2026-6791",
+    "commit": "965b580070b8184b0dd390800d9194291a600e67",
+    "url": "https://sourceware.org/git/?p=glibc.git;a=commitdiff_plain;h=965b580070b8184b0dd390800d9194291a600e67",
+    "filename": "glibc-CVE-2026-6791-upstream.patch",
+    "sha256": "7e37945125673bfe822643b52f1fa6082631b5e38f6b2d29b248c9b8e24267c7",
+    "bytes": 10483,
+    "status": "downloaded"
+  },
+  {
+    "label": "CVE-2026-6368",
+    "commit": "dfc8ef388ef7856f318ade7dec501f92ce54f9e3",
+    "url": "https://sourceware.org/git/?p=glibc.git;a=commitdiff_plain;h=dfc8ef388ef7856f318ade7dec501f92ce54f9e3",
+    "filename": "glibc-CVE-2026-6368-upstream.patch",
+    "sha256": "b39e677379e0f5964ba84d4a2a8bc54b654713fbf2cc06e0bce7e4536f2b67c3",
+    "bytes": 18449,
+    "status": "downloaded"
+  },
+  {
+    "label": "CVE-2026-19542",
+    "commit": "9318c2571576017d280a31b7b9ab576c9b696b1a",
+    "url": "https://sourceware.org/git/?p=glibc.git;a=commitdiff_plain;h=9318c2571576017d280a31b7b9ab576c9b696b1a",
+    "filename": "glibc-CVE-2026-19542-upstream.patch",
+    "sha256": "5ffd32d86b0accdcf3af85d0f7676deb59164f96a4a522bd347fae63c18b84d3",
+    "bytes": 3354,
+    "status": "downloaded"
+  },
+  {
+    "label": "CVE-2026-19499",
+    "commit": "5256941bc811248670eda4636dccd0a390d34dec",
+    "url": "https://sourceware.org/git/?p=glibc.git;a=commitdiff_plain;h=5256941bc811248670eda4636dccd0a390d34dec",
+    "filename": "glibc-CVE-2026-19499-upstream.patch",
+    "sha256": "af60309c94a4a477829cf0ee47382bb1466039baa666890427ed6bffb0991a64",
+    "bytes": 3469,
+    "status": "downloaded"
+  },
+  {
+    "label": "CVE-2026-77117",
+    "commit": "e43e46f94398b3de446fec11da1e7633ea5202ec",
+    "url": "https://sourceware.org/git/?p=glibc.git;a=commitdiff_plain;h=e43e46f94398b3de446fec11da1e7633ea5202ec",
+    "filename": "glibc-CVE-2026-77117-upstream.patch",
+    "sha256": "b9c5be18e20d50f240460fbf58e4f8e3105947c1253abf671e066fe12940952f",
+    "bytes": 1027,
+    "status": "downloaded"
+  },
+  {
+    "label": "CVE-2026-80489",
+    "commit": "ec116a0fbedcc860631e525e70b409cf295f27da",
+    "url": "https://sourceware.org/git/?p=glibc.git;a=commitdiff_plain;h=ec116a0fbedcc860631e525e70b409cf295f27da",
+    "filename": "glibc-CVE-2026-80489-upstream.patch",
+    "sha256": "0b979d82b7ee27b60e2eabaf126557c03c689ed26724af449bb6fe33b5ef226d",
+    "bytes": 1015,
+    "status": "downloaded"
+  },
+  {
+    "label": "jis-tests",
+    "commit": "3d141c23899d90559741b5fe74db97ccf0ef5c29",
+    "url": "https://sourceware.org/git/?p=glibc.git;a=commitdiff_plain;h=3d141c23899d90559741b5fe74db97ccf0ef5c29",
+    "filename": "glibc-jis-tests-upstream.patch",
+    "sha256": "72470765173bf8095f6d123d9f2e12ea9c98c4ffa775311a62315aa45508f60d",
+    "bytes": 5558,
+    "status": "downloaded"
+  },
+  {
+    "label": "CVE-2026-18374",
+    "commit": "f806c45178dbca3be08a25cc5dd6d5542ce84a59",
+    "url": "https://sourceware.org/git/?p=glibc.git;a=commitdiff_plain;h=f806c45178dbca3be08a25cc5dd6d5542ce84a59",
+    "filename": "glibc-CVE-2026-18374-upstream.patch",
+    "sha256": "daf0f6b1f965c1d4f12dc6ab0df983921538a6de63ca2537b009bf8e2a12f3a6",
+    "bytes": 2185,
+    "status": "downloaded"
+  },
+  {
+    "label": "fopen-tests",
+    "commit": "5dd252cf1d113644b3679f5a158e9ef20217865e",
+    "url": "https://sourceware.org/git/?p=glibc.git;a=commitdiff_plain;h=5dd252cf1d113644b3679f5a158e9ef20217865e",
+    "filename": "glibc-fopen-tests-upstream.patch",
+    "sha256": "fa59466760b2d5e1481fd28f2512f2bf19a0abbfdaa08f6d2ee232b880e17aa0",
+    "bytes": 3089,
+    "status": "downloaded"
+  },
+  {
+    "label": "CVE-2026-8674",
+    "commit": "c97fdd483232a831829aaff458a212307f1bf4bc",
+    "url": "https://sourceware.org/git/?p=glibc.git;a=commitdiff_plain;h=c97fdd483232a831829aaff458a212307f1bf4bc",
+    "filename": "glibc-CVE-2026-8674-upstream.patch",
+    "sha256": "d4ff5576bbb6567ec6fdd37d01e43cd10d8ec1220b3b772a2a08314226e992b9",
+    "bytes": 4962,
+    "status": "downloaded"
+  }
+]

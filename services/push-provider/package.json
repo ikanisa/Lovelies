@@ -1,0 +1,21 @@
+{
+  "name": "@lovelies/push-provider",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=24"
+  },
+  "scripts": {
+    "start": "node src/server.mjs",
+    "test": "node --test --test-concurrency=1 test/*.test.mjs",
+    "check": "node --check src/server.mjs && node --check src/gateway.mjs && node --check src/providers.mjs && node --check src/ledger.mjs",
+    "migrate": "node src/migrate.mjs"
+  },
+  "dependencies": {
+    "postgres": "3.4.7"
+  },
+  "devDependencies": {
+    "@electric-sql/pglite": "0.3.14"
+  }
+}

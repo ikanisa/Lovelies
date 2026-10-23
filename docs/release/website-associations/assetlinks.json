@@ -1,0 +1,12 @@
+[
+  {
+    "relation": ["delegate_permission/common.handle_all_urls"],
+    "target": {
+      "namespace": "android_app",
+      "package_name": "com.lovelies.memories",
+      "sha256_cert_fingerprints": [
+        "06:C0:F4:1F:B2:F6:5D:33:0F:70:15:44:D6:6E:30:69:87:4F:5C:58:A6:B7:DE:2C:2D:C7:0E:CD:BA:3F:37:A8"
+      ]
+    }
+  }
+]

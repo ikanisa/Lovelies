@@ -1,0 +1,130 @@
+{
+  "schema": 1,
+  "status": "source-refrozen-awaiting-root-verification",
+  "scope": "Anonymous own-account deletion native repository, existing onboarding/privacy UI, controlled transport and actual URLSession host harnesses",
+  "created_at": "2026-10-14T08:57:39.465446+00:00",
+  "changed": [
+    {
+      "path": "ios/Lovelies/Native/CoreWire.swift",
+      "bytes": 24965,
+      "sha256": "ca6da8dc6b5f3462f4bf41d0fe9e3021af8aa781c838a7b38d402c370ba2d23b"
+    },
+    {
+      "path": "ios/Lovelies/Native/BackendRepository.swift",
+      "bytes": 46573,
+      "sha256": "c92cdca5d7ec32194a8bfe599df03aea69dfe29447d172297312c0b26e38ca32"
+    },
+    {
+      "path": "ios/Lovelies/Native/LiveAppStore.swift",
+      "bytes": 26888,
+      "sha256": "9287e12c2c979dc0fd8f3079368f6dbb8b9450a897f3f1520ed410f840a509ab"
+    },
+    {
+      "path": "ios/Lovelies/Native/LiveOnboardingAndGallery.swift",
+      "bytes": 20960,
+      "sha256": "de739bc0ed2a579045eee81d68c87f72f2cfa66605a417e96d691a5a61545093"
+    },
+    {
+      "path": "ios/Lovelies/Native/LiveSharingAndSettings.swift",
+      "bytes": 36142,
+      "sha256": "d7478d8871f3a342288442df09f64b9f3aab6483a8d31ca32614c0f3ef949f24"
+    }
+  ],
+  "new": [
+    {
+      "path": "ios/Tests/NativeGuestDeletionTests.swift",
+      "bytes": 34849,
+      "sha256": "e7c878d402512b8cd2911a4f15c3e0a118e1d5ee994fb45f7f22947d9495bc06"
+    },
+    {
+      "path": "ios/Tests/NativeGuestDeletionHTTPJourney.swift",
+      "bytes": 10711,
+      "sha256": "91e104c63898d3482306133f86c7eb75a53cd2e9c01d3220e6b4531e9e6a7ecf"
+    }
+  ],
+  "preserved_inputs": [
+    {
+      "path": "ios/Lovelies/Native/DeviceIdentity.swift",
+      "bytes": 5681,
+      "sha256": "9c9df1a448c0345970827a1b1a31a978c8b232cbd5fe55897d67ee2264030fcb"
+    },
+    {
+      "path": "ios/Tests/NativeProtocolTests.swift",
+      "bytes": 10428,
+      "sha256": "62d49665bbf598e4d0ca9a34931cec707e16b05f3066889a7dce6af75286c644"
+    },
+    {
+      "path": "ios/Tests/NativeConnectionTests.swift",
+      "bytes": 19396,
+      "sha256": "a033e643248761ce1c9b1d87ee9fc3a0d47ac2b5e02249af2f6ba1748cc4d346"
+    },
+    {
+      "path": "ios/Tests/NativeLiveHTTPJourney.swift",
+      "bytes": 33897,
+      "sha256": "82865b9471e26251bf73b7b391d576c0bb86dacb3f1f7a820a77c0742a4baf0d"
+    }
+  ],
+  "contract": {
+    "path": "verification/anonymous-deletion-20261014/api-contract.md",
+    "bytes": 5009,
+    "sha256": "062046f439e747cb694c11c854e4a28cd2526a3e91a192253b0b0ce2058d995a"
+  },
+  "preimage_manifest": "verification/anonymous-deletion-20261014/preimages/ios/guest-deletion-before-implementation/manifest.json",
+  "local_checks": [
+    "First-frozen source/test/manifest checkpoint preserved and hash-verified",
+    "Generic protected method bodies unchanged",
+    "Existing layout files and HTTP harness unchanged",
+    "Single-use refresh + write failure + restart + mismatch + terminal receipt regressions added; execution is root-owned",
+    "Production UI publication guard has host-testable generation/cancellation cases",
+    "No worker compiler/test/build/simulator processes"
+  ],
+  "root_commands": [
+    [
+      "swiftc",
+      "ios/Lovelies/Native/CoreWire.swift",
+      "ios/Lovelies/Native/DeviceIdentity.swift",
+      "ios/Lovelies/Native/BackendRepository.swift",
+      "ios/Tests/NativeGuestDeletionTests.swift",
+      "-o",
+      "/tmp/lovelies-ios-guest-deletion-tests"
+    ],
+    [
+      "/tmp/lovelies-ios-guest-deletion-tests"
+    ],
+    [
+      "swiftc",
+      "ios/Lovelies/Native/CoreWire.swift",
+      "ios/Lovelies/Native/DeviceIdentity.swift",
+      "ios/Lovelies/Native/BackendRepository.swift",
+      "ios/Tests/NativeGuestDeletionHTTPJourney.swift",
+      "-o",
+      "/tmp/lovelies-ios-guest-deletion-http"
+    ],
+    [
+      "/tmp/lovelies-ios-guest-deletion-http",
+      "http://127.0.0.1:18887",
+      "verification/anonymous-deletion-20261014/ios-guest-http-after-refresh-fix-result.json"
+    ]
+  ],
+  "limits": [
+    "Root compilation and execution pending",
+    "Controlled transport fixtures do not qualify backend erasure",
+    "Actual HTTP harness does not elevate roles or approve/erase the request",
+    "Host in-memory secrets substitute for Keychain; no physical Secure Enclave/device proof",
+    "No iOS SDK/Xcode application build or rendered UI validation"
+  ],
+  "checkpoint_before_fixes": "verification/anonymous-deletion-20261014/checkpoints/ios-before-refresh-recovery-fix/checkpoint.json",
+  "fix_scope": [
+    "Reconcile validated same-account anonymous rotated credential slot into unresolved receipt before slot retirement",
+    "Completed receipts never restore slot credentials; account/method/JWT/origin mismatches remain fail-closed",
+    "Keep latest rotation through status acceptance/local retirement after receipt write failure",
+    "Guard guest/bootstrap/session publication and obsolete errors with production generation/cancellation fence; collect final repository reads before checked publication"
+  ],
+  "root_reported_prior_checkpoint_checks": [
+    "61 controlled guest checks passed",
+    "5 actual guest HTTP stages /17assertions passed",
+    "26 wire checks passed",
+    "25 connection checks passed",
+    "15 actual full sharing stages /140assertions passed"
+  ]
+}

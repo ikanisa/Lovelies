@@ -1,0 +1,12 @@
+# Local verification only. The default Dockerfile reproduces the pinned native
+# dependencies from source. This overlay reuses the already retained runtime;
+# the parent ID is verified by scripts/build-local-face-container.py.
+FROM lovelies-ml-release:security-4a8a73463c5c4ec6
+ENV PYTHONPATH=/app/src MODEL_MANIFEST_PATH=/app/models/model-manifest.json \
+    APP_ENV=production CLOUDFLARE_ENV=production ML_DEPLOYMENT_MODE=monitored_pilot \
+    ML_REQUIRE_MODEL_ARTIFACTS=true ML_USE_DETERMINISTIC_SIMULATOR=false
+COPY --chown=lovelies:lovelies src /app/src
+COPY --chown=lovelies:lovelies models /app/models
+COPY --chown=lovelies:lovelies licenses /app/licenses
+RUN ["/app/.venv/bin/python", "-c", "from lovelies_ml_face.app import pipeline; assert pipeline.artifact_integrity == 'verified'; assert not pipeline.using_deterministic_simulator"]
+CMD ["/app/.venv/bin/python", "-m", "lovelies_ml_face"]

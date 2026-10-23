@@ -1,0 +1,835 @@
+[
+  {
+    "asset": "photo01.jpg",
+    "subject": "Woman with hat overlooking the sea at sunset",
+    "source": "Lovelies-48-Screen-PNGs/screens/12-photo-viewer.png",
+    "source_sha256": "6bbff2a63e60efaefc575d5abde1d38f144a984d46f005af41aab9729e97664b",
+    "crop_xyxy": [
+      6,
+      52,
+      220,
+      309
+    ],
+    "size": [
+      214,
+      257
+    ],
+    "asset_sha256": "2378033c5d62f84a160a1b8d2c79c5aabf51ef1d928cac63855bc1a4f18f4913"
+  },
+  {
+    "asset": "photo02.jpg",
+    "subject": "Coastal village and harbour",
+    "source": "Lovelies-48-Screen-PNGs/screens/13-all-photos.png",
+    "source_sha256": "220ee339c6fbd1e28a09a34d8207df4cc5a9201b75234f108a6dbdff375195e9",
+    "crop_xyxy": [
+      16,
+      119,
+      83,
+      208
+    ],
+    "size": [
+      67,
+      89
+    ],
+    "asset_sha256": "bf8666317ef6907981fd1e48d79277ed17d6cd8a1be9a6516d4ba97555e029bc"
+  },
+  {
+    "asset": "photo03.jpg",
+    "subject": "Golden dog portrait",
+    "source": "Lovelies-48-Screen-PNGs/screens/13-all-photos.png",
+    "source_sha256": "220ee339c6fbd1e28a09a34d8207df4cc5a9201b75234f108a6dbdff375195e9",
+    "crop_xyxy": [
+      179,
+      119,
+      244,
+      183
+    ],
+    "size": [
+      65,
+      64
+    ],
+    "asset_sha256": "1362344cd96f27b1fed20c36462662c921a5c6792136f428acdd8574e112f716"
+  },
+  {
+    "asset": "photo04.jpg",
+    "subject": "Sunlit cathedral",
+    "source": "Lovelies-48-Screen-PNGs/screens/13-all-photos.png",
+    "source_sha256": "220ee339c6fbd1e28a09a34d8207df4cc5a9201b75234f108a6dbdff375195e9",
+    "crop_xyxy": [
+      17,
+      219,
+      83,
+      309
+    ],
+    "size": [
+      66,
+      90
+    ],
+    "asset_sha256": "c43419615a5ae00ea8848664ed7b632b6be94438152f731b0af573b1a27fff01"
+  },
+  {
+    "asset": "photo05.jpg",
+    "subject": "Friends in the village",
+    "source": "Lovelies-48-Screen-PNGs/screens/13-all-photos.png",
+    "source_sha256": "220ee339c6fbd1e28a09a34d8207df4cc5a9201b75234f108a6dbdff375195e9",
+    "crop_xyxy": [
+      179,
+      194,
+      244,
+      262
+    ],
+    "size": [
+      65,
+      68
+    ],
+    "asset_sha256": "cdbbdd6ccfdd38be495efbdb9681b47c2fbcec396d00659a530ea69aa0b0f054"
+  },
+  {
+    "asset": "photo06.jpg",
+    "subject": "Swimming by the coast",
+    "source": "Lovelies-48-Screen-PNGs/screens/13-all-photos.png",
+    "source_sha256": "220ee339c6fbd1e28a09a34d8207df4cc5a9201b75234f108a6dbdff375195e9",
+    "crop_xyxy": [
+      94,
+      243,
+      167,
+      319
+    ],
+    "size": [
+      73,
+      76
+    ],
+    "asset_sha256": "17218d6468e9c9fa485b8cb83c6e6e08242725a5ee541b13b695f6b8f8c463a8"
+  },
+  {
+    "asset": "photo07.jpg",
+    "subject": "Mountain village and lake",
+    "source": "Lovelies-48-Screen-PNGs/screens/13-all-photos.png",
+    "source_sha256": "220ee339c6fbd1e28a09a34d8207df4cc5a9201b75234f108a6dbdff375195e9",
+    "crop_xyxy": [
+      94,
+      330,
+      168,
+      404
+    ],
+    "size": [
+      74,
+      74
+    ],
+    "asset_sha256": "c3fddbb846b3cc98e2be43db352fbc4d90cf51f877254d1965cf68ffa8a7abea"
+  },
+  {
+    "asset": "photo08.jpg",
+    "subject": "Woman sitting in a town square",
+    "source": "Lovelies-48-Screen-PNGs/screens/13-all-photos.png",
+    "source_sha256": "220ee339c6fbd1e28a09a34d8207df4cc5a9201b75234f108a6dbdff375195e9",
+    "crop_xyxy": [
+      179,
+      274,
+      244,
+      369
+    ],
+    "size": [
+      65,
+      95
+    ],
+    "asset_sha256": "5574506c7a137a1305b00d3f007c3c8d93bd23f2bdda46e707e9744680b1dcfd"
+  },
+  {
+    "asset": "photo09.jpg",
+    "subject": "Dog in the garden",
+    "source": "Lovelies-48-Screen-PNGs/screens/13-all-photos.png",
+    "source_sha256": "220ee339c6fbd1e28a09a34d8207df4cc5a9201b75234f108a6dbdff375195e9",
+    "crop_xyxy": [
+      17,
+      322,
+      83,
+      367
+    ],
+    "size": [
+      66,
+      45
+    ],
+    "asset_sha256": "69b9fc9644d615f26fa5b7458ac19a05de37e5ef1febdb900e35024516f20d9e"
+  },
+  {
+    "asset": "photo10.jpg",
+    "subject": "Man travelling through a town",
+    "source": "Lovelies-48-Screen-PNGs/screens/13-all-photos.png",
+    "source_sha256": "220ee339c6fbd1e28a09a34d8207df4cc5a9201b75234f108a6dbdff375195e9",
+    "crop_xyxy": [
+      18,
+      380,
+      83,
+      481
+    ],
+    "size": [
+      65,
+      101
+    ],
+    "asset_sha256": "329d411c695b333fb530b1e9679c9a3ecf2c41c4b691ce89a970227e98375c11"
+  },
+  {
+    "asset": "photo11.jpg",
+    "subject": "Woman in sunshine",
+    "source": "Lovelies-48-Screen-PNGs/screens/13-all-photos.png",
+    "source_sha256": "220ee339c6fbd1e28a09a34d8207df4cc5a9201b75234f108a6dbdff375195e9",
+    "crop_xyxy": [
+      94,
+      419,
+      167,
+      481
+    ],
+    "size": [
+      73,
+      62
+    ],
+    "asset_sha256": "4c536aae651cc7caf44ea26721581874217967d50560319a8fa579367114dd00"
+  },
+  {
+    "asset": "photo12.jpg",
+    "subject": "Evening celebration",
+    "source": "Lovelies-48-Screen-PNGs/screens/13-all-photos.png",
+    "source_sha256": "220ee339c6fbd1e28a09a34d8207df4cc5a9201b75234f108a6dbdff375195e9",
+    "crop_xyxy": [
+      179,
+      381,
+      244,
+      446
+    ],
+    "size": [
+      65,
+      65
+    ],
+    "asset_sha256": "d55c1d6fafafa310d2e132e408be7af62f38a266d5532448d07741d73974b37e"
+  },
+  {
+    "asset": "photo13.jpg",
+    "subject": "Colourful Mediterranean coastline",
+    "source": "Lovelies-48-Screen-PNGs/screens/28-person-to-photos.png",
+    "source_sha256": "c1ee5a64ed747dbc02f43ef70290f516d919852ca0e36846affe4e1f30fdb7a9",
+    "crop_xyxy": [
+      92,
+      166,
+      157,
+      249
+    ],
+    "size": [
+      65,
+      83
+    ],
+    "asset_sha256": "79a6fd468d6857eff5af1b5cffe715b9439dc4a6878fe605c96bfe55896c318d"
+  },
+  {
+    "asset": "photo14.jpg",
+    "subject": "Bell tower at sunset",
+    "source": "Lovelies-48-Screen-PNGs/screens/28-person-to-photos.png",
+    "source_sha256": "c1ee5a64ed747dbc02f43ef70290f516d919852ca0e36846affe4e1f30fdb7a9",
+    "crop_xyxy": [
+      165,
+      167,
+      232,
+      225
+    ],
+    "size": [
+      67,
+      58
+    ],
+    "asset_sha256": "a71d7a30e1b3a2981375da0a3159bfe198a7a0979799c504da97adc57a835bd2"
+  },
+  {
+    "asset": "photo15.jpg",
+    "subject": "Cathedral facade",
+    "source": "Lovelies-48-Screen-PNGs/screens/28-person-to-photos.png",
+    "source_sha256": "c1ee5a64ed747dbc02f43ef70290f516d919852ca0e36846affe4e1f30fdb7a9",
+    "crop_xyxy": [
+      92,
+      259,
+      157,
+      368
+    ],
+    "size": [
+      65,
+      109
+    ],
+    "asset_sha256": "d2c07b7d46f721a4e9e4e15b5620ad0724e6f7eaea66159a2ba99bea88bb9324"
+  },
+  {
+    "asset": "photo16.jpg",
+    "subject": "Woman by a mountain lake",
+    "source": "Lovelies-48-Screen-PNGs/screens/28-person-to-photos.png",
+    "source_sha256": "c1ee5a64ed747dbc02f43ef70290f516d919852ca0e36846affe4e1f30fdb7a9",
+    "crop_xyxy": [
+      165,
+      235,
+      232,
+      310
+    ],
+    "size": [
+      67,
+      75
+    ],
+    "asset_sha256": "1e4835ea62f30e58a8cc2b2b8569a101cb0661747ac354d4832d4e1ebf4d011b"
+  },
+  {
+    "asset": "photo17.jpg",
+    "subject": "Blonde woman enjoying the sun",
+    "source": "Lovelies-48-Screen-PNGs/screens/14-favorites-and-saved.png",
+    "source_sha256": "90a0a02d9c54a6ebf94f92459764827c937661e3739271c0ed2f10021a2f2287",
+    "crop_xyxy": [
+      14,
+      378,
+      79,
+      450
+    ],
+    "size": [
+      65,
+      72
+    ],
+    "asset_sha256": "fae182d29324721618f01de1a88406aae3e7a5a08d160abbdbc080ba4ab9d742"
+  },
+  {
+    "asset": "photo18.jpg",
+    "subject": "Woman in a summer dress",
+    "source": "Lovelies-48-Screen-PNGs/screens/14-favorites-and-saved.png",
+    "source_sha256": "90a0a02d9c54a6ebf94f92459764827c937661e3739271c0ed2f10021a2f2287",
+    "crop_xyxy": [
+      173,
+      214,
+      238,
+      304
+    ],
+    "size": [
+      65,
+      90
+    ],
+    "asset_sha256": "7120904682a9cee4f23ef08a87217db2b01eed39094af30e97502bf055952b6e"
+  },
+  {
+    "asset": "portrait.jpg",
+    "subject": "Jasmine / Sophie portrait from the supplied enrollment illustration",
+    "source": "Lovelies-48-Screen-PNGs/screens/06-face-enrollment.png",
+    "source_sha256": "c0f8d5d52f0f31f1ff0d8bb45fd64b342541d734abf1670852386667538db13a",
+    "crop_xyxy": [
+      10,
+      32,
+      204,
+      291
+    ],
+    "size": [
+      194,
+      259
+    ],
+    "asset_sha256": "a11bc440ccf87045e06644cc296cf0ece4bc21ec13e9bd9eddeb563fa295109c"
+  },
+  {
+    "asset": "retry-portrait.jpg",
+    "subject": "Exact retry-screen portrait, excluding the exclamation control",
+    "source": "Lovelies-48-Screen-PNGs/screens/07-face-quality-retry.png",
+    "source_sha256": "a602c80b69e015a4ae9555c06c3864bd7b1b9880125ed04a79050b795d720305",
+    "crop_xyxy": [
+      23,
+      43,
+      194,
+      169
+    ],
+    "size": [
+      171,
+      126
+    ],
+    "asset_sha256": "05c82b41db60fa3b72bcd59944ef9a01a9539555acc476c349a5a3ddded14b5c"
+  },
+  {
+    "asset": "person01.jpg",
+    "subject": "Sophie / Jasmine avatar",
+    "source": "Lovelies-48-Screen-PNGs/screens/28-person-to-photos.png",
+    "source_sha256": "c1ee5a64ed747dbc02f43ef70290f516d919852ca0e36846affe4e1f30fdb7a9",
+    "crop_xyxy": [
+      81,
+      40,
+      164,
+      123
+    ],
+    "size": [
+      83,
+      83
+    ],
+    "asset_sha256": "03403e7c163cafdfef286521f8a9ff061efdc3725209d2835bdaddbbf24d5dd8"
+  },
+  {
+    "asset": "person02.jpg",
+    "subject": "Mark avatar from the supplied report screen",
+    "source": "Lovelies-48-Screen-PNGs/screens/36-report-incorrect-match.png",
+    "source_sha256": "08f5bbae2df06d11f313931b20fe1bda6f0cb2cf31db17bde5817f32a1f3c521",
+    "crop_xyxy": [
+      87,
+      36,
+      149,
+      98
+    ],
+    "size": [
+      62,
+      62
+    ],
+    "asset_sha256": "741a2116814f551e535b0fbcf916f8c28278685de45163663d803ef2c035925d"
+  },
+  {
+    "asset": "person03.jpg",
+    "subject": "Emma",
+    "source": "Lovelies-48-Screen-PNGs/screens/31-select-people-to-share-with.png",
+    "source_sha256": "9b2bf7cef622284ec0e7cfe038090f12cd9447ecf7135f1e904276a757ac677c",
+    "crop_xyxy": [
+      15,
+      139,
+      41,
+      165
+    ],
+    "size": [
+      26,
+      26
+    ],
+    "asset_sha256": "bf798d5799ceea30f7d5dbdc2867f4a84c446dd967a0127ff518997dc3790975"
+  },
+  {
+    "asset": "person04.jpg",
+    "subject": "James",
+    "source": "Lovelies-48-Screen-PNGs/screens/31-select-people-to-share-with.png",
+    "source_sha256": "9b2bf7cef622284ec0e7cfe038090f12cd9447ecf7135f1e904276a757ac677c",
+    "crop_xyxy": [
+      15,
+      171,
+      41,
+      197
+    ],
+    "size": [
+      26,
+      26
+    ],
+    "asset_sha256": "c732db22b492c7bc23f4c454c965a5fd61aa59211075b232814bbcb53d909d7c"
+  },
+  {
+    "asset": "person05.jpg",
+    "subject": "Olivia",
+    "source": "Lovelies-48-Screen-PNGs/screens/31-select-people-to-share-with.png",
+    "source_sha256": "9b2bf7cef622284ec0e7cfe038090f12cd9447ecf7135f1e904276a757ac677c",
+    "crop_xyxy": [
+      15,
+      206,
+      41,
+      232
+    ],
+    "size": [
+      26,
+      26
+    ],
+    "asset_sha256": "266a942d34b81c04093601f3a1a6cb392cf03dae493db8e0458f4e62cca2e4aa"
+  },
+  {
+    "asset": "person06.jpg",
+    "subject": "Daniel",
+    "source": "Lovelies-48-Screen-PNGs/screens/31-select-people-to-share-with.png",
+    "source_sha256": "9b2bf7cef622284ec0e7cfe038090f12cd9447ecf7135f1e904276a757ac677c",
+    "crop_xyxy": [
+      15,
+      237,
+      41,
+      263
+    ],
+    "size": [
+      26,
+      26
+    ],
+    "asset_sha256": "7e94b1799a10d6a73957fedc9cef1deb5e502ff05915083cf9200d0f4a306a64"
+  },
+  {
+    "asset": "person07.jpg",
+    "subject": "Maya",
+    "source": "Lovelies-48-Screen-PNGs/screens/31-select-people-to-share-with.png",
+    "source_sha256": "9b2bf7cef622284ec0e7cfe038090f12cd9447ecf7135f1e904276a757ac677c",
+    "crop_xyxy": [
+      15,
+      269,
+      41,
+      295
+    ],
+    "size": [
+      26,
+      26
+    ],
+    "asset_sha256": "7355a0776ebc52f922cfeb3baee67f7acb682a89959b229297ec186914199636"
+  },
+  {
+    "asset": "person08.jpg",
+    "subject": "Lucas",
+    "source": "Lovelies-48-Screen-PNGs/screens/31-select-people-to-share-with.png",
+    "source_sha256": "9b2bf7cef622284ec0e7cfe038090f12cd9447ecf7135f1e904276a757ac677c",
+    "crop_xyxy": [
+      15,
+      303,
+      41,
+      329
+    ],
+    "size": [
+      26,
+      26
+    ],
+    "asset_sha256": "cf34763b622905752c283b0291ec9d4fabc653db1d2ed8d068489ad965dbbdaf"
+  },
+  {
+    "asset": "wordmark.png",
+    "subject": "Original Lovelies handwritten pink wordmark",
+    "source": "Lovelies-48-Screen-PNGs/screens/03-sign-in-and-join.png",
+    "source_sha256": "705d75a7cfb03da8e51de489dee951c24fdecc5b28c7a9b5b5299482e833fe6b",
+    "crop_xyxy": [
+      49,
+      51,
+      193,
+      131
+    ],
+    "size": [
+      144,
+      80
+    ],
+    "asset_sha256": "0b85eb48e8609cba285b78cc1f586da6991a0af9def20c1395b6b6fb19a5a105"
+  },
+  {
+    "asset": "photo-heart.png",
+    "subject": "Original Lovelies photo and heart illustration",
+    "source": "Lovelies-48-Screen-PNGs/screens/19-upload-entry.png",
+    "source_sha256": "a947ed6178e2ab1a3d5cd4d32cd46c9c24a659e428e3b9e6cf221ead95bf2d79",
+    "crop_xyxy": [
+      56,
+      88,
+      192,
+      191
+    ],
+    "size": [
+      136,
+      103
+    ],
+    "asset_sha256": "f8970a77cb78738d4beac5e46c24aa5caf4e0cb63a44f62f097b8ee7aa3f5d13"
+  },
+  {
+    "asset": "splash.jpg",
+    "subject": "Pink bokeh background, excluding wordmark and controls",
+    "source": "Lovelies-48-Screen-PNGs/screens/01-splash.png",
+    "source_sha256": "4df4320c8da49ab658468c514781cb505f06c8a490211e03dace7cf31cc2565e",
+    "crop_xyxy": [
+      9,
+      30,
+      207,
+      120
+    ],
+    "size": [
+      198,
+      90
+    ],
+    "asset_sha256": "848187e582f3f02b14bb256a6544d3742efb99fbcf410f02b75493203e07122f"
+  },
+  {
+    "asset": "home01.jpg",
+    "subject": "Home screenshot photograph 1",
+    "source": "Lovelies-48-Screen-PNGs/screens/10-home-gallery.png",
+    "source_sha256": "d503fffd806e0130f3e1d50260a3ad383dd7ab60066cd9a77f3978ca4c823c64",
+    "crop_xyxy": [
+      9,
+      71,
+      69,
+      136
+    ],
+    "size": [
+      60,
+      65
+    ],
+    "asset_sha256": "c72061c391c5c8b1c67f6136996eafa029e42bc59541af0965c94986b8f5f346"
+  },
+  {
+    "asset": "home02.jpg",
+    "subject": "Home screenshot photograph 2",
+    "source": "Lovelies-48-Screen-PNGs/screens/10-home-gallery.png",
+    "source_sha256": "d503fffd806e0130f3e1d50260a3ad383dd7ab60066cd9a77f3978ca4c823c64",
+    "crop_xyxy": [
+      74,
+      68,
+      120,
+      137
+    ],
+    "size": [
+      46,
+      69
+    ],
+    "asset_sha256": "23761034ec2a144a6e250ae76c35a970ad379369d0578b634cb276f135d60836"
+  },
+  {
+    "asset": "home03.jpg",
+    "subject": "Home screenshot photograph 3",
+    "source": "Lovelies-48-Screen-PNGs/screens/10-home-gallery.png",
+    "source_sha256": "d503fffd806e0130f3e1d50260a3ad383dd7ab60066cd9a77f3978ca4c823c64",
+    "crop_xyxy": [
+      126,
+      67,
+      174,
+      109
+    ],
+    "size": [
+      48,
+      42
+    ],
+    "asset_sha256": "7ecfaed0f15083ab4ae8a0d0257c20c32d28f65d95a374e7723dbca29bda89dc"
+  },
+  {
+    "asset": "home04.jpg",
+    "subject": "Home screenshot photograph 4",
+    "source": "Lovelies-48-Screen-PNGs/screens/10-home-gallery.png",
+    "source_sha256": "d503fffd806e0130f3e1d50260a3ad383dd7ab60066cd9a77f3978ca4c823c64",
+    "crop_xyxy": [
+      181,
+      67,
+      235,
+      125
+    ],
+    "size": [
+      54,
+      58
+    ],
+    "asset_sha256": "048b0e9ecdda9622821d7613cc7732d6c42c7dd6760bc0fcf01e408681332411"
+  },
+  {
+    "asset": "home05.jpg",
+    "subject": "Home screenshot photograph 5",
+    "source": "Lovelies-48-Screen-PNGs/screens/10-home-gallery.png",
+    "source_sha256": "d503fffd806e0130f3e1d50260a3ad383dd7ab60066cd9a77f3978ca4c823c64",
+    "crop_xyxy": [
+      10,
+      142,
+      45,
+      207
+    ],
+    "size": [
+      35,
+      65
+    ],
+    "asset_sha256": "282e48217917213796d3b1c9a1f5ba3fb8bb075a23a6143b996823b1d64cd079"
+  },
+  {
+    "asset": "home06.jpg",
+    "subject": "Home screenshot photograph 6",
+    "source": "Lovelies-48-Screen-PNGs/screens/10-home-gallery.png",
+    "source_sha256": "d503fffd806e0130f3e1d50260a3ad383dd7ab60066cd9a77f3978ca4c823c64",
+    "crop_xyxy": [
+      52,
+      141,
+      120,
+      198
+    ],
+    "size": [
+      68,
+      57
+    ],
+    "asset_sha256": "2d708f218872aaca8b9135656fe6a8ca41441b4765b13bca7957e5de85c53d95"
+  },
+  {
+    "asset": "home07.jpg",
+    "subject": "Home screenshot photograph 7",
+    "source": "Lovelies-48-Screen-PNGs/screens/10-home-gallery.png",
+    "source_sha256": "d503fffd806e0130f3e1d50260a3ad383dd7ab60066cd9a77f3978ca4c823c64",
+    "crop_xyxy": [
+      126,
+      114,
+      174,
+      182
+    ],
+    "size": [
+      48,
+      68
+    ],
+    "asset_sha256": "4bd57c4e1bcb298a7cb28ac91626b32815cec932318b671c58383e0e742415b6"
+  },
+  {
+    "asset": "home08.jpg",
+    "subject": "Home screenshot photograph 8",
+    "source": "Lovelies-48-Screen-PNGs/screens/10-home-gallery.png",
+    "source_sha256": "d503fffd806e0130f3e1d50260a3ad383dd7ab60066cd9a77f3978ca4c823c64",
+    "crop_xyxy": [
+      181,
+      132,
+      235,
+      190
+    ],
+    "size": [
+      54,
+      58
+    ],
+    "asset_sha256": "b66f60f4ef80202c3e32dc37cc23f86af596395cef1bb072fd07d7c50e25ec48"
+  },
+  {
+    "asset": "home09.jpg",
+    "subject": "Home screenshot photograph 9",
+    "source": "Lovelies-48-Screen-PNGs/screens/10-home-gallery.png",
+    "source_sha256": "d503fffd806e0130f3e1d50260a3ad383dd7ab60066cd9a77f3978ca4c823c64",
+    "crop_xyxy": [
+      10,
+      215,
+      55,
+      264
+    ],
+    "size": [
+      45,
+      49
+    ],
+    "asset_sha256": "8c9edce5a7caf41cf8e8a4a6c49c63fdbb30a6ce3d6b5f1c8cfdf634f87be5e1"
+  },
+  {
+    "asset": "home10.jpg",
+    "subject": "Home screenshot photograph 10",
+    "source": "Lovelies-48-Screen-PNGs/screens/10-home-gallery.png",
+    "source_sha256": "d503fffd806e0130f3e1d50260a3ad383dd7ab60066cd9a77f3978ca4c823c64",
+    "crop_xyxy": [
+      61,
+      205,
+      120,
+      245
+    ],
+    "size": [
+      59,
+      40
+    ],
+    "asset_sha256": "2a0bdf3abcfa8a9d49b492ac3b24cc04929a28a5c30c16f5d29c89550129b52a"
+  },
+  {
+    "asset": "home11.jpg",
+    "subject": "Home screenshot photograph 11",
+    "source": "Lovelies-48-Screen-PNGs/screens/10-home-gallery.png",
+    "source_sha256": "d503fffd806e0130f3e1d50260a3ad383dd7ab60066cd9a77f3978ca4c823c64",
+    "crop_xyxy": [
+      126,
+      187,
+      174,
+      242
+    ],
+    "size": [
+      48,
+      55
+    ],
+    "asset_sha256": "e7dd334f5393f3a8a7c5ecff948db6fd92177f5f71d9ed9f74543e5812ee00e3"
+  },
+  {
+    "asset": "home12.jpg",
+    "subject": "Home screenshot photograph 12",
+    "source": "Lovelies-48-Screen-PNGs/screens/10-home-gallery.png",
+    "source_sha256": "d503fffd806e0130f3e1d50260a3ad383dd7ab60066cd9a77f3978ca4c823c64",
+    "crop_xyxy": [
+      181,
+      198,
+      235,
+      266
+    ],
+    "size": [
+      54,
+      68
+    ],
+    "asset_sha256": "24e41ce691599ec6a63cec920c556c1efe0298baaeea71d23c402ad99bad3ee5"
+  },
+  {
+    "asset": "home13.jpg",
+    "subject": "Home screenshot photograph 13",
+    "source": "Lovelies-48-Screen-PNGs/screens/10-home-gallery.png",
+    "source_sha256": "d503fffd806e0130f3e1d50260a3ad383dd7ab60066cd9a77f3978ca4c823c64",
+    "crop_xyxy": [
+      10,
+      272,
+      55,
+      314
+    ],
+    "size": [
+      45,
+      42
+    ],
+    "asset_sha256": "996680073119540e86ca7c2afddf4b8c4d7774bb4cccd5a0e5973206d22a3360"
+  },
+  {
+    "asset": "home14.jpg",
+    "subject": "Home screenshot photograph 14",
+    "source": "Lovelies-48-Screen-PNGs/screens/10-home-gallery.png",
+    "source_sha256": "d503fffd806e0130f3e1d50260a3ad383dd7ab60066cd9a77f3978ca4c823c64",
+    "crop_xyxy": [
+      61,
+      251,
+      120,
+      314
+    ],
+    "size": [
+      59,
+      63
+    ],
+    "asset_sha256": "96f82b8255345ba9b67d471829bcacc535bf327fde021de174b813f99ce368f6"
+  },
+  {
+    "asset": "home15.jpg",
+    "subject": "Home screenshot photograph 15",
+    "source": "Lovelies-48-Screen-PNGs/screens/10-home-gallery.png",
+    "source_sha256": "d503fffd806e0130f3e1d50260a3ad383dd7ab60066cd9a77f3978ca4c823c64",
+    "crop_xyxy": [
+      126,
+      248,
+      174,
+      314
+    ],
+    "size": [
+      48,
+      66
+    ],
+    "asset_sha256": "9a352932ce55d32c11d2a476b608b75a551fe132d5211951fac36a07169f6667"
+  },
+  {
+    "asset": "home16.jpg",
+    "subject": "Home screenshot photograph 16",
+    "source": "Lovelies-48-Screen-PNGs/screens/10-home-gallery.png",
+    "source_sha256": "d503fffd806e0130f3e1d50260a3ad383dd7ab60066cd9a77f3978ca4c823c64",
+    "crop_xyxy": [
+      181,
+      273,
+      235,
+      314
+    ],
+    "size": [
+      54,
+      41
+    ],
+    "asset_sha256": "3ac5fc3885e4391521eaf72aedef66c20f4dc2e09387b279e5ac7568cacc574e"
+  },
+  {
+    "asset": "home17.jpg",
+    "subject": "Home screenshot photograph 17",
+    "source": "Lovelies-48-Screen-PNGs/screens/10-home-gallery.png",
+    "source_sha256": "d503fffd806e0130f3e1d50260a3ad383dd7ab60066cd9a77f3978ca4c823c64",
+    "crop_xyxy": [
+      181,
+      273,
+      235,
+      314
+    ],
+    "size": [
+      54,
+      41
+    ],
+    "asset_sha256": "3ac5fc3885e4391521eaf72aedef66c20f4dc2e09387b279e5ac7568cacc574e"
+  },
+  {
+    "asset": "home18.jpg",
+    "subject": "Home screenshot photograph 18",
+    "source": "Lovelies-48-Screen-PNGs/screens/10-home-gallery.png",
+    "source_sha256": "d503fffd806e0130f3e1d50260a3ad383dd7ab60066cd9a77f3978ca4c823c64",
+    "crop_xyxy": [
+      126,
+      114,
+      174,
+      182
+    ],
+    "size": [
+      48,
+      68
+    ],
+    "asset_sha256": "4bd57c4e1bcb298a7cb28ac91626b32815cec932318b671c58383e0e742415b6"
+  }
+]

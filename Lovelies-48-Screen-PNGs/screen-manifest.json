@@ -1,0 +1,770 @@
+[
+  {
+    "number": 1,
+    "title": "Splash",
+    "source_board": 1,
+    "source_file_id": "file_0000000004d88208bd60e3003882d46b",
+    "crop_box_xyxy": [
+      72,
+      81,
+      289,
+      471
+    ],
+    "filename": "01-splash.png",
+    "width": 217,
+    "height": 390,
+    "sha256": "4df4320c8da49ab658468c514781cb505f06c8a490211e03dace7cf31cc2565e"
+  },
+  {
+    "number": 2,
+    "title": "Introduction and how it works",
+    "source_board": 1,
+    "source_file_id": "file_0000000004d88208bd60e3003882d46b",
+    "crop_box_xyxy": [
+      320,
+      80,
+      549,
+      471
+    ],
+    "filename": "02-introduction-and-how-it-works.png",
+    "width": 229,
+    "height": 391,
+    "sha256": "6fe45195f41989c5dd99b2ff35edccdad36af957c663a406b9d59c970ea4f586"
+  },
+  {
+    "number": 3,
+    "title": "Sign in and join",
+    "source_board": 1,
+    "source_file_id": "file_0000000004d88208bd60e3003882d46b",
+    "crop_box_xyxy": [
+      582,
+      81,
+      817,
+      470
+    ],
+    "filename": "03-sign-in-and-join.png",
+    "width": 235,
+    "height": 389,
+    "sha256": "705d75a7cfb03da8e51de489dee951c24fdecc5b28c7a9b5b5299482e833fe6b"
+  },
+  {
+    "number": 4,
+    "title": "Photo access prompt",
+    "source_board": 1,
+    "source_file_id": "file_0000000004d88208bd60e3003882d46b",
+    "crop_box_xyxy": [
+      851,
+      80,
+      1088,
+      470
+    ],
+    "filename": "04-photo-access-prompt.png",
+    "width": 237,
+    "height": 390,
+    "sha256": "71200340cd6f3e36f488efad83d02f047bd4526fef39d777e495cc9cee0c9a77"
+  },
+  {
+    "number": 5,
+    "title": "Photo access options",
+    "source_board": 1,
+    "source_file_id": "file_0000000004d88208bd60e3003882d46b",
+    "crop_box_xyxy": [
+      1122,
+      80,
+      1353,
+      470
+    ],
+    "filename": "05-photo-access-options.png",
+    "width": 231,
+    "height": 390,
+    "sha256": "83608caee1325bf6163e93238972cf7e0545c5555569d00c4889f9b737efe192"
+  },
+  {
+    "number": 6,
+    "title": "Face enrollment",
+    "source_board": 1,
+    "source_file_id": "file_0000000004d88208bd60e3003882d46b",
+    "crop_box_xyxy": [
+      1383,
+      81,
+      1597,
+      470
+    ],
+    "filename": "06-face-enrollment.png",
+    "width": 214,
+    "height": 389,
+    "sha256": "c0f8d5d52f0f31f1ff0d8bb45fd64b342541d734abf1670852386667538db13a"
+  },
+  {
+    "number": 7,
+    "title": "Face quality retry",
+    "source_board": 1,
+    "source_file_id": "file_0000000004d88208bd60e3003882d46b",
+    "crop_box_xyxy": [
+      73,
+      497,
+      289,
+      858
+    ],
+    "filename": "07-face-quality-retry.png",
+    "width": 216,
+    "height": 361,
+    "sha256": "a602c80b69e015a4ae9555c06c3864bd7b1b9880125ed04a79050b795d720305"
+  },
+  {
+    "number": 8,
+    "title": "Processing",
+    "source_board": 1,
+    "source_file_id": "file_0000000004d88208bd60e3003882d46b",
+    "crop_box_xyxy": [
+      321,
+      497,
+      549,
+      858
+    ],
+    "filename": "08-processing.png",
+    "width": 228,
+    "height": 361,
+    "sha256": "3dd38e362900b9cf7f34f2434a6cdd9dfb2e4fe335bb36b73ad4be22ebf0d8a9"
+  },
+  {
+    "number": 9,
+    "title": "Setup complete",
+    "source_board": 1,
+    "source_file_id": "file_0000000004d88208bd60e3003882d46b",
+    "crop_box_xyxy": [
+      581,
+      498,
+      817,
+      858
+    ],
+    "filename": "09-setup-complete.png",
+    "width": 236,
+    "height": 360,
+    "sha256": "0c5ab847770c534db8035bc3cc5b496c386603d209c5cdd9d1275d0d53dcad86"
+  },
+  {
+    "number": 10,
+    "title": "Home gallery",
+    "source_board": 1,
+    "source_file_id": "file_0000000004d88208bd60e3003882d46b",
+    "crop_box_xyxy": [
+      841,
+      497,
+      1088,
+      858
+    ],
+    "filename": "10-home-gallery.png",
+    "width": 247,
+    "height": 361,
+    "sha256": "d503fffd806e0130f3e1d50260a3ad383dd7ab60066cd9a77f3978ca4c823c64"
+  },
+  {
+    "number": 11,
+    "title": "New matches",
+    "source_board": 1,
+    "source_file_id": "file_0000000004d88208bd60e3003882d46b",
+    "crop_box_xyxy": [
+      1112,
+      497,
+      1352,
+      858
+    ],
+    "filename": "11-new-matches.png",
+    "width": 240,
+    "height": 361,
+    "sha256": "cd380489559f47cca941437a05b4c0f499868c7e224ff1ef0e64077e6388821b"
+  },
+  {
+    "number": 12,
+    "title": "Photo viewer",
+    "source_board": 1,
+    "source_file_id": "file_0000000004d88208bd60e3003882d46b",
+    "crop_box_xyxy": [
+      1379,
+      498,
+      1606,
+      858
+    ],
+    "filename": "12-photo-viewer.png",
+    "width": 227,
+    "height": 360,
+    "sha256": "6bbff2a63e60efaefc575d5abde1d38f144a984d46f005af41aab9729e97664b"
+  },
+  {
+    "number": 13,
+    "title": "All photos",
+    "source_board": 2,
+    "source_file_id": "file_0000000009e08208989d0ca9bdf7a216",
+    "crop_box_xyxy": [
+      26,
+      76,
+      284,
+      563
+    ],
+    "filename": "13-all-photos.png",
+    "width": 258,
+    "height": 487,
+    "sha256": "220ee339c6fbd1e28a09a34d8207df4cc5a9201b75234f108a6dbdff375195e9"
+  },
+  {
+    "number": 14,
+    "title": "Favorites and saved",
+    "source_board": 2,
+    "source_file_id": "file_0000000009e08208989d0ca9bdf7a216",
+    "crop_box_xyxy": [
+      299,
+      76,
+      557,
+      563
+    ],
+    "filename": "14-favorites-and-saved.png",
+    "width": 258,
+    "height": 487,
+    "sha256": "90a0a02d9c54a6ebf94f92459764827c937661e3739271c0ed2f10021a2f2287"
+  },
+  {
+    "number": 15,
+    "title": "Search",
+    "source_board": 2,
+    "source_file_id": "file_0000000009e08208989d0ca9bdf7a216",
+    "crop_box_xyxy": [
+      572,
+      76,
+      830,
+      563
+    ],
+    "filename": "15-search.png",
+    "width": 258,
+    "height": 487,
+    "sha256": "621f57ec86c1e2350d8ebe40b5353241f363b544d60fa15ddef882a746a5a84b"
+  },
+  {
+    "number": 16,
+    "title": "Filters",
+    "source_board": 2,
+    "source_file_id": "file_0000000009e08208989d0ca9bdf7a216",
+    "crop_box_xyxy": [
+      844,
+      76,
+      1103,
+      563
+    ],
+    "filename": "16-filters.png",
+    "width": 259,
+    "height": 487,
+    "sha256": "3d2fc1a675b7b48f33ec59faf81171370eaa9137d3986e5940e18719edaa2a29"
+  },
+  {
+    "number": 17,
+    "title": "Activity inbox",
+    "source_board": 2,
+    "source_file_id": "file_0000000009e08208989d0ca9bdf7a216",
+    "crop_box_xyxy": [
+      1118,
+      77,
+      1377,
+      563
+    ],
+    "filename": "17-activity-inbox.png",
+    "width": 259,
+    "height": 486,
+    "sha256": "7d0996aefa214199d69884dedcace647269c45a34390647affd49a1750ecb96a"
+  },
+  {
+    "number": 18,
+    "title": "Notifications",
+    "source_board": 2,
+    "source_file_id": "file_0000000009e08208989d0ca9bdf7a216",
+    "crop_box_xyxy": [
+      1391,
+      77,
+      1648,
+      563
+    ],
+    "filename": "18-notifications.png",
+    "width": 257,
+    "height": 486,
+    "sha256": "9de1b6cf118521a79b60956eba7fe592d0e16104ee23e4f8276835d410a0ed40"
+  },
+  {
+    "number": 19,
+    "title": "Upload entry",
+    "source_board": 2,
+    "source_file_id": "file_0000000009e08208989d0ca9bdf7a216",
+    "crop_box_xyxy": [
+      26,
+      599,
+      282,
+      913
+    ],
+    "filename": "19-upload-entry.png",
+    "width": 256,
+    "height": 314,
+    "sha256": "a947ed6178e2ab1a3d5cd4d32cd46c9c24a659e428e3b9e6cf221ead95bf2d79"
+  },
+  {
+    "number": 20,
+    "title": "Upload source picker",
+    "source_board": 2,
+    "source_file_id": "file_0000000009e08208989d0ca9bdf7a216",
+    "crop_box_xyxy": [
+      297,
+      599,
+      552,
+      913
+    ],
+    "filename": "20-upload-source-picker.png",
+    "width": 255,
+    "height": 314,
+    "sha256": "665c40dd7c5263534f49e60a2f496602e7c80f64fa3b39c729d171e97efa74b0"
+  },
+  {
+    "number": 21,
+    "title": "Select upload photos",
+    "source_board": 2,
+    "source_file_id": "file_0000000009e08208989d0ca9bdf7a216",
+    "crop_box_xyxy": [
+      571,
+      599,
+      829,
+      913
+    ],
+    "filename": "21-select-upload-photos.png",
+    "width": 258,
+    "height": 314,
+    "sha256": "928975680ed077bf2658f38ff17d2e8793abd49f173c4063eb7872ef17a948bb"
+  },
+  {
+    "number": 22,
+    "title": "Review upload",
+    "source_board": 2,
+    "source_file_id": "file_0000000009e08208989d0ca9bdf7a216",
+    "crop_box_xyxy": [
+      843,
+      599,
+      1102,
+      913
+    ],
+    "filename": "22-review-upload.png",
+    "width": 259,
+    "height": 314,
+    "sha256": "c79273e1ed4896dfa6dd62e04392f81e5588442ce9bd1d84996ecc32f5942ab0"
+  },
+  {
+    "number": 23,
+    "title": "Upload progress",
+    "source_board": 2,
+    "source_file_id": "file_0000000009e08208989d0ca9bdf7a216",
+    "crop_box_xyxy": [
+      1118,
+      600,
+      1376,
+      913
+    ],
+    "filename": "23-upload-progress.png",
+    "width": 258,
+    "height": 313,
+    "sha256": "d9f82e75e264dc3a45e459fca85c6a3196ab7e0f41eca68158b9333330e04320"
+  },
+  {
+    "number": 24,
+    "title": "Upload complete",
+    "source_board": 2,
+    "source_file_id": "file_0000000009e08208989d0ca9bdf7a216",
+    "crop_box_xyxy": [
+      1391,
+      600,
+      1648,
+      913
+    ],
+    "filename": "24-upload-complete.png",
+    "width": 257,
+    "height": 313,
+    "sha256": "669a89672a69972580cf6d4b1b97fb8a42bb6b9d45e2090bbcb5636527087dc6"
+  },
+  {
+    "number": 25,
+    "title": "Match results summary",
+    "source_board": 3,
+    "source_file_id": "file_000000008d30820898120b908576ae06",
+    "crop_box_xyxy": [
+      60,
+      80,
+      299,
+      457
+    ],
+    "filename": "25-match-results-summary.png",
+    "width": 239,
+    "height": 377,
+    "sha256": "63184917cbff566fc8c0719330f64a6daed7cb53fb207992ffd0d95501687bd9"
+  },
+  {
+    "number": 26,
+    "title": "Matched photos gallery",
+    "source_board": 3,
+    "source_file_id": "file_000000008d30820898120b908576ae06",
+    "crop_box_xyxy": [
+      322,
+      80,
+      558,
+      457
+    ],
+    "filename": "26-matched-photos-gallery.png",
+    "width": 236,
+    "height": 377,
+    "sha256": "fd6590e76eb110018e7d6e0978bed52ff4b6c926e205a3e23680410742d8e56e"
+  },
+  {
+    "number": 27,
+    "title": "Photo to people",
+    "source_board": 3,
+    "source_file_id": "file_000000008d30820898120b908576ae06",
+    "crop_box_xyxy": [
+      580,
+      80,
+      823,
+      457
+    ],
+    "filename": "27-photo-to-people.png",
+    "width": 243,
+    "height": 377,
+    "sha256": "86d265d727bde99b93d5d82fadef874315a4463269049b19e7d6024c368f9dde"
+  },
+  {
+    "number": 28,
+    "title": "Person to photos",
+    "source_board": 3,
+    "source_file_id": "file_000000008d30820898120b908576ae06",
+    "crop_box_xyxy": [
+      844,
+      80,
+      1090,
+      457
+    ],
+    "filename": "28-person-to-photos.png",
+    "width": 246,
+    "height": 377,
+    "sha256": "c1ee5a64ed747dbc02f43ef70290f516d919852ca0e36846affe4e1f30fdb7a9"
+  },
+  {
+    "number": 29,
+    "title": "Select photos to share",
+    "source_board": 3,
+    "source_file_id": "file_000000008d30820898120b908576ae06",
+    "crop_box_xyxy": [
+      1112,
+      80,
+      1351,
+      457
+    ],
+    "filename": "29-select-photos-to-share.png",
+    "width": 239,
+    "height": 377,
+    "sha256": "bd180d06526b2b913675289de7640ca6f451d15fbd46dcd87d5099fb27cd0102"
+  },
+  {
+    "number": 30,
+    "title": "Deselect photos",
+    "source_board": 3,
+    "source_file_id": "file_000000008d30820898120b908576ae06",
+    "crop_box_xyxy": [
+      1373,
+      80,
+      1613,
+      457
+    ],
+    "filename": "30-deselect-photos.png",
+    "width": 240,
+    "height": 377,
+    "sha256": "bbfdbe1e2314327f8dc46a524cbc7b0df185874ba7555e598f46928d4c4c25ee"
+  },
+  {
+    "number": 31,
+    "title": "Select people to share with",
+    "source_board": 3,
+    "source_file_id": "file_000000008d30820898120b908576ae06",
+    "crop_box_xyxy": [
+      60,
+      499,
+      299,
+      877
+    ],
+    "filename": "31-select-people-to-share-with.png",
+    "width": 239,
+    "height": 378,
+    "sha256": "9b2bf7cef622284ec0e7cfe038090f12cd9447ecf7135f1e904276a757ac677c"
+  },
+  {
+    "number": 32,
+    "title": "Deselect people",
+    "source_board": 3,
+    "source_file_id": "file_000000008d30820898120b908576ae06",
+    "crop_box_xyxy": [
+      321,
+      499,
+      558,
+      877
+    ],
+    "filename": "32-deselect-people.png",
+    "width": 237,
+    "height": 378,
+    "sha256": "94072836166e548d91cf9b77f5cfee2f850d4f98d07fcefc97b7605f328aee19"
+  },
+  {
+    "number": 33,
+    "title": "Review and share",
+    "source_board": 3,
+    "source_file_id": "file_000000008d30820898120b908576ae06",
+    "crop_box_xyxy": [
+      580,
+      499,
+      820,
+      877
+    ],
+    "filename": "33-review-and-share.png",
+    "width": 240,
+    "height": 378,
+    "sha256": "4236a3842b08f95aec1e775da29ed3726e115e4ddb17831389fa39dbcd8eeef4"
+  },
+  {
+    "number": 34,
+    "title": "Sharing progress",
+    "source_board": 3,
+    "source_file_id": "file_000000008d30820898120b908576ae06",
+    "crop_box_xyxy": [
+      842,
+      499,
+      1088,
+      879
+    ],
+    "filename": "34-sharing-progress.png",
+    "width": 246,
+    "height": 380,
+    "sha256": "e47a1f3d2c406c4c2d6a2868da35ea3b2d41aefffd92870a6baf24ab11f78213"
+  },
+  {
+    "number": 35,
+    "title": "Shared history",
+    "source_board": 3,
+    "source_file_id": "file_000000008d30820898120b908576ae06",
+    "crop_box_xyxy": [
+      1111,
+      499,
+      1351,
+      878
+    ],
+    "filename": "35-shared-history.png",
+    "width": 240,
+    "height": 379,
+    "sha256": "f2acce1fe94586b66a29181976703e9aa4adb5b272f1a78eac4b1189a583fa38"
+  },
+  {
+    "number": 36,
+    "title": "Report incorrect match",
+    "source_board": 3,
+    "source_file_id": "file_000000008d30820898120b908576ae06",
+    "crop_box_xyxy": [
+      1373,
+      499,
+      1613,
+      878
+    ],
+    "filename": "36-report-incorrect-match.png",
+    "width": 240,
+    "height": 379,
+    "sha256": "08f5bbae2df06d11f313931b20fe1bda6f0cb2cf31db17bde5817f32a1f3c521"
+  },
+  {
+    "number": 37,
+    "title": "Profile overview",
+    "source_board": 4,
+    "source_file_id": "file_00000000858082088bd5514b4304b274",
+    "crop_box_xyxy": [
+      32,
+      73,
+      288,
+      520
+    ],
+    "filename": "37-profile-overview.png",
+    "width": 256,
+    "height": 447,
+    "sha256": "e6b2e910dce69efbcdfbab67f3f75ff080b7b2d4f09471f62e4ec32de094319c"
+  },
+  {
+    "number": 38,
+    "title": "Face management",
+    "source_board": 4,
+    "source_file_id": "file_00000000858082088bd5514b4304b274",
+    "crop_box_xyxy": [
+      308,
+      73,
+      557,
+      520
+    ],
+    "filename": "38-face-management.png",
+    "width": 249,
+    "height": 447,
+    "sha256": "19d075ac7d1bbc871f1bfeebf64f82a872907ce5b470aec79fdbef223b29c740"
+  },
+  {
+    "number": 39,
+    "title": "Manage allowed recipients",
+    "source_board": 4,
+    "source_file_id": "file_00000000858082088bd5514b4304b274",
+    "crop_box_xyxy": [
+      576,
+      74,
+      825,
+      520
+    ],
+    "filename": "39-manage-allowed-recipients.png",
+    "width": 249,
+    "height": 446,
+    "sha256": "3422cf29090a926799d831a5b9bf3bcd4e7340d3ef0b8039493aa00b504c1bf4"
+  },
+  {
+    "number": 40,
+    "title": "Privacy and sharing",
+    "source_board": 4,
+    "source_file_id": "file_00000000858082088bd5514b4304b274",
+    "crop_box_xyxy": [
+      845,
+      73,
+      1096,
+      520
+    ],
+    "filename": "40-privacy-and-sharing.png",
+    "width": 251,
+    "height": 447,
+    "sha256": "354fd2b2c1d8862b89a6c86aece5f242e379b02993a507fcec4504d5328cc7ae"
+  },
+  {
+    "number": 41,
+    "title": "Photo access settings",
+    "source_board": 4,
+    "source_file_id": "file_00000000858082088bd5514b4304b274",
+    "crop_box_xyxy": [
+      1115,
+      74,
+      1365,
+      520
+    ],
+    "filename": "41-photo-access-settings.png",
+    "width": 250,
+    "height": 446,
+    "sha256": "385f1ad7481964cf4b29c14423c8eb2d9399cae9917875adbb029f26139de2b9"
+  },
+  {
+    "number": 42,
+    "title": "Notification settings",
+    "source_board": 4,
+    "source_file_id": "file_00000000858082088bd5514b4304b274",
+    "crop_box_xyxy": [
+      1384,
+      73,
+      1639,
+      520
+    ],
+    "filename": "42-notification-settings.png",
+    "width": 255,
+    "height": 447,
+    "sha256": "5e0cc626d71baee64cd182fb4aa96cd7e94f410f6b4ac6f45e61f76d900522ea"
+  },
+  {
+    "number": 43,
+    "title": "Storage",
+    "source_board": 4,
+    "source_file_id": "file_00000000858082088bd5514b4304b274",
+    "crop_box_xyxy": [
+      33,
+      550,
+      288,
+      898
+    ],
+    "filename": "43-storage.png",
+    "width": 255,
+    "height": 348,
+    "sha256": "8db6678c2fd8b6a649cb4e04e414735133f8db58b73b3a854f451c8a27005844"
+  },
+  {
+    "number": 44,
+    "title": "Data export",
+    "source_board": 4,
+    "source_file_id": "file_00000000858082088bd5514b4304b274",
+    "crop_box_xyxy": [
+      305,
+      550,
+      558,
+      898
+    ],
+    "filename": "44-data-export.png",
+    "width": 253,
+    "height": 348,
+    "sha256": "1d1db8f563fe5c5e84f39a127beca8e5aab355d70062f47630619b7a0aae5ccc"
+  },
+  {
+    "number": 45,
+    "title": "Help center",
+    "source_board": 4,
+    "source_file_id": "file_00000000858082088bd5514b4304b274",
+    "crop_box_xyxy": [
+      575,
+      550,
+      827,
+      898
+    ],
+    "filename": "45-help-center.png",
+    "width": 252,
+    "height": 348,
+    "sha256": "968ab647d05dd8e7e3563beb558e33b29d668594b2da297070df4b6baef43580"
+  },
+  {
+    "number": 46,
+    "title": "Account security and devices",
+    "source_board": 4,
+    "source_file_id": "file_00000000858082088bd5514b4304b274",
+    "crop_box_xyxy": [
+      844,
+      550,
+      1097,
+      898
+    ],
+    "filename": "46-account-security-and-devices.png",
+    "width": 253,
+    "height": 348,
+    "sha256": "990f7851eaa7e10430b2c25902f92492c84c077e2b8fa8c0a07f93d2e89488ce"
+  },
+  {
+    "number": 47,
+    "title": "No matches",
+    "source_board": 4,
+    "source_file_id": "file_00000000858082088bd5514b4304b274",
+    "crop_box_xyxy": [
+      1113,
+      550,
+      1367,
+      898
+    ],
+    "filename": "47-no-matches.png",
+    "width": 254,
+    "height": 348,
+    "sha256": "429a14047f029dace199b7f6b4d5ba21b28f587fa5be19e0bb85e1cf6d093565"
+  },
+  {
+    "number": 48,
+    "title": "Offline and error",
+    "source_board": 4,
+    "source_file_id": "file_00000000858082088bd5514b4304b274",
+    "crop_box_xyxy": [
+      1384,
+      550,
+      1638,
+      899
+    ],
+    "filename": "48-offline-and-error.png",
+    "width": 254,
+    "height": 349,
+    "sha256": "f65770517f27ee339c58bd68d800d1e1dd98b49069500c699126cc6cebdfb460"
+  }
+]

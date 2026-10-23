@@ -1,0 +1,28 @@
+Lovelies local glibc 2.41 maintenance and thread runtime build
+
+Base: Debian glibc 2.41-12+deb13u4, with its exact Debian quilt series.
+Modifications: the exact upstream release/2.41 maintenance commits identified
+in glibc-backport-manifest.json, covering ten 2026 CVE IDs with four required
+ns_print prerequisites and three additional vendor regression test commits.
+Two local source patches add separate guarded TLS/TCB storage for new pthreads,
+fresh random managed-stack mappings, and compiled exclusion of reusable managed
+stacks, per-thread malloc tcache and nonmain malloc arenas. The package identity
+is 2.41-12+deb13u4+lovelies2; its source receipt covers 80 Debian, 17 upstream and
+two local patches. Required local fixture runs and vendor NPTL/malloc results
+are bound to the measured libc, loader, fixture sources and output receipts.
+
+This is a modified glibc 2.41 build. It is not an official Debian release or
+an unmodified upstream distribution. Seven older glibc advisory IDs remain
+unfixed and must remain in the release findings.
+Local thread-path exclusions are scoped to this service build. They do not
+change the vendor's unfixed advisory status or establish universal ASLR entropy.
+Ordinary main-arena allocation reuse and unrelated memory-corruption paths
+remain outside that exclusion claim. Public ABI symbol comparisons alone do
+not establish private TLS/stack compatibility; measured native fixtures are
+required before packaging.
+
+The package contains the original licenses, Debian copyright, exact source
+archives and descriptor, modification patches, source preparation and build
+recipes, manifests and measured build/test/API evidence. The original glibc
+LGPL and applicable individual source notices apply. No blanket security,
+deployment, or independent acceptance claim is made.

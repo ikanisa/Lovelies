@@ -1,0 +1,5 @@
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <instrumentation android:name="com.lovelies.frontend.preview.FrontendAccessibilityJourney"
+        android:targetPackage="com.lovelies.memories"
+        android:label="Lovelies reference accessibility review" />
+</manifest>

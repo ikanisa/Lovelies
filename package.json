@@ -1,0 +1,36 @@
+{
+  "name": "lovelies-backend-workspace",
+  "private": true,
+  "packageManager": "pnpm@10.33.2",
+  "engines": {
+    "node": ">=24"
+  },
+  "scripts": {
+    "backend:dev": "node --experimental-transform-types scripts/dev-supabase.mjs",
+    "backend:typecheck": "pnpm --filter @lovelies/supabase-api typecheck",
+    "backend:test": "pnpm --filter @lovelies/supabase-api test",
+    "backend:build": "pnpm backend:typecheck && deno check --config supabase/functions/lovelies-api/deno.json --node-modules-dir=auto supabase/functions/lovelies-api/index.ts",
+    "backend:client:test": "node --test clients/backend/*.test.mjs",
+    "backend:schema:check": "node --experimental-transform-types --test services/supabase-api/test/supabase-boundaries.test.mjs",
+    "backend:smoke": "node scripts/smoke-supabase-backend.mjs",
+    "backend:sql:test": "pnpm --filter @lovelies/supabase-api test",
+    "backend:ml:typecheck": "pnpm --filter @lovelies/ml-container-worker typecheck",
+    "backend:ml:build": "pnpm --filter @lovelies/ml-container-worker build",
+    "backend:cloudflare:dev": "node scripts/dev-cloudflare.mjs",
+    "backend:cloudflare:test": "pnpm --filter @lovelies/cloudflare-api test",
+    "admin:test": "node --experimental-transform-types --test --test-concurrency=1 admin/*.test.mjs",
+    "preview:test": "python3 -m unittest discover -s scripts -p test_serve_preview.py",
+    "push:test": "pnpm --filter @lovelies/push-provider test",
+    "push:check": "pnpm --filter @lovelies/push-provider check"
+  },
+  "devDependencies": {
+    "fake-indexeddb": "6.2.6",
+    "typescript": "5.9.3"
+  },
+  "workspaces": [
+    "services/cloudflare-api",
+    "services/ml-container-worker",
+    "services/supabase-api",
+    "services/push-provider"
+  ]
+}

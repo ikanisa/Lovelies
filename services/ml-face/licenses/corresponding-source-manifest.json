@@ -1,0 +1,41 @@
+{
+  "schema": "lovelies-ml-licensing-sources-v1",
+  "reviewed_at": "2026-10-01",
+  "scope": "Exact libheif original and Debian packaging source supplied with the ML image. libde265 corresponding source is supplied by its custom builder under /usr/share/doc/libde265-0/source. The complete hash-bound pydantic-core2.46.4 and103-crate offline source bundle supplies the source-wheel builder and corresponding source.",
+  "source_records": [
+    {
+      "component": "libheif",
+      "version": "1.23.4-1~deb13u1",
+      "path": "sources/libheif_1.23.4-1~deb13u1.debian.tar.xz",
+      "sha256": "5102677f6e7e98b9b80d19e7579617ae07fe56199e9c9ce91ce59c1e7a6e24aa",
+      "bytes": 15552,
+      "publisher_url": "https://deb.debian.org/debian-security/pool/updates/main/libh/libheif/libheif_1.23.4-1~deb13u1.debian.tar.xz"
+    },
+    {
+      "component": "libheif",
+      "version": "1.23.4-1~deb13u1",
+      "path": "sources/libheif_1.23.4-1~deb13u1.dsc",
+      "sha256": "6bf7fbd3de53ba819c770f07946e20123ed460f3d8eabe579f22218c96bf82c1",
+      "bytes": 3377,
+      "publisher_url": "https://deb.debian.org/debian-security/pool/updates/main/libh/libheif/libheif_1.23.4-1~deb13u1.dsc"
+    },
+    {
+      "component": "libheif",
+      "version": "1.23.4-1~deb13u1",
+      "path": "sources/libheif_1.23.4.orig.tar.gz",
+      "sha256": "d0c02b4b0e978f34a1974b6f3eea7975a537bf7a9195ffeea38e7242ff316fdd",
+      "bytes": 2217221,
+      "publisher_url": "https://deb.debian.org/debian-security/pool/updates/main/libh/libheif/libheif_1.23.4.orig.tar.gz"
+    },
+    {
+      "component": "pydantic-core and locked Rust dependencies",
+      "version": "2.46.4",
+      "path": "rust-source-build/pydantic-core-2.46.4-offline-source.tar.gz",
+      "sha256": "323a9a858f144698364bf4e91e6fbab4913188ab13921dd6614b9d45fb33a19f",
+      "bytes": 18844873,
+      "provenance": "Existing accepted104-archive/103-crate offline bundle; original publisher archive identities and crate checksums retained in bundle-manifest.json."
+    }
+  ],
+  "verification": "Downloaded over HTTPS from Debian, SHA256 checked against the source descriptor. The descriptor OpenPGP signature was not independently verified.",
+  "release_source_channel_published": false
+}

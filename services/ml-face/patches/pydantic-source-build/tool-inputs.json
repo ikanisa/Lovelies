@@ -1,0 +1,24 @@
+{
+  "schema": "lovelies-pydantic-source-build-tool-inputs-v1",
+  "rust_version": "1.88.0",
+  "rust_manifest_url": "https://static.rust-lang.org/dist/channel-rust-1.88.0.toml",
+  "rust_toolchain_image": "rust@sha256:a6cab604fa016ac022e78c24038497eb7617ab59150ca4c3dd2ede0fbd514d4b",
+  "rust_archive": {
+    "filename": "rust-1.88.0-x86_64-unknown-linux-gnu.tar.xz",
+    "url": "https://static.rust-lang.org/dist/2025-06-26/rust-1.88.0-x86_64-unknown-linux-gnu.tar.xz",
+    "sha256": "7b5437c1d18a174faae253a18eac22c32288dccfc09ff78d5ee99b7467e21bca"
+  },
+  "maturin_version": "1.10.2",
+  "maturin_metadata_url": "https://pypi.org/pypi/maturin/1.10.2/json",
+  "maturin_wheel": {
+    "filename": "maturin-1.10.2-py3-none-manylinux_2_12_x86_64.manylinux2010_x86_64.musllinux_1_1_x86_64.whl",
+    "url": "https://files.pythonhosted.org/packages/46/8d/753148c0d0472acd31a297f6d11c3263cd2668d38278ed29d523625f7290/maturin-1.10.2-py3-none-manylinux_2_12_x86_64.manylinux2010_x86_64.musllinux_1_1_x86_64.whl",
+    "sha256": "efcd496a3202ffe0d0489df1f83d08b91399782fb2dd545d5a1e7bf6fd81af39"
+  },
+  "builder_image_id": "sha256:9a3e1da1b56c07b98e43f8cea33cf558347223b51f05fed1c6f1af0fff08a0a4",
+  "load_probe_image_id": "sha256:48b0d8439ba5ec39e078fdc39cec7551d78f4a4b2b31b10280de4d3367726773",
+  "offline_source_archive_sha256": "323a9a858f144698364bf4e91e6fbab4913188ab13921dd6614b9d45fb33a19f",
+  "offline_bundle_manifest_sha256": "120b34f18f42e8a16ea67bfe736cd2870b101f05fa9bdde1d75aef0b6e04414f",
+  "target": "x86_64-unknown-linux-gnu",
+  "python_abi": "cp313"
+}

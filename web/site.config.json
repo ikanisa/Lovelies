@@ -1,0 +1,25 @@
+{
+  "content_status": "local_review_draft",
+  "prepared_on": "2026-10-23",
+  "document_root": ".",
+  "canonical_origin": null,
+  "existing_public_origin_reference": "https://lovelies.ikanisa.com",
+  "routes": [
+    "/",
+    "/privacy/",
+    "/terms/",
+    "/account-deletion/",
+    "/support/"
+  ],
+  "support_email": "info@ikanisa.com",
+  "controller": "IKANISA LTD",
+  "publish_authorized": false,
+  "required_review": [
+    "private inference operator and location",
+    "active retention schedule and backup expiry",
+    "audience and territories",
+    "final legal/controller review",
+    "support mailbox and ownership-check operation",
+    "approved host/routes and HTTPS/header validation"
+  ]
+}

@@ -1,0 +1,51 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,interactive-widget=resizes-content">
+  <meta name="theme-color" content="#111014">
+  <meta name="description" content="Lovelies: an interactive review of the 48 supplied mobile screens.">
+  <title>Lovelies · Screen review</title>
+  <link rel="stylesheet" href="./styles.css">
+  <script src="./app.js" defer></script>
+</head>
+<body>
+  <a class="skip-link" href="#app">Skip to the interactive screen</a>
+  <div id="screen-status" class="sr-only" role="status" aria-live="polite" aria-atomic="true"></div>
+  <div class="review-shell">
+    <aside class="catalog-panel" id="screen-catalog" aria-label="Screen catalogue">
+      <button type="button" class="toolbar-icon catalog-close" data-action="catalog-toggle" aria-label="Close screen catalogue">×</button>
+      <a class="review-brand" href="#10"><span class="brand-heart" aria-hidden="true">♥</span><span>Lovelies<small>Front-end review</small></span></a>
+      <label class="catalog-search"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="10.5" cy="10.5" r="6.5"/><path d="m16 16 4 4"/></svg><input type="search" id="catalog-search" placeholder="Find a screen…" aria-label="Find a screen"></label>
+      <nav id="catalog" aria-label="All 48 screens"></nav>
+      <div class="catalog-footer"><span class="status-dot"></span>48 screenshot references<button type="button" data-action="onboarding">Start onboarding <span aria-hidden="true">↗</span></button></div>
+    </aside>
+    <main class="review-main">
+      <header class="review-toolbar">
+        <div class="toolbar-heading"><button type="button" class="toolbar-icon catalog-toggle" data-action="catalog-toggle" aria-label="Toggle screen catalogue" aria-controls="screen-catalog" aria-expanded="false">☰</button><span class="screen-counter" id="screen-counter">10 / 48</span><h1 id="screen-title">Home gallery</h1></div>
+        <div class="toolbar-actions">
+          <div class="platform-switch" role="group" aria-label="Preview platform"><button type="button" data-action="platform" data-platform="ios" aria-pressed="true">iOS</button><button type="button" data-action="platform" data-platform="android" aria-pressed="false">Android</button></div>
+          <button type="button" class="toolbar-button" data-action="compare" aria-pressed="false" id="compare-button">Compare</button>
+          <button type="button" class="toolbar-icon" data-action="reset" aria-label="Reset demo flow" title="Reset demo flow">↺</button>
+          <div class="screen-steppers"><button type="button" class="toolbar-icon" data-action="previous-screen" aria-label="Previous reference screen">←</button><button type="button" class="toolbar-icon" data-action="next-screen" aria-label="Next reference screen">→</button></div>
+        </div>
+      </header>
+      <div class="review-caption"><span>Clickable front-end preview · demo data</span><span id="platform-caption">iOS · native SwiftUI source</span></div>
+      <section class="review-stage" id="review-stage" aria-label="Screen preview">
+        <figure class="surface-column">
+          <figcaption>Interactive screen</figcaption>
+          <div class="device ios" id="device" data-screen-id="10">
+            <div class="status-bar" aria-hidden="true"><span>9:41</span><span class="system-icons"><svg viewBox="0 0 18 12"><path d="M1 11V9h2v2M5 11V6h2v5M9 11V3h2v8M13 11V0h2v11"/></svg><svg viewBox="0 0 20 14"><path d="M2 4c4-4 12-4 16 0M5 7c3-3 7-3 10 0M8 10c1-1 3-1 4 0"/><circle cx="10" cy="12" r="1"/></svg><svg viewBox="0 0 25 12"><rect x="1" y="2" width="20" height="9" rx="2"/><path d="M23 5v3"/></svg></span></div>
+            <div id="app" class="app-surface" role="region" tabindex="-1" aria-label="Lovelies interactive screen"></div>
+            <div class="home-indicator" aria-hidden="true"></div>
+            <div id="toast" class="toast" role="status" aria-live="polite"></div>
+          </div>
+        </figure>
+        <figure class="surface-column reference-column" id="reference-column" hidden><figcaption>Supplied screenshot</figcaption><img id="reference-image" alt="Supplied screenshot for Home gallery"></figure>
+      </section>
+      <footer class="review-footer"><span id="screen-group">Library</span><span>Responsive mobile review · local demo state</span><a href="./README.md" target="_blank" rel="noopener">Reference notes ↗</a></footer>
+    </main>
+  </div>
+  <dialog id="action-dialog" class="action-dialog" aria-labelledby="dialog-title"><form method="dialog"><div class="dialog-heading"><h2 id="dialog-title"></h2><button type="button" class="icon-button" data-action="close-dialog" aria-label="Close dialog">×</button></div><div id="dialog-body"></div><div id="dialog-actions"></div></form></dialog>
+</body>
+</html>

@@ -1,0 +1,49 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#0b0b0f">
+  <meta name="description" content="Lovelies protected operator workspace for current support, moderation and privacy records.">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <title>Overview · Lovelies Admin</title>
+  <link rel="icon" href="./icon.svg" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="./apple-touch-icon.png">
+  <link rel="manifest" href="./manifest.webmanifest">
+  <link rel="stylesheet" href="./styles.css">
+  <link rel="stylesheet" href="./collection-views.css">
+  <link rel="stylesheet" href="./detail-views.css">
+  <link rel="stylesheet" href="./workspace.css">
+  <link rel="stylesheet" href="./live-workspace.css">
+  <script type="module" src="./entry.mjs"></script>
+</head>
+<body>
+  <a class="skip-link" href="#main">Skip to workspace</a>
+  <div class="workspace">
+    <aside class="sidebar" aria-label="Workspace navigation">
+      <a class="brand" href="#overview" aria-label="Lovelies overview"><img src="/shared/assets/wordmark.png" width="144" height="80" alt="Lovelies"><span>ADMIN</span></a>
+      <p class="nav-caption">ADMINISTRATION</p>
+      <nav id="navigation" aria-label="Main navigation"></nav>
+      <div class="sidebar-bottom">
+        <button class="utility-link" data-action="install" id="install-button"><span data-icon="download"></span><span>Install app</span></button>
+        <button class="utility-link" data-action="about"><span data-icon="help"></span><span>Workspace help</span></button>
+        <div class="operator"><button class="operator-identity" aria-label="Operator not signed in"><span class="operator-avatar" aria-hidden="true">•</span><span>Operator<small>Sign-in required</small></span></button><button class="icon-button" data-action="logout" aria-label="Sign out" disabled><span data-icon="close"></span></button></div>
+      </div>
+    </aside>
+    <div class="main-shell">
+      <header class="topbar">
+        <div class="context"><button class="icon-button mobile-menu" data-action="menu" aria-label="Open navigation"><span data-icon="menu"></span></button><span class="context-name">Workspace</span><span class="context-divider" aria-hidden="true">/</span><span id="breadcrumb">Overview</span></div>
+        <div class="topbar-tools"><div class="global-search" role="search"><span data-icon="search"></span><input id="search" type="search" placeholder="Search workspace…" aria-label="Search current workspace" disabled><button class="icon-button search-clear" data-action="clear-search" aria-label="Clear search" hidden><span data-icon="close"></span></button><kbd aria-hidden="true">⌘ K</kbd></div><span class="preview-pill">Face sign-in</span></div>
+      </header>
+      <div class="connection-banner" id="connection-banner" role="status" hidden></div>
+      <main id="main" tabindex="-1"><p class="live-status">Opening protected workspace…</p></main>
+      <footer class="workspace-footer"><span><span class="tiny-dot" aria-hidden="true"></span>Current server authority required</span><span id="storage-note">Private records are not cached offline</span></footer>
+    </div>
+  </div>
+  <dialog id="detail-dialog" class="detail-dialog" aria-labelledby="detail-title"></dialog>
+  <dialog id="utility-dialog" class="utility-dialog" aria-labelledby="utility-title"></dialog>
+  <dialog id="navigation-dialog" class="navigation-dialog" aria-label="Workspace navigation"><div class="dialog-head"><strong>Lovelies workspace</strong><button class="icon-button" data-action="close-menu" aria-label="Close navigation"><span data-icon="close"></span></button></div><nav id="mobile-navigation" aria-label="Mobile navigation"></nav></dialog>
+  <div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
+  <noscript><p class="noscript">Enable JavaScript to use the protected Lovelies operator workspace.</p></noscript>
+</body>
+</html>

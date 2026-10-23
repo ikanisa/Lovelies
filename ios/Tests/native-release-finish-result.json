@@ -1,0 +1,113 @@
+{
+  "status": "passed",
+  "date": "2026-10-23",
+  "boundary": "Controlled host protocol/file checks; not an app build, BGTask OS scheduling, decoder/device, hosted Supabase, signing or store acceptance. Root owns integrated builds.",
+  "checks": {
+    "native_protocol": 38,
+    "release_readiness_protocol": 18,
+    "resumable_upload_recovery": 82,
+    "swift_parse_changed_native_and_test_sources": true,
+    "plist_project_entitlements_privacy_lint": true
+  },
+  "commands": [
+    [
+      "xcrun",
+      "swiftc",
+      "ios/Lovelies/Native/CoreWire.swift",
+      "ios/Lovelies/Native/CameraRecovery.swift",
+      "ios/Lovelies/Native/DeviceIdentity.swift",
+      "ios/Lovelies/Native/UploadRecovery.swift",
+      "ios/Lovelies/Native/UploadFileTransport.swift",
+      "ios/Lovelies/Native/BackendRepository.swift",
+      "ios/Tests/NativeUploadRecoveryTests.swift",
+      "-o",
+      "/tmp/lovelies-ios-upload-finish"
+    ],
+    [
+      "/tmp/lovelies-ios-upload-finish"
+    ],
+    [
+      "xcrun",
+      "swiftc",
+      "ios/Lovelies/Native/CoreWire.swift",
+      "ios/Lovelies/Native/CameraRecovery.swift",
+      "ios/Tests/NativeReleaseReadinessTests.swift",
+      "-o",
+      "/tmp/lovelies-ios-release-finish"
+    ],
+    [
+      "/tmp/lovelies-ios-release-finish"
+    ],
+    [
+      "xcrun",
+      "swiftc",
+      "ios/Lovelies/Native/CoreWire.swift",
+      "ios/Lovelies/Native/CameraRecovery.swift",
+      "ios/Tests/NativeProtocolTests.swift",
+      "-o",
+      "/tmp/lovelies-ios-native-finish"
+    ],
+    [
+      "/tmp/lovelies-ios-native-finish"
+    ]
+  ],
+  "inputs": [
+    {
+      "path": "ios/Lovelies/Native/CoreWire.swift",
+      "sha256": "88c66fcf777f90805cdd29d1fc0bad7114d4041d31e07684dcbab6c4efd99a8c"
+    },
+    {
+      "path": "ios/Lovelies/Native/CameraRecovery.swift",
+      "sha256": "53eeb625743fdf82b1385d068ce05043893173b8f65515abe7838a333786cfaa"
+    },
+    {
+      "path": "ios/Lovelies/Native/DeviceIdentity.swift",
+      "sha256": "e6cc45d5a3673866216f5892b9546846d46dccca20d1c7f05f8b722d1610e473"
+    },
+    {
+      "path": "ios/Lovelies/Native/UploadRecovery.swift",
+      "sha256": "ab38f02331a47799265381406d4bd2b45132089b924f48d2253d4ae7ea27b519"
+    },
+    {
+      "path": "ios/Lovelies/Native/UploadFileTransport.swift",
+      "sha256": "bb6a750dc21ada30c983bf02cd3b4dcaf8ce32ed9d1afe65a377584069a53d2a"
+    },
+    {
+      "path": "ios/Lovelies/Native/BackendRepository.swift",
+      "sha256": "870fa9f33975e9edcdc14048230eeb9def800d4c0aa074af7ae09362cce7a841"
+    },
+    {
+      "path": "ios/Tests/NativeUploadRecoveryTests.swift",
+      "sha256": "8227a13b81b6745ac0616834eb858787591e17c36cdc60e004154784c728d0f7"
+    },
+    {
+      "path": "ios/Tests/NativeReleaseReadinessTests.swift",
+      "sha256": "936fb16b6cf0a6bf872e4c159daa9ad596ff2fbb5a8fe540bff688f9b95cb5dd"
+    },
+    {
+      "path": "ios/Tests/NativeProtocolTests.swift",
+      "sha256": "e0012ddf6ff5cf079bae45e2249e5b3e825ed3c9efbf960d5c030a7eae7dab50"
+    }
+  ],
+  "diagnostics": [
+    "Existing BackendRepository.swift line 226 var record never mutated warning; no focused compile errors."
+  ],
+  "release_resource_input_patterns": {
+    "excluded_count": 152,
+    "retained_count": 11,
+    "retained": [
+      "empty-hero.png",
+      "intro-collage.png",
+      "matches-hero.png",
+      "offline-hero.png",
+      "photo-heart.png",
+      "processing-hero.png",
+      "setup-hero.png",
+      "sharing-hero.png",
+      "splash.jpg",
+      "upload-hero.png",
+      "wordmark.png"
+    ],
+    "actual_release_bundle_verified": false
+  }
+}

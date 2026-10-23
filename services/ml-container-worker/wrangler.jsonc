@@ -1,0 +1,10 @@
+{
+ "$schema":"node_modules/wrangler/config-schema.json", "name":"lovelies-private-ml",
+ "main":"src/index.ts", "compatibility_date":"2026-07-21", "compatibility_flags":["nodejs_compat"],
+ "workers_dev":false,"preview_urls":false,"send_metrics":false,
+ "containers":[{"class_name":"LoveliesFaceContainer","image":"../ml-face/Dockerfile","instance_type":"standard-2","max_instances":2}],
+ "durable_objects":{"bindings":[{"name":"ML_FACE_CONTAINER","class_name":"LoveliesFaceContainer"}]},
+ "migrations":[{"tag":"lovelies-face-container-v1","new_sqlite_classes":["LoveliesFaceContainer"]}],
+ "r2_buckets":[{"binding":"PHOTOS","bucket_name":"lovelies-cloudflare-photos"},{"binding":"QUARANTINE","bucket_name":"lovelies-cloudflare-quarantine"}],
+ "vars":{"MODEL_VERSION":"opencv-yunet-sface-2021dec-v1","FACE_AUTH_POLICY_VERSION":"registered-face-opencv-v1"}
+}

@@ -1,0 +1,46 @@
+Bundled OpenCV Zoo model attribution and provenance
+Verified on 30 September 2026.
+
+Source repository: https://github.com/opencv/opencv_zoo
+Immutable source commit: 47534e27c9851bb1128ccc0102f1145e27f23f98
+
+YuNet detector
+--------------
+File: face_detection_yunet_2023mar.onnx
+SHA-256: 8f2383e4dd3cfbb4553ea8718107fc0423210dc964f9f4280604804ed2552fa4
+Size: 232589 bytes
+Upstream file: models/face_detection_yunet/face_detection_yunet_2023mar.onnx
+License: MIT; copyright (c) 2020 Shiqi Yu <shiqi.yu@gmail.com>
+Unmodified upstream license text: LICENSE-opencv-zoo-yunet.txt
+License SHA-256: c83b8120c50ccbd4c4f96edf53141bdd566ebb8f8e9227e415326aa1b1aba958
+License source:
+https://github.com/opencv/opencv_zoo/blob/47534e27c9851bb1128ccc0102f1145e27f23f98/models/face_detection_yunet/LICENSE
+
+SFace recognizer
+----------------
+File: face_recognition_sface_2021dec.onnx
+SHA-256: 0ba9fbfa01b5270c96627c4ef784da859931e02f04419c829e83484087c34e79
+Size: 38696353 bytes
+Upstream file: models/face_recognition_sface/face_recognition_sface_2021dec.onnx
+Contributed by Yaoyao Zhong; ONNX conversion credited to Chengrui Wang
+in the upstream README at the immutable source commit above.
+License: Apache-2.0
+Unmodified upstream license text: LICENSE-opencv-zoo-sface.txt
+License SHA-256: cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30
+License source:
+https://github.com/opencv/opencv_zoo/blob/47534e27c9851bb1128ccc0102f1145e27f23f98/models/face_recognition_sface/LICENSE
+
+Verification and scope
+----------------------
+Each bundled ONNX file matches the SHA-256 object ID and byte size in its
+upstream Git LFS pointer at the named commit. Each upstream model directory's
+README applies the corresponding license to all files in that directory.
+The original ONNX files and license texts are distributed without modification.
+Neither upstream model directory contains a separate NOTICE file at that commit.
+This attribution notice is added by Lovelies; it is not an upstream NOTICE file.
+
+Retain this notice and both complete license texts with the bundled models.
+Read the complete licenses for their permissions, conditions and disclaimers.
+This byte/provenance verification does not establish model accuracy, training
+data rights, consent for a deployment, independent legal clearance or release
+approval. Native runtime dependencies have their own license/notice files.

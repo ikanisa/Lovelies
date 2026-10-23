@@ -1,0 +1,11 @@
+[libprotobuf ERROR google/protobuf/message_lite.cc:449] BoundedSizeProbe exceeded maximum protobuf size of 2GB: 2147483648
+[libprotobuf ERROR google/protobuf/message_lite.cc:449] BoundedSizeProbe exceeded maximum protobuf size of 2GB: 2147483648
+[libprotobuf ERROR google/protobuf/message_lite.cc:449] BoundedSizeProbe exceeded maximum protobuf size of 2GB: 2147483648
+[libprotobuf ERROR google/protobuf/message_lite.cc:479] BoundedSizeProbe exceeded maximum protobuf size of 2GB: 2147483648
+[libprotobuf ERROR google/protobuf/message_lite.cc:479] BoundedSizeProbe exceeded maximum protobuf size of 2GB: 2147483648
+[libprotobuf ERROR google/protobuf/message_lite.cc:449] BoundedSizeProbe exceeded maximum protobuf size of 2GB: 4294967297
+[libprotobuf ERROR google/protobuf/message_lite.cc:449] BoundedSizeProbe exceeded maximum protobuf size of 2GB: 4294967297
+[libprotobuf ERROR google/protobuf/message_lite.cc:449] BoundedSizeProbe exceeded maximum protobuf size of 2GB: 4294967297
+[libprotobuf ERROR google/protobuf/message_lite.cc:479] BoundedSizeProbe exceeded maximum protobuf size of 2GB: 4294967297
+[libprotobuf ERROR google/protobuf/message_lite.cc:479] BoundedSizeProbe exceeded maximum protobuf size of 2GB: 4294967297
+PASS: exact runtime rejects INT_MAX+1 and 4GiB+1 synthetic sizes before serialization/allocation; zero-size control passes

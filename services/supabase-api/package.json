@@ -1,0 +1,19 @@
+{
+  "name": "@lovelies/supabase-api",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "test": "node --experimental-transform-types --test --test-concurrency=1 test/*.test.mjs",
+    "schema:generate": "node --experimental-transform-types scripts/generate-schema.mjs"
+  },
+  "dependencies": {
+    "@apple/app-store-server-library": "3.1.0",
+    "postgres": "3.4.7"
+  },
+  "devDependencies": {
+    "@electric-sql/pglite": "0.3.14",
+    "@types/node": "24.12.4",
+    "typescript": "5.9.3"
+  }
+}

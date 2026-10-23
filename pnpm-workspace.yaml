@@ -1,0 +1,16 @@
+packages:
+  - "services/cloudflare-api"
+  - "services/ml-container-worker"
+  - "services/supabase-api"
+  - "services/push-provider"
+
+allowBuilds:
+  esbuild: true
+  workerd: true
+
+overrides:
+  "@vitest/runner": "4.1.9"
+  "@vitest/snapshot": "4.1.9"
+  esbuild: "0.28.1"
+  postcss: "8.5.23"
+  vite: "7.3.5"
