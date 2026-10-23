@@ -246,3 +246,27 @@ and independently compared it with the UI owner's retained preimage. The raced
 capture and initial failure remain. `android-v4-2-test-only-review.json` binds
 the passing build and reconciliation; `android-v4-2-preimage-handoff-failure.json`
 records the failed guard. No product input or app APK changed.
+
+## Latest reference Favorites viewport checkpoint
+
+On the immutable final V4.2 runner, named Cancel7 passes at normal/font2 and
+Favorites14 landscape still fails Save photo5. The remaining measured problem is
+its reference grid's inflated inner viewport. The reviewed V5 change adds only
+`referenceRoute==14 -> maxHeight` in `UiPresentation.kt`; `MainActivity.kt` and
+both final test files exactly match their previous compiled inputs. A broader
+shared-host candidate was preserved unbuilt: connected Favorites has additional
+fixed search/count/bottom/pagination/error chrome and needs its own constraint
+qualification. Its viewport was not changed or accepted by this reference fix.
+
+Root's combined V5 build passes with no changed frozen inputs. This actual product
+source change triggered a fresh156-test/14-suite unit run, zero failures/errors/
+skips; every XML report was newly written after build start and is hash-bound in
+`android-v5-favorites-review.json`. New app APK SHA256 is
+`e47b514f18234c719f6f53132e79b396598fdeae59b2900d8f0c3f049b169301`;
+the final4.2 test APK stays byte-identical at
+`5201146deb3bf511cb0ed0df3c1fead601e0157b443b772040fdc5cdc675d610`.
+The exact pair is handed to the UI owner for fresh14 normal/font2/landscape,
+then final48 variants/visible exits and visual review. V5 device outcomes are
+pending; prior e7b11109 app results remain tied to that original APK. The QA
+update must be installed in place without reset; store-installed upgrades,
+connected/hosted behavior, spoken accessibility and release acceptance stay open.

@@ -54,6 +54,8 @@ internal fun AdaptiveRouteHost(routeKey: String, reduceMotion: Boolean, referenc
         val minimumHeight=maxOf(640.dp,minOf(maxWidth,720.dp)*1.4f)*fontScale.coerceAtLeast(1f)
         val pageHeight=when {
             referenceRoute==1 -> maxHeight
+            // Favorites already owns an inner grid with a finite visible scroll viewport.
+            referenceRoute==14 -> maxHeight
             maxHeight<600.dp && (referenceRoute==3 || referenceRoute==4) -> maxOf(maxHeight,640.dp*fontScale.coerceAtLeast(1f))
             enlarged -> maxOf(maxHeight,minimumHeight)
             else -> maxHeight

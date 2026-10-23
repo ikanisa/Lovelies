@@ -144,8 +144,8 @@
       "artifacts": [
         {
           "path": "android/app/build/outputs/apk/debug/app-debug.apk",
-          "sha256": "e7b11109de7dac436d3cd51d8d55a577f03f1232af92063409b3952110c5c641",
-          "bytes": 14773220
+          "sha256": "e47b514f18234c719f6f53132e79b396598fdeae59b2900d8f0c3f049b169301",
+          "bytes": 14773223
         },
         {
           "path": "android/app/build/outputs/apk/androidTest/debug/app-debug-androidTest.apk",
@@ -153,13 +153,17 @@
           "bytes": 500669
         }
       ],
-      "physical_final_retests": "Retained V3 normal48/48,font2 48/48,landscape45/48;46/46 applicable physical Back checks;257 PNGs reviewed. Fresh V3 font2 keyboard routes15/22/45 pass. On the same product APK, V4 targeted20/39 pass,14 fails Save photo5,all3 actual visible exits pass. V4 normal/font2 each48 cases with only the incorrect Cancel7 expected6 assertion failed; raw outcomes retained. Final corrected4.2 physical retakes pending.",
+      "physical_final_retests": "Historical pre-V5 product e7b11109: V3 normal48/48,font2 48/48,landscape45/48;46/46 physical Back;257 PNGs reviewed; V3 font2 keyboard15/22/45 pass. V4 targeted20/39 pass,14 fails Save photo5. V4.2 Cancel7 passes normal/font2;14landscape stillfails. V5 changed only the reference14 viewport and needs new APK-bound device retakes. No earlier matrix relabelled as V5 acceptance.",
       "signed_store_artifact": false,
       "test_only_v4_build": "passed with unchanged frozen inputs; exact V3 product app hash retained; schema4/visible-exit physical execution pending",
-      "unit_result_reuse": "Prior156/14-suite unchanged unit results reused; Gradle testDebugUnitTest UP-TO-DATE; all14 XML hashes unchanged",
       "test_only_v4_2_build": "passed with unchanged final frozen inputs; two-line descendant coverage key and visible Cancel7 expected5; physical Back7 still6; byte-identical V3 product APK; final4.2 device execution pending",
       "physical_v4_targeted_receipt": "verification/supabase-release-20261023/device-checkpoint-v4-targeted.json",
-      "physical_v4_visible_navigation_receipt": "verification/supabase-release-20261023/device-checkpoint-v4-visible-exits.json"
+      "physical_v4_visible_navigation_receipt": "verification/supabase-release-20261023/device-checkpoint-v4-visible-exits.json",
+      "current_product_checkpoint": "V5 reference Favorites14 available-height branch only; connected callsite/tests unchanged",
+      "unit_result_execution": "Fresh execution after actual one-file reference viewport product change; testDebugUnitTest executed, all14 XML mtimes follow build start",
+      "reference_favorites_v5_compile": "passed; fresh156/14-suite unit execution; new appAPK e47b514f18234c719f6f53132e79b396598fdeae59b2900d8f0c3f049b169301; unchanged testAPK5201146deb3bf511cb0ed0df3c1fead601e0157b443b772040fdc5cdc675d610",
+      "connected_favorites_viewport": "unchanged; broader candidate preserved unbuilt because dynamic fixed chrome needs separate connected qualification",
+      "physical_v4_2_targeted_receipt": "verification/supabase-release-20261023/device-checkpoint-v4-2-targeted.json"
     },
     "ios": {
       "focused_host_checks_pass": 665,
@@ -225,8 +229,8 @@
     "verification/supabase-release-20261023/backend-account-recovery-final.json": "22adf0a5d0ea6c08e7a9bc6e02d8beee209f1e9ffec10e524f1e9001b568798d",
     "verification/supabase-release-20261023/backend-refresh-delivery/result.json": "d03bec24127b766e60b8b15976ff2cf75a963e66224b6f2d8318fc22bc6d5571",
     "verification/supabase-release-20261023/admin-integrated-final.json": "694ea637e53a4ca99d860dd5c7e766bc6f07d5a6f518069963aea20ae916599f",
-    "verification/supabase-release-20261023/android-final.json": "05890a2fd9d79754bd49c8adbf57098f566ef4f6331d0ab96e51b197217fc0f7",
-    "verification/supabase-release-20261023/android-final-inputs.json": "86186966e41fe35a809ae7f86962c95b4a01b1084b98f24a1513a7f7b7a56988",
+    "verification/supabase-release-20261023/android-final.json": "df6a4b1a30e87c1370fdd56d0cf508f9876c1aae3262c08fdebbb81929f41154",
+    "verification/supabase-release-20261023/android-final-inputs.json": "98816ab23161d1b7fd3cb2f5f60b028891ca35e12cd07c86294f6976afb14c87",
     "verification/supabase-release-20261023/android-unit-results-final.json": "52950744d7e0d4022654ac0a36afffbf27eee7d66396c3ef0361573e8f1c7bb1",
     "verification/supabase-release-20261023/ios-release-final.json": "3c5766630f63c4877910f604e7206b158c0f713db57aa9fb5387fe26244cfe76",
     "verification/supabase-release-20261023/ios-debug-final.json": "3dc868fcd0e7722c15fe9a4e41e79e121cd8e315813e6fa25e4c39c307acf8b2",
@@ -267,7 +271,11 @@
     "verification/supabase-release-20261023/device-checkpoint-v4-targeted.json": "b92d23a529de93dd021e4ad9ea1befaf7bff3a37227ff0df3b34d378a3284ffd",
     "verification/supabase-release-20261023/device-checkpoint-v4-visible-exits.json": "34ad693f65b9c0f3b3fe9230190f6d18b850973af250fe3b45d1fe1575d28548",
     "verification/accessibility-navigation-20261023/android-test-only-v4-1-freeze.json": "870a30f39553016d980eac9b7eefa024fbf20bc1c84661d598471325e6fdd9ba",
-    "verification/accessibility-navigation-20261023/android-test-only-v4-2-freeze.json": "9f1edd92bc32b70407e76fb685161d1a7a37e432e911b385fa9dc5490f7d50f7"
+    "verification/accessibility-navigation-20261023/android-test-only-v4-2-freeze.json": "9f1edd92bc32b70407e76fb685161d1a7a37e432e911b385fa9dc5490f7d50f7",
+    "verification/supabase-release-20261023/android-v5-favorites-review.json": "950f18e404c53ce3466857987e52b03418cf17ee2ad980f04cf078ebf79d7cf6",
+    "verification/supabase-release-20261023/device-checkpoint-v4-2-targeted.json": "d375cc861d5791be2afcb88898fe87a53402c976151533830c339266c51d0477",
+    "verification/accessibility-navigation-20261023/android-ui-v5-freeze.json": "cc87ad8278189811d7e4358d6a3ad84b5e32110b5e417239a625195c11ae7913",
+    "verification/accessibility-navigation-20261023/favorites-viewport-v5/freeze.json": "fc31866a61aad98cd268f78422d94d81635bcd69e3f974c3142b006090010b68"
   },
   "current_tested_source_inputs": {
     "admin/app.js": "f7f148fee1709fe762e3421c2b36dd3b32f271a9cd9d642c8d85705bc54fa4b9",
@@ -510,7 +518,7 @@
     "android/app/src/main/java/com/lovelies/frontend/preview/SecureSession.kt": "f3e7c000b3dc48d42affcc2d6b45424c75cbf3f6a6af26d2b48b1cdc89608c10",
     "android/app/src/main/java/com/lovelies/frontend/preview/SharingScreens.kt": "92c2aa4f3570b4b27c30443db4f8a24f893b5b46b90827f28318ea9ab8f16c7c",
     "android/app/src/main/java/com/lovelies/frontend/preview/SourcePhotoGrids.kt": "97357ebe1102e296de144c017990a0c375fd7949d60b7897c044a10b53c5eb41",
-    "android/app/src/main/java/com/lovelies/frontend/preview/UiPresentation.kt": "4981a54b51d2f04a6f8e2c6974fe9ae02983a0788f4ea7d130674b109c7ad9ca",
+    "android/app/src/main/java/com/lovelies/frontend/preview/UiPresentation.kt": "665e6081c3721e649a0e358a12c35197907287a613124711f83df4ce594f136c",
     "android/app/src/main/java/com/lovelies/frontend/preview/UploadScreens.kt": "397185f230792ab5e594e47962c1879758e5fd97b8569cc3dba31c88c039f97b",
     "android/app/src/main/res/drawable/ic_launcher_foreground.xml": "87d72c4eccb67013eb3077beff8fd8216d1e5344ac5ccde870d423d93c088b6d",
     "android/app/src/main/res/drawable/ic_lovelies.png": "f8970a77cb78738d4beac5e46c24aa5caf4e0cb63a44f62f097b8ee7aa3f5d13",
