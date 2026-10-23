@@ -197,3 +197,22 @@ host aligns the target; a bounded test-only correction is being prepared without
 relaxing the same-node/name48dp visible-area requirement. Full final landscape,
 connected journeys and spoken accessibility remain open. Prior failures remain
 in their original evidence.
+
+## Root schema4 test-only checkpoint
+
+The combined two-file instrumentation freeze passed root's shared Gradle build
+with no changed inputs. The product APK remains byte-identical to V3
+(`e7b11109de7dac436d3cd51d8d55a577f03f1232af92063409b3952110c5c641`);
+new test APK SHA256 is
+`6cf052a67d7e7ad1698dd1ed779048a9f254bafd16b0489db651d56a6ccca257`.
+Only the scroll helper and optional visible-exit audit changed. All14 existing
+unit XML results are unchanged; Gradle reused the prior156-test result as
+UP-TO-DATE rather than executing a new unit run. The helper retains fresh
+same-identity/name geometry and the48dp requirement while adding bounded ancestor
+alignment; `visible_exit=true` clicks an actual named Back/Close/Cancel and checks
+the expected pane. Root handed the exact package to the UI owner for targeted
+14/20/39 landscape checks, final matrices and visible-exit callbacks. V4 device
+outcomes remain pending; V3 physical results are not relabelled as V4 passes.
+Previous V3 artifacts, XML results, logs and proof are hash-preserved in
+`before-android-v4-test-only/`; `android-v4-test-only-review.json` records the
+compile/readback and unit-result reuse. No iOS or product app rebuild occurred.

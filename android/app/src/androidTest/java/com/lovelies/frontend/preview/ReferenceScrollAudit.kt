@@ -17,9 +17,10 @@ internal fun runReferenceScrollAudit(instrumentation: Instrumentation,output: Fi
 private class ReferenceScrollAudit(private val instrumentation: Instrumentation,private val output: File,
     private val route: Int,private val density: Float) {
     private data class Container(val key: String,val path: List<Int>,val parents: List<String>,val bounds: Rect,val actions: Set<Int>)
+    private data class ScrollRegion(val key: String,val parents: List<String>,val bounds: Rect,val scrollable: Boolean)
     private data class Target(val key: String,val identity: String,val name: String,val ownName: String,val path: List<Int>,val bounds: Rect,val viewport: Rect,
-        val full: Boolean,val reachable48: Boolean,val visibleBounds: Rect,val interiorSmall: Boolean,val partial: Boolean,val parents: List<String>)
-    private data class Snapshot(val targets: List<Target>,val containers: List<Container>,val settled: Boolean=false)
+        val full: Boolean,val reachable48: Boolean,val visibleBounds: Rect,val interiorSmall: Boolean,val partial: Boolean,val parents: List<String>,val regions: List<String>)
+    private data class Snapshot(val targets: List<Target>,val containers: List<Container>,val regions: List<ScrollRegion>,val settled: Boolean=false)
     private data class Observation(val identity: String,val name: String,var full: Boolean=false,var reachable48: Boolean=false,var partial: Boolean=false,
         val interiorSmall: MutableList<List<Int>> = mutableListOf(),var samples: Int=0,
         val recoveredFragments: MutableList<List<Int>> = mutableListOf(),val ownNames: MutableSet<String> = linkedSetOf(),
@@ -44,6 +45,9 @@ private class ReferenceScrollAudit(private val instrumentation: Instrumentation,
     private val refreshSamples=mutableListOf<Map<String,Any?>>()
     private val directionChecks=mutableListOf<Map<String,Any?>>()
     private val probeSamples=mutableListOf<Map<String,Any?>>()
+    private val alignmentSamples=mutableListOf<Map<String,Any?>>()
+    private val alignedRegions=mutableSetOf<String>()
+    private val alignmentResetParents=mutableSetOf<String>()
     private val startedAt=SystemClock.uptimeMillis()
     private val maxFreshChecks=3
     private var moves=0
@@ -111,21 +115,27 @@ private class ReferenceScrollAudit(private val instrumentation: Instrumentation,
         try {
             check(root.packageName?.toString()==instrumentation.targetContext.packageName) { "Reference Activity is not the active window" }
             val window=Rect();root.getBoundsInScreen(window)
-            val targets=mutableListOf<Target>();val containers=mutableListOf<Container>()
-            fun visit(node: AccessibilityNodeInfo,path: List<Int>,parents: List<String>,edges: List<Rect>): String {
+            val targets=mutableListOf<Target>();val containers=mutableListOf<Container>();val regions=mutableListOf<ScrollRegion>()
+            fun visit(node: AccessibilityNodeInfo,path: List<Int>,parents: List<String>,scrollParents: List<String>,edges: List<Rect>): String {
                 val bounds=Rect();node.getBoundsInScreen(bounds)
                 val currentViewport=viewport(window,edges)
                 val reachable=node.isVisibleToUser && !bounds.isEmpty && Rect.intersects(bounds,currentViewport)
-                val key=if(node.isScrollable || node.isClickable || node.isSelected)identity(node) else ""
+                // Compose can retain ScrollBy semantics on a zero-range ScrollView while
+                // isScrollable is false. SHOW still stops at that nearest semantic ancestor.
+                val scrollRegion=(node.isScrollable || node.className?.toString() in setOf("android.widget.ScrollView","android.widget.HorizontalScrollView")) &&
+                    node.windowId==root.windowId && node.packageName?.toString()==instrumentation.targetContext.packageName
+                val key=if(node.isScrollable || scrollRegion || node.isClickable || node.isSelected)identity(node) else ""
                 val ownContainer=node.isScrollable && reachable
                 val nextParents=if(ownContainer)parents+key else parents
+                val nextScrollParents=if(scrollRegion && reachable)scrollParents+key else scrollParents
                 // Non-scroll semantics parents can also report a clipping boundary (for example
                 // a toolbar partly obscured by the adaptive host). Include every represented edge.
                 val nextEdges=if(bounds.isEmpty)edges else edges+Rect(bounds)
                 if(ownContainer)containers.add(Container(key,path,parents,Rect(bounds),node.actionList.map { it.id }.toSet()))
+                if(scrollRegion && reachable)regions.add(ScrollRegion(key,scrollParents,Rect(bounds),node.isScrollable))
                 val children=mutableListOf<String>()
                 for(i in 0 until node.childCount)node.getChild(i)?.let { child ->
-                    children.add(visit(child,path+i,nextParents,nextEdges));child.recycle()
+                    children.add(visit(child,path+i,nextParents,nextScrollParents,nextEdges));child.recycle()
                 }
                 val own=listOfNotNull(node.text?.toString(),node.contentDescription?.toString()).filter { it.isNotBlank() }.distinct().joinToString(" · ")
                 val name=own.ifBlank { children.filter { it.isNotBlank() }.distinct().joinToString(" · ") }
@@ -153,20 +163,21 @@ private class ReferenceScrollAudit(private val instrumentation: Instrumentation,
                         // after clipping must not inherit a different label's successful observation.
                         val targetKey="$key|${node.className}|checkable=${node.isCheckable}|$name"
                         targets.add(Target(targetKey,key,name,own,path,Rect(bounds),currentViewport,contained && widthOk && heightOk,reachable48,visibleBounds,
-                            contained && (!widthOk || !heightOk) && !partial,partial,parents))
+                            contained && (!widthOk || !heightOk) && !partial,partial,parents,scrollParents))
                     }
                 }
                 // A nested action has its own audit/name. Do not append a Save/Favorite
                 // checkbox label to its photo action's fallback when that child is visible.
                 return if(node.isClickable || node.isSelected)"" else name
             }
-            visit(root,emptyList(),emptyList(),emptyList())
-            return Snapshot(targets,containers)
+            visit(root,emptyList(),emptyList(),emptyList(),emptyList())
+            return Snapshot(targets,containers,regions)
         } finally { root.recycle() }
     }
 
     private fun signature(state: Snapshot)=state.targets.map { "${it.key}:${it.bounds.wire()}:${it.viewport.wire()}" }.sorted().joinToString(";")+
-        state.containers.map { "${it.key}:${it.bounds.wire()}:${it.actions.sorted()}" }.sorted().joinToString(";")
+        state.containers.map { "${it.key}:${it.bounds.wire()}:${it.actions.sorted()}" }.sorted().joinToString(";")+
+        state.regions.map { "${it.key}:${it.bounds.wire()}:${it.scrollable}" }.sorted().joinToString(";")
 
     private fun snapshot(record: Boolean=true): Snapshot {
         var state=readSnapshot();var stable=false
@@ -338,12 +349,9 @@ private class ReferenceScrollAudit(private val instrumentation: Instrumentation,
         }
     }
 
-    private fun showOnScreen(target: Target,phase: String): Probe {
-        val began=SystemClock.uptimeMillis()
-        val move=move(target.identity,AccessibilityNodeInfo.AccessibilityAction.ACTION_SHOW_ON_SCREEN.id,phase)
-        // Delay proof credit until the refreshed target agrees with this settled snapshot.
-        val state=snapshot(record=false)
+    private fun measureProbe(target: Target,state: Snapshot,move: Move,phase: String,actionIdentity: String,began: Long): Boolean {
         val sample=mutableMapOf<String,Any?>("identity" to target.identity,"name" to target.name,"phase" to phase,
+            "action_identity" to actionIdentity,
             "attempted" to move.attempted,"accepted" to move.dispatched,"settled" to state.settled,
             "fresh_result_reachable_48dp" to false,"bounds_before_px" to target.bounds.wire())
         val current=state.targets.firstOrNull { it.key==target.key }
@@ -368,9 +376,59 @@ private class ReferenceScrollAudit(private val instrumentation: Instrumentation,
         } finally {
             fresh?.recycle();sample["elapsed_ms"]=SystemClock.uptimeMillis()-began;probeSamples.add(sample)
         }
+        return freshReachable
+    }
+
+    private fun showOnScreen(target: Target,phase: String): Probe {
+        val began=SystemClock.uptimeMillis()
+        val move=move(target.identity,AccessibilityNodeInfo.AccessibilityAction.ACTION_SHOW_ON_SCREEN.id,phase)
+        // Delay proof credit until the refreshed target agrees with this settled snapshot.
+        val state=snapshot(record=false)
+        val freshReachable=measureProbe(target,state,move,phase,target.identity,began)
         // Keep every other target's normal observations and all small-target failures.
         observe(state,if(freshReachable)emptySet() else setOf(target.key))
         return Probe(state,freshReachable)
+    }
+
+    /** One ancestor-self SHOW per inner region; acceptance never substitutes for target proof. */
+    private fun alignInnerRegions(state: Snapshot,parent: String,depth: Int): Snapshot {
+        var result=state
+        state.regions.filter { it.parents.lastOrNull()==parent }.forEach { initial ->
+            if(!alignedRegions.add(initial.key))return@forEach
+            val phase="ancestor-align:$depth:$parent:${initial.key}"
+            val began=SystemClock.uptimeMillis()
+            val originals=result.targets.filter { initial.key in it.regions && observations[it.key]?.reachable48!=true }
+            val sample=mutableMapOf<String,Any?>("identity" to initial.key,"parent" to parent,"phase" to phase,
+                "run_elapsed_ms" to (began-startedAt),"scrollable" to initial.scrollable,"bounds_before_px" to initial.bounds.wire(),
+                "original_targets" to originals.map { it.key },"attempted" to false,"accepted" to false,"parent_reset" to false)
+            try {
+                var region=result.regions.firstOrNull { it.key==initial.key } ?: run { sample["reason"]="region_unavailable";return@forEach }
+                val outer=result.containers.firstOrNull { it.key==parent }
+                // If discovered only after outer paging, its represented top can already be
+                // clipped. A single bounded fresh top reset restores a useful leading edge.
+                if(outer!=null && region.bounds.top<=outer.bounds.top+1 && alignmentResetParents.add(parent)) {
+                    sample["parent_reset"]=true
+                    if(!resetTop(parent,"$phase:reset-parent")) {
+                        failures.add("Could not establish ancestor alignment start for $parent")
+                        sample["reason"]="parent_start_unproved";return@forEach
+                    }
+                    result=snapshot()
+                    region=result.regions.firstOrNull { it.key==initial.key } ?: run { sample["reason"]="region_unavailable_after_reset";return@forEach }
+                }
+                val action=move(region.key,AccessibilityNodeInfo.AccessibilityAction.ACTION_SHOW_ON_SCREEN.id,phase)
+                sample["attempted"]=action.attempted;sample["accepted"]=action.dispatched
+                result=snapshot(record=false)
+                sample["settled"]=result.settled
+                sample["bounds_after_px"]=result.regions.firstOrNull { it.key==region.key }?.bounds?.wire()
+                val proved=originals.filter { measureProbe(it,result,action,phase,region.key,began) }.map { it.key }.toSet()
+                sample["fresh_reachable_targets"]=proved.toList()
+                observe(result,originals.map { it.key }.toSet()-proved)
+                sample["reason"]=if(action.attempted)"original_target_geometry_required" else "action_not_attempted"
+            } finally {
+                sample["elapsed_ms"]=SystemClock.uptimeMillis()-began;alignmentSamples.add(sample)
+            }
+        }
+        return result
     }
 
     private fun fingerprint(state: Snapshot,container: String)=state.targets.filter { container in it.parents }
@@ -416,7 +474,8 @@ private class ReferenceScrollAudit(private val instrumentation: Instrumentation,
         if(!resetTop(key,"sweep-start:$depth")) { failures.add("Could not establish scroll start for $key");return }
         var previous="";var repeated=0;var terminal=false;var reason="move_limit"
         for(step in 0 until maxContainerMoves) {
-            var state=probeSmallVisibleTargets(snapshot(),key);val container=state.containers.firstOrNull { it.key==key }
+            var state=alignInnerRegions(snapshot(),key,depth)
+            state=probeSmallVisibleTargets(state,key);val container=state.containers.firstOrNull { it.key==key }
             if(container==null) { reason="container_not_visible";break }
             state.containers.filter { it.parents.lastOrNull()==key }.forEach { nested ->
                 val visibleViewport=viewport(nested.bounds,listOf(container.bounds))
@@ -496,7 +555,7 @@ private class ReferenceScrollAudit(private val instrumentation: Instrumentation,
         if(unnamed.isNotEmpty())failures.add("${unnamed.size} visible enabled actions had no accessible name during scroll traversal")
         if(missingFooters.isNotEmpty())failures.add("Required controls never exposed a48dp AX-visible intersection: ${missingFooters.joinToString()}")
         if(capped)failures.add("Scroll traversal cap reached; coverage is incomplete")
-        return mapOf("audit_schema" to 3,"status" to if(failures.isEmpty())"passed" else "failed","failures" to failures.distinct(),
+        return mapOf("audit_schema" to 4,"status" to if(failures.isEmpty())"passed" else "failed","failures" to failures.distinct(),
             "target_metric" to "At least48dp in both dimensions of the AX bounding rectangle intersected with represented viewports; not a physical hit-test or proof of full text visibility.",
             "reference_only" to true,"actions_dispatched" to "scroll_and_show_on_screen_only","moves" to moves,"snapshots" to snapshots,
             "move_limit" to maxMoves,"container_move_limit" to maxContainerMoves,"capped" to capped,"containers" to scans,
@@ -510,6 +569,7 @@ private class ReferenceScrollAudit(private val instrumentation: Instrumentation,
             "scroll_event_samples" to scrollEvents,
             "node_refresh_samples" to refreshSamples,"direction_absence_checks" to directionChecks,
             "show_on_screen_probes" to probeSamples,"fresh_check_limit" to maxFreshChecks,
+            "ancestor_alignment_samples" to alignmentSamples,"ancestor_alignment_limit_per_region" to 1,"ancestor_parent_reset_limit_per_parent" to 1,
             "unnamed_visible_actions" to unnamed.values.toList(),
             "bottom_screenshots" to screenshots,"spoken_screen_reader_verified" to false)
     }

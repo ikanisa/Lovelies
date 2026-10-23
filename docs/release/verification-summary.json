@@ -149,12 +149,14 @@
         },
         {
           "path": "android/app/build/outputs/apk/androidTest/debug/app-debug-androidTest.apk",
-          "sha256": "804efce8c69b2cbf1dc361b0b63d37f805787640271aaed2682edc7082c9776c",
-          "bytes": 493299
+          "sha256": "6cf052a67d7e7ad1698dd1ed779048a9f254bafd16b0489db651d56a6ccca257",
+          "bytes": 500587
         }
       ],
-      "physical_final_retests": "V3 normal48/48, font2 48/48, landscape45/48;46/46 applicable Back checks;257 Android PNGs reviewed per owner report. Fresh V3 font2 keyboard routes15/22/45 pass. Three landscape failures retained under test-only nested-scroller diagnosis; final landscape/connected/spoken acceptance remains open.",
-      "signed_store_artifact": false
+      "physical_final_retests": "V3 normal48/48, font2 48/48, landscape45/48;46/46 applicable Back checks;257 Android PNGs reviewed per owner report. Fresh V3 font2 keyboard routes15/22/45 pass. Three landscape failures retained under test-only nested-scroller diagnosis; final landscape/connected/spoken acceptance remains open. V4 changes only instrumentation; targeted/final schema4 and visible-exit runtime checks are pending.",
+      "signed_store_artifact": false,
+      "test_only_v4_build": "passed with unchanged frozen inputs; exact V3 product app hash retained; schema4/visible-exit physical execution pending",
+      "unit_result_reuse": "Prior156/14-suite unchanged production/unit-input result reused; Gradle testDebugUnitTest UP-TO-DATE; all14 XML result hashes unchanged"
     },
     "ios": {
       "focused_host_checks_pass": 665,
@@ -220,8 +222,8 @@
     "verification/supabase-release-20261023/backend-account-recovery-final.json": "22adf0a5d0ea6c08e7a9bc6e02d8beee209f1e9ffec10e524f1e9001b568798d",
     "verification/supabase-release-20261023/backend-refresh-delivery/result.json": "d03bec24127b766e60b8b15976ff2cf75a963e66224b6f2d8318fc22bc6d5571",
     "verification/supabase-release-20261023/admin-integrated-final.json": "694ea637e53a4ca99d860dd5c7e766bc6f07d5a6f518069963aea20ae916599f",
-    "verification/supabase-release-20261023/android-final.json": "a24e6312dde49b2614e509e269adcae990529479b254c54676c283863eb01dab",
-    "verification/supabase-release-20261023/android-final-inputs.json": "fda69879e7c79013f5155ab3ebfd1d31d0a5710c7b5a4490b6f792496fed4184",
+    "verification/supabase-release-20261023/android-final.json": "cdd86bb927627dbbbf237dba19ee7e2447401b6a12ee5ae543be4f168cd8894b",
+    "verification/supabase-release-20261023/android-final-inputs.json": "0b70f8c2cff34004ba1fa4ae7799375d640cbd3e08f8420110b0be28a66b66ed",
     "verification/supabase-release-20261023/android-unit-results-final.json": "52950744d7e0d4022654ac0a36afffbf27eee7d66396c3ef0361573e8f1c7bb1",
     "verification/supabase-release-20261023/ios-release-final.json": "3c5766630f63c4877910f604e7206b158c0f713db57aa9fb5387fe26244cfe76",
     "verification/supabase-release-20261023/ios-debug-final.json": "3dc868fcd0e7722c15fe9a4e41e79e121cd8e315813e6fa25e4c39c307acf8b2",
@@ -253,7 +255,9 @@
     "verification/accessibility-navigation-20261023/ios-device-audit-v2-build.json": "57b83d5ea9396d19816449e932e95371d9e6702a97a10520454f761fd0803202",
     "verification/accessibility-navigation-20261023/ios-device-audit-v2-artifact.json": "42263facfe8763f0c45747ff7a748ca03865e9a13f6d481b49d27d6115a1cae3",
     "verification/accessibility-navigation-20261023/pixel-v3-final-keyboard-receipt.json": "9fa268116d3f239448424bc2e26ca586505a9169851d4e7f4955651f0b354291",
-    "verification/supabase-release-20261023/device-checkpoint-v3-v2-runner.json": "e4a11d8a5a07a3f50b5daa1b15e760c09666faf22985deaa5d59a4b01261ddff"
+    "verification/supabase-release-20261023/device-checkpoint-v3-v2-runner.json": "e4a11d8a5a07a3f50b5daa1b15e760c09666faf22985deaa5d59a4b01261ddff",
+    "verification/supabase-release-20261023/android-v4-test-only-review.json": "5bf467b3e2c1f75a1e937e4597d757138f4d60b7157099977fc676dce52fe199",
+    "verification/accessibility-navigation-20261023/android-test-only-v4-freeze.json": "4483722e71229bf853d3e71f144d15f4b59c4ec50fda7170e96b9d8b8805c3cd"
   },
   "current_tested_source_inputs": {
     "admin/app.js": "f7f148fee1709fe762e3421c2b36dd3b32f271a9cd9d642c8d85705bc54fa4b9",
@@ -296,11 +300,11 @@
     "android/app/src/androidTest/java/com/lovelies/frontend/preview/CameraRecoveryJourney.kt": "0f34ad208152932111a222d9cad56a98ca245a108b1d6a45a6ea62dc0064a2f6",
     "android/app/src/androidTest/java/com/lovelies/frontend/preview/EnrollmentRecoveryJourney.kt": "bb9e9ec301c7df82b7b94a24660ae96f1616399f2804c3cea346e3a142e6ef3f",
     "android/app/src/androidTest/java/com/lovelies/frontend/preview/FaceLifecycleJourney.kt": "0cf1bc1de3e356833fd230f2c14dd94229931e6b3130cf803cd88bc0fedbbb8c",
-    "android/app/src/androidTest/java/com/lovelies/frontend/preview/FrontendAccessibilityJourney.kt": "9a72556307a40b6acc84d9269c33a6dba20125e88358c1fac39231310eb41c3f",
+    "android/app/src/androidTest/java/com/lovelies/frontend/preview/FrontendAccessibilityJourney.kt": "849deecd7daab04c54dc33732893d1c83c761d1ab9b250d2e7e6503bfed8a393",
     "android/app/src/androidTest/java/com/lovelies/frontend/preview/GuestDeletionJourney.kt": "6259e3651d59ad4bf23566001004da6b47fabed5cd8319c6e4a7f0a1a1018951",
     "android/app/src/androidTest/java/com/lovelies/frontend/preview/NativeCloudflareJourney.kt": "cb683e7ff370c553b851271599aa80380f26196c246f41b749feada7c60eeb55",
     "android/app/src/androidTest/java/com/lovelies/frontend/preview/PhotoUploadRecoveryJourney.kt": "f8941926d9c6acbbc91b867df6aac27d1d405b2cff2985f6e40e06fa30b17eef",
-    "android/app/src/androidTest/java/com/lovelies/frontend/preview/ReferenceScrollAudit.kt": "dd1931a9775bcb635835762b950d7622ff194525f3d94457ec7ae615e444ba87",
+    "android/app/src/androidTest/java/com/lovelies/frontend/preview/ReferenceScrollAudit.kt": "0ecbba3998b209e55b5507a859ef8667be04a178142b3a3fab074fd25dcb5d19",
     "android/app/src/debug/AndroidManifest.xml": "80157d72973351585167c394517096d99e29d259140b8dd51fd094cf9562e193",
     "android/app/src/debug/assets/catalog.json": "3e013f4b873275901fc020c5037c667a5e29ebc24d2dba3ca86a0b368313f10b",
     "android/app/src/debug/assets/home-grid.json": "905fc61e393309ea7100bb58f1c063b04949ae8fa7aa14b9bc640846a62ae5bc",

@@ -22,6 +22,7 @@ class FrontendAccessibilityJourney : Instrumentation() {
         val rotation=arguments.getString("rotation")
         require(rotation==null || rotation in setOf("portrait","landscape"))
         val keyboard=arguments.getString("keyboard")=="true"
+        val visibleExit=arguments.getString("visible_exit")=="true"
         val scanScroll=arguments.getString("scan_scroll")=="true"
         val resolver=targetContext.contentResolver
         val oldAuto=android.provider.Settings.System.getInt(resolver,android.provider.Settings.System.ACCELEROMETER_ROTATION,0)
@@ -126,7 +127,37 @@ class FrontendAccessibilityJourney : Instrumentation() {
                     }
                     if(back!=null) {
                         val started=android.os.SystemClock.elapsedRealtime()
-                        sendKeyDownUpSync(KeyEvent.KEYCODE_BACK);waitForIdleSync();Thread.sleep(180)
+                        var exitLabel: String?=null
+                        val useVisibleExit=visibleExit && route !in setOf(11,37)
+                        if(useVisibleExit) {
+                            val exitNames=setOf(targetContext.getString(R.string.back),targetContext.getString(R.string.a11y_close),
+                                "Cancel","Cancel face capture","Back to gallery","Go Back")
+                            val current=uiAutomation.rootInActiveWindow ?: error("Missing exit window")
+                            var exit: AccessibilityNodeInfo?=null
+                            try {
+                                check(current.packageName?.toString()==targetContext.packageName) { "Reference Activity is not active before exit" }
+                                val windowBounds=Rect();current.getBoundsInScreen(windowBounds)
+                                fun findExit(node: AccessibilityNodeInfo): AccessibilityNodeInfo? {
+                                    val names=listOfNotNull(node.text?.toString(),node.contentDescription?.toString())
+                                    val bounds=Rect();node.getBoundsInScreen(bounds)
+                                    val area=Rect(bounds);val intersects=area.intersect(windowBounds)
+                                    if(node.isClickable && node.isEnabled && node.isVisibleToUser && names.any { it in exitNames } &&
+                                        intersects && area.width()+1>=48*density && area.height()+1>=48*density) {
+                                        exitLabel=names.first { it in exitNames }
+                                        return AccessibilityNodeInfo.obtain(node)
+                                    }
+                                    for(i in 0 until node.childCount)node.getChild(i)?.let { child ->
+                                        val found=try { findExit(child) } finally { child.recycle() }
+                                        if(found!=null)return found
+                                    }
+                                    return null
+                                }
+                                exit=findExit(current)
+                                check(exit!=null) { "No named visible48dp Back, Close or Cancel control before exit" }
+                                check(exit.performAction(AccessibilityNodeInfo.ACTION_CLICK)) { "Visible exit action was rejected" }
+                            } finally { exit?.recycle();current.recycle() }
+                        } else sendKeyDownUpSync(KeyEvent.KEYCODE_BACK)
+                        waitForIdleSync();Thread.sleep(180)
                         val expected="Screen ${back.toString().padStart(2,'0')}:"
                         var observed=emptyList<String>()
                         var activePackage: String?=null
@@ -144,10 +175,10 @@ class FrontendAccessibilityJourney : Instrumentation() {
                             if(reached || Build.VERSION.SDK_INT<28)break
                             Thread.sleep(60);waitForIdleSync()
                         } while(android.os.SystemClock.elapsedRealtime()-started<2000)
-                        backEvidence=mapOf("expected_screen" to back,"observed_panes" to observed,"active_package" to activePackage,
+                        backEvidence=mapOf("interaction" to if(useVisibleExit)"visible_exit" else "physical_back","visible_exit_label" to exitLabel,"expected_screen" to back,"observed_panes" to observed,"active_package" to activePackage,
                             "settle_ms" to android.os.SystemClock.elapsedRealtime()-started,"pane_assertion_supported" to (Build.VERSION.SDK_INT>=28),"reached_expected" to reached)
                         if(Build.VERSION.SDK_INT>=28 && !reached) {
-                            failures.add("Physical Back did not return to screen $back")
+                            failures.add("${if(useVisibleExit)"Visible exit" else "Physical Back"} did not return to screen $back")
                             if(activePackage==targetContext.packageName)uiAutomation.takeScreenshot()?.let { bitmap ->
                                 File(output,"screen-${route.toString().padStart(2,'0')}-back-failure.png").outputStream().use { bitmap.compress(android.graphics.Bitmap.CompressFormat.PNG,100,it) };bitmap.recycle()
                             }
@@ -170,7 +201,7 @@ class FrontendAccessibilityJourney : Instrumentation() {
             } catch(problem: Throwable) { restored=false;reports.add(mapOf("status" to "failed","failure" to "rotation_restore: ${problem.message}")) }
         }
         val failed=reports.count { it["status"]=="failed" }
-        File(output,"report.json").writeText(NativeProtocol.canonical(mapOf("reference_only" to true,"font_scale_override" to scale,"scroll_scan_requested" to scanScroll,"rotation_variant" to rotation,"rotation_preferences_restored" to restored,
+        File(output,"report.json").writeText(NativeProtocol.canonical(mapOf("reference_only" to true,"font_scale_override" to scale,"scroll_scan_requested" to scanScroll,"visible_exit_requested" to visibleExit,"rotation_variant" to rotation,"rotation_preferences_restored" to restored,
             "rotation_before" to mapOf("auto" to oldAuto,"user" to oldUser,"display" to oldDisplay),
             "screens" to reports,"failed" to failed,"spoken_screen_reader_verified" to false)))
         finish(if(failed==0)Activity.RESULT_OK else Activity.RESULT_CANCELED,Bundle().apply {

@@ -44,6 +44,13 @@ runner is built/signed/read back; the unchanged installed QA product's physical
 retry still awaits owner removal of the unrelated floating video overlay.
 `device-checkpoint-v3-v2-runner.json` binds this partial checkpoint.
 
+The V4 test-only Android batch subsequently compiled with unchanged frozen
+inputs and an identical product APK; its new test APK is handed to the UI owner
+for targeted/final landscape and actual visible-exit callbacks. Gradle reused
+all14 unchanged unit-result XMLs (156 tests); no fresh unit execution is claimed.
+`android-v4-test-only-review.json` binds the build and preserved V3 preimages.
+V4 physical acceptance remains pending.
+
 ## Remaining release gates
 
 1. The approved schema is applied/read back; reconcile Supabase CLI history, retain the clean post-change security-linter receipt, complete API/Auth/Storage/configuration inventory and establish backup/restore. Supply server-only secrets through the deployment secret store, not chat or Git.
