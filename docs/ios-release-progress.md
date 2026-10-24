@@ -1,5 +1,11 @@
 # iOS replacement implementation checkpoint — 24 October 2026
 
+## 24 October 2026 — compiled UI repairs after localization
+
+The five reviewed UI files now compile in unsigned iPhoneOS Release, Debug build-for-testing and a new arm64 Simulator app with the exact frozen V4 audit runner. Repairs cover bounded upload thumbnails, intrinsic large-text headings, meaningful photo labels, native field/toggle labels, 44-point controls and tagged horizontal strips. Counts, callbacks, selections and raw protocol values are preserved. Release binary SHA256 `4748d85937a610acfdb20cd389e9c3f356f3abe18818623899d005dc52b69b19`; the same resource-format cases pass and the same six link/policy/signature blockers remain. The UI review chat owns the fresh runtime checks. Compilation does not close the earlier observed failures.
+
+Receipts are under `verification/supabase-release-20261023/post-localization-ui/`; prior language-build receipts and bundles are preserved.
+
 ## 24 October2026 — integrated English/Kinyarwanda checkpoint
 
 Current unsigned Release and Debug build-for-testing pass with frozen inputs. English/Kinyarwanda resources929 static/20 plural dictionaries/three permissions per language are packaged. All665 focused Foundation host checks were rerun after final generated-label/known-status mapping changes and pass. Same1858 static/6 permission/144 plural/42 interpolation cases pass in source and actual Release resources; repeated cases are not additional coverage. Release binary SHA256 `4a6ae35fe24a6b8582d73f714409cd7256a2d24c223931eca6bd1953ee28fb60`. Six actual preflight gates remain: approved link host, four published URLs and distribution signature. Older08a Simulator V3 discovery retains real layout/AX failures; current candidates need rebuilt runtime qualification.

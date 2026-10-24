@@ -135,7 +135,7 @@ struct UploadViews: View {
     private var selection: some View {
         VStack(spacing: 13) {
             HStack {
-                Button("Cancel") { store.go(.uploadEntry) }.font(.body).frame(minHeight: 44).foregroundStyle(LoveliesTheme.pink)
+                Button { store.go(.uploadEntry) } label: { Text("Cancel").font(.body).frame(minWidth: 44, minHeight: 44).contentShape(Rectangle()) }.foregroundStyle(LoveliesTheme.pink)
                 Spacer()
                 Text("\(store.uploadIDs.count) selected").loveliesFont(size: 17, weight: .semibold)
                 Spacer()
@@ -165,15 +165,9 @@ struct UploadViews: View {
                 .frame(maxWidth: .infinity, alignment: .leading).padding(.horizontal, 21)
             ScrollView {
                 VStack(spacing: 16) {
-                    HStack(spacing: 7) {
-                        ForEach(Array(store.uploadPhotos.prefix(5))) { photo in
-                            Button { store.openPhoto(photo) } label: { AssetImage(name: photo.asset).scaledToFill().frame(height: 73).clipped().clipShape(RoundedRectangle(cornerRadius: 10)) }.buttonStyle(LoveliesPressStyle()).frame(maxWidth: .infinity).accessibilityLabel("Photo \(photo.id)")
-                        }
-                        if store.uploadPhotos.count > 5 {
-                            Button { store.go(.uploadSelection) } label: { Text("+\(store.uploadPhotos.count - 5)").loveliesFont(size: 17, weight: .medium).frame(width: 57, height: 73).background(LoveliesTheme.surface, in: RoundedRectangle(cornerRadius: 10)) }.accessibilityLabel("Edit selected photos")
-                        }
-                    }
-                    TextField("Add a caption (optional)", text: $store.caption, axis: .vertical).loveliesFont(size: 15).padding(17)
+                    reviewThumbnailStrip
+                    TextField("Add a caption (optional)", text: $store.caption, axis: .vertical).loveliesFont(size: 15)
+                        .frame(minHeight: 44).contentShape(Rectangle()).accessibilityLabel("Add a caption (optional)").padding(17)
                         .background(LoveliesTheme.surface, in: RoundedRectangle(cornerRadius: 14)).lineLimit(1...3)
                     GroupSurface { SettingsRow(icon: "photo", title: String(localized: "Add to album"), value: store.album) { picker = .album } }
                     GroupSurface { SettingsRow(icon: "lock", title: String(localized: "Who can see these?"), value: NSLocalizedString(store.visibility, comment: "App-owned photo visibility option")) { picker = .visibility } }
@@ -193,6 +187,44 @@ struct UploadViews: View {
                     }
                 }
             }
+    }
+
+    private var reviewThumbnailStrip: some View {
+        let photoCount = min(5, store.uploadPhotos.count)
+        let hasMore = store.uploadPhotos.count > 5
+        let controlCount = photoCount + (hasMore ? 1 : 0)
+        let minimumRowWidth = CGFloat(photoCount) * 44 + (hasMore ? 57 : 0) + CGFloat(max(0, controlCount - 1)) * 7
+        return ViewThatFits(in: .horizontal) {
+            HStack(spacing: 7) {
+                ForEach(Array(store.uploadPhotos.prefix(5))) { photo in reviewThumbnail(photo) }
+                if hasMore { reviewRemainingPhotos }
+            }.frame(minWidth: minimumRowWidth)
+            Grid(horizontalSpacing: 7, verticalSpacing: 7) {
+                GridRow {
+                    ForEach(Array(store.uploadPhotos.prefix(3))) { photo in reviewThumbnail(photo) }
+                }
+                GridRow {
+                    ForEach(Array(store.uploadPhotos.dropFirst(3).prefix(2))) { photo in reviewThumbnail(photo) }
+                    if hasMore { reviewRemainingPhotos }
+                }
+            }
+        }
+    }
+
+    private func reviewThumbnail(_ photo: DemoPhoto) -> some View {
+        Button { store.openPhoto(photo) } label: {
+            GeometryReader { geometry in
+                AssetImage(name: photo.asset).scaledToFill()
+                    .frame(width: geometry.size.width, height: 73).clipped().clipShape(RoundedRectangle(cornerRadius: 10))
+            }.frame(height: 73).frame(minWidth: 44).contentShape(Rectangle())
+        }.buttonStyle(LoveliesPressStyle()).frame(maxWidth: .infinity).accessibilityLabel("Photo \(photo.id)")
+    }
+
+    private var reviewRemainingPhotos: some View {
+        Button { store.go(.uploadSelection) } label: {
+            Text("+\(store.uploadPhotos.count - 5)").loveliesFont(size: 17, weight: .medium).fixedSize()
+                .frame(minWidth: 57, minHeight: 73).background(LoveliesTheme.surface, in: RoundedRectangle(cornerRadius: 10)).contentShape(Rectangle())
+        }.accessibilityLabel("Edit selected photos")
     }
 
     private var progress: some View {
@@ -216,12 +248,14 @@ struct UploadViews: View {
     private func uploadProgressRow(_ photo: DemoPhoto, index: Int) -> some View {
         let baseline: Double = index == 0 ? 0.78 : index == 1 ? 0.42 : index == 2 ? 0.2 : 0
         let value = min(1, baseline + store.progress * (index < 3 ? 0.85 : 1.15))
+        let filename = "IMG_\(2931 + index).\(index == 2 ? "MOV" : "JPG")"
+        let status = value >= 1 ? String(localized: "Complete") : value == 0 ? String(localized: "Waiting...") : index == 2 ? String(localized: "Processing...") : String(localized: "Uploading... \(Int(value * 100))%")
         return HStack(spacing: 14) {
             AssetImage(name: photo.asset).scaledToFill().frame(width: 58, height: 60).clipped().clipShape(RoundedRectangle(cornerRadius: 7))
+                .accessibilityHidden(true)
             VStack(alignment: .leading, spacing: 6) {
-                Text("IMG_\(2931 + index).\(index == 2 ? "MOV" : "JPG")").loveliesFont(size: 14)
-                Text(value >= 1 ? String(localized: "Complete") : value == 0 ? String(localized: "Waiting...") : index == 2 ? String(localized: "Processing...") : String(localized: "Uploading... \(Int(value * 100))%"))
-                    .loveliesFont(size: 12).foregroundStyle(LoveliesTheme.secondary)
+                Text(verbatim: filename).loveliesFont(size: 14)
+                Text(status).loveliesFont(size: 12).foregroundStyle(LoveliesTheme.secondary)
                 GeometryReader { geometry in
                     ZStack(alignment: .leading) { Capsule().fill(.white.opacity(0.12)); Capsule().fill(LoveliesTheme.pink).frame(width: geometry.size.width * value) }
                 }.frame(height: 5)
@@ -232,7 +266,9 @@ struct UploadViews: View {
                 if value >= 1 { Image(systemName: "checkmark").font(.system(size: 12, weight: .semibold)).foregroundStyle(LoveliesTheme.pink) }
                 else if value > 0 { Circle().trim(from: 0, to: value).stroke(LoveliesTheme.pink, style: StrokeStyle(lineWidth: 2, lineCap: .round)).rotationEffect(.degrees(-90)) }
             }.frame(width: 23, height: 23)
-        }
+        }.accessibilityElement(children: .ignore)
+            .accessibilityLabel(Text("Photo \(photo.id), \(filename)"))
+            .accessibilityValue(Text(verbatim: status))
     }
 
     private var complete: some View {

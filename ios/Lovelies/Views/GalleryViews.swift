@@ -90,7 +90,7 @@ struct GalleryViews: View {
                     Spacer()
                     HStack(spacing: 8) {
                         Button { store.go(.photoPeople) } label: {
-                            HStack(spacing: -6) { Avatar(asset: "person05", size: 42, pink: true); Avatar(asset: "person03", size: 42) }
+                            HStack(spacing: -6) { Avatar(asset: "person05", size: 42, pink: true); Avatar(asset: "person03", size: 42) }.frame(minHeight: 44).contentShape(Rectangle())
                         }.accessibilityLabel("People in this photo")
                         Button { store.go(.photoPeople) } label: { Text("+3").loveliesFont(size: 15).frame(width: 44, height: 44).background(.white.opacity(0.13), in: Circle()) }.accessibilityLabel("3 more people")
                         Spacer()
@@ -201,7 +201,7 @@ struct GalleryViews: View {
                                 VStack(spacing: 7) { AssetImage(name: SourceReferenceCatalog.recentAsset(index, route: 15) ?? DemoPhoto.all[item.1 - 1].asset).scaledToFill().frame(width: 70, height: 70).clipped().clipShape(RoundedRectangle(cornerRadius: 20)); Text(LocalizedStringKey(item.0)).loveliesFont(size: 13) }
                             }.buttonStyle(LoveliesPressStyle()).frame(maxWidth: .infinity)
                         }
-                    } }.padding(.bottom, 10)
+                    } }.accessibilityIdentifier("lovelies.horizontal.search-recent").padding(.bottom, 10)
                     Text("Results").loveliesFont(size: 18, weight: .semibold)
                     if store.searchResults.isEmpty { Text("No photos found. Try a person, place or sunset.").foregroundStyle(LoveliesTheme.secondary).padding(.vertical, 25) }
                     else {

@@ -28,8 +28,8 @@ struct SharingViews: View {
                 VStack(spacing: 12) {
                     PageHeader(title: String(localized: "Your Matches"), trailing: false)
                     AssetImage(name: "matches-hero").scaledToFit().frame(width: min(260, geometry.size.width * 0.531)).padding(.top, geometry.size.height * 0.02).accessibilityHidden(true)
-                    VStack(spacing: 0) { Text("12").loveliesFont(size: 33, weight: .semibold); Text("Photos Matched").loveliesFont(size: 20) }
-                    VStack(spacing: 0) { Text("8").loveliesFont(size: 32, weight: .semibold); Text("People Found").loveliesFont(size: 20) }
+                    VStack(spacing: 0) { Text("12").loveliesFont(size: 33, weight: .semibold); Text("Photos Matched").loveliesFont(size: 20).multilineTextAlignment(.center).fixedSize(horizontal: false, vertical: true) }
+                    VStack(spacing: 0) { Text("8").loveliesFont(size: 32, weight: .semibold); Text("People Found").loveliesFont(size: 20).multilineTextAlignment(.center).fixedSize(horizontal: false, vertical: true) }
                     ViewThatFits(in: .horizontal) {
                         HStack(spacing: -6) { summaryPeople }
                             .fixedSize(horizontal: true, vertical: false)
@@ -77,6 +77,7 @@ struct SharingViews: View {
             VStack(spacing: 0) {
                 ZStack(alignment: .top) {
                     AssetImage(name: store.currentPhoto.asset).scaledToFill().frame(width: geometry.size.width, height: geometry.size.height * 0.53).clipped()
+                        .accessibilityElement(children: .ignore).accessibilityLabel(Text("Photo \(store.currentPhoto.id)")).accessibilityAddTraits(.isImage)
                     HStack {
                         Button { store.back() } label: { Image(systemName: "chevron.left").font(.system(size: 22)).frame(width: 44, height: 44) }.accessibilityLabel("Back")
                         Spacer()
@@ -87,7 +88,7 @@ struct SharingViews: View {
                 VStack(spacing: 15) {
                     HStack {
                         Button { store.back() } label: { Image(systemName: "chevron.left").font(.system(size: 21)).frame(width: 44, height: 44) }.accessibilityLabel("Back to photo")
-                        Text("People in this photo").loveliesFont(size: 19, weight: .semibold).frame(maxWidth: .infinity)
+                        Text("People in this photo").loveliesFont(size: 19, weight: .semibold).multilineTextAlignment(.center).fixedSize(horizontal: false, vertical: true).frame(maxWidth: .infinity)
                         Menu {
                             Button("Share this photo", systemImage: "square.and.arrow.up") { store.beginSharing(store.currentPhoto); store.go(.peopleSelection) }
                             Button("Report incorrect match", systemImage: "flag") { store.go(.incorrectMatch) }
@@ -220,7 +221,7 @@ struct SharingViews: View {
                                 Button { store.openPerson(person) } label: { VStack(spacing: 6) { Avatar(asset: person.asset, size: 65, pink: true); Text(person.name).loveliesFont(size: 14) } }.buttonStyle(LoveliesPressStyle())
                             }
                         }.padding(.horizontal, 4).padding(.vertical, 2)
-                    }.scrollIndicators(.hidden)
+                    }.scrollIndicators(.hidden).accessibilityIdentifier("lovelies.horizontal.review-people")
                 }.padding(.horizontal, 21)
             }.scrollIndicators(.hidden)
             Text("You're about to share \(store.sharePhotoIDs.count) photos\nwith \(store.sharingPeople.count) people.")

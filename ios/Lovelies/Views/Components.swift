@@ -116,11 +116,11 @@ struct PageHeader: View {
                     .accessibilityLabel(close ? String(localized: "Close") : String(localized: "Back"))
             }
             if leadingTitle {
-                if !title.isEmpty { Text(title).font(.title2.weight(.semibold)).accessibilityAddTraits(.isHeader) }
+                if !title.isEmpty { Text(title).font(.title2.weight(.semibold)).fixedSize(horizontal: false, vertical: true).accessibilityAddTraits(.isHeader) }
                 Spacer(minLength: 0)
             } else {
                 VStack(spacing: 4) {
-                    if !title.isEmpty { Text(title).font(.headline).multilineTextAlignment(.center).accessibilityAddTraits(.isHeader) }
+                    if !title.isEmpty { Text(title).font(.headline).multilineTextAlignment(.center).fixedSize(horizontal: false, vertical: true).accessibilityAddTraits(.isHeader) }
                     if let subtitle { Text(subtitle).font(.subheadline).foregroundStyle(LoveliesTheme.secondary).multilineTextAlignment(.center).fixedSize(horizontal: false, vertical: true) }
                 }.frame(maxWidth: .infinity)
             }
@@ -596,13 +596,15 @@ struct SourcePhotoGrid: View {
             let imageHeight = reflow ? imageWidth * max(0.001, photo.ratio) : height
             let imageX = (width - imageWidth) / 2
             let imageY = (height - imageHeight) / 2
+            let photoLabel = String(localized: "Photo \(photo.id), \(photo.tags)")
+            let accessiblePhotoLabel = tile.peopleBadge == true ? photoLabel + ", " + String(localized: "People in this photo") : photoLabel
             ZStack(alignment: .topLeading) {
                 Button { action(photo) } label: {
                     AssetImage(name: photo.asset).scaledToFill().frame(width: imageWidth, height: imageHeight).clipped()
                         .frame(width: width, height: height).background(Color.black)
                         .overlay { if dimUnselected && !chosen { Color.black.opacity(0.35) } }
                         .clipShape(RoundedRectangle(cornerRadius: 9)).contentShape(Rectangle())
-                }.buttonStyle(LoveliesPressStyle()).accessibilityLabel("Photo \(photo.id), \(photo.tags)")
+                }.buttonStyle(LoveliesPressStyle()).accessibilityLabel(accessiblePhotoLabel)
                     .accessibilityAddTraits(chosen ? .isSelected : [])
                     .accessibilityValue(selection == nil ? "" : chosen ? String(localized: "Selected") : String(localized: "Not selected"))
                     .accessibilityAction(named: selection == nil && badgeAction == nil ? String(localized: "Open photo") : badge == .heart ? (chosen ? String(localized: "Remove from favorites") : String(localized: "Add to favorites")) : (chosen ? String(localized: "Deselect photo") : String(localized: "Select photo"))) { if let badgeAction { badgeAction(photo) } else { action(photo) } }
@@ -643,11 +645,11 @@ struct SourcePhotoGrid: View {
                 }
                 if tile.peopleBadge == true {
                     if let bounds = tile.peopleBadgeBounds, bounds.count == 4 {
-                        Image(systemName: "person.2.fill").font(.system(size: min(imageWidth * bounds[2], imageHeight * bounds[3]) * 0.68)).foregroundStyle(.white)
+                        Image(systemName: "person.2.fill").accessibilityHidden(true).font(.system(size: min(imageWidth * bounds[2], imageHeight * bounds[3]) * 0.68)).foregroundStyle(.white)
                             .frame(width: imageWidth * bounds[2], height: imageHeight * bounds[3]).background(Color.black, in: Circle())
                             .position(x: imageX + imageWidth * (bounds[0] + bounds[2] / 2), y: imageY + imageHeight * (bounds[1] + bounds[3] / 2)).allowsHitTesting(false)
                     } else {
-                        Image(systemName: "person.2.fill").font(.system(size: 15)).foregroundStyle(.white)
+                        Image(systemName: "person.2.fill").accessibilityHidden(true).font(.system(size: 15)).foregroundStyle(.white)
                             .frame(width: 29, height: 29).background(Color.black, in: Circle())
                             .position(x: imageX + imageWidth - 20, y: imageY + imageHeight - 20).allowsHitTesting(false)
                     }

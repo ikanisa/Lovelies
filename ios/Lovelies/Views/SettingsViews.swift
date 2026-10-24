@@ -129,8 +129,10 @@ struct SettingsViews: View {
                 Text("Help Lovelies find you in photos\nacross your matches.").loveliesFont(size: 17).foregroundStyle(LoveliesTheme.secondary).multilineTextAlignment(.center)
                 if let camera = SourceReferenceCatalog.layout(38)?.cameraAsset {
                     AssetImage(name: camera).scaledToFit().frame(width: geometry.size.width * 0.687).clipShape(RoundedRectangle(cornerRadius: 19))
+                        .accessibilityLabel(String(localized: "Sample face \(faceIndex + 1)"))
                 } else {
                     AssetImage(name: "portrait").scaledToFill().scaleEffect(1 + CGFloat(faceIndex) * 0.05).frame(width: geometry.size.width * 0.74, height: geometry.size.height * 0.38).clipped().clipShape(RoundedRectangle(cornerRadius: 19))
+                        .accessibilityLabel(String(localized: "Sample face \(faceIndex + 1)"))
                 }
                 if SourceReferenceCatalog.layout(38) != nil {
                     SourcePhotoGrid(route: 38, selection: [faceIndex + 1], outlineSelection: true) { faceIndex = max(0, min(3, $0.id - 1)) }.padding(.vertical, 3)
@@ -159,7 +161,9 @@ struct SettingsViews: View {
         VStack(spacing: 15) {
             HStack {
                 Button { store.back() } label: { Image(systemName: "chevron.left").font(.system(size: 22)).frame(width: 44, height: 44) }.accessibilityLabel("Back")
-                Text("Manage People").loveliesFont(size: 21, weight: .semibold).frame(maxWidth: .infinity)
+                Text("Manage People").loveliesFont(size: 21, weight: .semibold)
+                    .multilineTextAlignment(.center).fixedSize(horizontal: false, vertical: true)
+                    .frame(maxWidth: .infinity).accessibilityAddTraits(.isHeader)
                 Color.clear.frame(width: 44, height: 44)
             }.padding(.horizontal, 15)
             Text("Every matched person is allowed unless you block them. You still review each photo and recipient before sharing.")
@@ -174,9 +178,10 @@ struct SettingsViews: View {
                         Button { store.currentPerson = person; sheet = .managePerson } label: {
                             HStack(spacing: 15) {
                                 Avatar(asset: person.asset, size: 43)
-                                Text(person.fullName).loveliesFont(size: 14)
-                                Spacer()
+                                Text(person.fullName).loveliesFont(size: 14).fixedSize(horizontal: false, vertical: true)
+                                Spacer(minLength: 0)
                                 Text(peopleTab == "Blocked" ? String(localized: "Blocked") : String(localized: "Can share with")).loveliesFont(size: 12).foregroundStyle(LoveliesTheme.secondary)
+                                    .multilineTextAlignment(.trailing).fixedSize(horizontal: false, vertical: true)
                                 Image(systemName: "chevron.right").font(.system(size: 14)).foregroundStyle(LoveliesTheme.secondary)
                             }.padding(.vertical, 11).contentShape(Rectangle())
                         }.buttonStyle(LoveliesPressStyle())
@@ -189,8 +194,12 @@ struct SettingsViews: View {
     private func peopleSegment(_ title: String, count: Int) -> some View {
         Button { peopleTab = title } label: {
             Text("\(NSLocalizedString(title, comment: "App-owned people segment")) (\(count))").loveliesFont(size: 15, weight: peopleTab == title ? .medium : .regular).foregroundStyle(peopleTab == title ? .black : .white)
-                .frame(maxWidth: .infinity).padding(.vertical, 11).background(peopleTab == title ? LoveliesTheme.pink : .clear, in: RoundedRectangle(cornerRadius: 14))
-        }.buttonStyle(LoveliesPressStyle())
+                .multilineTextAlignment(.center).fixedSize(horizontal: false, vertical: true)
+                .padding(.horizontal, 12).padding(.vertical, 11)
+                .frame(maxWidth: .infinity, minHeight: 44)
+                .contentShape(Rectangle())
+                .background(peopleTab == title ? LoveliesTheme.pink : .clear, in: RoundedRectangle(cornerRadius: 14))
+        }.buttonStyle(LoveliesPressStyle()).accessibilityAddTraits(peopleTab == title ? .isSelected : [])
     }
 
     private var privacy: some View {
@@ -212,11 +221,11 @@ struct SettingsViews: View {
                         preferenceRow("Analytics", icon: "chart.bar", subtitle: "Help us improve Lovelies")
                     }
                     HStack(spacing: 18) {
-                        Image(systemName: "checkmark.shield").font(.system(size: 42, weight: .light)).foregroundStyle(LoveliesTheme.pink).shadow(color: LoveliesTheme.pink.opacity(0.6), radius: 10)
+                        Image(systemName: "checkmark.shield").font(.system(size: 42, weight: .light)).foregroundStyle(LoveliesTheme.pink).shadow(color: LoveliesTheme.pink.opacity(0.6), radius: 10).accessibilityHidden(true)
                         VStack(alignment: .leading, spacing: 7) {
-                            Text("Your privacy matters").loveliesFont(size: 16, weight: .medium).foregroundStyle(LoveliesTheme.pink.opacity(0.9))
-                            Text("You choose each photo and recipient\nbefore sharing.").loveliesFont(size: 13).foregroundStyle(LoveliesTheme.secondary)
-                        }
+                            Text("Your privacy matters").loveliesFont(size: 16, weight: .medium).foregroundStyle(LoveliesTheme.pink.opacity(0.9)).fixedSize(horizontal: false, vertical: true)
+                            Text("You choose each photo and recipient\nbefore sharing.").loveliesFont(size: 13).foregroundStyle(LoveliesTheme.secondary).fixedSize(horizontal: false, vertical: true)
+                        }.frame(maxWidth: .infinity, alignment: .leading)
                         Spacer(minLength: 0)
                     }.padding(17).background(LoveliesTheme.pink.opacity(0.07), in: RoundedRectangle(cornerRadius: 16)).overlay(RoundedRectangle(cornerRadius: 16).stroke(LoveliesTheme.pink.opacity(0.35), lineWidth: 1))
                 }.padding(.horizontal, 20).padding(.bottom, 15)
@@ -225,58 +234,71 @@ struct SettingsViews: View {
     }
 
     private var photoAccess: some View {
-        VStack(spacing: 17) {
-            PageHeader(title: String(localized: "Photo Access"), trailing: false)
-            Spacer(minLength: 0)
-            PhotoHeart(size: 185)
-            Text("Lovelies needs access to your\nphotos to find people in them.").loveliesFont(size: 17).foregroundStyle(LoveliesTheme.secondary).multilineTextAlignment(.center)
-            VStack(spacing: 3) {
-                ForEach(AccessMode.allCases, id: \.self) { mode in
-                    Button { store.access = mode } label: {
-                        HStack(spacing: 17) {
-                            CheckBadge(selected: store.access == mode, size: 30)
-                            VStack(alignment: .leading, spacing: 5) {
-                                Text(LocalizedStringKey(mode.rawValue)).loveliesFont(size: 16, weight: .medium)
-                                Text(mode == .all ? String(localized: "Access to your entire library") : mode == .albums ? String(localized: "Choose specific albums") : String(localized: "Allow only certain photos")).loveliesFont(size: 13).foregroundStyle(LoveliesTheme.secondary)
-                            }
-                            Spacer()
-                            Circle().stroke(store.access == mode ? LoveliesTheme.pink : .white.opacity(0.6), lineWidth: store.access == mode ? 5 : 1.3).frame(width: 25, height: 25)
-                        }.padding(16).frame(minHeight: 81).background(LoveliesTheme.surface, in: RoundedRectangle(cornerRadius: 15))
-                            .overlay(RoundedRectangle(cornerRadius: 15).stroke(store.access == mode ? LoveliesTheme.pink.opacity(0.5) : .clear, lineWidth: 1))
-                    }.buttonStyle(LoveliesPressStyle()).accessibilityAddTraits(store.access == mode ? .isSelected : [])
-                }
-            }
-            Spacer(minLength: 0)
-            PinkButton(title: String(localized: "Continue")) { store.go(.profile) }.padding(.bottom, 14)
-        }.padding(.horizontal, 22).foregroundStyle(.white)
+        GeometryReader { geometry in
+            ScrollView {
+                VStack(spacing: 17) {
+                    PageHeader(title: String(localized: "Photo Access"), trailing: false)
+                    Spacer(minLength: 0)
+                    PhotoHeart(size: 185).accessibilityHidden(true)
+                    Text("Lovelies needs access to your\nphotos to find people in them.").loveliesFont(size: 17).foregroundStyle(LoveliesTheme.secondary).multilineTextAlignment(.center).fixedSize(horizontal: false, vertical: true)
+                    VStack(spacing: 3) {
+                        ForEach(AccessMode.allCases, id: \.self) { mode in
+                            Button { store.access = mode } label: {
+                                HStack(spacing: 17) {
+                                    CheckBadge(selected: store.access == mode, size: 30).accessibilityHidden(true)
+                                    VStack(alignment: .leading, spacing: 5) {
+                                        Text(LocalizedStringKey(mode.rawValue)).loveliesFont(size: 16, weight: .medium).fixedSize(horizontal: false, vertical: true)
+                                        Text(mode == .all ? String(localized: "Access to your entire library") : mode == .albums ? String(localized: "Choose specific albums") : String(localized: "Allow only certain photos")).loveliesFont(size: 13).foregroundStyle(LoveliesTheme.secondary).fixedSize(horizontal: false, vertical: true)
+                                    }.frame(maxWidth: .infinity, alignment: .leading)
+                                    Circle().stroke(store.access == mode ? LoveliesTheme.pink : .white.opacity(0.6), lineWidth: store.access == mode ? 5 : 1.3).frame(width: 25, height: 25).accessibilityHidden(true)
+                                }.padding(16).frame(minHeight: 81).background(LoveliesTheme.surface, in: RoundedRectangle(cornerRadius: 15))
+                                    .overlay(RoundedRectangle(cornerRadius: 15).stroke(store.access == mode ? LoveliesTheme.pink.opacity(0.5) : .clear, lineWidth: 1))
+                            }.buttonStyle(LoveliesPressStyle()).accessibilityAddTraits(store.access == mode ? .isSelected : [])
+                        }
+                    }
+                    Spacer(minLength: 0)
+                    PinkButton(title: String(localized: "Continue")) { store.go(.profile) }.padding(.bottom, 14)
+                }.padding(.horizontal, 22).frame(minHeight: geometry.size.height)
+            }.scrollIndicators(.hidden)
+        }.foregroundStyle(.white)
     }
 
     private var notificationSettings: some View {
         VStack(spacing: 15) {
             PageHeader(title: String(localized: "Notifications"), trailing: false)
-            GroupSurface {
-                preferenceRow("New Matches", icon: "heart", subtitle: "When you're matched in photos")
-                insetDivider
-                preferenceRow("Messages", icon: "bubble.left", subtitle: "When you receive a message")
-                insetDivider
-                preferenceRow("Mentions", icon: "at", subtitle: "When someone mentions you")
-                insetDivider
-                preferenceRow("Tips & Features", icon: "lightbulb", subtitle: "Product updates and tips")
-                insetDivider
-                preferenceRow("Reminders", icon: "bell", subtitle: "Friendly nudges")
-                insetDivider
-                preferenceRow("Marketing", icon: "megaphone", subtitle: "Special offers (optional)")
-            }.padding(.horizontal, 21)
-            Spacer(minLength: 0)
+            ScrollView {
+                GroupSurface {
+                    preferenceRow("New Matches", icon: "heart", subtitle: "When you're matched in photos")
+                    insetDivider
+                    preferenceRow("Messages", icon: "bubble.left", subtitle: "When you receive a message")
+                    insetDivider
+                    preferenceRow("Mentions", icon: "at", subtitle: "When someone mentions you")
+                    insetDivider
+                    preferenceRow("Tips & Features", icon: "lightbulb", subtitle: "Product updates and tips")
+                    insetDivider
+                    preferenceRow("Reminders", icon: "bell", subtitle: "Friendly nudges")
+                    insetDivider
+                    preferenceRow("Marketing", icon: "megaphone", subtitle: "Special offers (optional)")
+                }.padding(.horizontal, 21).padding(.bottom, 15)
+            }.scrollIndicators(.hidden)
         }.foregroundStyle(.white)
     }
     private func preferenceRow(_ title: String, icon: String, subtitle: String? = nil) -> some View {
         Toggle(isOn: store.preference(title)) {
-            HStack(spacing: 15) {
-                Image(systemName: icon).font(.system(size: 23, weight: .light)).frame(width: 27)
-                VStack(alignment: .leading, spacing: 6) { Text(LocalizedStringKey(title)).loveliesFont(size: 16); if let subtitle { Text(LocalizedStringKey(subtitle)).loveliesFont(size: 12).foregroundStyle(LoveliesTheme.secondary) } }
+            HStack(alignment: .top, spacing: 15) {
+                Image(systemName: icon).font(.system(size: 23, weight: .light)).frame(width: 27).accessibilityHidden(true)
+                VStack(alignment: .leading, spacing: 6) {
+                    Text(LocalizedStringKey(title)).loveliesFont(size: 16).fixedSize(horizontal: false, vertical: true)
+                    if let subtitle {
+                        Text(LocalizedStringKey(subtitle)).loveliesFont(size: 12).foregroundStyle(LoveliesTheme.secondary).fixedSize(horizontal: false, vertical: true)
+                    }
+                }.frame(maxWidth: .infinity, alignment: .leading).fixedSize(horizontal: false, vertical: true)
             }
-        }.tint(LoveliesTheme.pink).padding(.horizontal, 16).padding(.vertical, subtitle == nil ? 17 : 21)
+        }
+        .accessibilityLabel(Text(LocalizedStringKey(title)))
+        .accessibilityHint(Text(LocalizedStringKey(subtitle ?? "")))
+        .frame(minHeight: 44)
+        .tint(LoveliesTheme.pink).padding(.horizontal, 16).padding(.vertical, subtitle == nil ? 17 : 21)
     }
     private var insetDivider: some View { Divider().overlay(.white.opacity(0.025)).padding(.leading, 57) }
 
@@ -338,7 +360,12 @@ struct SettingsViews: View {
                         Image(systemName: "lightbulb").font(.system(size: 27, weight: .light)).padding(.top, 3)
                         VStack(alignment: .leading, spacing: 11) {
                             Text("Your data, your choice").loveliesFont(size: 16, weight: .medium)
-                            ForEach([String(localized: "Photos you've shared"), String(localized: "Your matches and messages"), String(localized: "Profile information"), String(localized: "Settings and preferences")], id: \.self) { title in HStack(spacing: 10) { Image(systemName: "checkmark"); Text(title) }.loveliesFont(size: 13).foregroundStyle(LoveliesTheme.secondary) }
+                            ForEach([String(localized: "Photos you've shared"), String(localized: "Your matches and messages"), String(localized: "Profile information"), String(localized: "Settings and preferences")], id: \.self) { title in
+                                HStack(alignment: .top, spacing: 10) {
+                                    Image(systemName: "checkmark").accessibilityHidden(true)
+                                    Text(title).fixedSize(horizontal: false, vertical: true)
+                                }.loveliesFont(size: 13).foregroundStyle(LoveliesTheme.secondary)
+                            }
                         }
                         Spacer(minLength: 0)
                     }.padding(23)
@@ -355,17 +382,32 @@ struct SettingsViews: View {
     private var help: some View {
         VStack(spacing: 10) {
             PageHeader(title: String(localized: "Help Center"), trailing: false)
-            HStack(spacing: 11) { Image(systemName: "magnifyingglass").foregroundStyle(LoveliesTheme.secondary); TextField("Search for help...", text: $helpQuery).loveliesFont(size: 15).submitLabel(.search) }.padding(14).background(LoveliesTheme.raised, in: RoundedRectangle(cornerRadius: 12)).padding(.horizontal, 20)
+            HStack(spacing: 11) {
+                Image(systemName: "magnifyingglass").foregroundStyle(LoveliesTheme.secondary).accessibilityHidden(true)
+                TextField("Search for help...", text: $helpQuery, prompt: Text("Search for help...").foregroundColor(LoveliesTheme.secondary))
+                    .loveliesFont(size: 15).submitLabel(.search)
+                    .frame(minHeight: 44).contentShape(Rectangle())
+                    .accessibilityLabel(String(localized: "Search for help..."))
+            }.padding(14).background(LoveliesTheme.raised, in: RoundedRectangle(cornerRadius: 12)).padding(.horizontal, 20)
             ScrollView {
                 GroupSurface {
-                    ForEach(helpTopics.filter { helpQuery.isEmpty || $0.0.localizedCaseInsensitiveContains(helpQuery) || $0.1.localizedCaseInsensitiveContains(helpQuery) }, id: \.0) { topic in
+                    ForEach(filteredHelpTopics, id: \.0) { topic in
                         SettingsRow(icon: topic.2, title: NSLocalizedString(topic.0, comment: "App-owned help topic"), subtitle: NSLocalizedString(topic.1, comment: "App-owned help topic description")) { article = topic.0; sheet = .helpArticle }
                         insetDivider
                     }
                 }.padding(.horizontal, 20).padding(.bottom, 12)
-                if !helpQuery.isEmpty, helpTopics.filter({ $0.0.localizedCaseInsensitiveContains(helpQuery) || $0.1.localizedCaseInsensitiveContains(helpQuery) }).isEmpty { Text("No help topics found. Try photos, privacy or account.").loveliesFont(size: 15).foregroundStyle(LoveliesTheme.secondary).padding(22) }
+                if !helpQuery.isEmpty, filteredHelpTopics.isEmpty { Text("No help topics found. Try photos, privacy or account.").loveliesFont(size: 15).foregroundStyle(LoveliesTheme.secondary).padding(22) }
             }.scrollIndicators(.hidden).scrollDismissesKeyboard(.interactively)
         }.foregroundStyle(.white)
+    }
+    private var filteredHelpTopics: [(String, String, String)] {
+        helpTopics.filter { topic in
+            helpQuery.isEmpty ||
+            topic.0.localizedCaseInsensitiveContains(helpQuery) ||
+            topic.1.localizedCaseInsensitiveContains(helpQuery) ||
+            NSLocalizedString(topic.0, comment: "App-owned help topic").localizedCaseInsensitiveContains(helpQuery) ||
+            NSLocalizedString(topic.1, comment: "App-owned help topic description").localizedCaseInsensitiveContains(helpQuery)
+        }
     }
     private var helpTopics: [(String, String, String)] { [("Getting Started", "Learn the basics", "shield.lefthalf.filled"), ("Your Photos", "Uploading, matching and more", "photo"), ("Privacy & Safety", "Keeping your data safe", "checkmark.shield"), ("Account & Settings", "Manage your account", "gearshape"), ("Troubleshooting", "Fix common issues", "questionmark.circle"), ("Contact Support", "We're here to help", "bubble.left.and.bubble.right")] }
 
@@ -402,8 +444,8 @@ struct SettingsViews: View {
                 PageHeader(title: String(localized: "Matches"), trailing: false)
                 Spacer().frame(height: geometry.size.height * 0.04)
                 AssetImage(name: "empty-hero").scaledToFit().frame(width: min(260, geometry.size.width * 0.598)).accessibilityHidden(true)
-                Text("No Matches Yet").loveliesFont(size: 25, weight: .medium).padding(.top, 10)
-                Text("Your people are out there.\nKeep sharing your photos\nand we'll find them!").loveliesFont(size: 17).foregroundStyle(LoveliesTheme.secondary).multilineTextAlignment(.center).lineSpacing(3)
+                Text("No Matches Yet").loveliesFont(size: 25, weight: .medium).multilineTextAlignment(.center).fixedSize(horizontal: false, vertical: true).padding(.top, 10)
+                Text("Your people are out there.\nKeep sharing your photos\nand we'll find them!").loveliesFont(size: 17).foregroundStyle(LoveliesTheme.secondary).multilineTextAlignment(.center).lineSpacing(3).fixedSize(horizontal: false, vertical: true)
                 Spacer(minLength: 15)
                 PinkButton(title: String(localized: "Keep Exploring")) { store.go(.home) }.padding(.bottom, 28)
             }.padding(.horizontal, 34).frame(maxWidth: .infinity).foregroundStyle(.white)
