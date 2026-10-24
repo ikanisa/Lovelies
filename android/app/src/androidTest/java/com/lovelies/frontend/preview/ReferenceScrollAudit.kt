@@ -48,6 +48,15 @@ private class ReferenceScrollAudit(private val instrumentation: Instrumentation,
     private val alignmentSamples=mutableListOf<Map<String,Any?>>()
     private val alignedRegions=mutableSetOf<String>()
     private val alignmentResetParents=mutableSetOf<String>()
+    // Diagnostic-only readbacks never feed observations, footers, failures or target proof.
+    private val blankNameSamples=mutableListOf<Map<String,Any?>>()
+    private val blankNameRefreshedSources=mutableSetOf<String>()
+    private val maxBlankNameSamples=64
+    private val maxBlankNameRefreshes=16
+    private val maxBlankNameChildNodes=64
+    private val maxBlankNameChildDepth=8
+    private var blankNameSamplesOmitted=0
+    private var snapshotReadSequence=0
     private val startedAt=SystemClock.uptimeMillis()
     private val maxFreshChecks=3
     private var moves=0
@@ -109,7 +118,96 @@ private class ReferenceScrollAudit(private val instrumentation: Instrumentation,
         return key
     }
 
-    private fun readSnapshot(): Snapshot {
+    /** Bounded child-label query, with the same nested-action boundary as readSnapshot. */
+    private fun blankNameLabelReadback(node: AccessibilityNodeInfo,expected: Identity): Map<String,Any?> {
+        val nodes=mutableListOf<Map<String,Any?>>()
+        val unknowns=linkedSetOf<String>()
+        var childSlots=0
+        var rootOwn=emptyList<String>();var rootChildren=emptyList<String>();var rootName=""
+        fun visit(current: AccessibilityNodeInfo,path: List<Int>): String {
+            if(nodes.size>=maxBlankNameChildNodes) { unknowns.add("node_limit");return "" }
+            val sameWindow=current.windowId==expected.window
+            val samePackage=current.packageName?.toString()==instrumentation.targetContext.packageName
+            if(!sameWindow || !samePackage) { unknowns.add("descendant_window_or_package_mismatch");return "" }
+            val own=listOfNotNull(current.text?.toString(),current.contentDescription?.toString()).filter { it.isNotBlank() }.distinct()
+            val bounds=Rect();current.getBoundsInScreen(bounds)
+            val actionBoundary=current.isClickable || current.isSelected
+            nodes.add(mapOf("relative_child_path" to path,"own_labels" to own,"bounds_px" to bounds.wire(),
+                "clickable" to current.isClickable,"selected" to current.isSelected,"enabled" to current.isEnabled,
+                "visible" to current.isVisibleToUser,"child_count" to current.childCount,
+                "same_window" to sameWindow,"same_package" to samePackage))
+            val children=mutableListOf<String>()
+            if(path.size>=maxBlankNameChildDepth) {
+                if(current.childCount>0)unknowns.add("depth_limit")
+            } else for(i in 0 until current.childCount) {
+                if(childSlots>=maxBlankNameChildNodes || nodes.size>=maxBlankNameChildNodes) { unknowns.add("child_query_limit");break }
+                childSlots++
+                val child=current.getChild(i)
+                if(child==null) { unknowns.add("child_unavailable");continue }
+                try { children.add(visit(child,path+i)) } finally { child.recycle() }
+            }
+            val propagated=children.filter { it.isNotBlank() }.distinct()
+            val name=own.joinToString(" · ").ifBlank { propagated.joinToString(" · ") }
+            if(path.isEmpty()) { rootOwn=own;rootChildren=propagated;rootName=name }
+            return if(actionBoundary)"" else name
+        }
+        visit(node,emptyList())
+        return mapOf("own_labels" to rootOwn,"descendant_labels" to rootChildren,"synthesized_name" to rootName,
+            "complete" to unknowns.isEmpty(),"unknowns" to unknowns.toList(),"child_queries" to childSlots,"nodes" to nodes)
+    }
+
+    /** One read-only clone refresh per source; original blank/failure is always retained. */
+    private fun diagnoseBlankName(node: AccessibilityNodeInfo,key: String,path: List<Int>,bounds: Rect,currentViewport: Rect,
+        ownLabels: List<String>,children: List<String>,phase: String,sequence: Int,settleAttempt: Int) {
+        if(blankNameSamples.size>=maxBlankNameSamples) { blankNameSamplesOmitted++;return }
+        val began=SystemClock.uptimeMillis()
+        val sample=mutableMapOf<String,Any?>("identity" to key,"phase" to phase,"snapshot_read_sequence" to sequence,
+            "snapshot_ordinal" to (snapshots+1),"settle_attempt" to settleAttempt,"run_elapsed_ms" to (began-startedAt),
+            "diagnostic_child_path" to path,"cached_bounds_px" to bounds.wire(),"cached_viewport_px" to currentViewport.wire(),
+            "cached_own_labels" to ownLabels,"cached_descendant_labels" to children.filter { it.isNotBlank() }.distinct(),
+            "cached_synthesized_name" to "","original_blank_retained" to true,"refresh_attempted" to false,
+            "refresh_succeeded" to false,"comparison" to "unknown","strict_proof_credited" to false)
+        var clone: AccessibilityNodeInfo?=null
+        try {
+            val expected=identities.firstOrNull { it.key==key } ?: run { sample["reason"]="identity_anchor_unavailable";return }
+            val cachedMatched=sameNode(expected,node) && expected.anchor==node &&
+                node.windowId==expected.window && node.packageName?.toString()==instrumentation.targetContext.packageName
+            sample["cached_public_equal"]=expected.anchor==node;sample["cached_source_matched"]=cachedMatched
+            sample["cached_window_id"]=node.windowId;sample["cached_package"]=node.packageName?.toString()
+            if(!cachedMatched) { sample["reason"]="cached_source_window_or_package_mismatch";return }
+            if(key in blankNameRefreshedSources) { sample["reason"]="source_already_refreshed_once";return }
+            if(blankNameRefreshedSources.size>=maxBlankNameRefreshes) { sample["reason"]="refresh_budget_exhausted";return }
+            val copy=AccessibilityNodeInfo.obtain(node);clone=copy
+            val beforeMatched=sameNode(expected,copy) && expected.anchor==copy &&
+                copy.windowId==expected.window && copy.packageName?.toString()==instrumentation.targetContext.packageName
+            sample["clone_before_public_equal"]=expected.anchor==copy;sample["clone_before_source_matched"]=beforeMatched
+            if(!beforeMatched) { sample["reason"]="clone_source_mismatch_before_refresh";return }
+            blankNameRefreshedSources.add(key)
+            sample["refresh_attempted"]=true
+            val refreshed=copy.refresh();sample["refresh_succeeded"]=refreshed
+            if(!refreshed) { sample["reason"]="refresh_returned_false";return }
+            val matched=sameNode(expected,copy) && expected.anchor==copy &&
+                copy.windowId==expected.window && copy.packageName?.toString()==instrumentation.targetContext.packageName
+            sample["clone_after_public_equal"]=expected.anchor==copy;sample["clone_after_source_matched"]=matched
+            sample["refreshed_window_id"]=copy.windowId;sample["refreshed_package"]=copy.packageName?.toString()
+            if(!matched) { sample["reason"]="source_window_or_package_mismatch_after_refresh";return }
+            val after=Rect();copy.getBoundsInScreen(after)
+            sample["refreshed_bounds_px"]=after.wire();sample["same_bounds"]=after==bounds
+            sample["refreshed_clickable"]=copy.isClickable;sample["refreshed_selected"]=copy.isSelected
+            sample["refreshed_enabled"]=copy.isEnabled;sample["refreshed_visible"]=copy.isVisibleToUser
+            val readback=blankNameLabelReadback(copy,expected);sample["refreshed_label_readback"]=readback
+            sample["comparison"]=if(readback["complete"]!=true)"unknown_incomplete_descendant_readback"
+                else if(readback["synthesized_name"]=="")"same_source_still_blank" else "same_source_named_readback_conflicts_with_cached_blank"
+            sample["reason"]="readback_only_no_cause_or_visibility_inference"
+        } catch(problem: Exception) {
+            sample["reason"]="diagnostic_exception";sample["error"]="${problem.javaClass.simpleName}: ${problem.message}"
+        } finally {
+            clone?.recycle();sample["elapsed_ms"]=SystemClock.uptimeMillis()-began;blankNameSamples.add(sample)
+        }
+    }
+
+    private fun readSnapshot(phase: String,settleAttempt: Int): Snapshot {
+        val sequence=++snapshotReadSequence
         instrumentation.waitForIdleSync()
         val root=instrumentation.uiAutomation.rootInActiveWindow ?: error("No reference accessibility window")
         try {
@@ -137,7 +235,8 @@ private class ReferenceScrollAudit(private val instrumentation: Instrumentation,
                 for(i in 0 until node.childCount)node.getChild(i)?.let { child ->
                     children.add(visit(child,path+i,nextParents,nextScrollParents,nextEdges));child.recycle()
                 }
-                val own=listOfNotNull(node.text?.toString(),node.contentDescription?.toString()).filter { it.isNotBlank() }.distinct().joinToString(" · ")
+                val ownLabels=listOfNotNull(node.text?.toString(),node.contentDescription?.toString()).filter { it.isNotBlank() }.distinct()
+                val own=ownLabels.joinToString(" · ")
                 val name=own.ifBlank { children.filter { it.isNotBlank() }.distinct().joinToString(" · ") }
                 // Compose exposes the current selected tab as non-clickable. It still needs a
                 // visible, named, adequately sized location in required navigation coverage.
@@ -158,6 +257,7 @@ private class ReferenceScrollAudit(private val instrumentation: Instrumentation,
                         unnamed[unnamedKey]=mapOf("key" to unnamedKey,"bounds_px" to bounds.wire(),"viewport_px" to currentViewport.wire(),
                             "fully_bounded" to (contained && widthOk && heightOk),"partial" to partial,"scroll_ancestors" to parents,
                             "diagnostic_child_path" to path)
+                        diagnoseBlankName(node,key,path,bounds,currentViewport,ownLabels,children,phase,sequence,settleAttempt)
                     } else {
                         // Keep the name in the observation key: subtitle-only or missing names
                         // after clipping must not inherit a different label's successful observation.
@@ -179,10 +279,10 @@ private class ReferenceScrollAudit(private val instrumentation: Instrumentation,
         state.containers.map { "${it.key}:${it.bounds.wire()}:${it.actions.sorted()}" }.sorted().joinToString(";")+
         state.regions.map { "${it.key}:${it.bounds.wire()}:${it.scrollable}" }.sorted().joinToString(";")
 
-    private fun snapshot(record: Boolean=true): Snapshot {
-        var state=readSnapshot();var stable=false
+    private fun snapshot(record: Boolean=true,phase: String="snapshot"): Snapshot {
+        var state=readSnapshot(phase,0);var stable=false
         for(attempt in 0 until 3) {
-            Thread.sleep(80);val next=readSnapshot()
+            Thread.sleep(80);val next=readSnapshot(phase,attempt+1)
             if(signature(state)==signature(next)) { state=next;stable=true;break }
             state=next
         }
@@ -383,7 +483,7 @@ private class ReferenceScrollAudit(private val instrumentation: Instrumentation,
         val began=SystemClock.uptimeMillis()
         val move=move(target.identity,AccessibilityNodeInfo.AccessibilityAction.ACTION_SHOW_ON_SCREEN.id,phase)
         // Delay proof credit until the refreshed target agrees with this settled snapshot.
-        val state=snapshot(record=false)
+        val state=snapshot(record=false,phase="$phase:result")
         val freshReachable=measureProbe(target,state,move,phase,target.identity,began)
         // Keep every other target's normal observations and all small-target failures.
         observe(state,if(freshReachable)emptySet() else setOf(target.key))
@@ -412,12 +512,12 @@ private class ReferenceScrollAudit(private val instrumentation: Instrumentation,
                         failures.add("Could not establish ancestor alignment start for $parent")
                         sample["reason"]="parent_start_unproved";return@forEach
                     }
-                    result=snapshot()
+                    result=snapshot(phase="$phase:after-parent-reset")
                     region=result.regions.firstOrNull { it.key==initial.key } ?: run { sample["reason"]="region_unavailable_after_reset";return@forEach }
                 }
                 val action=move(region.key,AccessibilityNodeInfo.AccessibilityAction.ACTION_SHOW_ON_SCREEN.id,phase)
                 sample["attempted"]=action.attempted;sample["accepted"]=action.dispatched
-                result=snapshot(record=false)
+                result=snapshot(record=false,phase="$phase:result")
                 sample["settled"]=result.settled
                 sample["bounds_after_px"]=result.regions.firstOrNull { it.key==region.key }?.bounds?.wire()
                 val proved=originals.filter { measureProbe(it,result,action,phase,region.key,began) }.map { it.key }.toSet()
@@ -447,14 +547,14 @@ private class ReferenceScrollAudit(private val instrumentation: Instrumentation,
     private fun resetTop(key: String,phase: String): Boolean {
         var previous="";var repeated=0
         for(step in 0 until maxContainerMoves) {
-            val state=snapshot();val container=state.containers.firstOrNull { it.key==key } ?: return false
+            val state=snapshot(phase="$phase:state-$step");val container=state.containers.firstOrNull { it.key==key } ?: return false
             if(directionAbsentFresh(key,AccessibilityNodeInfo.ACTION_SCROLL_BACKWARD,"$phase:at-start-$step"))return true
             val current=fingerprint(state,key)
             repeated=if(current==previous)repeated+1 else 0;previous=current
             if(repeated>=2)return false
             val result=move(container.key,AccessibilityNodeInfo.ACTION_SCROLL_BACKWARD,"$phase:backward-$step")
             if(!result.dispatched) {
-                snapshot()
+                snapshot(phase="$phase:after-rejection-$step")
                 return !capped && directionAbsentFresh(key,AccessibilityNodeInfo.ACTION_SCROLL_BACKWARD,"$phase:after-rejection-$step")
             }
         }
@@ -474,7 +574,7 @@ private class ReferenceScrollAudit(private val instrumentation: Instrumentation,
         if(!resetTop(key,"sweep-start:$depth")) { failures.add("Could not establish scroll start for $key");return }
         var previous="";var repeated=0;var terminal=false;var reason="move_limit"
         for(step in 0 until maxContainerMoves) {
-            var state=alignInnerRegions(snapshot(),key,depth)
+            var state=alignInnerRegions(snapshot(phase="sweep:$depth:$key:step-$step"),key,depth)
             state=probeSmallVisibleTargets(state,key);val container=state.containers.firstOrNull { it.key==key }
             if(container==null) { reason="container_not_visible";break }
             state.containers.filter { it.parents.lastOrNull()==key }.forEach { nested ->
@@ -482,7 +582,7 @@ private class ReferenceScrollAudit(private val instrumentation: Instrumentation,
                 val visit="${nested.key}:${nested.bounds.wire()}:${visibleViewport.wire()}:${fingerprint(state,nested.key)}"
                 if(visited.add(visit))sweep(nested.key,depth+1)
             }
-            state=snapshot()
+            state=snapshot(phase="sweep:$depth:$key:after-nested-$step")
             val currentContainer=state.containers.firstOrNull { it.key==key }
             if(currentContainer==null) { reason="container_disappeared";break }
             if(directionAbsentFresh(key,AccessibilityNodeInfo.ACTION_SCROLL_FORWARD,"sweep-end:$depth:$step")) { terminal=true;reason="no_forward_action";break }
@@ -492,7 +592,7 @@ private class ReferenceScrollAudit(private val instrumentation: Instrumentation,
             val result=move(currentContainer.key,AccessibilityNodeInfo.ACTION_SCROLL_FORWARD,"sweep-forward:$depth:$step")
             if(!result.dispatched) {
                 // Inspect the actual last viewport, including its inner scroll regions, next iteration.
-                state=snapshot()
+                state=snapshot(phase="sweep:$depth:$key:after-forward-rejection-$step")
                 state.containers.filter { it.parents.lastOrNull()==key }.forEach { nested ->
                     val visit="${nested.key}:${nested.bounds.wire()}:terminal:${fingerprint(state,nested.key)}"
                     if(visited.add(visit))sweep(nested.key,depth+1)
@@ -505,7 +605,7 @@ private class ReferenceScrollAudit(private val instrumentation: Instrumentation,
         if(!terminal) { if(reason=="move_limit")capped=true;failures.add("Scroll coverage incomplete for $key: $reason") }
         if(terminal)saveBottom()
         scans.add(mapOf("container" to key,"depth" to depth,"terminal" to terminal,"reason" to reason,
-            "diagnostic_child_path" to snapshot().containers.firstOrNull { it.key==key }?.path))
+            "diagnostic_child_path" to snapshot(phase="sweep:$depth:$key:terminal-record").containers.firstOrNull { it.key==key }?.path))
         if(!resetTop(key,"sweep-restore:$depth"))failures.add("Could not restore scroll start for $key")
     }
 
@@ -513,7 +613,7 @@ private class ReferenceScrollAudit(private val instrumentation: Instrumentation,
         try {
             check(BuildConfig.REFERENCE_SCREENS) { "Reference fixtures are disabled" }
             output.mkdirs()
-            var initial=snapshot()
+            var initial=snapshot(phase="run-initial")
             // Safe direct reachability probe when a footer node is already exposed but partly clipped.
             expectedFooters.filter { it !in footerSeen }.forEach { expected ->
                 initial.targets.firstOrNull { matches(it.name,expected) }?.let { target ->
@@ -521,13 +621,13 @@ private class ReferenceScrollAudit(private val instrumentation: Instrumentation,
                 }
             }
             initial.containers.filter { it.parents.isEmpty() }.forEach { container -> sweep(container.key,0) }
-            snapshot()
+            snapshot(phase="run-after-sweeps")
             // A virtual node's AX bounds can be cropped without a represented clipping parent.
             // Resolve that case by explicitly showing the SAME source identity, then require a
             // settled full target with the SAME name and one unchanged dimension. A stable small
             // target, changed label, unavailable node or unsuccessful recovery remains a failure.
             observations.filterValues { it.interiorSmall.isNotEmpty() }.toList().forEach { (key,observation) ->
-                val before=snapshot().targets.firstOrNull { it.key==key }
+                val before=snapshot(phase="interior-size-before:$key").targets.firstOrNull { it.key==key }
                 val probe=before?.let { showOnScreen(it,"interior-size-probe") }
                 val recovery=probe?.state
                 val recovered=if(probe?.freshReachable==true && recovery!=null && recovery.settled)
@@ -540,7 +640,7 @@ private class ReferenceScrollAudit(private val instrumentation: Instrumentation,
             }
             // SHOW_ON_SCREEN probes may move a parent. Restore visible nested containers before
             // their outer parents, using identities rather than changing child indexes.
-            snapshot().containers.sortedByDescending { it.parents.size }.forEach {
+            snapshot(phase="post-probe-restore-containers").containers.sortedByDescending { it.parents.size }.forEach {
                 if(!resetTop(it.key,"post-probe-restore"))failures.add("Could not restore scroll start after geometry probe for ${it.key}")
             }
         } catch(problem: Throwable) { failures.add("${problem.javaClass.simpleName}: ${problem.message}") }
@@ -571,6 +671,11 @@ private class ReferenceScrollAudit(private val instrumentation: Instrumentation,
             "show_on_screen_probes" to probeSamples,"fresh_check_limit" to maxFreshChecks,
             "ancestor_alignment_samples" to alignmentSamples,"ancestor_alignment_limit_per_region" to 1,"ancestor_parent_reset_limit_per_parent" to 1,
             "unnamed_visible_actions" to unnamed.values.toList(),
+            "named_snapshot_diagnostic" to mapOf("version" to 1,"strict_proof_credited" to false,"original_blank_failures_preserved" to true,
+                "metric" to "Read-only same-public-source label readback; not an atomic snapshot or proof of cache cause, visibility or spoken output.",
+                "snapshot_read_count" to snapshotReadSequence,"sample_limit" to maxBlankNameSamples,"samples_omitted" to blankNameSamplesOmitted,
+                "refresh_limit" to maxBlankNameRefreshes,"refresh_limit_per_source" to 1,"refreshed_source_count" to blankNameRefreshedSources.size,
+                "child_node_limit" to maxBlankNameChildNodes,"child_depth_limit" to maxBlankNameChildDepth,"samples" to blankNameSamples),
             "bottom_screenshots" to screenshots,"spoken_screen_reader_verified" to false)
     }
 }

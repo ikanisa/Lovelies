@@ -176,7 +176,14 @@ struct OnboardingViews: View {
             PageHeader(title: String(localized: "Processing"), close: true, trailing: false)
             AssetImage(name: "processing-hero").scaledToFit().frame(maxHeight: 250).accessibilityHidden(true)
             Text("Finding sample photos…").font(.title2.weight(.medium)).accessibilityAddTraits(.isHeader)
-            ProgressView(value: store.progress).tint(LoveliesTheme.pink).frame(minHeight: 44).accessibilityLabel("Sample processing progress")
+            ZStack {
+                ProgressView(value: store.progress).tint(LoveliesTheme.pink).accessibilityHidden(true)
+            }
+            .frame(minHeight: 44).contentShape(Rectangle())
+            .accessibilityElement(children: .ignore)
+            .accessibilityLabel(String(localized: "Sample processing progress"))
+            .accessibilityValue(Text(store.progress, format: .percent))
+            .accessibilityAddTraits(.updatesFrequently)
             Text("This frontend preview uses included photos.").font(.body).foregroundStyle(LoveliesTheme.secondary)
             PinkButton(title: String(localized: "Continue preview")) { store.go(.setupComplete) }
             QuietButton(title: String(localized: "Back to setup")) { store.back() }

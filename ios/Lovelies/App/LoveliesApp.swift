@@ -24,6 +24,7 @@ struct LoveliesRootView: View {
     @EnvironmentObject private var purchases: NativePurchases
     @Environment(\.scenePhase) private var scenePhase
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.layoutDirection) private var layoutDirection
     @State private var foregroundRefresh: Task<Void, Never>?
     var body: some View {
         ZStack {
@@ -34,16 +35,9 @@ struct LoveliesRootView: View {
         }
         .safeAreaInset(edge: .top, spacing: 0) {
             if store.isReferenceMode {
-                ViewThatFits(in: .horizontal) {
-                    HStack(spacing: 12) {
-                        referenceStatus.fixedSize()
-                        Spacer(minLength: 4)
-                        referenceGalleryButton.fixedSize()
-                    }
-                    VStack(alignment: .leading, spacing: 0) {
-                        referenceStatus
-                        referenceGalleryButton.frame(maxWidth: .infinity, alignment: .trailing)
-                    }
+                ReferenceBannerLayout(layoutDirection: layoutDirection) {
+                    referenceStatus
+                    referenceGalleryButton
                 }.padding(.horizontal, 16).background(LoveliesTheme.canvas)
             }
         }
@@ -161,5 +155,57 @@ struct ScreenGalleryView: View {
             .toolbar { ToolbarItem(placement: .bottomBar) { Button("Return to connected app") { store.isReferenceMode = false; store.showGallery = false; store.go(live.session?.authenticated == true ? .home : .photoAccessPrompt, replace: true, simulateProgress: false) } } }
         }
         .preferredColorScheme(.dark)
+    }
+}
+
+// One stable status and one stable gallery button; only their placement changes.
+private struct ReferenceBannerLayout: Layout {
+    var layoutDirection: LayoutDirection
+    private let minimumHorizontalGap: CGFloat = 28
+
+    private struct Arrangement {
+        var width: CGFloat
+        var horizontal: Bool
+        var childProposal: ProposedViewSize
+        var status: CGSize
+        var gallery: CGSize
+        var height: CGFloat { horizontal ? max(status.height, gallery.height) : status.height + gallery.height }
+    }
+
+    private func arrangement(width: CGFloat?, subviews: Subviews) -> Arrangement {
+        let statusIdeal = subviews[0].sizeThatFits(.unspecified)
+        let galleryIdeal = subviews[1].sizeThatFits(.unspecified)
+        let idealWidth = statusIdeal.width + minimumHorizontalGap + galleryIdeal.width
+        let available = width.flatMap { $0.isFinite ? max(0, $0) : nil } ?? idealWidth
+        let horizontal = idealWidth <= available
+        let childProposal: ProposedViewSize = horizontal ? .unspecified : ProposedViewSize(width: available, height: nil)
+        return Arrangement(width: available, horizontal: horizontal, childProposal: childProposal,
+            status: horizontal ? statusIdeal : subviews[0].sizeThatFits(childProposal),
+            gallery: horizontal ? galleryIdeal : subviews[1].sizeThatFits(childProposal))
+    }
+
+    func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
+        let measured = arrangement(width: proposal.width, subviews: subviews)
+        return CGSize(width: measured.width, height: measured.height)
+    }
+
+    func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
+        let measured = arrangement(width: bounds.width, subviews: subviews)
+        let rightToLeft = layoutDirection == .rightToLeft
+        let leadingX = rightToLeft ? bounds.maxX : bounds.minX
+        let trailingX = rightToLeft ? bounds.minX : bounds.maxX
+        let leadingAnchor = rightToLeft ? CGFloat(1) : 0
+        let trailingAnchor = rightToLeft ? CGFloat(0) : 1
+        if measured.horizontal {
+            subviews[0].place(at: CGPoint(x: leadingX, y: bounds.midY),
+                anchor: UnitPoint(x: leadingAnchor, y: 0.5), proposal: measured.childProposal)
+            subviews[1].place(at: CGPoint(x: trailingX, y: bounds.midY),
+                anchor: UnitPoint(x: trailingAnchor, y: 0.5), proposal: measured.childProposal)
+        } else {
+            subviews[0].place(at: CGPoint(x: leadingX, y: bounds.minY),
+                anchor: UnitPoint(x: leadingAnchor, y: 0), proposal: measured.childProposal)
+            subviews[1].place(at: CGPoint(x: trailingX, y: bounds.minY + measured.status.height),
+                anchor: UnitPoint(x: trailingAnchor, y: 0), proposal: measured.childProposal)
+        }
     }
 }

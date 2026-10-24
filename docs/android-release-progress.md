@@ -1,5 +1,11 @@
 # Android replacement readiness — 24 October 2026
 
+## 24 October 2026 — current product runtime and test-only correction
+
+The unchanged `fcd89930…97ab0` product with original `96763d37…8ef65` test passes all 48 normal and all 48 font2 reference screens. Landscape passes 47/48; screen 25's unnamed-action failure remains. Three person modes/21 nested cases, three font2 keyboard routes and three reduced-animation routes pass within their separate scopes. All 254 main-matrix screenshots were independently reviewed; position limits remain recorded. Connected, spoken, provider and store behavior is separate.
+
+Five targeted Kinyarwanda rows rendered translated controls but failed hardcoded English pane assertions. Three test files now use exact localized pane equality from the launched Activity and add bounded unnamed-node telemetry without relaxing failures. New test `7123d309…a3b9` compiles; the product APK and all 14 unit XML hashes remain unchanged. The 157 unit cases are reused, not rerun. Current corrected-test locale/landscape/English consumers are under qualification; the original failures are preserved. Receipts: `android-test-only-correction/` under the release verification root.
+
 ## 24 October2026 — integrated English/Kinyarwanda checkpoint
 
 Current Debug/test packaging passes157 fresh units in14 suites; all XMLs follow the build start and report zero failures/errors/skips. Product SHA256 `fcd89930b4ce3ca2870da47ff284809689b88b7a883520f0fa0ffb5104a97ab0`, test `96763d3731b14cc8ec5bd6358e127083fcc49dea6cafbcbed002cedf2be8ef65`.903 strings/17 plurals and actual packaged en/rw locale configuration are checked. Missing/null titles localize only at presentation; real supplied titles and persisted metadata are preserved. No new APK runtime/locale acceptance is claimed.

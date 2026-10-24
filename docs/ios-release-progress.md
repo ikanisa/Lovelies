@@ -1,5 +1,11 @@
 # iOS replacement implementation checkpoint — 24 October 2026
 
+## 24 October 2026 — banner and progress runtime qualification
+
+The two reviewed follow-up files pass Release, Debug build-for-testing and a new Simulator app build; the unchanged V4 runner is reused. Focused normal screens 1–6 and 8 have zero custom failures. The shared banner Dynamic Type finding is absent across all six; 2/4/6/8 pass raw audits, while 1/3/5 retain caption/tagline/contrast findings. Screen 8 separately exposes one progress element with a 346×44-point frame and the correct 83% value. Broad largest-text, keyboard, remaining-normal and locale/spoken checks continue on this exact source; no whole-matrix pass is inferred.
+
+Release binary `2472f065e388bc2ae66104ba1ee360dd18bff171c775192a413ceea1df17859e` retains the same six link/policy/signature blockers and repeated packaged-resource format proof. A current 187-file development QA is strict/deep/profile/certificate verified, remains uninstalled and excludes production APNs/Associated Domains. Prior QA and native bundles remain preserved. Receipts: `post-localization-ui/banner-progress-build/` under the release verification root.
+
 ## 24 October 2026 — compiled UI repairs after localization
 
 The five reviewed UI files now compile in unsigned iPhoneOS Release, Debug build-for-testing and a new arm64 Simulator app with the exact frozen V4 audit runner. Repairs cover bounded upload thumbnails, intrinsic large-text headings, meaningful photo labels, native field/toggle labels, 44-point controls and tagged horizontal strips. Counts, callbacks, selections and raw protocol values are preserved. Release binary SHA256 `4748d85937a610acfdb20cd389e9c3f356f3abe18818623899d005dc52b69b19`; the same resource-format cases pass and the same six link/policy/signature blockers remain. The UI review chat owns the fresh runtime checks. Compilation does not close the earlier observed failures.

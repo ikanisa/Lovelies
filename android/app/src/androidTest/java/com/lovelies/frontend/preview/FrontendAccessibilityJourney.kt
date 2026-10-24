@@ -54,6 +54,7 @@ class FrontendAccessibilityJourney : Instrumentation() {
                     activity=startActivitySync(Intent(targetContext,MainActivity::class.java).putExtra("review",true)
                         .putExtra("screen",route).putExtra("reviewFontScale",scale).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
                     waitForIdleSync();Thread.sleep(220);waitForIdleSync()
+                    val paneActivity=checkNotNull(activity)
                     val root=uiAutomation.rootInActiveWindow ?: error("No accessibility window")
                     val window=Rect();root.getBoundsInScreen(window)
                     val seen=mutableListOf<Map<String,Any?>>()
@@ -86,7 +87,8 @@ class FrontendAccessibilityJourney : Instrumentation() {
                         return name
                     }
                     inspect(root);root.recycle();nodes=seen
-                    if(Build.VERSION.SDK_INT>=28 && seen.none { it["pane"]?.toString()?.startsWith("Screen ${route.toString().padStart(2,'0')}:")==true })failures.add("Missing screen pane title")
+                    val expectedPane=referencePaneTitle(paneActivity,route)
+                    if(Build.VERSION.SDK_INT>=28 && seen.none { it["pane"]?.toString()==expectedPane })failures.add("Missing screen pane title")
                     if(unnamed.isNotEmpty())failures.add("${unnamed.size} unnamed visible actions")
                     if(small.isNotEmpty())failures.add("${small.size} fully visible actions below48dp")
                     val back=fallbackBackRoute(route)
@@ -103,7 +105,7 @@ class FrontendAccessibilityJourney : Instrumentation() {
                         (audit["failures"] as? List<*>)?.forEach { failures.add("scroll: $it") }
                     }
                     if(personLink) {
-                        val audit=runPersonNavigationAudit(this,output,density)
+                        val audit=runPersonNavigationAudit(this,paneActivity,output,density)
                         personEvidence=audit
                         (audit["failures"] as? List<*>)?.forEach { failures.add("person_navigation: $it") }
                     }
@@ -228,7 +230,7 @@ class FrontendAccessibilityJourney : Instrumentation() {
                         waitForIdleSync();Thread.sleep(180)
                         // Cancel exits enrollment to setup; ordinary Back returns to capture.
                         val expectedRoute=if(useVisibleExit && route==7 && exitLabel=="Cancel face capture")5 else back
-                        val expected="Screen ${expectedRoute.toString().padStart(2,'0')}:"
+                        val expected=referencePaneTitle(paneActivity,expectedRoute)
                         var observed=emptyList<String>()
                         var activePackage: String?=null
                         var reached=false
@@ -241,7 +243,7 @@ class FrontendAccessibilityJourney : Instrumentation() {
                             activePackage=returned?.packageName?.toString()
                             val titles=linkedSetOf<String>()
                             if(returned!=null && activePackage==targetContext.packageName)panes(returned,titles)
-                            returned?.recycle();observed=titles.toList();reached=observed.any { it.startsWith(expected) }
+                            returned?.recycle();observed=titles.toList();reached=observed.any { it==expected }
                             if(reached || Build.VERSION.SDK_INT<28)break
                             Thread.sleep(60);waitForIdleSync()
                         } while(android.os.SystemClock.elapsedRealtime()-started<2000)
@@ -279,4 +281,11 @@ class FrontendAccessibilityJourney : Instrumentation() {
             putString("report",File(output,"report.json").absolutePath);putInt("screens",reports.size);putInt("failed",failed)
         })
     }
+}
+
+/** Resolve the exact reference pane from the launched Activity, never the instrumentation locale. */
+internal fun referencePaneTitle(activity: Activity,route: Int): String {
+    require(route in 1..ScreenNames.size)
+    return activity.getString(R.string.copy_screen_1_s_2_s_0753a8a4,
+        route.toString().padStart(2,'0'),activity.getString(ScreenNames[route-1]))
 }

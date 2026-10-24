@@ -1,5 +1,6 @@
 package com.lovelies.frontend.preview
 
+import android.app.Activity
 import android.app.Instrumentation
 import android.graphics.Bitmap
 import android.graphics.Rect
@@ -10,7 +11,7 @@ import android.view.accessibility.AccessibilityNodeInfo
 import java.io.File
 
 /** Optional reference27 probe: verify each exposed person's gallery and return path. */
-internal fun runPersonNavigationAudit(instrumentation: Instrumentation,output: File,density: Float): Map<String,Any?> {
+internal fun runPersonNavigationAudit(instrumentation: Instrumentation,activity: Activity,output: File,density: Float): Map<String,Any?> {
     val cases=listOf(
         Triple("James",3,setOf("Photo 1","Photo 2","Photo 4")),
         Triple("Sophie",6,setOf("Photo 1","Photo 4","Photo 7","Photo 9","Photo 5","Photo 3")),
@@ -22,7 +23,7 @@ internal fun runPersonNavigationAudit(instrumentation: Instrumentation,output: F
     val results=mutableListOf<Map<String,Any?>>()
     for((person,count,photos) in cases) {
         val folder=File(output,"person-${person.lowercase()}").apply { mkdirs() }
-        val result=auditPersonNavigation(instrumentation,folder,density,person,count,photos)
+        val result=auditPersonNavigation(instrumentation,activity,folder,density,person,count,photos)
         results.add(result)
         if(result["status"]!="passed")break
     }
@@ -36,7 +37,7 @@ internal fun runPersonNavigationAudit(instrumentation: Instrumentation,output: F
     }
 }
 
-private fun auditPersonNavigation(instrumentation: Instrumentation,output: File,density: Float,
+private fun auditPersonNavigation(instrumentation: Instrumentation,activity: Activity,output: File,density: Float,
     personName: String,expectedCount: Int,expectedPhotos: Set<String>): Map<String,Any?> {
     val evidence=linkedMapOf<String,Any?>("reference_only" to true,"person" to personName,"expected_matched_photos" to expectedCount)
     val failures=mutableListOf<String>()
@@ -66,7 +67,7 @@ private fun auditPersonNavigation(instrumentation: Instrumentation,output: File,
         } finally { root.recycle() }
     }
     fun waitForPane(route: Int): Map<String,Any?> {
-        val expected="Screen ${route.toString().padStart(2,'0')}:"
+        val expected=referencePaneTitle(activity,route)
         val started=SystemClock.elapsedRealtime()
         var observed: Map<String,Any?>
         var previous: Map<String,Any?>?=null
@@ -75,7 +76,7 @@ private fun auditPersonNavigation(instrumentation: Instrumentation,output: File,
             val names=observed["names"] as List<*>
             val body=if(route==27)(("Photo 1" in names && "1/12" in names) || "People in this photo" in names) && names.none { Regex("[0-9]+ matched photos?").matches(it.toString()) }
                 else personName in names && caption in names && "1/12" !in names
-            val ready=observed["fresh_complete"]==true && body && (observed["panes"] as List<*>).any { it.toString().startsWith(expected) }
+            val ready=observed["fresh_complete"]==true && body && (observed["panes"] as List<*>).any { it.toString()==expected }
             if(ready && observed==previous)return observed
             previous=if(ready)observed else null
             Thread.sleep(80)
