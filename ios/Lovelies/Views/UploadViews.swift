@@ -160,20 +160,23 @@ struct UploadViews: View {
 
     private var review: some View {
         VStack(spacing: 16) {
-            PageHeader(title: String(localized: "Review Upload"), trailing: false)
-            Text("\(NSLocalizedString(store.uploadSource, comment: "App-owned upload source label")) · Sample photos").loveliesFont(size: 13).foregroundStyle(LoveliesTheme.secondary)
-                .frame(maxWidth: .infinity, alignment: .leading).padding(.horizontal, 21)
             ScrollView {
                 VStack(spacing: 16) {
-                    reviewThumbnailStrip
-                    TextField("Add a caption (optional)", text: $store.caption, axis: .vertical).loveliesFont(size: 15)
-                        .frame(minHeight: 44).contentShape(Rectangle()).accessibilityLabel("Add a caption (optional)").padding(17)
-                        .background(LoveliesTheme.surface, in: RoundedRectangle(cornerRadius: 14)).lineLimit(1...3)
-                    GroupSurface { SettingsRow(icon: "photo", title: String(localized: "Add to album"), value: store.album) { picker = .album } }
-                    GroupSurface { SettingsRow(icon: "lock", title: String(localized: "Who can see these?"), value: NSLocalizedString(store.visibility, comment: "App-owned photo visibility option")) { picker = .visibility } }
-                }.padding(.horizontal, 21).padding(.top, 8)
+                    PageHeader(title: String(localized: "Review Upload"), trailing: false)
+                    Text("\(NSLocalizedString(store.uploadSource, comment: "App-owned upload source label")) · Sample photos").loveliesFont(size: 13).foregroundStyle(LoveliesTheme.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .frame(maxWidth: .infinity, alignment: .leading).padding(.horizontal, 21)
+                    VStack(spacing: 16) {
+                        reviewThumbnailStrip
+                        TextField("Add a caption (optional)", text: $store.caption, axis: .vertical).loveliesFont(size: 15)
+                            .frame(minHeight: 44).contentShape(Rectangle()).accessibilityLabel("Add a caption (optional)").padding(17)
+                            .background(LoveliesTheme.surface, in: RoundedRectangle(cornerRadius: 14)).lineLimit(3, reservesSpace: true)
+                        GroupSurface { SettingsRow(icon: "photo", title: String(localized: "Add to album"), value: store.album) { picker = .album } }
+                        GroupSurface { SettingsRow(icon: "lock", title: String(localized: "Who can see these?"), value: NSLocalizedString(store.visibility, comment: "App-owned photo visibility option")) { picker = .visibility } }
+                    }.padding(.horizontal, 21).padding(.top, 8)
+                }
             }.scrollIndicators(.hidden).scrollDismissesKeyboard(.interactively)
-            PinkButton(title: String(localized: "Start Upload"), enabled: !store.uploadIDs.isEmpty) { store.go(.uploadProgress) }.padding(.horizontal, 21).padding(.bottom, 17)
+            PinkButton(title: String(localized: "Start Upload"), enabled: !store.uploadIDs.isEmpty) { store.go(.uploadProgress) }.fixedSize(horizontal: false, vertical: true).padding(.horizontal, 21).padding(.bottom, 17)
         }.foregroundStyle(.white)
             .sheet(item: $picker) { value in
                 DemoSheet(title: value == .album ? String(localized: "Add to album") : String(localized: "Photo visibility")) {

@@ -55,6 +55,7 @@ struct GalleryViews: View {
                         Avatar(asset: person.asset, size: 66, pink: index < 3)
                             .overlay(alignment: .bottom) {
                                 Text(index == 3 ? "+6" : ["24", "18", "12"][index]).loveliesFont(size: 14, weight: .semibold)
+                                    .fixedSize(horizontal: true, vertical: false)
                                     .foregroundStyle(index == 3 ? .white : .black).padding(.horizontal, 10).padding(.vertical, 6)
                                     .background(index == 3 ? LoveliesTheme.surface : LoveliesTheme.pink, in: Capsule()).offset(y: 6)
                             }

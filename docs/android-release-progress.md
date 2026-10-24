@@ -1,5 +1,7 @@
 # Android replacement readiness — 24 October 2026
 
+The existing157-case/14-suite XMLs and immutable fcd product/7123 test artifacts were preserved before the concurrent OpenFace native-test continuation. `post-localization-ui/native-caption-count-build/pre-openface-android-artifacts/preservation.json` binds the copies and exact historical scope. This preservation is not another unit run, build or qualification of the changing native HTTP/tests.
+
 ## 24 October 2026 — current product runtime and test-only correction
 
 The unchanged `fcd89930…97ab0` product with original `96763d37…8ef65` test passes all 48 normal and all 48 font2 reference screens. Landscape passes 47/48; screen 25's unnamed-action failure remains. Three person modes/21 nested cases, three font2 keyboard routes and three reduced-animation routes pass within their separate scopes. All 254 main-matrix screenshots were independently reviewed; position limits remain recorded. Connected, spoken, provider and store behavior is separate.

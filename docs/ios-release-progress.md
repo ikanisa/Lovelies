@@ -1,6 +1,17 @@
 # iOS replacement implementation checkpoint — 24 October 2026
 
-## 24 October 2026 — gallery search and keyboard qualification
+## Latest checkpoint — caption scroll repair awaiting capacity
+
+The caption/count presentation repair compiled as unsigned Release `317e0d67…71a5cf` and Simulator `32d15a08…571f20`, with the unchanged c6 runner. Its source snapshot is Gallery `0e4ce318…` / Upload `23cda61f…`. Smoke passed. The focused keyboard run observed screen15, failed22 and never reached45; no complete three-row result was produced. The source summary and Start Upload are whole, but the caption/caret is absent and the measured form viewport is only0.667pt. The later AX rectangle being above the keyboard does not establish the earlier native hit predicate.
+
+Complete normal25–30 records25 failed with two native clipping findings,26–30 passed, zero custom failures and six actual44pt Back exits to1. All11 saved PNGs were reviewed; the visible three-line normal caption does not waive the larger-type warning. Normal31–36 did not start because of capacity. Other ranges and failures retain their original binary scopes.
+
+The reviewed, adopted Upload `392b12c2…` moves the header/source summary into the form ScrollView while retaining the intrinsic pinned footer and three reserved caption lines. Its predicted255pt viewport recovery remains unmeasured. Guarded preflight stopped **before Xcode** with265,322,496 bytes free internally and1,322,590,208 on PRO-G40; required guards remain2GiB/3GiB. Prepared221 native plus three runner inputs are not a build result. The665 prior Foundation checks are reused only because all11 recorded hashes still match; no new host-test execution occurred.
+
+The latest compiled32 bundles are preserved in `post-localization-ui/native-caption-count-build/compiled-checkpoint-32/`; candidate, independent reviews and blocked preflight are in `post-localization-ui/caption-scroll-build/`. No development QA was signed for32 or392b. The earlier187-file gallery QA remains uninstalled and bound to its earlier source. The owner selects emulator testing; no new phone action or physical acceptance is claimed. Six release host/policy/signature gates and connected/provider/store acceptance remain open.
+
+
+## Preserved 24 October 2026 — gallery search and keyboard qualification
 
 The one-file gallery repair hides the long introductory section while searching and retains filtering, route callbacks and localized resources. Current Simulator dylib `0360aa76…da1f89` with unchanged c6 V4 runner now materializes the exact largest-text gallery rows1/15; actual selections and settled destination/dismissal guards pass. Keyboard15/22/45 passes with each field above the keyboard. Largest1–6 has zero custom failures and all five applicable44pt Back actions reach1:2/6 pass raw, while1/3/4/5 retain native text/contrast findings. Independent source/12-image review leaves ten native records unresolved; it establishes no source cause or justified layout/palette repair. Remaining normal/largest ranges continue. Prior dc3 no-row failures remain preserved.
 
