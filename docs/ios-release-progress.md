@@ -1,6 +1,12 @@
 # iOS replacement implementation checkpoint — 24 October 2026
 
-## 24 October 2026 — banner and progress runtime qualification
+## 24 October 2026 — gallery search and keyboard qualification
+
+The one-file gallery repair hides the long introductory section while searching and retains filtering, route callbacks and localized resources. Current Simulator dylib `0360aa76…da1f89` with unchanged c6 V4 runner now materializes the exact largest-text gallery rows1/15; actual selections and settled destination/dismissal guards pass. Keyboard15/22/45 passes with each field above the keyboard. Largest1–6 has zero custom failures and all five applicable44pt Back actions reach1:2/6 pass raw, while1/3/4/5 retain native text/contrast findings. Independent source/12-image review leaves ten native records unresolved; it establishes no source cause or justified layout/palette repair. Remaining normal/largest ranges continue. Prior dc3 no-row failures remain preserved.
+
+Unsigned Release binary `af5021e3ad7cfecafc92bf1b691feb16aefb4a36ea7c76c1115de3039943a1a9` and Debug/Simulator compilation pass with253 native and256 combined Simulator/runner inputs unchanged. All eight packaged locale resources exactly match the prior Release; its1858 static/6 permission/144 plural/42 interpolation proof is reused without rerunning cases. The same six release preflight blockers remain. The new187-file development QA is signature/profile/certificate verified and uninstalled. The Return button's36pt named child sits inside a48pt parent; no actual activation,44pt button credit or proven touch deficit is claimed. Receipts: `post-localization-ui/gallery-search-build/`; raw search observations and settled snapshots remain separate.
+
+## Preserved 24 October 2026 — banner and progress runtime qualification
 
 The two reviewed follow-up files pass Release, Debug build-for-testing and a new Simulator app build; the unchanged V4 runner is reused. Focused normal screens 1–6 and 8 have zero custom failures. The shared banner Dynamic Type finding is absent across all six; 2/4/6/8 pass raw audits, while 1/3/5 retain caption/tagline/contrast findings. Screen 8 separately exposes one progress element with a 346×44-point frame and the correct 83% value. Broad largest-text, keyboard, remaining-normal and locale/spoken checks continue on this exact source; no whole-matrix pass is inferred.
 

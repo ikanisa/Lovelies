@@ -131,9 +131,11 @@ struct ScreenGalleryView: View {
     var body: some View {
         NavigationStack {
             List {
-                Section {
-                    Text("All 48 reference screens. Choosing a selection screen loads its screenshot's sample selections; editing a review keeps your changes.")
-                        .font(.subheadline).foregroundStyle(LoveliesTheme.secondary)
+                if query.isEmpty {
+                    Section {
+                        Text("All 48 reference screens. Choosing a selection screen loads its screenshot's sample selections; editing a review keeps your changes.")
+                            .font(.subheadline).foregroundStyle(LoveliesTheme.secondary)
+                    }
                 }
                 ForEach(Screen.allCases.filter { query.isEmpty || $0.title.localizedCaseInsensitiveContains(query) || String($0.id).contains(query) }) { screen in
                     Button { store.jump(screen) } label: {
@@ -152,7 +154,7 @@ struct ScreenGalleryView: View {
             .navigationTitle("Screen gallery")
             .searchable(text: $query, prompt: "Find a screen")
             .toolbar { ToolbarItem(placement: .topBarTrailing) { Button("Done") { store.showGallery = false } } }
-            .toolbar { ToolbarItem(placement: .bottomBar) { Button("Return to connected app") { store.isReferenceMode = false; store.showGallery = false; store.go(live.session?.authenticated == true ? .home : .photoAccessPrompt, replace: true, simulateProgress: false) } } }
+            .toolbar { ToolbarItem(placement: .bottomBar) { Button { store.isReferenceMode = false; store.showGallery = false; store.go(live.session?.authenticated == true ? .home : .photoAccessPrompt, replace: true, simulateProgress: false) } label: { Text("Return to connected app").frame(minWidth: 44, minHeight: 44).contentShape(Rectangle()) } } }
         }
         .preferredColorScheme(.dark)
     }
