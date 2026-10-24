@@ -20,22 +20,26 @@ struct OnboardingViews: View {
     private var splash: some View {
         GeometryReader { geometry in
             ZStack {
-                AssetImage(name: "splash").scaledToFill().frame(width: geometry.size.width, height: geometry.size.height).clipped().ignoresSafeArea()
-                VStack(spacing: 20) {
-                    Spacer()
-                    Wordmark(width: geometry.size.width * 0.81)
-                        .shadow(color: LoveliesTheme.pink.opacity(0.3), radius: 20)
-                    Text("PHOTOS BRING\nPEOPLE CLOSER")
-                        .loveliesFont(size: 14, weight: .medium).tracking(4).lineSpacing(6).multilineTextAlignment(.center)
-                        .foregroundStyle(.white.opacity(0.9))
-                    Spacer().frame(height: geometry.size.height * 0.07)
-                    Button { store.go(.introduction) } label: {
-                        Image(systemName: "arrow.right").font(.system(size: 32, weight: .light)).foregroundStyle(LoveliesTheme.canvas)
-                            .frame(width: 88, height: 88).background(LoveliesTheme.pink, in: Circle())
-                            .shadow(color: LoveliesTheme.pink.opacity(0.3), radius: 25)
-                    }.accessibilityLabel("Get started")
-                    Spacer().frame(height: geometry.size.height * 0.06)
-                }.frame(maxWidth: .infinity)
+                AssetImage(name: "splash").scaledToFill()
+                    .frame(width: geometry.size.width, height: geometry.size.height).clipped()
+                    .overlay(Color.black.opacity(0.4)).ignoresSafeArea().accessibilityHidden(true)
+                ScrollView {
+                    VStack(spacing: 20) {
+                        Spacer(minLength: 0)
+                        Wordmark(width: geometry.size.width * 0.81)
+                            .shadow(color: LoveliesTheme.pink.opacity(0.3), radius: 20)
+                        Text("PHOTOS BRING\nPEOPLE CLOSER")
+                            .loveliesFont(size: 14, weight: .medium).tracking(4).lineSpacing(6).multilineTextAlignment(.center)
+                            .fixedSize(horizontal: false, vertical: true).foregroundStyle(.white.opacity(0.9))
+                        Spacer().frame(height: geometry.size.height * 0.07)
+                        Button { store.go(.introduction) } label: {
+                            Image(systemName: "arrow.right").font(.system(size: 32, weight: .light)).foregroundStyle(LoveliesTheme.canvas)
+                                .frame(width: 88, height: 88).background(LoveliesTheme.pink, in: Circle())
+                                .shadow(color: LoveliesTheme.pink.opacity(0.3), radius: 25)
+                        }.accessibilityLabel("Get started")
+                        Spacer().frame(height: geometry.size.height * 0.06)
+                    }.padding(.horizontal, 22).frame(maxWidth: .infinity).frame(minHeight: geometry.size.height)
+                }
             }
         }
     }
@@ -46,16 +50,16 @@ struct OnboardingViews: View {
             AssetImage(name: "intro-collage").scaledToFit().frame(maxHeight: 270).accessibilityHidden(true)
             Text("Your photos\nfind their people").font(.title2.weight(.semibold)).multilineTextAlignment(.center).accessibilityAddTraits(.isHeader)
             AdaptiveActions {
-                introItem(icon: "person.crop.circle.badge.checkmark", lines: "We match\nyour photos")
-                introItem(icon: "person.2", lines: "To the\nright people")
-                introItem(icon: "square.and.arrow.up", lines: "You choose\nwhat to share")
+                introItem(icon: "person.crop.circle.badge.checkmark", lines: String(localized: "We match\nyour photos"))
+                introItem(icon: "person.2", lines: String(localized: "To the\nright people"))
+                introItem(icon: "square.and.arrow.up", lines: String(localized: "You choose\nwhat to share"))
             }
-            PinkButton(title: "Get Started") { store.go(.signIn) }
+            PinkButton(title: String(localized: "Get Started")) { store.go(.signIn) }
             HStack(spacing: 4) {
                 ForEach(0..<3) { index in
                     Button { if index > 0 { store.go(.signIn) } } label: {
                         Circle().fill(index == 0 ? Color.white : .white.opacity(0.55)).frame(width: 8, height: 8).frame(width: 44, height: 44).contentShape(Rectangle())
-                    }.accessibilityLabel("Introduction page \(index + 1)").accessibilityAddTraits(index == 0 ? .isSelected : [])
+                    }.accessibilityLabel(String.localizedStringWithFormat(NSLocalizedString("Introduction page %lld", comment: "Introduction page control"), index + 1)).accessibilityAddTraits(index == 0 ? .isSelected : [])
                 }
             }
         }.foregroundStyle(.white)
@@ -65,7 +69,8 @@ struct OnboardingViews: View {
         VStack(spacing: 10) {
             Image(systemName: icon).font(.system(size: 28, weight: .light)).frame(width: 64, height: 64)
                 .overlay(Circle().stroke(LoveliesTheme.pink, lineWidth: 1.4)).shadow(color: LoveliesTheme.pink.opacity(0.5), radius: 9)
-            Text(lines).loveliesFont(size: 13, weight: .medium).multilineTextAlignment(.center)
+                .accessibilityHidden(true)
+            Text(lines).loveliesFont(size: 13, weight: .medium).multilineTextAlignment(.center).fixedSize(horizontal: false, vertical: true)
         }.frame(maxWidth: .infinity)
     }
 
@@ -73,13 +78,14 @@ struct OnboardingViews: View {
         ZStack {
             GlowBackground()
             LoveliesPage {
-                PageHeader(title: "Welcome", trailing: false)
+                PageHeader(title: String(localized: "Welcome"), trailing: false)
                 Wordmark(width: 210).padding(.vertical, 12)
                 Text("Same photos.\nMore people in them.").font(.title3).foregroundStyle(LoveliesTheme.secondary).multilineTextAlignment(.center)
-                PinkButton(title: "Continue with Apple", icon: "apple.logo") { store.go(.photoAccessPrompt) }
-                QuietButton(title: "Continue with Google") { store.go(.photoAccessPrompt) }
-                PinkButton(title: "Create Account") { store.go(.photoAccessPrompt) }
-                QuietButton(title: "Sign In") { store.go(.photoAccessPrompt) }
+                    .fixedSize(horizontal: false, vertical: true)
+                PinkButton(title: String(localized: "Continue with Apple"), icon: "apple.logo") { store.go(.photoAccessPrompt) }
+                QuietButton(title: String(localized: "Continue with Google")) { store.go(.photoAccessPrompt) }
+                PinkButton(title: String(localized: "Create Account")) { store.go(.photoAccessPrompt) }
+                QuietButton(title: String(localized: "Sign In")) { store.go(.photoAccessPrompt) }
                 Text("Sample sign-in choices for this frontend preview.").font(.footnote).foregroundStyle(LoveliesTheme.secondary)
             }
         }.foregroundStyle(.white)
@@ -87,41 +93,47 @@ struct OnboardingViews: View {
 
     private var accessPrompt: some View {
         LoveliesPage {
-            PageHeader(title: "Photo Access", trailing: false)
+            PageHeader(title: String(localized: "Photo Access"), trailing: false)
             PhotoHeart(size: 90).accessibilityHidden(true)
             Text("Choose your photos").font(.title2.weight(.semibold)).accessibilityAddTraits(.isHeader)
             Text("Choose how this sample library is shown. In the connected app, you select images with Photos or Files; processing happens through the backend.")
                 .font(.body).foregroundStyle(LoveliesTheme.secondary).multilineTextAlignment(.center)
-            permissionButton("Allow Full Access", strong: true) { store.access = .all; store.go(.photoAccessOptions) }
-            permissionButton("Allow Limited Access", strong: false) { store.access = .limited; store.go(.photoAccessOptions) }
-            QuietButton(title: "Not Now") { store.access = .limited; store.go(.photoAccessOptions) }
+            permissionButton(String(localized: "Allow Full Access"), strong: true) { store.access = .all; store.go(.photoAccessOptions) }
+            permissionButton(String(localized: "Allow Limited Access"), strong: false) { store.access = .limited; store.go(.photoAccessOptions) }
+            QuietButton(title: String(localized: "Not Now")) { store.access = .limited; store.go(.photoAccessOptions) }
             Text("Preview choices do not change device permissions.").font(.footnote).foregroundStyle(LoveliesTheme.secondary)
         }.foregroundStyle(.white)
     }
 
     private func permissionButton(_ title: String, strong: Bool, action: @escaping () -> Void) -> some View {
-        Button(action: action) { Text(title).loveliesFont(size: 15, weight: strong ? .semibold : .regular).frame(maxWidth: .infinity).padding(.vertical, 12).background(LoveliesTheme.pink.opacity(strong ? 0.9 : 0.32), in: Capsule()) }
+        Button(action: action) {
+            Text(title).loveliesFont(size: 15, weight: strong ? .semibold : .regular)
+                .multilineTextAlignment(.center).fixedSize(horizontal: false, vertical: true)
+                .foregroundStyle(strong ? LoveliesTheme.canvas : .white)
+                .frame(maxWidth: .infinity).padding(.vertical, 12).frame(minHeight: 44)
+                .background(LoveliesTheme.pink.opacity(strong ? 0.9 : 0.32), in: Capsule())
+        }.buttonStyle(LoveliesPressStyle())
     }
 
     private var accessOptions: some View {
         LoveliesPage(spacing: 15, padding: 20) {
-            PageHeader(title: "Choose Photo Access", trailing: false)
+            PageHeader(title: String(localized: "Choose Photo Access"), trailing: false)
             ForEach(AccessMode.allCases, id: \.self) { mode in accessCard(mode) }
-            PinkButton(title: "Continue") { store.captures = 0; store.go(.faceEnrollment) }
+            PinkButton(title: String(localized: "Continue")) { store.captures = 0; store.go(.faceEnrollment) }
         }.foregroundStyle(.white)
     }
 
     private func accessCard(_ mode: AccessMode) -> some View {
         let selected = store.access == mode
         let icon = mode == .all ? "photo" : mode == .albums ? "rectangle.stack" : "lock.rectangle"
-        let detail = mode == .all ? "Get the best matches\nacross your entire library" : mode == .albums ? "Choose specific albums" : "Start with a few photos\n(you can change this anytime)"
+        let detail = mode == .all ? String(localized: "Get the best matches\nacross your entire library") : mode == .albums ? String(localized: "Choose specific albums") : String(localized: "Start with a few photos\n(you can change this anytime)")
         return Button { store.access = mode } label: {
             HStack(spacing: 16) {
                 CheckBadge(selected: selected, size: 30)
-                Image(systemName: icon).font(.system(size: 25, weight: .light)).frame(width: 31)
+                Image(systemName: icon).font(.system(size: 25, weight: .light)).frame(width: 31).accessibilityHidden(true)
                 VStack(alignment: .leading, spacing: 5) {
-                    Text(mode.rawValue).loveliesFont(size: 17, weight: .medium)
-                    Text(detail).loveliesFont(size: 13).foregroundStyle(LoveliesTheme.secondary)
+                    Text(LocalizedStringKey(mode.rawValue)).loveliesFont(size: 17, weight: .medium).foregroundStyle(.white).fixedSize(horizontal: false, vertical: true)
+                    Text(detail).loveliesFont(size: 13).foregroundStyle(LoveliesTheme.secondary).fixedSize(horizontal: false, vertical: true)
                 }.frame(maxWidth: .infinity, alignment: .leading)
             }.padding(17).frame(minHeight: 111).background(LoveliesTheme.surface, in: RoundedRectangle(cornerRadius: 20))
                 .overlay(RoundedRectangle(cornerRadius: 20).stroke(selected ? LoveliesTheme.pink : LoveliesTheme.stroke, lineWidth: selected ? 1.6 : 1))
@@ -138,8 +150,8 @@ struct OnboardingViews: View {
                         .clipShape(RoundedRectangle(cornerRadius: 19)).accessibilityLabel("Sample selfie preview, simulated capture")
                     Button { store.capture() } label: {
                         Circle().fill(.white).frame(width: 52, height: 52).padding(5).overlay(Circle().stroke(.white, lineWidth: 2))
-                    }.accessibilityLabel("Capture sample selfie \(store.captures + 1) of 3")
-                    Text(store.captures == 0 ? "Position your face\nin the frame" : store.captures == 1 ? "Turn slightly to your left\n2 of 3 sample selfies" : "Turn slightly to your right\n3 of 3 sample selfies")
+                    }.accessibilityLabel(String.localizedStringWithFormat(NSLocalizedString("Capture sample selfie %lld of 3", comment: "Reference capture control"), store.captures + 1))
+                    Text(store.captures == 0 ? String(localized: "Position your face\nin the frame") : store.captures == 1 ? String(localized: "Turn slightly to your left\n2 of 3 sample selfies") : String(localized: "Turn slightly to your right\n3 of 3 sample selfies"))
                         .font(.body).multilineTextAlignment(.center).foregroundStyle(LoveliesTheme.secondary)
                 }.padding(.bottom, 20).frame(maxWidth: .infinity)
             }.overlay(alignment: .topLeading) {
@@ -150,34 +162,34 @@ struct OnboardingViews: View {
 
     private var qualityRetry: some View {
         LoveliesPage {
-            PageHeader(title: "Try Again", close: true, trailing: false)
+            PageHeader(title: String(localized: "Try Again"), close: true, trailing: false)
             AssetImage(name: "retry-portrait").scaledToFit().frame(maxHeight: 260).clipShape(RoundedRectangle(cornerRadius: 24)).accessibilityHidden(true)
             Text("Let's try that again").font(.title2.weight(.medium)).accessibilityAddTraits(.isHeader)
             Text("Make sure your face is well lit, in focus, and centered.").font(.body).foregroundStyle(LoveliesTheme.secondary).multilineTextAlignment(.center)
-            PinkButton(title: "Retake") { store.go(.faceEnrollment) }
-            QuietButton(title: "Back to photo access") { store.go(.photoAccessOptions) }
+            PinkButton(title: String(localized: "Retake")) { store.go(.faceEnrollment) }
+            QuietButton(title: String(localized: "Back to photo access")) { store.go(.photoAccessOptions) }
         }.foregroundStyle(.white)
     }
 
     private var processing: some View {
         LoveliesPage {
-            PageHeader(title: "Processing", close: true, trailing: false)
+            PageHeader(title: String(localized: "Processing"), close: true, trailing: false)
             AssetImage(name: "processing-hero").scaledToFit().frame(maxHeight: 250).accessibilityHidden(true)
             Text("Finding sample photos…").font(.title2.weight(.medium)).accessibilityAddTraits(.isHeader)
-            ProgressView(value: store.progress).tint(LoveliesTheme.pink).accessibilityLabel("Sample processing progress")
+            ProgressView(value: store.progress).tint(LoveliesTheme.pink).frame(minHeight: 44).accessibilityLabel("Sample processing progress")
             Text("This frontend preview uses included photos.").font(.body).foregroundStyle(LoveliesTheme.secondary)
-            PinkButton(title: "Continue preview") { store.go(.setupComplete) }
-            QuietButton(title: "Back to setup") { store.back() }
+            PinkButton(title: String(localized: "Continue preview")) { store.go(.setupComplete) }
+            QuietButton(title: String(localized: "Back to setup")) { store.back() }
         }.foregroundStyle(.white)
     }
 
     private var setupComplete: some View {
         LoveliesPage {
-            PageHeader(title: "Setup Complete", trailing: false)
+            PageHeader(title: String(localized: "Setup Complete"), trailing: false)
             AssetImage(name: "setup-hero").scaledToFit().frame(maxHeight: 270).accessibilityHidden(true)
             Text("You're all set!").font(.title.weight(.medium)).accessibilityAddTraits(.isHeader)
             Text("Explore the sample photos and their people. You choose what to share.").font(.body).foregroundStyle(LoveliesTheme.secondary).multilineTextAlignment(.center)
-            PinkButton(title: "Let's Go") { store.history = []; store.go(.home, replace: true) }
+            PinkButton(title: String(localized: "Let's Go")) { store.history = []; store.go(.home, replace: true) }
         }.foregroundStyle(.white)
     }
 }

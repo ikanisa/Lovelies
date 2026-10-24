@@ -136,12 +136,12 @@ object NativeProtocol {
 }
 
 data class LivePhoto(val id: String,val version: String,val source: String,val mediaSource: String,
-    val title: String,val width: Int?,val height: Int?,val matchId: String?=null) {
+    val title: String,val width: Int?,val height: Int?,val matchId: String?=null,val titleDefaulted: Boolean=false) {
     val ratio: Float get() = if(width != null && height != null) (width.toFloat()/height).coerceIn(.35f,3f) else 1f
     companion object { fun parse(value: WireObject): LivePhoto = LivePhoto(NativeProtocol.id(value["media_asset_id"] ?: value["id"]),
         NativeProtocol.text(value["version"] ?: ""),NativeProtocol.text(value["source"] ?: "received"),
         NativeProtocol.mediaSource(value["media_source"]),NativeProtocol.text(value["title"] ?: "Photo"),
-        value["width"]?.let { NativeProtocol.integer(it,1,100000).toInt() },value["height"]?.let { NativeProtocol.integer(it,1,100000).toInt() },value["match_id"]?.let(NativeProtocol::id)) }
+        value["width"]?.let { NativeProtocol.integer(it,1,100000).toInt() },value["height"]?.let { NativeProtocol.integer(it,1,100000).toInt() },value["match_id"]?.let(NativeProtocol::id),titleDefaulted=value["title"]==null) }
 }
 data class LivePair(val photo: String,val person: String,val version: String = "") {
     fun wire(): WireObject = mapOf("asset_id" to photo,"recipient_id" to person)

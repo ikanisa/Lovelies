@@ -1,0 +1,25 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="camera_recovery_permission_required">Emera gukoresha kamera kugira ngo ufate ifoto nshya.</string>
+    <string name="camera_recovery_initialization_timeout">Kamera ntiyatangiye. Funga izindi porogaramu zikoresha kamera wongere ugerageze.</string>
+    <string name="camera_recovery_disconnected">Kamera yahagaritswe. Garuka hano wongere ugerageze.</string>
+    <string name="camera_recovery_surface_replaced">Ibyerekanwa na kamera byahindutse. Ongera ugerageze kureba icyitegererezo.</string>
+    <string name="camera_recovery_unavailable">Kamera ntiboneka. Funga izindi porogaramu zikoresha kamera wongere ugerageze.</string>
+    <string name="camera_recovery_capture_failed">Ifoto ntiyafashwe. Fata telefoni uyikomereze hamwe wongere ugerageze.</string>
+    <string name="camera_recovery_review_expired">Iki cyitegererezo ntikigihuje n’uko ibintu bimeze ubu. Fata indi foto.</string>
+    <string name="camera_recovery_image_invalid">Iyo foto ntiyashoboye gusomwa. Yifate bundi bushya.</string>
+    <string name="camera_recovery_capture_too_large">Iyo foto ni nini cyane. Yifate bundi bushya ukoresheje kamera.</string>
+    <string name="camera_recovery_no_face">Nta sura ishobora gukoreshwa yabonetse. Shyira isura yawe mu mwanya ugaragara kuri kamera wongere ufate ifoto.</string>
+    <string name="camera_recovery_multiple_faces">Habonetse isura irenze imwe. Fata ifoto uri wenyine mu mwanya ugaragara kuri kamera.</string>
+    <string name="camera_recovery_quality_low">Ongera ufate ifoto ahari urumuri rwiza kandi ufate telefoni uyikomereze hamwe.</string>
+    <string name="camera_recovery_cannot_continue">Kamera ntiyashoboye gukomeza. Ongera ugerageze igihe ibonetse.</string>
+    <string name="camera_permission_prompt">Koresha kamera yawe ufate ifoto nshya.</string>
+    <string name="camera_permission_changed">Uburenganzira bwo gukoresha kamera bwahindutse. Emera kuyikoresha kugira ngo ukomeze kwiyandikisha kwabitswe.</string>
+    <string name="camera_permission_denied">Kamera ntiyemerewe gukoreshwa. Ushobora kubyemera igihe witeguye.</string>
+    <string name="camera_permission_disabled">Uburenganzira bwo gukoresha kamera bwahagaritswe. Emera Kamera mu igenamiterere rya Lovelies.</string>
+    <string name="camera_allow_access">Emera gukoresha kamera</string>
+    <string name="camera_open_settings">Fungura igenamiterere</string>
+    <string name="camera_starting">Kamera iratangira…</string>
+    <string name="camera_retry">Ongera ugerageze kamera</string>
+    <string name="camera_paused">Kamera yahagaze by’agateganyo. Subira muri Lovelies ukomeze.</string>
+</resources>

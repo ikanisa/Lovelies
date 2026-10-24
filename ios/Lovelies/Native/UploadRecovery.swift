@@ -133,7 +133,7 @@ final class NativeUploadPrivateFiles: @unchecked Sendable {
         guard UUID(uuidString: source.id) != nil, source.title.utf16.count <= 500,
               let metadata = try? source.file.resourceValues(forKeys: [.isRegularFileKey, .isSymbolicLinkKey, .fileSizeKey]),
               metadata.isRegularFile == true, metadata.isSymbolicLink != true,
-              let count = metadata.fileSize, (1...20 * 1024 * 1024).contains(count) else { throw NativeAPIError.unsupported("This selected photo is unavailable. Select it again before starting an upload.") }
+              let count = metadata.fileSize, (1...20 * 1024 * 1024).contains(count) else { throw NativeAPIError.unsupported(String(localized: "This selected photo is unavailable. Select it again before starting an upload.")) }
         let bytes = try Data(contentsOf: source.file, options: .mappedIfSafe)
         guard bytes.count == count, let content = NativeUploadContentType.detect(bytes) else { throw NativeAPIError.invalidResponse }
         let name = source.id + "." + content.fileExtension, target = try directory(batch).appendingPathComponent(name)
@@ -151,9 +151,9 @@ final class NativeUploadPrivateFiles: @unchecked Sendable {
     func verifiedBytes(_ file: NativeResumableUploadFile, batch: String) throws -> Data {
         let source = try url(file, batch: batch)
         guard let metadata = try? source.resourceValues(forKeys: [.isRegularFileKey, .isSymbolicLinkKey, .fileSizeKey]), metadata.isRegularFile == true,
-              metadata.isSymbolicLink != true, metadata.fileSize == file.byteSize else { throw NativeAPIError.unsupported("The saved photo is unavailable. Keep this upload's status; its bytes cannot be replaced.") }
+              metadata.isSymbolicLink != true, metadata.fileSize == file.byteSize else { throw NativeAPIError.unsupported(String(localized: "The saved photo is unavailable. Keep this upload's status; its bytes cannot be replaced.")) }
         let bytes = try Data(contentsOf: source, options: .mappedIfSafe)
-        guard bytes.count == file.byteSize, Self.hash(bytes) == file.sha256 else { throw NativeAPIError.unsupported("The saved photo changed. Its original upload cannot use different bytes.") }
+        guard bytes.count == file.byteSize, Self.hash(bytes) == file.sha256 else { throw NativeAPIError.unsupported(String(localized: "The saved photo changed. Its original upload cannot use different bytes.")) }
         return bytes
     }
     func chunk(_ file: NativeResumableUploadFile, batch: String, offset: Int, count: Int) throws -> (URL, String) {

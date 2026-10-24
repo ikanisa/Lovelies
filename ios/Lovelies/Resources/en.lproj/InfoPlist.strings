@@ -1,0 +1,3 @@
+"NSCameraUsageDescription" = "Take your guided Lovelies face-registration selfies and photos you choose to upload.";
+"NSPhotoLibraryAddUsageDescription" = "Save photos only after Lovelies verifies your current access and download entitlement.";
+"NSPhotoLibraryUsageDescription" = "Choose photos to upload to Lovelies after your review.";

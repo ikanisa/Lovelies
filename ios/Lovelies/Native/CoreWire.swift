@@ -53,24 +53,24 @@ enum NativeAPIError: Error, LocalizedError, Equatable {
     case selectionEmpty, reviewChanged, operationUnconfirmed(String), unsupported(String)
     var errorDescription: String? {
         switch self {
-        case .unavailable(let code): return "Connection unavailable (\(code)). Try again."
+        case .unavailable(let code): return String.localizedStringWithFormat(NSLocalizedString("Connection unavailable (%@). Try again.", comment: ""), code)
         case .denied(_, let code):
-            if code == "face_verification_failed" { return "This selfie did not match your registered face. Take a fresh selfie to try again." }
-            if code == "face_capture_no_face" { return "No face was found. Center your face in the frame and retake the selfies." }
-            if code == "face_capture_multiple_faces" { return "More than one face was found. Make sure only your face is in the frame and retake the selfies." }
-            if code == "face_capture_quality_low" { return "The selfies were not clear enough. Hold the phone steady, use even lighting, and retake them." }
-            if code == "face_capture_invalid_image" || code == "capture_format_invalid" { return "A selfie could not be read. Check the saved capture status before retaking it." }
-            if code == "capture_too_large" { return "This selfie is too large. Check the saved capture status before retaking it." }
-            if ["capture_unavailable", "capture_changed"].contains(code) { return "The saved selfie is unavailable or changed. Check the original capture status before retaking it." }
-            if code.contains("verifier") || code.contains("face_authentication_unavailable") || code.contains("verdict") { return "Face verification is unavailable. Your account has not been verified. Try again when the service is available." }
-            if code.contains("processor") { return "Photo processing is unavailable. Your photos have not been matched or shared." }
-            return "The service could not allow this action (\(code))."
-        case .invalidResponse: return "The service returned an unverified result. Nothing has been confirmed."
-        case .sessionChanged: return "Your account changed. Reopen this screen."
-        case .authenticationRequired: return "Verify your face to continue."
-        case .selectionEmpty: return "Select at least one matched photo and person."
-        case .reviewChanged: return "The eligible matches changed. Review the current selection again."
-        case .operationUnconfirmed: return "The result is not confirmed. Check the original request before trying again."
+            if code == "face_verification_failed" { return String(localized: "This selfie did not match your registered face. Take a fresh selfie to try again.") }
+            if code == "face_capture_no_face" { return String(localized: "No face was found. Center your face in the frame and retake the selfies.") }
+            if code == "face_capture_multiple_faces" { return String(localized: "More than one face was found. Make sure only your face is in the frame and retake the selfies.") }
+            if code == "face_capture_quality_low" { return String(localized: "The selfies were not clear enough. Hold the phone steady, use even lighting, and retake them.") }
+            if code == "face_capture_invalid_image" || code == "capture_format_invalid" { return String(localized: "A selfie could not be read. Check the saved capture status before retaking it.") }
+            if code == "capture_too_large" { return String(localized: "This selfie is too large. Check the saved capture status before retaking it.") }
+            if ["capture_unavailable", "capture_changed"].contains(code) { return String(localized: "The saved selfie is unavailable or changed. Check the original capture status before retaking it.") }
+            if code.contains("verifier") || code.contains("face_authentication_unavailable") || code.contains("verdict") { return String(localized: "Face verification is unavailable. Your account has not been verified. Try again when the service is available.") }
+            if code.contains("processor") { return String(localized: "Photo processing is unavailable. Your photos have not been matched or shared.") }
+            return String.localizedStringWithFormat(NSLocalizedString("The service could not allow this action (%@).", comment: ""), code)
+        case .invalidResponse: return String(localized: "The service returned an unverified result. Nothing has been confirmed.")
+        case .sessionChanged: return String(localized: "Your account changed. Reopen this screen.")
+        case .authenticationRequired: return String(localized: "Verify your face to continue.")
+        case .selectionEmpty: return String(localized: "Select at least one matched photo and person.")
+        case .reviewChanged: return String(localized: "The eligible matches changed. Review the current selection again.")
+        case .operationUnconfirmed: return String(localized: "The result is not confirmed. Check the original request before trying again.")
         case .unsupported(let message): return message
         }
     }
@@ -419,11 +419,71 @@ struct NativeEnrollmentSummary: Sendable {
     var awaitingServer: Bool { state == .capturePending || state == .verifying || state == .completionPending }
 }
 
+/// Display labels only. Wire values remain the authority for all decisions.
+enum NativeStatusCopy {
+    static func support(_ code: String) -> String {
+        switch code {
+        case "open": return String(localized: "Open")
+        case "under_review": return String(localized: "Under review")
+        case "resolved": return String(localized: "Resolved")
+        case "closed": return String(localized: "Closed")
+        default: return code
+        }
+    }
+    static func privacy(_ code: String) -> String {
+        switch code {
+        case "pending_approval": return String(localized: "Awaiting approval")
+        case "approved": return String(localized: "Approved")
+        case "queued": return String(localized: "Queued")
+        case "processing": return String(localized: "Processing")
+        case "completed": return String(localized: "Completed")
+        case "rejected": return String(localized: "Rejected")
+        case "failed": return String(localized: "Failed")
+        case "cancelled": return String(localized: "Cancelled")
+        default: return code
+        }
+    }
+    static func sharing(_ code: String) -> String {
+        switch code {
+        case "requested": return String(localized: "Requested")
+        case "accepted": return String(localized: "Accepted")
+        case "declined": return String(localized: "Declined")
+        case "withdrawn": return String(localized: "Withdrawn")
+        case "expired": return String(localized: "Expired")
+        case "revoked": return String(localized: "Revoked")
+        case "blocked": return String(localized: "Blocked")
+        default: return code
+        }
+    }
+    static func faceOperation(_ code: String) -> String {
+        switch code {
+        case "pending": return String(localized: "Pending")
+        case "capture_pending": return String(localized: "Capture pending")
+        case "verifying": return String(localized: "Verifying")
+        case "applied": return String(localized: "Applied")
+        case "completed": return String(localized: "Completed")
+        case "cancelled": return String(localized: "Cancelled")
+        case "failed": return String(localized: "Failed")
+        default: return code
+        }
+    }
+    static func cleanup(_ code: String) -> String {
+        switch code {
+        case "none": return String(localized: "None")
+        case "pending": return String(localized: "Pending")
+        case "completed": return String(localized: "Completed")
+        case "failed": return String(localized: "Failed")
+        case "blocked": return String(localized: "Blocked")
+        default: return code
+        }
+    }
+}
+
 struct NativePhoto: Identifiable, Sendable, Equatable {
     let id: String, title: String, source: String, version: String, feedSource: String
     let width: Int?, height: Int?
     init(_ wire: WireValue) throws {
-        id = try wire.uuid("id"); title = wire["title"].string ?? "Photo"
+        id = try wire.uuid("id"); title = wire["title"].string ?? String(localized: "Photo")
         source = try wire.text("media_source", maximum: 32); feedSource = wire["source"].string ?? "contributions"
         guard source == "personal" else { throw NativeAPIError.invalidResponse }
         version = wire["version"].string ?? ""
@@ -433,7 +493,7 @@ struct NativePhoto: Identifiable, Sendable, Equatable {
 }
 struct NativePerson: Identifiable, Sendable, Equatable {
     let id: String, name: String
-    init(_ wire: WireValue) throws { id = try wire.uuid("id"); name = wire["name"].string ?? "Matched person" }
+    init(_ wire: WireValue) throws { id = try wire.uuid("id"); name = wire["name"].string ?? String(localized: "Matched person") }
 }
 struct NativePair: Hashable, Codable, Sendable {
     let asset_id: String, recipient_id: String
@@ -577,7 +637,7 @@ struct NativeAccountRecoveryRecord: Codable, Sendable {
     static func backup(_ text: String) throws -> (String, String) {
         let values = text.trimmingCharacters(in: .whitespacesAndNewlines).split(separator: ":", omittingEmptySubsequences: false).map(String.init)
         guard values.count == 3, values[0] == "LVR1", UUID(uuidString: values[1]) != nil,
-              values[1] == values[1].lowercased(), validSecret(values[2], prefix: "lfr_") else { throw NativeAPIError.unsupported("Enter the private LVR1 recovery backup you saved for this account.") }
+              values[1] == values[1].lowercased(), validSecret(values[2], prefix: "lfr_") else { throw NativeAPIError.unsupported(String(localized: "Enter the private LVR1 recovery backup you saved for this account.")) }
         return (values[1], values[2])
     }
     static func date(_ value: WireValue) throws -> Date {

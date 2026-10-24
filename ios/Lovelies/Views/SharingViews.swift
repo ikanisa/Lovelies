@@ -26,7 +26,7 @@ struct SharingViews: View {
             ZStack {
                 GlowBackground(strong: true)
                 VStack(spacing: 12) {
-                    PageHeader(title: "Your Matches", trailing: false)
+                    PageHeader(title: String(localized: "Your Matches"), trailing: false)
                     AssetImage(name: "matches-hero").scaledToFit().frame(width: min(260, geometry.size.width * 0.531)).padding(.top, geometry.size.height * 0.02).accessibilityHidden(true)
                     VStack(spacing: 0) { Text("12").loveliesFont(size: 33, weight: .semibold); Text("Photos Matched").loveliesFont(size: 20) }
                     VStack(spacing: 0) { Text("8").loveliesFont(size: 32, weight: .semibold); Text("People Found").loveliesFont(size: 20) }
@@ -39,7 +39,7 @@ struct SharingViews: View {
                     }.padding(.vertical, 7)
                     Text("Great matches!\nYour photos found people\nin your memories.").loveliesFont(size: 16).multilineTextAlignment(.center).foregroundStyle(LoveliesTheme.secondary).lineSpacing(2)
                     Spacer(minLength: 10)
-                    PinkButton(title: "View Matches") { store.go(.matchedPhotos) }.padding(.bottom, 19)
+                    PinkButton(title: String(localized: "View Matches")) { store.go(.matchedPhotos) }.padding(.bottom, 19)
                 }.padding(.horizontal, 23).frame(maxWidth: .infinity).foregroundStyle(.white)
             }
         
@@ -60,7 +60,7 @@ struct SharingViews: View {
 
     private var matchedPhotos: some View {
         VStack(spacing: 6) {
-            PageHeader(title: "Matched Photos", subtitle: "12 photos")
+            PageHeader(title: String(localized: "Matched Photos"), subtitle: String(localized: "12 photos"))
             ScrollView {
                 if SourceReferenceCatalog.layout(26) != nil {
                     SourcePhotoGrid(route: 26) { store.openPhoto($0, destination: .photoPeople) }.padding(.horizontal, 12).padding(.bottom, 10)
@@ -113,7 +113,7 @@ struct SharingViews: View {
             PageHeader(title: "")
             Avatar(asset: store.currentPerson.asset, size: 119).padding(.top, -20)
             Text(store.currentPerson.name).loveliesFont(size: 22, weight: .medium)
-            Text("\(store.currentPerson.matches) matched \(store.currentPerson.matches == 1 ? "photo" : "photos")").loveliesFont(size: 17).foregroundStyle(LoveliesTheme.secondary)
+            Text(NativeCountCopy.text(.matched, store.currentPerson.matches)).loveliesFont(size: 17).foregroundStyle(LoveliesTheme.secondary)
             ScrollView {
                 if SourceReferenceCatalog.layout(28) != nil, store.currentPerson.id == 1 {
                     SourcePhotoGrid(route: 28, filterIDs: Set((SourceReferenceCatalog.layout(28)?.tiles ?? []).prefix(store.currentPerson.matches).map(\.id))) { store.openPhoto($0) }.padding(.horizontal, 13).padding(.bottom, 12)
@@ -127,7 +127,7 @@ struct SharingViews: View {
 
     private var photoSelection: some View {
         VStack(spacing: 6) {
-            PageHeader(title: screen == .deselectPhotos ? "Deselect Photos" : "Select Photos to Share", subtitle: "\(store.sharePhotoIDs.count) of 12 selected")
+            PageHeader(title: screen == .deselectPhotos ? String(localized: "Deselect Photos") : String(localized: "Select Photos to Share"), subtitle: String(localized: "\(store.sharePhotoIDs.count) of 12 selected"))
             ScrollView {
                 if SourceReferenceCatalog.layout(screen.rawValue) != nil {
                     let overrides = Dictionary(uniqueKeysWithValues: store.sharingPhotos.filter { store.sharingPhotoAssets[$0.id] != nil }.map { ($0.id, $0) })
@@ -162,13 +162,13 @@ struct SharingViews: View {
 
     private var peopleSelection: some View {
         VStack(spacing: 7) {
-            PageHeader(title: screen == .deselectPeople ? "Deselect People" : "Choose People to Share With", subtitle: "\(store.sharingPeople.count) of \(store.people.count) selected")
+            PageHeader(title: screen == .deselectPeople ? String(localized: "Deselect People") : String(localized: "Choose People to Share With"), subtitle: String(localized: "\(store.sharingPeople.count) of \(store.people.count) selected"))
             ScrollView {
                 VStack(spacing: 3) {
                     ForEach(store.people) { person in personSelectionRow(person) }
                 }.padding(.horizontal, 14)
             }.scrollIndicators(.hidden)
-            PinkButton(title: "Continue", enabled: !store.sharingPeople.isEmpty && !store.sharePhotoIDs.isEmpty) { store.go(.shareReview) }.padding(.horizontal, 19).padding(.bottom, 14)
+            PinkButton(title: String(localized: "Continue"), enabled: !store.sharingPeople.isEmpty && !store.sharePhotoIDs.isEmpty) { store.go(.shareReview) }.padding(.horizontal, 19).padding(.bottom, 14)
         }.foregroundStyle(.white)
     }
     private func personSelectionRow(_ person: DemoPerson) -> some View {
@@ -179,7 +179,7 @@ struct SharingViews: View {
                 Avatar(asset: person.asset, size: 45, pink: selected)
                 VStack(alignment: .leading, spacing: 3) {
                     Text(person.name).loveliesFont(size: 16, weight: .medium)
-                    Text(blocked ? "Blocked" : "Matched in \(person.matches) \(person.matches == 1 ? "photo" : "photos")").loveliesFont(size: 12).foregroundStyle(LoveliesTheme.secondary)
+                    Text(blocked ? String(localized: "Blocked") : String(localized: "Matched in \(person.matches) photos")).loveliesFont(size: 12).foregroundStyle(LoveliesTheme.secondary)
                 }
                 Spacer()
                 RoundedRectangle(cornerRadius: 8).fill(selected ? LoveliesTheme.pink : .clear).frame(width: 28, height: 28)
@@ -187,15 +187,15 @@ struct SharingViews: View {
                     .overlay { if selected { Image(systemName: "checkmark").font(.system(size: 15, weight: .semibold)).foregroundStyle(.black) } }
             }.padding(.horizontal, 9).padding(.vertical, 5).frame(minHeight: 62)
                 .background(selected ? LoveliesTheme.surface : .clear, in: RoundedRectangle(cornerRadius: 12)).opacity(blocked ? 0.4 : 1).contentShape(Rectangle())
-        }.buttonStyle(LoveliesPressStyle()).disabled(blocked).accessibilityElement(children: .ignore).accessibilityLabel(person.name).accessibilityValue(blocked ? "Blocked" : selected ? "Selected" : "Not selected").accessibilityAddTraits(selected ? .isSelected : [])
+        }.buttonStyle(LoveliesPressStyle()).disabled(blocked).accessibilityElement(children: .ignore).accessibilityLabel(person.name).accessibilityValue(blocked ? String(localized: "Blocked") : selected ? String(localized: "Selected") : String(localized: "Not selected")).accessibilityAddTraits(selected ? .isSelected : [])
     }
 
     private var review: some View {
         VStack(spacing: 10) {
-            PageHeader(title: "Review & Share", trailing: false)
+            PageHeader(title: String(localized: "Review & Share"), trailing: false)
             ScrollView {
                 VStack(alignment: .leading, spacing: 8) {
-                    reviewSectionHeader("Photos (\(store.sharePhotoIDs.count))") { store.go(.shareSelection) }
+                    reviewSectionHeader(String(localized: "Photos (\(store.sharePhotoIDs.count))")) { store.go(.shareSelection) }
                     if let layout = SourceReferenceCatalog.layout(33) {
                         if store.referenceReview33 {
                             SourcePhotoGrid(route: 33, filterIDs: store.sharePhotoIDs) { store.openPhoto($0) }
@@ -213,7 +213,7 @@ struct SharingViews: View {
                     } else {
                         PhotoReviewMosaic(photos: store.sharingPhotos) { store.openPhoto($0) }.frame(height: 165)
                     }
-                    reviewSectionHeader("People (\(store.sharingPeople.count))") { store.go(.peopleSelection) }.padding(.top, 7)
+                    reviewSectionHeader(String(localized: "People (\(store.sharingPeople.count))")) { store.go(.peopleSelection) }.padding(.top, 7)
                     ScrollView(.horizontal) {
                         HStack(spacing: 22) {
                             ForEach(store.sharingPeople) { person in
@@ -227,7 +227,7 @@ struct SharingViews: View {
                 .loveliesFont(size: 15).multilineTextAlignment(.center).foregroundStyle(LoveliesTheme.secondary)
                 .frame(maxWidth: .infinity).padding(.vertical, 21).background(LoveliesTheme.raised, in: RoundedRectangle(cornerRadius: 15))
                 .overlay(RoundedRectangle(cornerRadius: 15).stroke(LoveliesTheme.stroke)).padding(.horizontal, 21)
-            PinkButton(title: "Share Photos", icon: "square.and.arrow.up", enabled: !store.sharePhotoIDs.isEmpty && !store.sharingPeople.isEmpty) { store.go(.sharingProgress) }.padding(.horizontal, 21).padding(.bottom, 15)
+            PinkButton(title: String(localized: "Share Photos"), icon: "square.and.arrow.up", enabled: !store.sharePhotoIDs.isEmpty && !store.sharingPeople.isEmpty) { store.go(.sharingProgress) }.padding(.horizontal, 21).padding(.bottom, 15)
         }.foregroundStyle(.white)
     }
     private func reviewSectionHeader(_ title: String, action: @escaping () -> Void) -> some View {
@@ -248,16 +248,16 @@ struct SharingViews: View {
             ZStack {
                 GlowBackground(strong: true)
                 VStack(spacing: 18) {
-                    PageHeader(title: "Sharing Photos", close: true, trailing: false)
+                    PageHeader(title: String(localized: "Sharing Photos"), close: true, trailing: false)
                     AssetImage(name: "sharing-hero").scaledToFit().frame(width: min(300, geometry.size.width * 0.683)).accessibilityHidden(true)
                     Text("Sharing with \(store.sharingPeople.count) people...").loveliesFont(size: 20)
                     Text("This is a local preview. Your selections stay here when you go back.").loveliesFont(size: 15).foregroundStyle(LoveliesTheme.secondary)
                     VStack(alignment: .leading, spacing: 16) {
-                        sharingStep("Preparing photos", index: 0)
-                        sharingStep("Finding your people", index: 1)
-                        sharingStep("Sending...", index: 2)
-                        sharingStep("Almost there!", index: 3)
-                        QuietButton(title: "Back to review") { store.back() }
+                        sharingStep(String(localized: "Preparing photos"), index: 0)
+                        sharingStep(String(localized: "Finding your people"), index: 1)
+                        sharingStep(String(localized: "Sending..."), index: 2)
+                        sharingStep(String(localized: "Almost there!"), index: 3)
+                        QuietButton(title: String(localized: "Back to review")) { store.back() }
                     }.padding(.top, 13).padding(.horizontal, 20)
                     Spacer(minLength: 0)
                 }.padding(.horizontal, 29).frame(maxWidth: .infinity).foregroundStyle(.white)
@@ -281,16 +281,16 @@ struct SharingViews: View {
 
     private var history: some View {
         VStack(spacing: 9) {
-            PageHeader(title: "Shared with People")
+            PageHeader(title: String(localized: "Shared with People"))
             ScrollView {
                 VStack(alignment: .leading, spacing: 0) {
                     ForEach(Array([DemoPerson.all[0], DemoPerson.all[4], DemoPerson.all[6]].enumerated()), id: \.offset) { index, person in
-                        sharedRow(person, photo: [1, 6, 16][index], detail: "\(store.shared ? store.sharePhotoIDs.count : 6) photos · \(index == 0 ? "Just now" : "2m ago")", status: "Delivered")
+                        sharedRow(person, photo: [1, 6, 16][index], detail: NativeCountCopy.text(.photoStatus, store.shared ? store.sharePhotoIDs.count : 6, index == 0 ? String(localized: "Just now") : String(localized: "2m ago")), status: "Delivered")
                     }
                     Text("Earlier").loveliesFont(size: 18, weight: .semibold).padding(.vertical, 18)
-                    sharedRow(DemoPerson.all[1], photo: nil, detail: "4 photos · 1d ago", status: "Viewed")
-                    sharedRow(DemoPerson.all[2], photo: nil, detail: "3 photos · 1d ago", status: "Viewed")
-                    sharedRow(DemoPerson.all[3], photo: nil, detail: "5 photos · 2d ago", status: "Sent")
+                    sharedRow(DemoPerson.all[1], photo: nil, detail: String(localized: "4 photos · 1d ago"), status: "Viewed")
+                    sharedRow(DemoPerson.all[2], photo: nil, detail: String(localized: "3 photos · 1d ago"), status: "Viewed")
+                    sharedRow(DemoPerson.all[3], photo: nil, detail: String(localized: "5 photos · 2d ago"), status: "Sent")
                 }.padding(.horizontal, 20)
             }.scrollIndicators(.hidden)
         }.foregroundStyle(.white)
@@ -306,7 +306,7 @@ struct SharingViews: View {
                 } else { Avatar(asset: person.asset, size: 51) }
                 VStack(alignment: .leading, spacing: 6) { Text(person.name).loveliesFont(size: 17, weight: .medium); Text(detail).loveliesFont(size: 12).foregroundStyle(LoveliesTheme.secondary) }
                 Spacer(minLength: 0)
-                Label(status, systemImage: status == "Delivered" ? "circle.fill" : status == "Viewed" ? "eye" : "circle.fill")
+                Label(LocalizedStringKey(status), systemImage: status == "Delivered" ? "circle.fill" : status == "Viewed" ? "eye" : "circle.fill")
                     .loveliesFont(size: 11, weight: .medium).foregroundStyle(status == "Delivered" ? LoveliesTheme.pink : .black)
                     .padding(.horizontal, 10).padding(.vertical, 7)
                     .background(status == "Delivered" ? LoveliesTheme.pink.opacity(0.14) : status == "Sent" ? Color(red: 0.7, green: 0.56, blue: 1) : LoveliesTheme.pink, in: Capsule())
@@ -325,7 +325,7 @@ struct SharingViews: View {
                     Button { store.reportReason = item.0 } label: {
                         HStack(spacing: 14) {
                             Image(systemName: item.1).font(.system(size: 19)).frame(width: 27)
-                            Text(item.0).loveliesFont(size: 15)
+                            Text(LocalizedStringKey(item.0)).loveliesFont(size: 15)
                             Spacer()
                             Circle().stroke(.white.opacity(0.65), lineWidth: 1.5).frame(width: 27, height: 27)
                                 .overlay { if store.reportReason == item.0 { Circle().fill(LoveliesTheme.pink).overlay(Circle().fill(.white.opacity(0.8)).frame(width: 9, height: 9)) } }
@@ -334,7 +334,7 @@ struct SharingViews: View {
                 }
             }.padding(.top, 2)
             Spacer(minLength: 0)
-            PinkButton(title: "Submit") { reportSaved = true }.padding(.bottom, 15)
+            PinkButton(title: String(localized: "Submit")) { reportSaved = true }.padding(.bottom, 15)
         }.foregroundStyle(.white)
             .alert("Report saved in this preview", isPresented: $reportSaved) { Button("Done") { store.go(.matchedPhotos) } } message: { Text("Selected reason: \(store.reportReason). No report or photo has been sent. This is a local frontend demonstration.") }
     }

@@ -204,19 +204,20 @@ fun ScreenHeader(title: String, onBack: (() -> Unit)? = null, subtitle: String? 
 
 @Composable
 fun Overflow(state: PreviewState) {
+    val uiContext = androidx.compose.ui.platform.LocalContext.current
     var expanded by remember { mutableStateOf(false) }
     Box {
-        IconAction(Glyph.MORE,"Screen actions",tonal=true,onClick={expanded=true})
+        IconAction(Glyph.MORE,uiContext.getString(R.string.copy_screen_actions_a1599566),tonal=true,onClick={expanded=true})
         androidx.compose.material.DropdownMenu(expanded=expanded,onDismissRequest={expanded=false},modifier=Modifier.background(Panel)) {
             val contextual=when(state.route) {
-                29 -> listOf("Deselect Photos" to 30)
-                31 -> listOf("Deselect People" to 32)
-                26,27,28 -> listOf("Select Photos to Share" to 29,"Report Incorrect Match" to 36)
+                29 -> listOf(uiContext.getString(R.string.copy_deselect_photos_d46d783f) to 30)
+                31 -> listOf(uiContext.getString(R.string.copy_deselect_people_a3a304bd) to 32)
+                26,27,28 -> listOf(uiContext.getString(R.string.copy_select_photos_to_share_52f9b7e4) to 29,uiContext.getString(R.string.copy_report_incorrect_match_cd851491) to 36)
                 else -> emptyList()
             }
-            val choices=contextual+(if(BuildConfig.REFERENCE_SCREENS)listOf("All 48 screens" to 0) else emptyList())+listOf("Add photos" to 19,"Activity" to 17,"Privacy & Sharing" to 40,
-                "Manage Your Face" to 38,"Manage People" to 39,"Photo Access" to 41,"Notifications" to 42,
-                "Storage" to 43,"Export Your Data" to 44,"Shared History" to 35,"Account & Security" to 46,"Help Center" to 45)
+            val choices=contextual+(if(BuildConfig.REFERENCE_SCREENS)listOf(uiContext.getString(R.string.copy_all_48_screens_65cfa625) to 0) else emptyList())+listOf(uiContext.getString(R.string.copy_add_photos_12f5a599) to 19,uiContext.getString(R.string.copy_activity_9e75940c) to 17,uiContext.getString(R.string.copy_privacy_sharing_576d0d35) to 40,
+                uiContext.getString(R.string.copy_manage_your_face_990044ce) to 38,uiContext.getString(R.string.copy_manage_people_a3539654) to 39,uiContext.getString(R.string.copy_photo_access_7b04cc07) to 41,uiContext.getString(R.string.copy_notifications_753a22b2) to 42,
+                uiContext.getString(R.string.copy_storage_34eddf06) to 43,uiContext.getString(R.string.copy_export_your_data_726c5cda) to 44,uiContext.getString(R.string.copy_shared_history_966f258c) to 35,uiContext.getString(R.string.copy_account_security_fb84c56c) to 46,uiContext.getString(R.string.copy_help_center_bbf4ae03) to 45)
             choices.forEach{(label,id)-> androidx.compose.material.DropdownMenuItem(onClick={expanded=false;if(id==0)state.enterReview() else state.navigate(id)}){Text(label,color=Color.White)} }
         }
     }
@@ -264,6 +265,7 @@ fun PhotoGrid(state: PreviewState, modifier: Modifier = Modifier, photos: List<I
     selectable: Boolean = false, selections: List<Int> = emptyList(), favorites: Boolean = false,
     dimUnselected: Boolean = false, showPeople: Boolean = false, columns: Int = 3,
     onPhotoClick: (Int) -> Unit = {state.openPhoto(it)}) {
+    val uiContext = androidx.compose.ui.platform.LocalContext.current
     val heights=listOf(180,236,136,185,146,186,144,179,212,146,210,178,168,212,146,174,146,212)
     LazyVerticalStaggeredGrid(columns=StaggeredGridCells.Fixed(columns),modifier=modifier,
         horizontalArrangement=Arrangement.spacedBy(6.dp),verticalItemSpacing=6.dp,
@@ -274,7 +276,7 @@ fun PhotoGrid(state: PreviewState, modifier: Modifier = Modifier, photos: List<I
                 else Modifier.clickable(role=Role.Button){onPhotoClick(index)}
             Box(Modifier.fillMaxWidth().height((heights[position%heights.size] * when(columns){2->1.15f;4->.75f;else->1f}).dp)
                 .clip(RoundedCornerShape(9.dp)).then(interactionModifier)
-                .semantics { contentDescription = "Photo ${index+1}" }) {
+                .semantics { contentDescription = uiContext.getString(R.string.copy_photo_1_s_b27fd7d6, index+1) }) {
                 Asset(photoAsset(index),Modifier.fillMaxSize())
                 if(dimUnselected && index !in selections) Box(Modifier.fillMaxSize().background(Ink.copy(alpha=.5f)))
                 if(selectable || (favorites && index in state.favorites)) SelectionMark(
@@ -312,11 +314,14 @@ internal fun AdaptiveChoices(labels: List<String>, modifier: Modifier = Modifier
 
 @Composable
 fun Segments(items: List<String>, selected: String, modifier: Modifier = Modifier, onSelect: (String) -> Unit) {
-    AdaptiveChoices(items,modifier) { index,cell ->
+    val uiContext = androidx.compose.ui.platform.LocalContext.current
+    val labels=items.map { choiceLabel(uiContext,it) }
+    AdaptiveChoices(labels,modifier) { index,cell ->
         val item=items[index]
+        val label=labels[index]
             Box(cell.heightIn(min=48.dp).clip(CircleShape).background(if(selected==item)Pink else Panel)
-                .clickable(role=Role.Tab){onSelect(item)}.semantics { contentDescription=item;this.selected = selected == item }.padding(horizontal=8.dp,vertical=10.dp),contentAlignment=Alignment.Center) {
-                Text(item,color=if(selected==item)Ink else Color.White,fontSize=13.sp,textAlign=TextAlign.Center,fontWeight=if(selected==item)FontWeight.Medium else FontWeight.Normal,modifier=Modifier.clearAndSetSemantics { })
+                .clickable(role=Role.Tab){onSelect(item)}.semantics { contentDescription=label;this.selected = selected == item }.padding(horizontal=8.dp,vertical=10.dp),contentAlignment=Alignment.Center) {
+                Text(label,color=if(selected==item)Ink else Color.White,fontSize=13.sp,textAlign=TextAlign.Center,fontWeight=if(selected==item)FontWeight.Medium else FontWeight.Normal,modifier=Modifier.clearAndSetSemantics { })
             }
     }
 }
@@ -357,6 +362,7 @@ fun SettingRow(title: String, subtitle: String? = null, icon: Glyph? = null, tra
 
 @Composable
 fun BottomBar(state: PreviewState, active: Int, modifier: Modifier = Modifier, profile: Boolean = false) {
+    val uiContext = androidx.compose.ui.platform.LocalContext.current
     Row(modifier.fillMaxWidth().height(63.dp).clip(RoundedCornerShape(24.dp)).background(Ink.copy(alpha=.96f))
         .border(1.dp,Hairline.copy(alpha=.4f),RoundedCornerShape(24.dp)),
         horizontalArrangement=Arrangement.SpaceEvenly,verticalAlignment=Alignment.CenterVertically) {
@@ -364,7 +370,7 @@ fun BottomBar(state: PreviewState, active: Int, modifier: Modifier = Modifier, p
             else listOf(Glyph.HOME to 10,Glyph.PEOPLE to 11,Glyph.PHOTO to 13,Glyph.HEART to 14,Glyph.PERSON to 37)
         links.forEach{(icon,id)->
             Box(Modifier.weight(1f).height(54.dp).clickable(role=Role.Tab){state.navigate(id)}.semantics {
-                contentDescription=when(id){10->"Home";11->"New matches";13->"Photos";14->"Favorites";15->"Search";else->"Profile"}
+                contentDescription=when(id){10->uiContext.getString(R.string.copy_home_52f50eae);11->uiContext.getString(R.string.copy_new_matches_a3489490);13->uiContext.getString(R.string.copy_photos_cde554d0);14->uiContext.getString(R.string.copy_favorites_7c2c53ba);15->uiContext.getString(R.string.copy_search_c646a2c9);else->uiContext.getString(R.string.copy_profile_cd17328e)}
                 selected=id==active
             },contentAlignment=Alignment.Center) {
                 if(id==active)Canvas(Modifier.size(54.dp)){drawCircle(Brush.radialGradient(listOf(Pink.copy(alpha=.22f),Color.Transparent)),radius=size.width/2)}
@@ -413,17 +419,79 @@ fun PinkToggle(checked: Boolean, label: String, interactive: Boolean = true, onT
 
 @Composable
 fun ToggleRow(state: PreviewState, title: String, subtitle: String? = null, icon: Glyph) {
+    val uiContext = androidx.compose.ui.platform.LocalContext.current
+    val displayTitle=choiceLabel(uiContext,title)
     Row(Modifier.fillMaxWidth().heightIn(min=73.dp).toggleable(state.toggles[title]==true,role=Role.Switch,onValueChange={state.toggle(title)})
-        .semantics { contentDescription=listOfNotNull(title,subtitle).joinToString(", ") }
+        .semantics { contentDescription=listOfNotNull(displayTitle,subtitle).joinToString(", ") }
         .padding(horizontal=15.dp,vertical=10.dp),verticalAlignment=Alignment.CenterVertically) {
         AppIcon(icon,Modifier.size(26.dp));Spacer(Modifier.width(17.dp))
         Column(Modifier.weight(1f).clearAndSetSemantics { }) {
-            Text(title,color=Color.White,fontSize=14.sp)
+            Text(displayTitle,color=Color.White,fontSize=14.sp)
             if(subtitle!=null)Text(subtitle,color=Muted,fontSize=12.sp,modifier=Modifier.padding(top=4.dp))
         }
-        PinkToggle(state.toggles[title]==true,title,interactive=false){state.toggle(title)}
+        PinkToggle(state.toggles[title]==true,displayTitle,interactive=false){state.toggle(title)}
     }
 }
 
 @Composable
 fun DividerLine(modifier: Modifier = Modifier) { Box(modifier.fillMaxWidth().height(1.dp).background(Hairline.copy(alpha=.45f))) }
+
+/** Display labels for stable selection/preference keys; never apply to user or provider text. */
+internal fun choiceLabel(context: android.content.Context, key: String): String = when(key) {
+    "All Photos" -> context.getString(R.string.copy_all_photos_343464c9)
+    "Selected Albums" -> context.getString(R.string.copy_selected_albums_17cc5138)
+    "Limited Access" -> context.getString(R.string.copy_limited_access_f122f20d)
+    "All" -> context.getString(R.string.copy_all_75afe364)
+    "People" -> context.getString(R.string.copy_people_8390060e)
+    "Places" -> context.getString(R.string.copy_places_a808d03d)
+    "Videos" -> context.getString(R.string.copy_videos_63609fed)
+    "Dates" -> context.getString(R.string.copy_dates_6ccb18be)
+    "Favorites" -> context.getString(R.string.copy_favorites_7c2c53ba)
+    "Photos" -> context.getString(R.string.copy_photos_cde554d0)
+    "Live Photos" -> context.getString(R.string.copy_live_photos_f34b9b98)
+    "Matches" -> context.getString(R.string.copy_matches_a7d4102e)
+    "Shares" -> context.getString(R.string.copy_shares_da0ba431)
+    "Mentions" -> context.getString(R.string.copy_mentions_43e4fe52)
+    "System" -> context.getString(R.string.copy_system_8f3184bc)
+    "Any date" -> context.getString(R.string.copy_any_date_77399ff3)
+    "Any location" -> context.getString(R.string.copy_any_location_12402400)
+    "Last 30 days" -> context.getString(R.string.copy_last_30_days_d0778b33)
+    "Anyone" -> context.getString(R.string.copy_anyone_6202c187)
+    "Matched people only" -> context.getString(R.string.copy_matched_people_only_18da4a7c)
+    "Allowed people only" -> context.getString(R.string.copy_allowed_people_only_8a09f220)
+    "Approved recipients" -> context.getString(R.string.copy_approved_recipients_a3d21a9a)
+    "Allow others to save" -> context.getString(R.string.copy_allow_others_to_save_b85a095b)
+    "Show location info" -> context.getString(R.string.copy_show_location_info_4e6e2781)
+    "Show in suggestions" -> context.getString(R.string.copy_show_in_suggestions_7b1dc7e6)
+    "Analytics" -> context.getString(R.string.copy_analytics_bcade02b)
+    "New Matches" -> context.getString(R.string.copy_new_matches_2c63d230)
+    "Messages" -> context.getString(R.string.copy_messages_f8611fd5)
+    "Tips & Features" -> context.getString(R.string.copy_tips_features_1748bcf0)
+    "Reminders" -> context.getString(R.string.copy_reminders_4841b654)
+    "Marketing" -> context.getString(R.string.copy_marketing_54cb9b0f)
+    "Two-Factor Authentication" -> context.getString(R.string.copy_two_factor_authentication_1a856a41)
+    "Contributed" -> context.getString(R.string.copy_contributed_7ee59a7a)
+    "Received" -> context.getString(R.string.copy_received_5cf817d2)
+    "To review" -> context.getString(R.string.copy_to_review_efec5b50)
+    "This isn’t me" -> context.getString(R.string.copy_this_isn_t_me_fadfca58)
+    "Wrong person" -> context.getString(R.string.copy_wrong_person_781d726f)
+    "Other" -> context.getString(R.string.copy_other_6e38ff95)
+    "This isn't me" -> context.getString(R.string.copy_this_isn_t_me_05a96606)
+    "Not in this photo" -> context.getString(R.string.copy_not_in_this_photo_ecdf616f)
+    "Other issue" -> context.getString(R.string.copy_other_issue_8e041f9e)
+    "Allowed" -> context.getString(R.string.copy_allowed_586f52e3)
+    "Blocked" -> context.getString(R.string.copy_blocked_e378ac53)
+    "From This Device" -> context.getString(R.string.copy_from_this_device_7e2db4db)
+    "From Albums" -> context.getString(R.string.copy_from_albums_04f444df)
+    "From Files" -> context.getString(R.string.copy_from_files_f5e9d896)
+    "Take a Photo" -> context.getString(R.string.copy_take_a_photo_31010195)
+    "Getting Started" -> context.getString(R.string.copy_getting_started_d7ac78be)
+    "Your Photos" -> context.getString(R.string.copy_your_photos_337df2cf)
+    "Privacy & Safety" -> context.getString(R.string.copy_privacy_safety_475ecedd)
+    "Account & Settings" -> context.getString(R.string.copy_account_settings_eb2f3ea7)
+    "Troubleshooting" -> context.getString(R.string.copy_troubleshooting_eacc4991)
+    "Contact Support" -> context.getString(R.string.copy_contact_support_abccb14c)
+    "Email" -> context.getString(R.string.copy_email_43352167)
+    "Phone" -> context.getString(R.string.copy_phone_4930944f)
+    else -> key
+}

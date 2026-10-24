@@ -72,7 +72,7 @@ class LoveliesMessagingService: FirebaseMessagingService() {
         val id=runCatching { NativeProtocol.id(message.data["id"] ?: message.data["notification_id"]) }.getOrNull() ?: return
         val manager=getSystemService(NotificationManager::class.java)
         manager.createNotificationChannel(NotificationChannel("lovelies-updates",getString(R.string.notification_channel),NotificationManager.IMPORTANCE_DEFAULT).apply {
-            description="Private account updates";lockscreenVisibility=android.app.Notification.VISIBILITY_PRIVATE
+            description=getString(R.string.controller_a6e0f9a6503b);lockscreenVisibility=android.app.Notification.VISIBILITY_PRIVATE
         })
         val open=Intent(this,MainActivity::class.java).putExtra("notification_id",id).addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP or Intent.FLAG_ACTIVITY_CLEAR_TOP)
         val tap=PendingIntent.getActivity(this,id.hashCode(),open,PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)

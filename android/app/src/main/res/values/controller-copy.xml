@@ -1,0 +1,72 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+  <string name="controller_30f58b93760b">"Checking original access…"</string>
+  <string name="controller_15669a062c47">"Choose an app to share this photo."</string>
+  <string name="controller_ad87b0a11a23">"Original saved to your photos."</string>
+  <string name="controller_57d25e1f7252">"The original could not be saved. Check device storage and retry."</string>
+  <string name="controller_17d1551e8be5">"Updating device notifications…"</string>
+  <string name="controller_995526390e92">"Device notification registration is current."</string>
+  <string name="controller_9efb2f41cf2d">"Device notifications are off."</string>
+  <string name="controller_528d89ad72cb">"Your profile"</string>
+  <string name="controller_ec7d2382fde4">"Renew profile management?"</string>
+  <string name="controller_f108323d93e8">"Use your current registered sign-in and original device key to renew the expired private control. Consent choices stay separate."</string>
+  <string name="controller_90c1689b0b74">"Renew"</string>
+  <string name="controller_cadcad9e7c2a">"Sign in first"</string>
+  <string name="controller_a9e347551eb0">"Verify your face before choosing photos to upload."</string>
+  <string name="controller_c45abd8cb088">"Upload in progress"</string>
+  <string name="controller_173a1e5aeead">"Wait for the current operation to finish before choosing more photos."</string>
+  <string name="controller_c572c62d9ac7">"Remaining uploads cancelled. Photos already processing stay in your gallery."</string>
+  <string name="controller_84050f9a2b22">"Cancelling remaining uploads"</string>
+  <string name="controller_a9d087af281a">"Cancel remaining uploads?"</string>
+  <string name="controller_23a3f52d76e9">"Uploaded photos already processing stay in your gallery. Unfinished transfers will stop."</string>
+  <string name="controller_b3f81aca8528">"Cancel uploads"</string>
+  <string name="controller_94cbfcc0d1d3">"Report submitted"</string>
+  <string name="controller_41f9a4941e80">"Your report is saved for review."</string>
+  <string name="controller_0a0d775d7d14">"Export saved"</string>
+  <string name="controller_eaec755aa61d">"Your export was written to the document you selected."</string>
+  <string name="controller_a50a0663baa7">"Export requested"</string>
+  <string name="controller_6834ba087c0b">"Your request is saved. Availability follows the server status."</string>
+  <string name="controller_c6f0b6f0a522">"Delete this guest account?"</string>
+  <string name="controller_05c6f53286dc">"This requests deletion of your current guest account. It requires review. You can check the status here before setting up your face."</string>
+  <string name="controller_0e07b0e306d0">"Request deletion"</string>
+  <string name="controller_bb1d294c8d56">"Purchase cancelled. You have not been charged by this action."</string>
+  <string name="controller_311651867b2f">"Google Play disconnected. Retry when it is available."</string>
+  <string name="controller_b7dd6131b8f4">"Loading Google Play…"</string>
+  <string name="controller_43a45b864afc">"; then "</string>
+  <string name="controller_2d3b500866f8">"No eligible subscription plan is available from Google Play."</string>
+  <string name="controller_c5dd9ec980ef">"Choose a plan. Google Play shows its complete terms before you confirm."</string>
+  <string name="controller_0d9613931369">"Complete your purchase in Google Play."</string>
+  <string name="controller_ca350dda4dc7">"Checking Google Play purchases…"</string>
+  <string name="controller_7bc8522e0cb4">"No active Google Play subscription was found for this Play account."</string>
+  <string name="controller_4f6eed6a9fe6">"Sign in to the account used for this purchase, then restore."</string>
+  <string name="controller_04a714d06d40">"Payment is pending in Google Play. Photo access will update after verified payment."</string>
+  <string name="controller_04cb36080a3e">"This purchase belongs to another Lovelies account."</string>
+  <string name="controller_e5581cbfef39">"Verifying your purchase…"</string>
+  <string name="controller_7baa8299b4a7">"Test purchase verified. Production original access remains restricted."</string>
+  <string name="controller_846e2c78f9fc">"Purchase verified. Your current access is confirmed by the server."</string>
+  <string name="controller_acc527e9244f">"Purchase cancelled."</string>
+  <string name="controller_ec3bb17ddb0a">"You already own this subscription. Restore purchases to verify it."</string>
+  <string name="controller_4161e060779d">"This subscription is unavailable for your Play account or region."</string>
+  <string name="controller_0f2a4fcc93e6">"Google Play purchases are unavailable on this device."</string>
+  <string name="controller_f81e04a747c2">"Google Play could not be reached. Check your connection and retry."</string>
+  <string name="controller_47fb027a47f9">"Google Play could not complete this action. Retry or restore purchases."</string>
+  <string name="controller_d5bc59f2366c">" Restore to retry verification."</string>
+  <plurals name="controller_photos_processed">
+    <item quantity="one">%1$d photo processed</item>
+    <item quantity="other">%1$d photos processed</item>
+  </plurals>
+  <plurals name="controller_photos_preparing">
+    <item quantity="one">Preparing %1$d of %2$d photo</item>
+    <item quantity="other">Preparing %1$d of %2$d photos</item>
+  </plurals>
+  <plurals name="controller_photos_progress">
+    <item quantity="one">%1$d of %2$d photo processed</item>
+    <item quantity="other">%1$d of %2$d photos processed</item>
+  </plurals>
+  <plurals name="controller_bytes_saved">
+    <item quantity="one">%1$d of %2$d byte saved</item>
+    <item quantity="other">%1$d of %2$d bytes saved</item>
+  </plurals>
+  <string name="controller_a6e0f9a6503b">"Private account updates"</string>
+  <string name="controller_f72a6f212afb">"Lovelies photo"</string>
+</resources>

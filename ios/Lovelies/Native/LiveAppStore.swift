@@ -236,7 +236,7 @@ import AVFoundation
         if faceLifecycle != nil, accountRecovery == nil { checkFaceProfile(); return }
         if accountRecovery != nil { checkAccountRecovery(); return }
         performGuarded { [self] fence in
-            guard guestDeletion == nil else { throw NativeAPIError.unsupported("Check your guest account deletion before resuming setup.") }
+            guard guestDeletion == nil else { throw NativeAPIError.unsupported(String(localized: "Check your guest account deletion before resuming setup.")) }
             guard let repository else { throw NativeAPIError.unavailable("configuration") }
             let currentPolicy = try await repository.policy()
             let knownDevice = try await repository.device()
@@ -245,7 +245,7 @@ import AVFoundation
             try checkPublication(fence)
             guard (authConsent && acceptedAuthPolicy == currentPolicy) || (retained && restored?.policy == currentPolicy) || (session == nil && knownDevice != nil) else {
                 authConsent = false
-                throw NativeAPIError.unsupported("Read and accept the current face-registration policy before capturing.")
+                throw NativeAPIError.unsupported(String(localized: "Read and accept the current face-registration policy before capturing."))
             }
             let value = try await repository.startFace(consentPolicy: currentPolicy, publicKey: DeviceIdentity.publicJWK(alias: knownDevice?.keyAlias ?? NativeEnrollmentRecord.keyAlias, createIfMissing: !retained && knownDevice == nil))
             let latest = try await repository.enrollmentSummary()
@@ -258,8 +258,8 @@ import AVFoundation
     func takeSelfie() {
         performGuarded { [self] fence in
             guard isForeground, selfieReview == nil, !captureNeedsStatus else { throw NativeCameraIssue.captureUnavailable }
-            guard guestDeletion == nil else { throw NativeAPIError.unsupported("Check your guest account deletion before capturing.") }
-            guard let repository, let challenge else { throw NativeAPIError.unsupported("Accept face registration consent and start a current capture session first.") }
+            guard guestDeletion == nil else { throw NativeAPIError.unsupported(String(localized: "Check your guest account deletion before capturing.")) }
+            guard let repository, let challenge else { throw NativeAPIError.unsupported(String(localized: "Accept face registration consent and start a current capture session first.")) }
             let shutter = NativeFaceShutterContext(challenge), captureIndex = captureReceipts.count
             let cameraGeneration = camera.currentState.generation, presentationGeneration = cameraReviewGeneration, sessionEpoch = session?.epoch
             var bytes = try await camera.capture(); defer { bytes.resetBytes(in: 0..<bytes.count) }
@@ -267,7 +267,7 @@ import AVFoundation
             guard isForeground, camera.currentState.generation == cameraGeneration,
                   cameraReviewGeneration == presentationGeneration, session?.epoch == sessionEpoch,
                   shutter.permits(self.challenge), captureReceipts.count == captureIndex else { throw NativeAPIError.sessionChanged }
-            guard captureReceipts.reduce(0, { $0 + ($1["byte_size"].integer ?? 0) }) + bytes.count <= 8 * 1024 * 1024 else { throw NativeAPIError.unsupported("These captures exceed the 8 MiB enrollment limit. Start again with smaller camera captures.") }
+            guard captureReceipts.reduce(0, { $0 + ($1["byte_size"].integer ?? 0) }) + bytes.count <= 8 * 1024 * 1024 else { throw NativeAPIError.unsupported(String(localized: "These captures exceed the 8 MiB enrollment limit. Start again with smaller camera captures.")) }
             guard let decoded = UIImage(data: bytes) else { throw NativeCameraIssue.invalidImage }
             selfieReview = try NativeSelfieCandidate(bytes: bytes, challenge: challenge, index: captureIndex,
                 publicationGeneration: presentationGeneration, sessionEpoch: sessionEpoch, cameraGeneration: cameraGeneration)
@@ -341,7 +341,7 @@ import AVFoundation
             }
             if recovered.awaitingServer {
                 captureNeedsStatus = true
-                transferText = "The original capture result is not confirmed. Check the saved request before taking another selfie."
+                transferText = String(localized: "The original capture result is not confirmed. Check the saved request before taking another selfie.")
                 navigation?.go(.processing, replace: true, simulateProgress: false); return
             }
             guard recovered.challenge != nil else { throw NativeAPIError.operationUnconfirmed(previous.id) }
@@ -377,7 +377,7 @@ import AVFoundation
             }
             if recovered.awaitingServer {
                 enrollment = recovered; challenge = nil; captureReceipts = recovered.receipts
-                transferText = "Enrollment is still processing. Check again before capturing."; return
+                transferText = String(localized: "Enrollment is still processing. Check again before capturing."); return
             }
             let value = try await repository.startFace(consentPolicy: recovered.policy, publicKey: DeviceIdentity.publicJWK(createIfMissing: false))
             let latest = try await repository.enrollmentSummary()
@@ -469,10 +469,10 @@ import AVFoundation
         perform { [self] in
             guard let repository else { throw NativeAPIError.authenticationRequired }
             let value = try await repository.reconcile(retryUnknown: retry)
-            if value["status"].string == "unknown" { throw NativeAPIError.unsupported("The original request is still unconfirmed. Retry reuses its original key and exact selection.") }
+            if value["status"].string == "unknown" { throw NativeAPIError.unsupported(String(localized: "The original request is still unconfirmed. Retry reuses its original key and exact selection.")) }
             if value["status"].string == "ready", value["snapshot"] != .null { let loaded = try NativeSnapshot(value); snapshot = loaded; draft = NativeShareDraft(snapshot: loaded); navigation?.go(.shareSelection, simulateProgress: false) }
             else if value["recipients"] != .null { outcome = value; navigation?.go(.sharedHistory, simulateProgress: false) }
-            else { outcome = value; transferText = "Original request confirmed." }
+            else { outcome = value; transferText = String(localized: "Original request confirmed.") }
         }
     }
     func beginPhotoImport() -> NativeMediaCaptureContext? {
@@ -542,7 +542,7 @@ import AVFoundation
         processingStatuses = Dictionary(uniqueKeysWithValues: value.batch.selectedFiles.compactMap { item -> (String, String)? in
             guard let id = item.assetID, item.received else { return nil }; return (id, item.phase.rawValue)
         })
-        transferText = value.batch.cancellationRequested && value.batch.finished ? "Pending uploads cancelled." : value.batch.received ? "Uploads received. Photo matching is separate from sharing." : "\(value.batch.acknowledgedBytes) of \(value.batch.totalBytes) bytes received"
+        transferText = value.batch.cancellationRequested && value.batch.finished ? String(localized: "Pending uploads cancelled.") : value.batch.received ? String(localized: "Uploads received. Photo matching is separate from sharing.") : String.localizedStringWithFormat(NSLocalizedString("controller_bytes_received", comment: ""), value.batch.acknowledgedBytes, value.batch.totalBytes)
     }
     func restorePhotoUploads() async throws {
         guard let repository, let value = try await repository.uploadSummary(), value.batch.accountID == session?.accountID else { return }
@@ -614,7 +614,7 @@ import AVFoundation
         Task { [self] in
             do {
                 let next = try await repository.pausePhotoUpload(batchID: current.batch.id, disableAutomaticRetry: userInitiated)
-                if session?.accountID == current.batch.accountID { installPhotoUploads(next); transferText = "Paused. Received bytes and the original upload are saved." }
+                if session?.accountID == current.batch.accountID { installPhotoUploads(next); transferText = String(localized: "Paused. Received bytes and the original upload are saved.") }
                 if scheduleRetry && next.batch.canRetryInBackground { NativeBackgroundUploads.shared.schedule() }
             }
             catch { if session?.accountID == current.batch.accountID { self.error = error.localizedDescription } }
@@ -623,13 +623,13 @@ import AVFoundation
     func cancelPhotoUploads() {
         guard let repository, let current = uploadRecovery else { return }
         pausePhotoUploads()
-        perform { [self] in let next = try await repository.cancelPhotoUpload(batchID: current.batch.id); installPhotoUploads(next); transferText = "Pending uploads cancelled. Photos already processing remain in your library." }
+        perform { [self] in let next = try await repository.cancelPhotoUpload(batchID: current.batch.id); installPhotoUploads(next); transferText = String(localized: "Pending uploads cancelled. Photos already processing remain in your library.") }
     }
     func checkProcessing() {
         perform { [self] in
             guard let repository, let value = uploadRecovery else { throw NativeAPIError.authenticationRequired }
             let current = try await repository.checkPhotoUpload(batchID: value.batch.id); installPhotoUploads(current)
-            if current.batch.selectedFiles.allSatisfy({ $0.phase == .ready || $0.phase == .cancelled }) { transferText = "Photo processing complete."; try await refreshGallery() }
+            if current.batch.selectedFiles.allSatisfy({ $0.phase == .ready || $0.phase == .cancelled }) { transferText = String(localized: "Photo processing complete."); try await refreshGallery() }
         }
     }
     func retryUploadPhoto(_ id: String) {
@@ -668,7 +668,7 @@ import AVFoundation
         perform { [self] in
             guard let repository, let photo = currentPhoto else { throw NativeAPIError.invalidResponse }
             let bytes = try await repository.authorizedSaveBytes(photo); try await NativePhotoLibrary.save(bytes)
-            transferText = "Saved to Photos."
+            transferText = String(localized: "Saved to Photos.")
         }
     }
     func loadPrivacy() {
@@ -741,10 +741,10 @@ import AVFoundation
     }
     func reportCurrentPair() {
         perform { [self] in
-            guard let repository, let photo = currentPhoto, let person = currentPerson else { throw NativeAPIError.unsupported("Choose a matched photo and person before reporting.") }
-            _ = try await repository.post("/safety/reports", payload: .object(["asset_id": .string(photo.id), "subject_id": .string(person.id), "reason": .string("This photo/person match is incorrect")]), operation: "safety.report")
+            guard let repository, let photo = currentPhoto, let person = currentPerson else { throw NativeAPIError.unsupported(String(localized: "Choose a matched photo and person before reporting.")) }
+            _ = try await repository.post("/safety/reports", payload: .object(["asset_id": .string(photo.id), "subject_id": .string(person.id), "reason": .string(String(localized: "This photo/person match is incorrect"))]), operation: "safety.report")
             if var value = draft { value.excludedPairs.insert(NativePair(asset: photo.id, recipient: person.id)); value.version += 1; draft = value; preview = nil }
-            transferText = "Report received for review. No access has been granted."
+            transferText = String(localized: "Report received for review. No access has been granted.")
         }
     }
     func loadNotificationSettings() { perform { [self] in guard let repository else { return }; notificationSettings = try await repository.protectedJSON("/me/notification-settings") } }
@@ -774,7 +774,7 @@ import AVFoundation
             try await repository?.logout(); try checkPublication(fence); session = nil; navigation?.go(.faceEnrollment, replace: true, simulateProgress: false)
         }
     }
-    func pauseWork() { if uploadRecovery != nil { pausePhotoUploads(); return }; workTask?.cancel(); transferText = "Paused. Resume keeps the original upload stage and pending request keys." }
+    func pauseWork() { if uploadRecovery != nil { pausePhotoUploads(); return }; workTask?.cancel(); transferText = String(localized: "Paused. Resume keeps the original upload stage and pending request keys.") }
     func clearPreviewCache() { mediaRevision += 1; if let repository { Task { await repository.retireMedia() } } }
     func background(scheduleRetry: Bool = false) { persistLibraryState(); if uploadRunning || scheduleRetry && uploadRecovery?.batch.started == true { pausePhotoUploads(userInitiated: false, scheduleRetry: scheduleRetry) }; isForeground = false; photoCamera = false; photoCameraContext = nil; retireSelfieReview(); camera.setForeground(false); recoveryBackup = nil; recoveryBackupSheet = false; mediaRevision += 1; workTask?.cancel(); workGeneration += 1; busy = false; if let repository { Task { await repository.retireMedia() } } }
     func foreground() {
@@ -791,7 +791,7 @@ import AVFoundation
 extension LiveAppStore {
     func requestPhotoCamera() {
         guard canEdit, isForeground, let session, session.authenticated else { error = NativeAPIError.authenticationRequired.localizedDescription; return }
-        guard UIImagePickerController.isSourceTypeAvailable(.camera) else { error = "A camera is unavailable on this device. Choose a photo using Photos or Files."; return }
+        guard UIImagePickerController.isSourceTypeAvailable(.camera) else { error = String(localized: "A camera is unavailable on this device. Choose a photo using Photos or Files."); return }
         let context = NativeMediaCaptureContext(accountID: session.accountID, sessionEpoch: session.epoch, publicationGeneration: workGeneration, expiresAt: session.expiresAt)
         photoCameraPermissionDenied = false
         Task { [self] in
@@ -805,7 +805,7 @@ extension LiveAppStore {
             if allowed { photoCameraContext = context; photoCamera = true }
             else {
                 photoCameraPermissionDenied = AVCaptureDevice.authorizationStatus(for: .video) == .denied
-                error = photoCameraPermissionDenied ? "Allow camera access in Settings, then return and open the camera again." : "Camera access is restricted on this device."
+                error = photoCameraPermissionDenied ? String(localized: "Allow camera access in Settings, then return and open the camera again.") : String(localized: "Camera access is restricted on this device.")
             }
         }
     }
@@ -826,7 +826,7 @@ extension LiveAppStore {
 extension LiveAppStore {
     func beginAccountRecovery(_ backup: String) {
         performGuarded { [self] fence in
-            guard guestDeletion == nil else { throw NativeAPIError.unsupported("Check your deletion request before recovering an account.") }
+            guard guestDeletion == nil else { throw NativeAPIError.unsupported(String(localized: "Check your deletion request before recovering an account.")) }
             await NativeBackgroundUploads.shared.stop()
             if repository == nil { repository = try NativeBackgroundUploads.shared.repository() }
             let result = try await repository!.startAccountRecovery(backup: backup)
@@ -848,7 +848,7 @@ extension LiveAppStore {
             guard let repository, guestDeletion == nil else { throw NativeAPIError.authenticationRequired }
             try await repository.useAnotherRecoveryKey(); try checkPublication(fence)
             accountRecovery = nil; challenge = nil; captureReceipts = []; lastSelfie = nil; stopFaceCameraPresentation()
-            transferText = "The earlier attempt is retained privately. No server cancellation has been confirmed."; accountRecoverySheet = true
+            transferText = String(localized: "The earlier attempt is retained privately. No server cancellation has been confirmed."); accountRecoverySheet = true
         }
     }
     private func presentAccountRecovery(_ result: NativeAccountRecoverySummary, fence: NativePublicationFence) async throws {
@@ -861,7 +861,7 @@ extension LiveAppStore {
             navigation?.go(.setupComplete, replace: true, simulateProgress: false); return
         }
         retireAccountPresentation(); accountRecovery = result; session = nil; challenge = result.awaitingServer ? nil : result.challenge; captureReceipts = result.receipts
-        if result.awaitingServer { stopFaceCameraPresentation(); transferText = "Account recovery is still processing. Check again before capturing." }
+        if result.awaitingServer { stopFaceCameraPresentation(); transferText = String(localized: "Account recovery is still processing. Check again before capturing.") }
         navigation?.go(.faceEnrollment, replace: true, simulateProgress: false)
         if let challenge, !result.awaitingServer, result.receipts.count == challenge.poses.count {
             let authenticated = try await repository.completeFace(challenge, captures: result.receipts)
@@ -912,7 +912,7 @@ extension LiveAppStore {
             guard let repository, let current = faceLifecycle, guestDeletion == nil else { throw NativeAPIError.authenticationRequired }
             stopFaceCameraPresentation(); challenge = nil; captureReceipts = []; lastSelfie = nil
             let policy = action == .resume ? current.metadata.photoPolicy : current.metadata.authPolicy
-            if action == .resume || action.captures { guard explicitlyConsented else { throw NativeAPIError.unsupported("Accept the current purpose-specific policy before continuing.") } }
+            if action == .resume || action.captures { guard explicitlyConsented else { throw NativeAPIError.unsupported(String(localized: "Accept the current purpose-specific policy before continuing.")) } }
             let value = action.captures ? try await repository.startFaceProfileCapture(action, consentPolicy: policy, expectedVersion: current.metadata.version) : try await repository.faceProfileAction(action, consentPolicy: explicitlyConsented ? policy : nil, expectedVersion: current.metadata.version)
             try checkPublication(fence); try await presentFaceLifecycle(value, fence: fence)
             if let challenge = value.challenge, !value.awaitingServer {
@@ -938,7 +938,7 @@ extension LiveAppStore {
         if current?.authenticated != true { retireAccountPresentation(); imports = []; selectedImports = []; NativeImport.removeAll(); photoCamera = false }
         faceLifecycle = value; session = current; challenge = value.challenge; captureReceipts = value.receipts; lastSelfie = nil
         policy = value.metadata.authPolicy; enrollment = nil
-        if value.awaitingServer || value.authorityUnavailable { stopFaceCameraPresentation(); transferText = "The face-profile result is not confirmed. Check its saved status before continuing." }
+        if value.awaitingServer || value.authorityUnavailable { stopFaceCameraPresentation(); transferText = String(localized: "The face-profile result is not confirmed. Check its saved status before continuing.") }
         if challenge == nil { navigation?.go(.faceManagement, replace: true, simulateProgress: false) }
     }
     private func finishManagedFace(_ challenge: NativeFaceChallenge, receipts: [WireValue], fence: NativePublicationFence) async throws {
@@ -998,7 +998,7 @@ extension LiveAppStore {
         librarySave?.cancel()
         librarySave = Task { [weak self] in
             do { try await repository.saveLibraryState(value) }
-            catch { if !Task.isCancelled, self?.session?.accountID == account { self?.error = "Your library choices could not be saved securely. Try again before closing." } }
+            catch { if !Task.isCancelled, self?.session?.accountID == account { self?.error = String(localized: "Your library choices could not be saved securely. Try again before closing.") } }
         }
     }
     func toggleFavorite(_ id: String) {
@@ -1025,13 +1025,13 @@ extension LiveAppStore {
     }
     func sendSupport() {
         let subject = supportSubject.trimmingCharacters(in: .whitespacesAndNewlines), details = supportDetails.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard (3...160).contains(subject.count), (5...4000).contains(details.count) else { error = "Enter a subject of 3–160 characters and details of 5–4,000 characters."; return }
+        guard (3...160).contains(subject.count), (5...4000).contains(details.count) else { error = String(localized: "Enter a subject of 3–160 characters and details of 5–4,000 characters."); return }
         perform { [self] in
             guard let repository else { throw NativeAPIError.authenticationRequired }
             _ = try await repository.post("/support/requests", payload: .object(["subject": .string(subject), "details": .string(details)]), operation: "support.create")
             supportSubject = ""; supportDetails = ""
             supportRequests = try await repository.protectedJSON("/support/requests")["support_requests"].array ?? []
-            transferText = "Support request received. Its current status is shown below."
+            transferText = String(localized: "Support request received. Its current status is shown below.")
         }
     }
     func checkPrivacyRequest(_ id: String) {
@@ -1086,11 +1086,11 @@ extension LiveAppStore {
     }
     func openLink(_ url: URL) {
         let trustedHost = Bundle.main.object(forInfoDictionaryKey: "LoveliesLinkHost") as? String ?? ""
-        guard url.scheme == "lovelies" || (url.scheme == "https" && !trustedHost.isEmpty && url.host == trustedHost), url.user == nil, url.password == nil, url.fragment == nil else { error = "This Lovelies link is unavailable."; return }
+        guard url.scheme == "lovelies" || (url.scheme == "https" && !trustedHost.isEmpty && url.host == trustedHost), url.user == nil, url.password == nil, url.fragment == nil else { error = String(localized: "This Lovelies link is unavailable."); return }
         let parts = url.path.split(separator: "/").map(String.init)
         let kind = url.scheme == "lovelies" ? url.host : parts.first
         let id = url.scheme == "lovelies" ? parts.first : parts.dropFirst().first
-        guard let kind, let id, UUID(uuidString: id) != nil, ["match", "support", "payment"].contains(kind) else { error = "This Lovelies link is expired or unavailable."; return }
+        guard let kind, let id, UUID(uuidString: id) != nil, ["match", "support", "payment"].contains(kind) else { error = String(localized: "This Lovelies link is expired or unavailable."); return }
         NativePush.shared.queue(kind: kind, entity: id)
     }
 }

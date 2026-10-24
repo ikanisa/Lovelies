@@ -104,6 +104,7 @@ fun SourcePhotoGrid(
     visibleIds: List<Int>? = null, tilesOverride: List<SourcePhotoTile>? = null,
     onPhotoClick: ((Int,String) -> Unit)? = null
 ) {
+    val uiContext = androidx.compose.ui.platform.LocalContext.current
     val original = state.referenceGrids[29]?.tiles?.associateBy { it.id } ?: emptyMap()
     val sourceTiles = state.referenceGrids[sourceRoute]?.tiles?.map { tile ->
         if(sourceRoute == 30)original[tile.id]?.let { bright -> tile.copy(asset = bright.asset,
@@ -134,7 +135,7 @@ fun SourcePhotoGrid(
             BoxWithConstraints(Modifier.offset(x = galleryWidth*tile.x,y = galleryHeight*tile.y)
                 .width(galleryWidth*tile.width).height(galleryHeight*tile.height)
                 .clip(RoundedCornerShape(8.dp)).then(interaction).semantics {
-                    contentDescription = "Photo ${tile.id+1}"
+                    contentDescription = uiContext.getString(R.string.copy_photo_1_s_b27fd7d6, tile.id+1)
                 }) {
                 Asset(tile.asset,Modifier.fillMaxSize(),null,ContentScale.Crop)
                 if(dimUnselected && !selected)Box(Modifier.fillMaxSize().background(Ink.copy(alpha = .48f)))
@@ -186,7 +187,7 @@ fun SourcePhotoGrid(
                         Box(Modifier.offset(x=(centerX-24.dp).coerceIn(0.dp,maxOf(0.dp,photoWidth-48.dp)),
                             y=(centerY-24.dp).coerceIn(0.dp,maxOf(0.dp,photoHeight-48.dp))).size(48.dp)
                             .toggleable(checked,role=Role.Checkbox,onValueChange={toggle()})
-                            .semantics { contentDescription="${if(kind=="favorite")"Favorite" else "Save"} photo ${tile.id+1}" })
+                            .semantics { contentDescription=if(kind=="favorite")uiContext.getString(R.string.copy_favorite_photo_1_d_42e527c9, tile.id+1) else uiContext.getString(R.string.copy_save_photo_1_d_fdf6ba96, tile.id+1) })
                     }
                 }
                 if(!selectable && !favoriteBadges && tile.controlBaked && bounds != null && bounds.size >= 4) {
@@ -213,8 +214,9 @@ fun SourcePhotoGrid(
 @Composable
 private fun SourcePhotoBadge(checked: Boolean, favorite: Boolean, modifier: Modifier,
     onToggle: (() -> Unit)?, photoId: Int) {
+    val uiContext = androidx.compose.ui.platform.LocalContext.current
     val interaction = if(onToggle != null)Modifier.toggleable(value = checked,role = Role.Checkbox,onValueChange = { onToggle() })
-        .semantics { contentDescription = "${if(favorite)"Favorite" else"Save"} photo ${photoId+1}" } else Modifier
+        .semantics { contentDescription = if(favorite)uiContext.getString(R.string.copy_favorite_photo_1_d_42e527c9, photoId+1) else uiContext.getString(R.string.copy_save_photo_1_d_fdf6ba96, photoId+1) } else Modifier
     Box(modifier.clip(CircleShape).background(if(checked)Pink else Color(0xFF303036))
         .border(1.dp,if(checked)Pink else Color.White.copy(alpha = .8f),CircleShape).then(interaction),contentAlignment = Alignment.Center) {
         if(checked)AppIcon(if(favorite)Glyph.HEART else Glyph.CHECK,Modifier.fillMaxSize().padding(5.dp),Ink,filled = favorite)

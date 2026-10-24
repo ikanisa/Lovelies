@@ -29,9 +29,9 @@ protocol NativeDeviceSigner: Sendable {
 // Production and restart-capable fixtures override this noncreating query.
 extension NativeDeviceSigner {
     func hasRetainedKey() throws -> Bool { false }
-    func publicJWK(alias: String, create: Bool) throws -> WireValue { throw NativeAPIError.unsupported("This signer cannot manage a new device key.") }
+    func publicJWK(alias: String, create: Bool) throws -> WireValue { throw NativeAPIError.unsupported(String(localized: "This signer cannot manage a new device key.")) }
     func sign(_ data: Data, alias: String) throws -> String {
-        guard alias == NativeEnrollmentRecord.keyAlias else { throw NativeAPIError.unsupported("The saved recovery device key is unavailable.") }
+        guard alias == NativeEnrollmentRecord.keyAlias else { throw NativeAPIError.unsupported(String(localized: "The saved recovery device key is unavailable.")) }
         return try sign(data)
     }
     func clear(alias: String) { if alias == NativeEnrollmentRecord.keyAlias { clear() } }
@@ -53,7 +53,7 @@ struct KeychainSecretStore: NativeSecretStore {
             kSecAttrAccount as String: name, kSecReturnData as String: true, kSecMatchLimit as String: kSecMatchLimitOne]
         var result: CFTypeRef?; let status = SecItemCopyMatching(query as CFDictionary, &result)
         if status == errSecItemNotFound { return nil }
-        guard status == errSecSuccess, let data = result as? Data else { throw NativeAPIError.unsupported("Protected storage is unavailable. Unlock this device and try again.") }
+        guard status == errSecSuccess, let data = result as? Data else { throw NativeAPIError.unsupported(String(localized: "Protected storage is unavailable. Unlock this device and try again.")) }
         return data
     }
     func write(_ name: String, data: Data?) throws {
@@ -91,7 +91,7 @@ enum DeviceIdentity {
         var result: CFTypeRef?
         let status = SecItemCopyMatching(query as CFDictionary, &result)
         if status == errSecItemNotFound { return false }
-        guard status == errSecSuccess, result != nil else { throw NativeAPIError.unsupported("Unlock this device to check its existing face-verification key.") }
+        guard status == errSecSuccess, result != nil else { throw NativeAPIError.unsupported(String(localized: "Unlock this device to check its existing face-verification key.")) }
         return true
     }
     static func key(alias: String = NativeEnrollmentRecord.keyAlias, createIfMissing: Bool = true) throws -> SecKey {
@@ -101,19 +101,19 @@ enum DeviceIdentity {
         var existing: CFTypeRef?
         let status = SecItemCopyMatching(query as CFDictionary, &existing)
         if status == errSecSuccess, let existing { return existing as! SecKey }
-        guard status == errSecItemNotFound else { throw NativeAPIError.unsupported("Unlock your device to access its face-verification key.") }
-        guard createIfMissing else { throw NativeAPIError.unsupported("The original face-verification key is unavailable. Enrollment recovery cannot create a replacement key.") }
+        guard status == errSecItemNotFound else { throw NativeAPIError.unsupported(String(localized: "Unlock your device to access its face-verification key.")) }
+        guard createIfMissing else { throw NativeAPIError.unsupported(String(localized: "The original face-verification key is unavailable. Enrollment recovery cannot create a replacement key.")) }
         var attributes: [String: Any] = [kSecAttrKeyType as String: kSecAttrKeyTypeECSECPrimeRandom,
             kSecAttrKeySizeInBits as String: 256,
             kSecPrivateKeyAttrs as String: [kSecAttrIsPermanent as String: true,
                 kSecAttrApplicationTag as String: tag, kSecAttrAccessible as String: kSecAttrAccessibleWhenUnlockedThisDeviceOnly]]
         #if !targetEnvironment(simulator)
         attributes[kSecAttrTokenID as String] = kSecAttrTokenIDSecureEnclave
-        guard let access = SecAccessControlCreateWithFlags(nil, kSecAttrAccessibleWhenUnlockedThisDeviceOnly, [.privateKeyUsage], nil) else { throw NativeAPIError.unsupported("Protected device-key access is unavailable.") }
+        guard let access = SecAccessControlCreateWithFlags(nil, kSecAttrAccessibleWhenUnlockedThisDeviceOnly, [.privateKeyUsage], nil) else { throw NativeAPIError.unsupported(String(localized: "Protected device-key access is unavailable.")) }
         attributes[kSecPrivateKeyAttrs as String] = [kSecAttrIsPermanent as String: true, kSecAttrApplicationTag as String: tag, kSecAttrAccessControl as String: access]
         #endif
         var error: Unmanaged<CFError>?
-        guard let value = SecKeyCreateRandomKey(attributes as CFDictionary, &error) else { throw NativeAPIError.unsupported("This device could not create its protected verification key.") }
+        guard let value = SecKeyCreateRandomKey(attributes as CFDictionary, &error) else { throw NativeAPIError.unsupported(String(localized: "This device could not create its protected verification key.")) }
         return value
     }
     static func publicJWK(alias: String = NativeEnrollmentRecord.keyAlias, createIfMissing: Bool = true) throws -> WireValue {
@@ -126,7 +126,7 @@ enum DeviceIdentity {
     }
     static func sign(_ data: Data, alias: String = NativeEnrollmentRecord.keyAlias) throws -> String {
         var error: Unmanaged<CFError>?
-        guard let signature = SecKeyCreateSignature(try key(alias: alias, createIfMissing: false), .ecdsaSignatureMessageX962SHA256, data as CFData, &error) as Data? else { throw NativeAPIError.unsupported("The device could not sign this capture. Unlock it and try again.") }
+        guard let signature = SecKeyCreateSignature(try key(alias: alias, createIfMissing: false), .ecdsaSignatureMessageX962SHA256, data as CFData, &error) as Data? else { throw NativeAPIError.unsupported(String(localized: "The device could not sign this capture. Unlock it and try again.")) }
         return try P256.Signing.ECDSASignature(derRepresentation: signature).rawRepresentation.base64URL
     }
     static func sha256(_ data: Data) -> String { SHA256.hash(data: data).map { String(format: "%02x", $0) }.joined() }

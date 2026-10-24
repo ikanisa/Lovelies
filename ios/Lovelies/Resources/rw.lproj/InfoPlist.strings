@@ -1,0 +1,4 @@
+// System permission descriptions.
+"NSCameraUsageDescription" = "Fata selfie zigendeye ku mabwiriza yo kwandikisha isura yawe muri Lovelies, n’amafoto uhisemo kohereza.";
+"NSPhotoLibraryAddUsageDescription" = "Bika amafoto ari uko Lovelies yemeje uburenganzira bwawe bwo kuyabona n’ubwo kuyakuramo muri iki gihe.";
+"NSPhotoLibraryUsageDescription" = "Hitamo amafoto yo kohereza muri Lovelies nyuma yo kuyasuzuma.";

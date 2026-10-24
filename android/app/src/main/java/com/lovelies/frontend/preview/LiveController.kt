@@ -97,7 +97,7 @@ class LiveController(private val state: PreviewState,private val context: Contex
     fun original(photo: LivePhoto,share: Boolean=false) {
         if(busy || !registered)return
         run(false) {
-            val owned=repository.currentScope();mediaStatus="Checking original access…"
+            val owned=repository.currentScope();mediaStatus=context.getString(R.string.controller_30f58b93760b)
             try {
                 val bytes=repository.original(photo)
                 try {
@@ -107,14 +107,14 @@ class LiveController(private val state: PreviewState,private val context: Contex
                         else { OriginalMedia.save(context,photo.id,bytes) { repository.fence.assert(owned) };null }
                     }
                     repository.fence.assert(owned)
-                    if(share) { shareIntent=output;mediaStatus="Choose an app to share this photo." }
-                    else mediaStatus="Original saved to your photos."
+                    if(share) { shareIntent=output;mediaStatus=context.getString(R.string.controller_15669a062c47) }
+                    else mediaStatus=context.getString(R.string.controller_ad87b0a11a23)
                 } finally { bytes.fill(0) }
             } catch(problem: LiveFailure) {
-                mediaStatus=readableError(problem.code)
+                mediaStatus=readableError(problem.code,context)
                 if(problem.code=="missing_entitlement") { interruptedOriginal=photo to share;purchaseVisible=true;purchases.load() }
                 else throw problem
-            } catch(problem: java.io.IOException) { mediaStatus="The original could not be saved. Check device storage and retry.";throw LiveFailure("save_failed") }
+            } catch(problem: java.io.IOException) { mediaStatus=context.getString(R.string.controller_57d25e1f7252);throw LiveFailure("save_failed") }
         }
     }
     val push=PushRegistration(context,repository)
@@ -128,9 +128,9 @@ class LiveController(private val state: PreviewState,private val context: Contex
         if(!enabled)BackgroundTransfers.cancel(context)
     }
     fun enablePush(enabled: Boolean)=run(false) {
-        pushStatus="Updating device notifications…"
-        try { push.sync(enabled);pushStatus=if(enabled)"Device notification registration is current." else "Device notifications are off." }
-        catch(problem: LiveFailure) { pushStatus=readableError(problem.code);throw problem }
+        pushStatus=context.getString(R.string.controller_17d1551e8be5)
+        try { push.sync(enabled);pushStatus=if(enabled)context.getString(R.string.controller_995526390e92) else context.getString(R.string.controller_9efb2f41cf2d) }
+        catch(problem: LiveFailure) { pushStatus=readableError(problem.code,context);throw problem }
     }
     fun receiveLink(value: AppLink) { pendingLink=value;if(registered && !busy)openPendingLink() }
     private fun openPendingLink() {
@@ -159,7 +159,7 @@ class LiveController(private val state: PreviewState,private val context: Contex
     val registered get()=repository.accountDeletion==null && !repository.cameraLoginHeld && !lifecycleHold && repository.accountRecovery==null && repository.enrollment==null && repository.credentials?.method=="registered_face" && me["authenticated"]==true
     val hasGuestDeletion get()=guestDeletion!=null || repository.guestDeletion!=null
     val canDeleteGuest get()=!registered && !hasGuestDeletion && !hasLifecycle && repository.credentials?.method=="anonymous" && !hasAccountRecovery && repository.enrollment?.state !in setOf("registered","credentials_pending")
-    val name get()=(me["name"] as? String)?.takeIf { it.isNotBlank() } ?: "Your profile"
+    val name get()=(me["name"] as? String)?.takeIf { it.isNotBlank() } ?: context.getString(R.string.controller_528d89ad72cb)
     val effective get()=snapshot?.let { draft.effective(it) } ?: emptyList()
     val totals get()=mapOf("photos" to effective.map { it.photo }.toSet().size,"people" to effective.map { it.person }.toSet().size,"pairs" to effective.size)
 
@@ -397,7 +397,7 @@ class LiveController(private val state: PreviewState,private val context: Contex
     fun confirmProfileRenewal() {
         if(busy || hasGuestDeletion)return
         val epoch=uiEpoch;val reviewed=repository.currentScope()
-        state.confirm("Renew profile management?","Use your current registered sign-in and original device key to renew the expired private control. Consent choices stay separate.","Renew") {
+        state.confirm(context.getString(R.string.controller_ec7d2382fde4),context.getString(R.string.controller_f108323d93e8),context.getString(R.string.controller_90c1689b0b74)) {
             if(epoch!=uiEpoch) { error=LiveFailure("session_changed");return@confirm }
             val owned=try { repository.invalidateReads(reviewed) } catch(problem: LiveFailure) { error=problem;return@confirm }
             invalidateCameraReview();uiEpoch++;faceChallenge=null;captureCount=0;cameraReady=false
@@ -610,7 +610,7 @@ class LiveController(private val state: PreviewState,private val context: Contex
     fun beginPhotoPicker(): NativePhotoPickerOwner? = synchronized(repository.fence) {
         if(busy || !foregroundActive || photoPickerOwnership.opened!=null)return@synchronized null
         val owner=photoPickerContext(UUID.randomUUID().toString())
-        if(owner==null) { state.info("Sign in first","Verify your face before choosing photos to upload.");return@synchronized null }
+        if(owner==null) { state.info(context.getString(R.string.controller_cadcad9e7c2a),context.getString(R.string.controller_a9e347551eb0));return@synchronized null }
         if(photoPickerOwnership.begin(owner))owner else null
     }
     fun cancelPhotoPicker(owner: NativePhotoPickerOwner) = synchronized(repository.fence) { photoPickerOwnership.cancel(owner) }
@@ -621,7 +621,7 @@ class LiveController(private val state: PreviewState,private val context: Contex
         choosePhotos(uris)
     }
     private fun choosePhotos(uris: List<Uri>) {
-        if(busy) { state.info("Upload in progress","Wait for the current operation to finish before choosing more photos.");return }
+        if(busy) { state.info(context.getString(R.string.controller_c45abd8cb088),context.getString(R.string.controller_173a1e5aeead));return }
         if(repository.photoUploads()?.let { !it.finished && !it.cancelled }==true) { restoreUploads();state.navigate(23);return }
         repository.clearFinishedPhotoUploads()
         picked.clear();picked.addAll(uris.distinct().take(100));selectedUploads.clear();selectedUploads.addAll(picked);state.navigate(21)
@@ -635,13 +635,13 @@ class LiveController(private val state: PreviewState,private val context: Contex
         backgroundUploads=BackgroundTransfers.permitted(repository.saved("background_upload"),record.account,record.device,record.batch)
         uploadRecovery=record;uploadBatch=record.batch;uploadIds.clear();uploadIds.addAll(record.assetIds)
         uploadStatus=when {
-            record.cancelled->"Remaining uploads cancelled. Photos already processing stay in your gallery."
-            record.finished->"${record.readyCount} photos processed"
-            record.cancelling->"Cancelling remaining uploads"
-            record.error!=null->readableError(record.error)
-            record.files.any { it.sha256==null }->"Preparing ${record.files.count { it.sha256!=null }} of ${record.files.size} photos"
-            record.files.all { it.status in setOf("processing","ready","failed") }->"${record.readyCount} of ${record.files.size} photos processed"
-            else->"${record.bytesAcknowledged} of ${record.bytesTotal} bytes saved"
+            record.cancelled->context.getString(R.string.controller_c572c62d9ac7)
+            record.finished->context.resources.getQuantityString(R.plurals.controller_photos_processed,record.readyCount,record.readyCount)
+            record.cancelling->context.getString(R.string.controller_84050f9a2b22)
+            record.error!=null->readableError(record.error,context)
+            record.files.any { it.sha256==null }->context.resources.getQuantityString(R.plurals.controller_photos_preparing,record.files.size,record.files.count { it.sha256!=null },record.files.size)
+            record.files.all { it.status in setOf("processing","ready","failed") }->context.resources.getQuantityString(R.plurals.controller_photos_progress,record.files.size,record.readyCount,record.files.size)
+            else->context.resources.getQuantityString(R.plurals.controller_bytes_saved,record.bytesTotal.coerceAtMost(Int.MAX_VALUE.toLong()).toInt(),record.bytesAcknowledged,record.bytesTotal)
         }
     }
     private fun restoreUploads() {
@@ -683,7 +683,7 @@ class LiveController(private val state: PreviewState,private val context: Contex
         uiEpoch++;work?.cancel();work=null;repository.pausePhotoUploads()?.let(::presentUpload);busy=false;error=null;state.navigate(23)
     }
     fun cancelUploads() {
-        state.confirm("Cancel remaining uploads?","Uploaded photos already processing stay in your gallery. Unfinished transfers will stop.","Cancel uploads") {
+        state.confirm(context.getString(R.string.controller_a9d087af281a),context.getString(R.string.controller_23a3f52d76e9),context.getString(R.string.controller_b3f81aca8528)) {
             pauseUploads();presentUpload(repository.requestPhotoUploadCancellation());resumeUploads()
         }
     }
@@ -793,7 +793,7 @@ class LiveController(private val state: PreviewState,private val context: Contex
         val notMe=reason=="This isn’t me" && photo.matchId!=null
         repository.mutate(if(notMe)"safety.not_me" else "safety.report",mapOf("reason" to reason)+(if(notMe)emptyMap() else mapOf("asset_id" to photo.id)),
             "safety",path=if(notMe)"/matches/${photo.matchId}/not-me" else "/safety/reports")
-        refreshData();state.info("Report submitted","Your report is saved for review.");state.navigate(13)
+        refreshData();state.info(context.getString(R.string.controller_94cbfcc0d1d3),context.getString(R.string.controller_41f9a4941e80));state.navigate(13)
     }
     fun decide(decision: String) {
         val receipt=focusedReceipt ?: return;val id=NativeProtocol.id(receipt["id"])
@@ -809,9 +809,9 @@ class LiveController(private val state: PreviewState,private val context: Contex
         refreshData();state.navigate(37)
     }
     fun rename(name: String)=run { val response=repository.mutate("account.profile.update",mapOf("name" to name),"account",path="/me/profile",method="PATCH");me=me+mapOf("name" to response["name"]);state.navigate(37) }
-    fun saveExport(id: String,destination: Uri)=run(false) { repository.saveExport(id,destination);privacyCenter=repository.get("/privacy/center");state.info("Export saved","Your export was written to the document you selected.") }
+    fun saveExport(id: String,destination: Uri)=run(false) { repository.saveExport(id,destination);privacyCenter=repository.get("/privacy/center");state.info(context.getString(R.string.controller_0a0d775d7d14),context.getString(R.string.controller_eaec755aa61d)) }
     fun refreshPrivacy()=run(false) { privacyCenter=repository.get("/privacy/center") }
-    fun requestExport()=run { repository.mutate("privacy.request.export",emptyMap(),"privacy",path="/privacy/export");privacyCenter=repository.get("/privacy/center");state.info("Export requested","Your request is saved. Availability follows the server status.") }
+    fun requestExport()=run { repository.mutate("privacy.request.export",emptyMap(),"privacy",path="/privacy/export");privacyCenter=repository.get("/privacy/center");state.info(context.getString(R.string.controller_a50a0663baa7),context.getString(R.string.controller_6834ba087c0b)) }
     var accountDeletion by mutableStateOf<GuestDeletionRecord?>(null);private set
     fun requestDeletion()=run(false) {
         try { accountDeletion=repository.requestAccountDeletion() }
@@ -826,7 +826,7 @@ class LiveController(private val state: PreviewState,private val context: Contex
     fun restartAfterAccountDeletion()=run(false) { repository.restartAfterAccountDeletion();accountDeletion=null;me=repository.bootstrap();state.navigate(2) }
     fun confirmGuestDeletion() {
         if(!canDeleteGuest || busy)return
-        state.confirm("Delete this guest account?","This requests deletion of your current guest account. It requires review. You can check the status here before setting up your face.","Request deletion") {
+        state.confirm(context.getString(R.string.controller_c6f0b6f0a522),context.getString(R.string.controller_05c6f53286dc),context.getString(R.string.controller_0e07b0e306d0)) {
             requestGuestDeletion()
         }
     }

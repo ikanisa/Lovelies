@@ -156,18 +156,18 @@ internal fun selectCameraLoginOwner(record: CameraLoginJournal,active: CameraLog
 internal fun isFaceCaptureRejection(code: String)=code in setOf("face_capture_no_face","face_capture_multiple_faces",
     "face_capture_quality_low","face_capture_invalid_image")
 
-internal fun cameraRecoveryMessage(code: String)=when(code) {
-    "camera_permission_required" -> "Allow camera access to take a fresh photo."
-    "camera_initialization_timeout" -> "The camera did not start. Close other camera apps and retry."
-    "camera_disconnected" -> "The camera was interrupted. Return here and retry."
-    "camera_surface_replaced" -> "The camera view changed. Retry the preview."
-    "camera_unavailable" -> "The camera is unavailable. Close other camera apps and retry."
-    "capture_failed","capture_timeout" -> "The photo was not captured. Hold the phone steady and retry."
-    "camera_review_expired","capture_context_changed" -> "This preview is no longer current. Take another photo."
-    "camera_image_invalid","face_capture_invalid_image","capture_format_invalid" -> "That photo could not be read. Retake it."
-    "capture_too_large" -> "That photo is too large. Retake it with the camera."
-    "face_capture_no_face" -> "No usable face was found. Keep your face inside the frame and retake."
-    "face_capture_multiple_faces" -> "More than one face was found. Take the photo with only you in the frame."
-    "face_capture_quality_low" -> "Retake in better light and hold the phone steady."
-    else -> "The camera could not continue. Retry when it is available."
-}
+internal fun cameraRecoveryMessage(code: String,context: android.content.Context): String=context.getString(when(code) {
+    "camera_permission_required" -> R.string.camera_recovery_permission_required
+    "camera_initialization_timeout" -> R.string.camera_recovery_initialization_timeout
+    "camera_disconnected" -> R.string.camera_recovery_disconnected
+    "camera_surface_replaced" -> R.string.camera_recovery_surface_replaced
+    "camera_unavailable" -> R.string.camera_recovery_unavailable
+    "capture_failed","capture_timeout" -> R.string.camera_recovery_capture_failed
+    "camera_review_expired","capture_context_changed" -> R.string.camera_recovery_review_expired
+    "camera_image_invalid","face_capture_invalid_image","capture_format_invalid" -> R.string.camera_recovery_image_invalid
+    "capture_too_large" -> R.string.camera_recovery_capture_too_large
+    "face_capture_no_face" -> R.string.camera_recovery_no_face
+    "face_capture_multiple_faces" -> R.string.camera_recovery_multiple_faces
+    "face_capture_quality_low" -> R.string.camera_recovery_quality_low
+    else -> R.string.camera_recovery_cannot_continue
+})

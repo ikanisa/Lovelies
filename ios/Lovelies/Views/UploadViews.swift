@@ -4,32 +4,32 @@ enum LoveliesUploadSource: String, Identifiable {
     case device, googlePhotos, iCloudPhotos, googleDrive, dropbox, oneDrive, albums, files, camera
     var id: String { rawValue }
     static let groups: [(title: String, sources: [LoveliesUploadSource])] = [
-        ("Photo libraries", [.device, .googlePhotos, .iCloudPhotos]),
-        ("Cloud storage", [.googleDrive, .dropbox, .oneDrive]),
-        ("More ways", [.albums, .files, .camera])
+        (String(localized: "Photo libraries"), [.device, .googlePhotos, .iCloudPhotos]),
+        (String(localized: "Cloud storage"), [.googleDrive, .dropbox, .oneDrive]),
+        (String(localized: "More ways"), [.albums, .files, .camera])
     ]
     var title: String {
         switch self {
-        case .device: return "From This Device"
+        case .device: return String(localized: "From This Device")
         case .googlePhotos: return "Google Photos"
         case .iCloudPhotos: return "iCloud Photos"
         case .googleDrive: return "Google Drive"
         case .dropbox: return "Dropbox"
         case .oneDrive: return "OneDrive"
-        case .albums: return "From Albums"
-        case .files: return "From Files"
-        case .camera: return "Take a Photo"
+        case .albums: return String(localized: "From Albums")
+        case .files: return String(localized: "From Files")
+        case .camera: return String(localized: "Take a Photo")
         }
     }
     var detail: String {
         switch self {
-        case .device: return "Browse your photos"
-        case .googlePhotos: return "Save to Apple Photos first"
-        case .iCloudPhotos: return "Choose in Apple Photos"
-        case .googleDrive, .dropbox, .oneDrive: return "Choose from enabled Files locations"
-        case .albums: return "Choose specific albums"
-        case .files: return "Import from your files"
-        case .camera: return "Use your camera"
+        case .device: return String(localized: "Browse your photos")
+        case .googlePhotos: return String(localized: "Save to Apple Photos first")
+        case .iCloudPhotos: return String(localized: "Choose in Apple Photos")
+        case .googleDrive, .dropbox, .oneDrive: return String(localized: "Choose from enabled Files locations")
+        case .albums: return String(localized: "Choose specific albums")
+        case .files: return String(localized: "Import from your files")
+        case .camera: return String(localized: "Use your camera")
         }
     }
     var icon: String {
@@ -71,7 +71,7 @@ struct UploadViews: View {
         GeometryReader { geometry in
             ScrollView {
             VStack(spacing: 20) {
-                PageHeader(title: "Add Photos", close: true, trailing: false)
+                PageHeader(title: String(localized: "Add Photos"), close: true, trailing: false)
                 Spacer(minLength: 0)
                 Button { store.go(.uploadSource) } label: { PhotoHeart(size: min(215, geometry.size.width * 0.58)) }.accessibilityLabel("Choose photo source")
                 Text("Add your photos\nto find their people.").loveliesFont(size: 19, weight: .medium).multilineTextAlignment(.center).lineSpacing(3)
@@ -96,14 +96,14 @@ struct UploadViews: View {
                     .background(selected ? LoveliesTheme.pink : LoveliesTheme.surface, in: Circle())
                     .foregroundStyle(selected ? .white : .white.opacity(0.9))
                     .shadow(color: selected ? LoveliesTheme.pink.opacity(0.2) : .clear, radius: 16)
-                Text(title).loveliesFont(size: 13).foregroundStyle(selected ? LoveliesTheme.pink : .white)
+                Text(LocalizedStringKey(title)).loveliesFont(size: 13).foregroundStyle(selected ? LoveliesTheme.pink : .white)
             }.frame(maxWidth: .infinity)
         }.buttonStyle(LoveliesPressStyle())
     }
 
     private var source: some View {
         VStack(spacing: 12) {
-            PageHeader(title: "Choose Source", close: true, trailing: false)
+            PageHeader(title: String(localized: "Choose Source"), close: true, trailing: false)
             ScrollView {
                 VStack(alignment: .leading, spacing: 18) {
                     Text("Preview uses sample photos. No cloud accounts are connected.")
@@ -144,7 +144,7 @@ struct UploadViews: View {
                         .padding(.horizontal, 14).padding(.vertical, 10).frame(minHeight: 44).background(LoveliesTheme.surface, in: Capsule())
                 }.disabled(store.uploadIDs.isEmpty)
             }.padding(.horizontal, 19).padding(.vertical, 7)
-            Text("\(store.uploadSource) · Sample photos").loveliesFont(size: 13).foregroundStyle(LoveliesTheme.secondary)
+            Text("\(NSLocalizedString(store.uploadSource, comment: "App-owned upload source label")) · Sample photos").loveliesFont(size: 13).foregroundStyle(LoveliesTheme.secondary)
                 .frame(maxWidth: .infinity, alignment: .leading).padding(.horizontal, 19)
             ScrollView {
                 if SourceReferenceCatalog.layout(21) != nil {
@@ -160,8 +160,8 @@ struct UploadViews: View {
 
     private var review: some View {
         VStack(spacing: 16) {
-            PageHeader(title: "Review Upload", trailing: false)
-            Text("\(store.uploadSource) · Sample photos").loveliesFont(size: 13).foregroundStyle(LoveliesTheme.secondary)
+            PageHeader(title: String(localized: "Review Upload"), trailing: false)
+            Text("\(NSLocalizedString(store.uploadSource, comment: "App-owned upload source label")) · Sample photos").loveliesFont(size: 13).foregroundStyle(LoveliesTheme.secondary)
                 .frame(maxWidth: .infinity, alignment: .leading).padding(.horizontal, 21)
             ScrollView {
                 VStack(spacing: 16) {
@@ -175,20 +175,20 @@ struct UploadViews: View {
                     }
                     TextField("Add a caption (optional)", text: $store.caption, axis: .vertical).loveliesFont(size: 15).padding(17)
                         .background(LoveliesTheme.surface, in: RoundedRectangle(cornerRadius: 14)).lineLimit(1...3)
-                    GroupSurface { SettingsRow(icon: "photo", title: "Add to album", value: store.album) { picker = .album } }
-                    GroupSurface { SettingsRow(icon: "lock", title: "Who can see these?", value: store.visibility) { picker = .visibility } }
+                    GroupSurface { SettingsRow(icon: "photo", title: String(localized: "Add to album"), value: store.album) { picker = .album } }
+                    GroupSurface { SettingsRow(icon: "lock", title: String(localized: "Who can see these?"), value: NSLocalizedString(store.visibility, comment: "App-owned photo visibility option")) { picker = .visibility } }
                 }.padding(.horizontal, 21).padding(.top, 8)
             }.scrollIndicators(.hidden).scrollDismissesKeyboard(.interactively)
-            PinkButton(title: "Start Upload", enabled: !store.uploadIDs.isEmpty) { store.go(.uploadProgress) }.padding(.horizontal, 21).padding(.bottom, 17)
+            PinkButton(title: String(localized: "Start Upload"), enabled: !store.uploadIDs.isEmpty) { store.go(.uploadProgress) }.padding(.horizontal, 21).padding(.bottom, 17)
         }.foregroundStyle(.white)
             .sheet(item: $picker) { value in
-                DemoSheet(title: value == .album ? "Add to album" : "Photo visibility") {
+                DemoSheet(title: value == .album ? String(localized: "Add to album") : String(localized: "Photo visibility")) {
                     ForEach(value == .album ? ["Travels 2024", "Summer memories", "Friends & family", "No album"] : ["Matched people only", "Only me", "Allowed people"], id: \.self) { choice in
                         Button {
                             if value == .album { store.album = choice } else { store.visibility = choice }
                             picker = nil
                         } label: {
-                            HStack { Text(choice); Spacer(); if (value == .album ? store.album : store.visibility) == choice { Image(systemName: "checkmark").foregroundStyle(LoveliesTheme.pink) } }.padding(.vertical, 12)
+                            HStack { Text(value == .album ? (choice == "No album" ? String(localized: "No album") : choice) : NSLocalizedString(choice, comment: "App-owned photo visibility option")); Spacer(); if (value == .album ? store.album : store.visibility) == choice { Image(systemName: "checkmark").foregroundStyle(LoveliesTheme.pink) } }.padding(.vertical, 12)
                         }.buttonStyle(LoveliesPressStyle())
                     }
                 }
@@ -220,7 +220,7 @@ struct UploadViews: View {
             AssetImage(name: photo.asset).scaledToFill().frame(width: 58, height: 60).clipped().clipShape(RoundedRectangle(cornerRadius: 7))
             VStack(alignment: .leading, spacing: 6) {
                 Text("IMG_\(2931 + index).\(index == 2 ? "MOV" : "JPG")").loveliesFont(size: 14)
-                Text(value >= 1 ? "Complete" : value == 0 ? "Waiting..." : index == 2 ? "Processing..." : "Uploading... \(Int(value * 100))%")
+                Text(value >= 1 ? String(localized: "Complete") : value == 0 ? String(localized: "Waiting...") : index == 2 ? String(localized: "Processing...") : String(localized: "Uploading... \(Int(value * 100))%"))
                     .loveliesFont(size: 12).foregroundStyle(LoveliesTheme.secondary)
                 GeometryReader { geometry in
                     ZStack(alignment: .leading) { Capsule().fill(.white.opacity(0.12)); Capsule().fill(LoveliesTheme.pink).frame(width: geometry.size.width * value) }
@@ -239,11 +239,11 @@ struct UploadViews: View {
         GeometryReader { geometry in
             ScrollView {
             VStack(spacing: 16) {
-                PageHeader(title: "Upload Complete", trailing: false)
+                PageHeader(title: String(localized: "Upload Complete"), trailing: false)
                 AssetImage(name: "upload-hero").scaledToFit().frame(width: min(300, geometry.size.width * 0.716)).accessibilityHidden(true)
                 Text("Upload complete!").loveliesFont(size: 23, weight: .medium)
                 Text("\(store.uploadIDs.count) photos added to your library\nand ready to find their people.").loveliesFont(size: 16).foregroundStyle(LoveliesTheme.secondary).multilineTextAlignment(.center)
-                PinkButton(title: "View in Library") { store.go(.allPhotos) }.padding(.top, 5)
+                PinkButton(title: String(localized: "View in Library")) { store.go(.allPhotos) }.padding(.top, 5)
                 Spacer(minLength: 15)
                 HStack { Text("Recent Uploads").loveliesFont(size: 17, weight: .medium); Spacer(); Button { store.go(.uploadSelection) } label: { Image(systemName: "chevron.right").frame(width: 44, height: 44) }.accessibilityLabel("View recent uploads") }
                 HStack(spacing: 7) {

@@ -25,6 +25,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.core.app.ActivityCompat
@@ -249,16 +250,16 @@ fun NativeCameraPane(modifier: Modifier,front: Boolean,active: Boolean,captureCo
     LaunchedEffect(active,captureContext) { permission=currentPermission();if(!active) { ready(captureContext,null);report(captureContext,CameraStatus(CameraPhase.INTERRUPTED)) } }
     if(permission!=CameraPermissionState.GRANTED)Box(modifier,contentAlignment=Alignment.Center) {
         Column(horizontalAlignment=Alignment.CenterHorizontally,modifier=Modifier.padding(18.dp)) {
-            BodyText(when(permission) {
-                CameraPermissionState.NOT_REQUESTED->"Use your camera to take a fresh photo."
-                CameraPermissionState.REVOKED->"Camera access changed. Allow access to continue your saved setup."
-                CameraPermissionState.DENIED->"Camera access was denied. You can allow it when you’re ready."
-                else->"Camera access is disabled. Enable Camera in Lovelies settings."
-            })
-            if(permission!=CameraPermissionState.PERMANENTLY_DENIED)PinkButton("Allow camera",Modifier.padding(top=18.dp).fillMaxWidth(.8f),enabled=active) {
+            BodyText(stringResource(when(permission) {
+                CameraPermissionState.NOT_REQUESTED->R.string.camera_permission_prompt
+                CameraPermissionState.REVOKED->R.string.camera_permission_changed
+                CameraPermissionState.DENIED->R.string.camera_permission_denied
+                else->R.string.camera_permission_disabled
+            }))
+            if(permission!=CameraPermissionState.PERMANENTLY_DENIED)PinkButton(stringResource(R.string.camera_allow_access),Modifier.padding(top=18.dp).fillMaxWidth(.8f),enabled=active) {
                 preferences.edit().putBoolean("requested",true).apply();launcher.launch(Manifest.permission.CAMERA)
             }
-            if(permission in setOf(CameraPermissionState.PERMANENTLY_DENIED,CameraPermissionState.REVOKED))OutlineButton("Open Settings",Modifier.padding(top=12.dp),enabled=active) {
+            if(permission in setOf(CameraPermissionState.PERMANENTLY_DENIED,CameraPermissionState.REVOKED))OutlineButton(stringResource(R.string.camera_open_settings),Modifier.padding(top=12.dp),enabled=active) {
                 settings.launch(Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS,Uri.parse("package:${context.packageName}")))
             }
         }
@@ -272,15 +273,15 @@ fun NativeCameraPane(modifier: Modifier,front: Boolean,active: Boolean,captureCo
                 {if(alive.get()) { status=it;report(captureContext,it) }}) }
             Box(modifier) {
                 AndroidView(factory={TextureView(it).also(camera::attach)},modifier=Modifier.fillMaxSize())
-                if(status.phase in setOf(CameraPhase.IDLE,CameraPhase.INITIALIZING))Box(Modifier.fillMaxSize(),contentAlignment=Alignment.Center) { BodyText("Starting camera…") }
+                if(status.phase in setOf(CameraPhase.IDLE,CameraPhase.INITIALIZING))Box(Modifier.fillMaxSize(),contentAlignment=Alignment.Center) { BodyText(stringResource(R.string.camera_starting)) }
                 if(status.phase==CameraPhase.FAILED)Box(Modifier.fillMaxSize(),contentAlignment=Alignment.Center) {
                     Column(Modifier.padding(18.dp),horizontalAlignment=Alignment.CenterHorizontally) {
-                        BodyText(cameraRecoveryMessage(status.code ?: "camera_unavailable"))
-                        PinkButton("Retry camera",Modifier.padding(top=18.dp),enabled=active) { status=CameraStatus(CameraPhase.IDLE);attempt++ }
+                        BodyText(cameraRecoveryMessage(status.code ?: "camera_unavailable",context))
+                        PinkButton(stringResource(R.string.camera_retry),Modifier.padding(top=18.dp),enabled=active) { status=CameraStatus(CameraPhase.IDLE);attempt++ }
                     }
                 }
             }
             DisposableEffect(camera) { onDispose { alive.set(false);camera.close() } }
         }
-    } else Box(modifier,contentAlignment=Alignment.Center) { BodyText("Camera paused. Return to Lovelies to continue.") }
+    } else Box(modifier,contentAlignment=Alignment.Center) { BodyText(stringResource(R.string.camera_paused)) }
 }

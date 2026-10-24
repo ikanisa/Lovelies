@@ -40,18 +40,18 @@ enum Screen: Int, CaseIterable, Identifiable {
         }
     }
     var title: String {
-        ["Splash", "Introduction and how it works", "Sign in and join", "Photo access prompt",
-         "Photo access options", "Face enrollment", "Face quality retry", "Processing",
-         "Setup complete", "Home gallery", "New matches", "Photo viewer", "All photos",
-         "Favorites and saved", "Search", "Filters", "Activity inbox", "Notifications",
-         "Upload entry", "Upload source picker", "Select upload photos", "Review upload",
-         "Upload progress", "Upload complete", "Match results summary", "Matched photos gallery",
-         "Photo to people", "Person to photos", "Select photos to share", "Deselect photos",
-         "Select people to share with", "Deselect people", "Review and share", "Sharing progress",
-         "Shared history", "Report incorrect match", "Profile overview", "Face management",
-         "Manage people", "Privacy and sharing", "Photo access settings",
-         "Notification settings", "Storage", "Data export", "Help center",
-         "Account security and devices", "No matches", "Offline and error"][rawValue - 1]
+        [String(localized: "Splash"), String(localized: "Introduction and how it works"), String(localized: "Sign in and join"), String(localized: "Photo access prompt"),
+         String(localized: "Photo access options"), String(localized: "Face enrollment"), String(localized: "Face quality retry"), String(localized: "Processing"),
+         String(localized: "Setup complete"), String(localized: "Home gallery"), String(localized: "New matches"), String(localized: "Photo viewer"), String(localized: "All photos"),
+         String(localized: "Favorites and saved"), String(localized: "Search"), String(localized: "Filters"), String(localized: "Activity inbox"), String(localized: "Notifications"),
+         String(localized: "Upload entry"), String(localized: "Upload source picker"), String(localized: "Select upload photos"), String(localized: "Review upload"),
+         String(localized: "Upload progress"), String(localized: "Upload complete"), String(localized: "Match results summary"), String(localized: "Matched photos gallery"),
+         String(localized: "Photo to people"), String(localized: "Person to photos"), String(localized: "Select photos to share"), String(localized: "Deselect photos"),
+         String(localized: "Select people to share with"), String(localized: "Deselect people"), String(localized: "Review and share"), String(localized: "Sharing progress"),
+         String(localized: "Shared history"), String(localized: "Report incorrect match"), String(localized: "Profile overview"), String(localized: "Face management"),
+         String(localized: "Manage people"), String(localized: "Privacy and sharing"), String(localized: "Photo access settings"),
+         String(localized: "Notification settings"), String(localized: "Storage"), String(localized: "Data export"), String(localized: "Help center"),
+         String(localized: "Account security and devices"), String(localized: "No matches"), String(localized: "Offline and error")][rawValue - 1]
     }
 }
 

@@ -49,20 +49,21 @@ fun OnboardingScreen(state: PreviewState) {
 
 @Composable
 private fun Splash(state: PreviewState) {
+    val uiContext = androidx.compose.ui.platform.LocalContext.current
     BoxWithConstraints(Modifier.fillMaxSize()) {
         val compact=maxHeight<600.dp
         Asset("splash.jpg", Modifier.fillMaxSize())
         Column(Modifier.fillMaxWidth().align(if(compact)Alignment.TopCenter else Alignment.Center)
             .padding(top=if(compact)12.dp else 0.dp,bottom = 15.dp),
             horizontalAlignment = Alignment.CenterHorizontally) {
-            Asset("wordmark.png", Modifier.fillMaxWidth(.83f).height(if(compact)86.dp else 150.dp), "Lovelies", ContentScale.Fit)
+            Asset("wordmark.png", Modifier.fillMaxWidth(.83f).height(if(compact)86.dp else 150.dp), uiContext.getString(R.string.app_name), ContentScale.Fit)
             Text(stringResource(R.string.copy_photos_bring_people_closer_63eca6c3), color = Color(0xFFECD4DE), fontSize = 13.sp,
                 letterSpacing = 4.sp, lineHeight = 23.sp, textAlign = TextAlign.Center,
                 modifier = Modifier.padding(top = 8.dp))
         }
         Box(Modifier.align(Alignment.BottomCenter).padding(bottom = if(compact)16.dp else 70.dp).size(if(compact)64.dp else 82.dp)
             .clip(CircleShape).background(Pink).clickable(role = Role.Button) { state.navigate(2) }
-            .semantics { contentDescription = "Get started" }, contentAlignment = Alignment.Center) {
+            .semantics { contentDescription = uiContext.getString(R.string.copy_get_started_e83ca5ee) }, contentAlignment = Alignment.Center) {
             AppIcon(Glyph.ARROW, Modifier.size(37.dp), Ink)
         }
     }
@@ -70,6 +71,7 @@ private fun Splash(state: PreviewState) {
 
 @Composable
 private fun Introduction(state: PreviewState) {
+    val uiContext = androidx.compose.ui.platform.LocalContext.current
     Column(Modifier.fillMaxSize().padding(horizontal = 20.dp, vertical = 10.dp),
         horizontalAlignment = Alignment.CenterHorizontally) {
         Box(Modifier.fillMaxWidth().weight(1.1f), contentAlignment = Alignment.Center) {
@@ -78,9 +80,9 @@ private fun Introduction(state: PreviewState) {
         Text(stringResource(R.string.copy_your_photos_find_their_people_3168ba56), color = Color.White, fontSize = 23.sp,
             lineHeight = 30.sp, textAlign = TextAlign.Center, modifier = Modifier.padding(top = 12.dp, bottom = 25.dp))
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-            IntroFeature(Glyph.FACE, "We match\nyour photos", Modifier.weight(1f))
-            IntroFeature(Glyph.PEOPLE, "To the\nright people", Modifier.weight(1f))
-            IntroFeature(Glyph.SHARE, "You choose\nwhat to share", Modifier.weight(1f))
+            IntroFeature(Glyph.FACE, uiContext.getString(R.string.copy_we_match_your_photos_24d3ee46), Modifier.weight(1f))
+            IntroFeature(Glyph.PEOPLE, uiContext.getString(R.string.copy_to_the_right_people_6c96a95a), Modifier.weight(1f))
+            IntroFeature(Glyph.SHARE, uiContext.getString(R.string.copy_you_choose_what_to_share_5e707ea7), Modifier.weight(1f))
         }
         Spacer(Modifier.height(25.dp))
         PinkButton(stringResource(R.string.copy_get_started_bd2cb051)) { state.navigate(3) }
@@ -104,20 +106,21 @@ private fun IntroFeature(icon: Glyph, title: String, modifier: Modifier = Modifi
 
 @Composable
 private fun SignIn(state: PreviewState) {
+    val uiContext = androidx.compose.ui.platform.LocalContext.current
     val compact=LocalConfiguration.current.screenHeightDp<600
     Box(Modifier.fillMaxSize()) {
         Glow(strong = true)
         Column(Modifier.fillMaxSize().padding(horizontal = 22.dp), horizontalAlignment = Alignment.CenterHorizontally) {
             if(compact)Spacer(Modifier.height(16.dp)) else Spacer(Modifier.weight(.7f))
-            Asset("wordmark.png", Modifier.fillMaxWidth(.76f).height(if(compact)84.dp else 138.dp), "Lovelies", ContentScale.Fit)
+            Asset("wordmark.png", Modifier.fillMaxWidth(.76f).height(if(compact)84.dp else 138.dp), uiContext.getString(R.string.app_name), ContentScale.Fit)
             Text(stringResource(R.string.copy_welcome_ca4f9dcf), color = Color.White, fontSize = 27.sp, modifier = Modifier.padding(top = 14.dp))
             BodyText(stringResource(R.string.copy_same_photos_more_people_in_them_dee1a826), Modifier.padding(top = 8.dp, bottom = 25.dp), size = 17)
             OutlineButton(stringResource(R.string.copy_continue_with_apple_01ca4c21), icon = Glyph.APPLE, light = true) {
-                state.toast("Preview sign-in: no account is created"); state.navigate(4)
+                state.toast(uiContext.getString(R.string.copy_preview_sign_in_no_account_is_create_6d2a20f6)); state.navigate(4)
             }
             Spacer(Modifier.height(12.dp))
             OutlineButton(stringResource(R.string.copy_continue_with_google_ccc5b0ed), icon = Glyph.GOOGLE) {
-                state.toast("Preview sign-in: no account is created"); state.navigate(4)
+                state.toast(uiContext.getString(R.string.copy_preview_sign_in_no_account_is_create_6d2a20f6)); state.navigate(4)
             }
             Spacer(Modifier.height(12.dp))
             PinkButton(stringResource(R.string.copy_create_account_eff4fd86)) { state.navigate(4) }
@@ -157,16 +160,17 @@ private fun PhotoPermissionPreview(state: PreviewState) {
 
 @Composable
 private fun AccessOptions(state: PreviewState) {
+    val uiContext = androidx.compose.ui.platform.LocalContext.current
     Column(Modifier.fillMaxSize().padding(horizontal = 21.dp)) {
         ScreenHeader("", onBack = state::back)
         Spacer(Modifier.weight(.4f))
         Text(stringResource(R.string.copy_choose_photo_access_5e644cf7), color = Color.White, fontSize = 20.sp, fontWeight = FontWeight.SemiBold,
             modifier = Modifier.align(Alignment.CenterHorizontally).padding(bottom = 25.dp))
-        AccessOption(state, "All Photos", "Get the best matches\nacross your entire library", Glyph.PHOTO)
+        AccessOption(state, "All Photos", uiContext.getString(R.string.copy_get_the_best_matches_across_your_ent_22d501f1), Glyph.PHOTO)
         Spacer(Modifier.height(12.dp))
-        AccessOption(state, "Selected Albums", "Choose specific albums", Glyph.ALBUM)
+        AccessOption(state, "Selected Albums", uiContext.getString(R.string.copy_choose_specific_albums_7962fd6c), Glyph.ALBUM)
         Spacer(Modifier.height(12.dp))
-        AccessOption(state, "Limited Access", "Start with a few photos\n(you can change this anytime)", Glyph.LOCK)
+        AccessOption(state, "Limited Access", uiContext.getString(R.string.copy_start_with_a_few_photos_you_can_chan_01ad8b6e), Glyph.LOCK)
         Spacer(Modifier.height(23.dp))
         PinkButton(stringResource(R.string.copy_continue_2e026239)) { state.navigate(6) }
         Spacer(Modifier.weight(.5f))
@@ -175,15 +179,17 @@ private fun AccessOptions(state: PreviewState) {
 
 @Composable
 private fun AccessOption(state: PreviewState, title: String, text: String, icon: Glyph) {
+    val uiContext = androidx.compose.ui.platform.LocalContext.current
     val selected = state.photoAccess == title
+    val displayTitle=choiceLabel(uiContext,title)
     Row(Modifier.fillMaxWidth().heightIn(min=111.dp).clip(RoundedCornerShape(21.dp)).background(Panel)
         .border(if(selected)1.6.dp else 1.dp, if(selected)Pink else Hairline, RoundedCornerShape(21.dp))
         .selectable(selected=selected,role = Role.RadioButton,onClick={ state.setAccess(title) })
-        .semantics { contentDescription = "$title, ${text.replace('\n',' ')}" }.padding(17.dp), verticalAlignment = Alignment.CenterVertically) {
+        .semantics { contentDescription = uiContext.getString(R.string.copy_1_s_2_s_70b33c0c, displayTitle, text.replace('\n',' ')) }.padding(17.dp), verticalAlignment = Alignment.CenterVertically) {
         SelectionMark(selected);Spacer(Modifier.width(16.dp))
         AppIcon(icon, Modifier.size(29.dp));Spacer(Modifier.width(14.dp))
         Column(Modifier.weight(1f).clearAndSetSemantics { }) {
-            Text(title, color = Color.White, fontSize = 16.sp, fontWeight = FontWeight.Medium)
+            Text(displayTitle, color = Color.White, fontSize = 16.sp, fontWeight = FontWeight.Medium)
             Text(text, color = Muted, fontSize = 13.sp, lineHeight = 18.sp, modifier = Modifier.padding(top = 5.dp))
         }
     }
@@ -191,14 +197,15 @@ private fun AccessOption(state: PreviewState, title: String, text: String, icon:
 
 @Composable
 private fun FaceEnrollment(state: PreviewState) {
+    val uiContext = androidx.compose.ui.platform.LocalContext.current
     Column(Modifier.fillMaxSize().padding(horizontal = 9.dp, vertical = 9.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-        Asset("portrait.jpg", Modifier.fillMaxWidth().weight(1f).clip(RoundedCornerShape(22.dp)), "Preview face portrait")
+        Asset("portrait.jpg", Modifier.fillMaxWidth().weight(1f).clip(RoundedCornerShape(22.dp)), uiContext.getString(R.string.copy_preview_face_portrait_be053b0f))
         Box(Modifier.padding(top = 17.dp).size(65.dp).clip(CircleShape).border(3.dp, Color.White, CircleShape)
             .clickable(role = Role.Button) {
                 state.selfieCount += 1
                 if(state.selfieCount >= 3) { state.selfieCount = 0; state.navigate(8) }
-                else state.toast("Selfie ${state.selfieCount} of 3 captured in this preview")
-            }.semantics { contentDescription = "Capture simulated selfie ${state.selfieCount + 1} of 3" }, contentAlignment = Alignment.Center) {
+                else state.toast(uiContext.getString(R.string.copy_selfie_1_s_of_3_captured_in_this_pre_b9989903, state.selfieCount))
+            }.semantics { contentDescription = uiContext.getString(R.string.copy_capture_simulated_selfie_1_s_of_3_88ac9758, state.selfieCount + 1) }, contentAlignment = Alignment.Center) {
             Box(Modifier.size(54.dp).clip(CircleShape).background(Color.White))
         }
         BodyText(stringResource(R.string.copy_position_your_face_in_the_frame_d8080d72), Modifier.padding(top = 14.dp, bottom = 14.dp), size = 14)
@@ -207,9 +214,10 @@ private fun FaceEnrollment(state: PreviewState) {
 
 @Composable
 private fun FaceRetry(state: PreviewState) {
+    val uiContext = androidx.compose.ui.platform.LocalContext.current
     Column(Modifier.fillMaxSize().padding(20.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-        IconAction(Glyph.CLOSE, "Cancel face capture", Modifier.align(Alignment.Start), onClick = { state.navigate(5) })
-        Asset("retry-portrait.jpg", Modifier.fillMaxWidth(.89f).weight(1f).clip(RoundedCornerShape(25.dp)), "Face quality preview")
+        IconAction(Glyph.CLOSE, uiContext.getString(R.string.copy_cancel_face_capture_7b69fd0a), Modifier.align(Alignment.Start), onClick = { state.navigate(5) })
+        Asset("retry-portrait.jpg", Modifier.fillMaxWidth(.89f).weight(1f).clip(RoundedCornerShape(25.dp)), uiContext.getString(R.string.copy_face_quality_preview_0c8ad7b9))
         Box(Modifier.offset(y = (-13).dp).size(56.dp).clip(CircleShape).background(Ink).border(2.dp, Pink, CircleShape), contentAlignment = Alignment.Center) {
             Text(stringResource(R.string.copy__0ab8318a), color = Pink, fontSize = 36.sp, fontWeight = FontWeight.Medium)
         }

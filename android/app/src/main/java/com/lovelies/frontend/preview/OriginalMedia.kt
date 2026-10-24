@@ -52,7 +52,7 @@ internal object OriginalMedia {
             target.outputStream().use { it.write(bytes);it.flush() };current()
             val uri=FileProvider.getUriForFile(context,"${context.packageName}.camera-files",target)
             return Intent(Intent.ACTION_SEND).setType(format.mime).putExtra(Intent.EXTRA_STREAM,uri)
-                .apply { clipData=ClipData.newUri(context.contentResolver,"Lovelies photo",uri);addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION) }
+                .apply { clipData=ClipData.newUri(context.contentResolver,context.getString(R.string.controller_f72a6f212afb),uri);addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION) }
         } catch(problem: Exception) { target.delete();throw problem }
     }
     fun prune(context: Context,all: Boolean=false) { File(context.cacheDir,"shared-originals").listFiles()?.forEach { if(all || System.currentTimeMillis()-it.lastModified()>15*60*1000)it.delete() } }

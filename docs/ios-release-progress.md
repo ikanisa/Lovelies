@@ -1,5 +1,12 @@
 # iOS replacement implementation checkpoint — 24 October 2026
 
+## 24 October2026 — integrated English/Kinyarwanda checkpoint
+
+Current unsigned Release and Debug build-for-testing pass with frozen inputs. English/Kinyarwanda resources929 static/20 plural dictionaries/three permissions per language are packaged. All665 focused Foundation host checks were rerun after final generated-label/known-status mapping changes and pass. Same1858 static/6 permission/144 plural/42 interpolation cases pass in source and actual Release resources; repeated cases are not additional coverage. Release binary SHA256 `4a6ae35fe24a6b8582d73f714409cd7256a2d24c223931eca6bd1953ee28fb60`. Six actual preflight gates remain: approved link host, four published URLs and distribution signature. Older08a Simulator V3 discovery retains real layout/AX failures; current candidates need rebuilt runtime qualification.
+
+See [localization scope](release/localization/README.md), `native-localization-build/result.json` and the preserved historical checkpoints below.
+
+
 ## Latest connected count-copy checkpoint — 24 October
 
 Seven live upload/review/recipient/inbox count phrases now use the packaged English `CountCopy.stringsdict` plural resource through a typed Foundation lookup. Callbacks, count sources, enablement, layout and status details are unchanged. All27 zero/one/two combinations pass both the temporary-Bundle and actual Release packaged-resource lookup on macOS Foundation; these repeat the same cases and establish no iOS UI or whole-locale acceptance. The independent read-only review found no concrete defect.

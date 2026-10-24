@@ -58,6 +58,7 @@ class MainActivity : ComponentActivity() {
                 androidx.compose.ui.platform.LocalConfiguration provides reviewConfiguration
             ) {
             val context = LocalContext.current
+            val uiContext=context
             val state = remember { PreviewState(context, if(BuildConfig.REFERENCE_SCREENS)intent.getIntExtra("screen", 1) else 1, BuildConfig.REFERENCE_SCREENS && intent.getBooleanExtra("review", false)) }
             activeState=state
             LaunchedEffect(state) { dispatchLink(intent) }
@@ -78,8 +79,8 @@ class MainActivity : ComponentActivity() {
                 onPrimary = Ink, onBackground = Color.White, onSurface = Color.White)) {
                 BackHandler(enabled = state.canGoBack) { state.back() }
                 Box(Modifier.fillMaxSize().background(Ink).windowInsetsPadding(WindowInsets.safeDrawing).imePadding()
-                    .semantics { isTraversalGroup=true;paneTitle = if(state.catalogVisible)"All 48 screens" else
-                        "Screen ${state.route.toString().padStart(2,'0')}: ${if(!state.reviewMode && state.route==38)"Manage your face" else if(!state.reviewMode && state.route==6 && state.live.hasLifecycle)"Face profile verification" else if(!state.reviewMode && state.route==6 && state.live.hasAccountRecovery)"Account recovery" else if(!state.reviewMode && state.route==44 && !state.live.registered)"Guest account deletion" else ScreenNames[state.route-1]}" }) {
+                    .semantics { isTraversalGroup=true;paneTitle = if(state.catalogVisible)uiContext.getString(R.string.copy_all_48_screens_65cfa625) else
+                        uiContext.getString(R.string.copy_screen_1_s_2_s_0753a8a4, state.route.toString().padStart(2,'0'), if(!state.reviewMode && state.route==38)uiContext.getString(R.string.copy_manage_your_face_f49f3b4e) else if(!state.reviewMode && state.route==6 && state.live.hasLifecycle)uiContext.getString(R.string.copy_face_profile_verification_f541a4dc) else if(!state.reviewMode && state.route==6 && state.live.hasAccountRecovery)uiContext.getString(R.string.copy_account_recovery_39aeafab) else if(!state.reviewMode && state.route==44 && !state.live.registered)uiContext.getString(R.string.copy_guest_account_deletion_16fa4c92) else uiContext.getString(ScreenNames[state.route-1])) }) {
                     AdaptiveRouteHost("${state.reviewMode}:${state.catalogVisible}:${state.route}",state.reduceMotion,
                         referenceRoute=state.route.takeIf { state.reviewMode && !state.catalogVisible }) {
                         Column(Modifier.fillMaxSize()) {
@@ -110,11 +111,11 @@ class MainActivity : ComponentActivity() {
                             text = { Text(dialog.message, color = Muted) },
                             confirmButton = {
                                 TextButton(onClick = { state.dialog = null; dialog.action?.invoke() }) {
-                                    Text(dialog.actionTitle, color = Pink)
+                                    Text(dialog.actionTitle ?: uiContext.getString(R.string.copy_got_it_4c891c6a), color = Pink)
                                 }
                             },
                             dismissButton = if (dialog.action != null) {
-                                { TextButton(onClick = { state.dialog = null }) { Text("Cancel", color = Muted) } }
+                                { TextButton(onClick = { state.dialog = null }) { Text(uiContext.getString(R.string.copy_cancel_77dfd213), color = Muted) } }
                             } else null
                         )
                     }
@@ -126,7 +127,7 @@ class MainActivity : ComponentActivity() {
 }
 
 data class PreviewDialog(val title: String, val message: String,
-    val actionTitle: String = "Got it", val action: (() -> Unit)? = null)
+    val actionTitle: String? = null, val action: (() -> Unit)? = null)
 
 class PreviewState(private val context: Context, initialRoute: Int, reviewMode: Boolean = false) {
     var reviewMode by mutableStateOf(BuildConfig.REFERENCE_SCREENS && reviewMode);private set
@@ -314,30 +315,32 @@ class PreviewState(private val context: Context, initialRoute: Int, reviewMode: 
     fun openPerson(index: Int) { selectedPerson = index; navigate(28) }
 }
 
-val ScreenNames = listOf("Splash", "Introduction and how it works", "Sign in and join",
-    "Photo access prompt", "Photo access options", "Face enrollment", "Face quality retry",
-    "Processing", "Setup complete", "Home gallery", "New matches", "Photo viewer",
-    "All photos", "Favorites and saved", "Search", "Filters", "Activity inbox", "Notifications",
-    "Upload entry", "Upload source picker", "Select upload photos", "Review upload", "Upload progress",
-    "Upload complete", "Match results summary", "Matched photos gallery", "Photo to people",
-    "Person to photos", "Select photos to share", "Deselect photos", "Select people to share with",
-    "Deselect people", "Review and share", "Sharing progress", "Shared history", "Report incorrect match",
-    "Profile overview", "Face management", "Manage allowed recipients", "Privacy and sharing",
-    "Photo access settings", "Notification settings", "Storage", "Data export", "Help center",
-    "Account security and devices", "No matches", "Offline and error")
+val ScreenNames = listOf(R.string.copy_splash_efe8e986, R.string.copy_introduction_and_how_it_works_1e51705d, R.string.copy_sign_in_and_join_30616392,
+    R.string.copy_photo_access_prompt_091042bb, R.string.copy_photo_access_options_3c3c3125, R.string.copy_face_enrollment_baf4f5dc, R.string.copy_face_quality_retry_d109856f,
+    R.string.copy_processing_34c199e6, R.string.copy_setup_complete_6a8021a9, R.string.copy_home_gallery_0d862074, R.string.copy_new_matches_a3489490, R.string.copy_photo_viewer_ab1864d3,
+    R.string.copy_all_photos_076d9fa9, R.string.copy_favorites_and_saved_7fd74634, R.string.copy_search_c646a2c9, R.string.filters, R.string.copy_activity_inbox_349ebeec, R.string.copy_notifications_753a22b2,
+    R.string.copy_upload_entry_3f03bb78, R.string.copy_upload_source_picker_8d4dcda1, R.string.copy_select_upload_photos_b4eb22bf, R.string.copy_review_upload_20a7a4c6, R.string.copy_upload_progress_7bdec45f,
+    R.string.copy_upload_complete_3f2c4cbb, R.string.copy_match_results_summary_92fda420, R.string.copy_matched_photos_gallery_66f1681e, R.string.copy_photo_to_people_1df5035b,
+    R.string.copy_person_to_photos_44987602, R.string.copy_select_photos_to_share_8c16a188, R.string.copy_deselect_photos_493a6c5f, R.string.copy_select_people_to_share_with_e4eaa196,
+    R.string.copy_deselect_people_186ff8dd, R.string.copy_review_and_share_ef1dbda7, R.string.copy_sharing_progress_ecfb0942, R.string.copy_shared_history_adcb4c2c, R.string.copy_report_incorrect_match_86eac351,
+    R.string.copy_profile_overview_27d10949, R.string.copy_face_management_ac064eff, R.string.copy_manage_allowed_recipients_2241db26, R.string.copy_privacy_and_sharing_904f9e9a,
+    R.string.copy_photo_access_settings_3e24d088, R.string.copy_notification_settings_c3b8f497, R.string.copy_storage_34eddf06, R.string.copy_data_export_81b2478d, R.string.copy_help_center_75e133e3,
+    R.string.copy_account_security_and_devices_63de4688, R.string.copy_no_matches_d29421ef, R.string.copy_offline_and_error_1105424b)
 
 @Composable
 private fun ScreenCatalog(state: PreviewState) {
+    val uiContext = androidx.compose.ui.platform.LocalContext.current
     Column(Modifier.fillMaxSize().padding(horizontal = 18.dp)) {
-        ScreenHeader("All 48 screens", onBack = { state.catalogVisible = false })
-        Text("Native front-end preview · local sample data", color = Pink,
+        ScreenHeader(uiContext.getString(R.string.copy_all_48_screens_65cfa625), onBack = { state.catalogVisible = false })
+        Text(uiContext.getString(R.string.copy_native_front_end_preview_local_sampl_2176c0a9), color = Pink,
             style = MaterialTheme.typography.caption, modifier = Modifier.padding(bottom = 8.dp))
-        Text("Sign-in, face capture, matching, upload and sharing are simulated. No photos or account data leave this app.",
+        Text(uiContext.getString(R.string.copy_sign_in_face_capture_matching_upload_8f94b73c),
             color = Muted, style = MaterialTheme.typography.body2, modifier = Modifier.padding(bottom = 14.dp))
-        OutlineButton("Return to live app") { state.returnToLive() }
+        OutlineButton(uiContext.getString(R.string.copy_return_to_live_app_9555c839)) { state.returnToLive() }
         LazyColumn(modifier=Modifier.weight(1f),verticalArrangement = Arrangement.spacedBy(4.dp)) {
-            itemsIndexed(ScreenNames) { index, title ->
-                SettingRow(title = title, subtitle = "Screen ${(index + 1).toString().padStart(2, '0')}",
+            itemsIndexed(ScreenNames) { index, titleId ->
+                val title=uiContext.getString(titleId)
+                SettingRow(title = title, subtitle = uiContext.getString(R.string.copy_screen_1_s_98dcff9c, (index + 1).toString().padStart(2, '0')),
                     icon = if (index < 9) Glyph.FACE else if (index < 36) Glyph.PHOTO else Glyph.PERSON,
                     onClick = { state.navigate(index + 1, seed = true) })
             }

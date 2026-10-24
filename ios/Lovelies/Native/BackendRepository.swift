@@ -50,11 +50,11 @@ enum NativeConfiguration {
         let value = Bundle.main.object(forInfoDictionaryKey: "LoveliesAPIOrigin") as? String ?? ""
         #endif
         guard let url = URL(string: value), let scheme = url.scheme, url.host != nil, url.user == nil, url.password == nil,
-              url.query == nil, url.fragment == nil, ["", "/", "/functions/v1/lovelies-api"].contains(url.path) else { throw NativeAPIError.unsupported("Configure the Lovelies HTTPS API origin before connecting this app.") }
+              url.query == nil, url.fragment == nil, ["", "/", "/functions/v1/lovelies-api"].contains(url.path) else { throw NativeAPIError.unsupported(String(localized: "Configure the Lovelies HTTPS API origin before connecting this app.")) }
         #if DEBUG && targetEnvironment(simulator)
-        guard scheme == "https" || (scheme == "http" && ["localhost", "127.0.0.1"].contains(url.host!)) else { throw NativeAPIError.unsupported("Use HTTPS for this API origin.") }
+        guard scheme == "https" || (scheme == "http" && ["localhost", "127.0.0.1"].contains(url.host!)) else { throw NativeAPIError.unsupported(String(localized: "Use HTTPS for this API origin.")) }
         #else
-        guard scheme == "https" else { throw NativeAPIError.unsupported("Use HTTPS for this API origin.") }
+        guard scheme == "https" else { throw NativeAPIError.unsupported(String(localized: "Use HTTPS for this API origin.")) }
         #endif
         return url
     }
@@ -264,7 +264,7 @@ actor BackendRepository {
         }
         if try device() != nil { return nil } // Fresh verification, never a new anonymous account, recovers this retained handle.
         if !recoveryArchives.isEmpty || !lifecycleArchives.isEmpty { return nil } // Retired attempts are known holds, never a reason to bootstrap another account.
-        guard try !signer.hasRetainedKey() else { throw NativeAPIError.unsupported("This device has a retained face-verification key but its recovery record is unavailable. A replacement account cannot be created automatically.") }
+        guard try !signer.hasRetainedKey() else { throw NativeAPIError.unsupported(String(localized: "This device has a retained face-verification key but its recovery record is unavailable. A replacement account cannot be created automatically.")) }
         let captured = Scope(epoch: epoch, account: nil, token: nil)
         let result = try await json("/auth/anonymous", method: "POST", body: .object([:]), scope: captured)
         try check(captured); try adopt(result, method: "anonymous"); return summary()
@@ -527,7 +527,7 @@ actor BackendRepository {
         let bytes = try record.startEnvelope.canonical(), raw = try signer.sign(bytes)
         guard let data = Data(base64URL: raw), data.count == 64,
               try record.publicKey().isValidSignature(P256.Signing.ECDSASignature(rawRepresentation: data), for: bytes) else {
-            throw NativeAPIError.unsupported("The original enrollment key is unavailable. Recovery cannot replace it.")
+            throw NativeAPIError.unsupported(String(localized: "The original enrollment key is unavailable. Recovery cannot replace it."))
         }
     }
     private func enrollmentLoginCurrent(_ record: NativeEnrollmentRecord) throws -> Bool {
@@ -538,7 +538,7 @@ actor BackendRepository {
         try enrollmentLoginCurrent(record) && (record.state != .registered || record.loginCaptures.contains(where: { !$0.accepted }))
     }
     private func beginEnrollmentWork(allowDeletionResume: Bool = false) throws -> Int {
-        guard faceLifecycle == nil, !lifecycleBusy, accountRecovery == nil, !recoveryBusy, !enrollmentBusy, (!guestDeletionBusy && guestDeletion == nil) || allowDeletionResume else { throw NativeAPIError.unsupported("Check the current enrollment, account recovery or deletion request before continuing.") }
+        guard faceLifecycle == nil, !lifecycleBusy, accountRecovery == nil, !recoveryBusy, !enrollmentBusy, (!guestDeletionBusy && guestDeletion == nil) || allowDeletionResume else { throw NativeAPIError.unsupported(String(localized: "Check the current enrollment, account recovery or deletion request before continuing.")) }
         if allowDeletionResume { guard guestDeletionBusy, guestDeletionSummary()?.canResumeSetup == true, credentials?.authenticated == false, credentials?.account_id == enrollment?.accountID else { throw NativeAPIError.sessionChanged } }
         enrollmentBusy = true; enrollmentSerial += 1; return enrollmentSerial
     }
@@ -713,10 +713,10 @@ actor BackendRepository {
         }
         let serial = try beginEnrollmentWork(); defer { endEnrollmentWork(serial) }
         if let saved = enrollment {
-            guard publicKey == saved.publicJWK, consentPolicy == saved.policy else { throw NativeAPIError.unsupported("Use the original enrollment key and accepted policy to recover this account.") }
+            guard publicKey == saved.publicJWK, consentPolicy == saved.policy else { throw NativeAPIError.unsupported(String(localized: "Use the original enrollment key and accepted policy to recover this account.")) }
             if try enrollmentLoginHeld(saved) { throw NativeAPIError.operationUnconfirmed(try saved.loginChallengeWire!.uuid("challenge_id")) }
             if try enrollmentLoginCurrent(saved) { return try NativeFaceChallenge(saved.loginChallengeWire!, accountID: saved.accountID, purpose: "login") }
-            if saved.promotionCredentials != nil { _ = try await repairEnrollmentPromotion(); throw NativeAPIError.unsupported("Your account was recovered. Continue from the completed setup.") }
+            if saved.promotionCredentials != nil { _ = try await repairEnrollmentPromotion(); throw NativeAPIError.unsupported(String(localized: "Your account was recovered. Continue from the completed setup.")) }
             _ = try await reconcileEnrollment(serial: serial, retryStart: true)
             guard var current = enrollment else { throw NativeAPIError.invalidResponse }
             if current.state == .registered {
@@ -743,7 +743,7 @@ actor BackendRepository {
                 try assertOrdinaryLoginKey(record)
                 guard record.originalDevice.accountID == saved.accountID, record.originalDevice.deviceID == saved.deviceID, publicKey == record.publicJWK else { throw NativeAPIError.sessionChanged }
                 let retained = try NativeFaceChallenge(record.challengeWire, accountID: saved.accountID, purpose: "login", allowExpired: true)
-                if record.promotionCredentials != nil { _ = try await repairOrdinaryLoginPromotion(); throw NativeAPIError.unsupported("Your account was recovered. Continue from completed setup.") }
+                if record.promotionCredentials != nil { _ = try await repairOrdinaryLoginPromotion(); throw NativeAPIError.unsupported(String(localized: "Your account was recovered. Continue from completed setup.")) }
                 if record.terminalQualityCode == nil && record.terminalMismatch != true && retained.expiresAt > Date() {
                     guard !record.completionPending, record.captures.allSatisfy(\.accepted) else { throw NativeAPIError.operationUnconfirmed(retained.id) }
                     return retained
@@ -1056,7 +1056,7 @@ actor BackendRepository {
         return NativeGuestDeletionSummary(status: record.status, statusUnavailable: unavailable, canRetryOriginal: canRetry, canResumeSetup: canResume)
     }
     private func beginGuestDeletionWork() throws -> Int {
-        guard (faceLifecycle == nil || guestDeletion != nil), !lifecycleBusy, accountRecovery == nil, !recoveryBusy, !guestDeletionBusy, !enrollmentBusy else { throw NativeAPIError.unsupported("An enrollment, recovery or guest deletion check is already running.") }
+        guard (faceLifecycle == nil || guestDeletion != nil), !lifecycleBusy, accountRecovery == nil, !recoveryBusy, !guestDeletionBusy, !enrollmentBusy else { throw NativeAPIError.unsupported(String(localized: "An enrollment, recovery or guest deletion check is already running.")) }
         guestDeletionBusy = true; guestDeletionSerial += 1; return guestDeletionSerial
     }
     private func endGuestDeletionWork(_ serial: Int) { if guestDeletionSerial == serial { guestDeletionBusy = false } }
@@ -1083,14 +1083,14 @@ actor BackendRepository {
         if guestDeletion == nil, enrollment != nil {
             let status = try await recoverEnrollment()
             guard !status.awaitingServer, status.state != .registered, status.state != .promoting else {
-                throw NativeAPIError.unsupported("Check and recover your current enrollment before requesting guest deletion. No deletion request has been sent.")
+                throw NativeAPIError.unsupported(String(localized: "Check and recover your current enrollment before requesting guest deletion. No deletion request has been sent."))
             }
         }
         let serial = try beginGuestDeletionWork(); defer { endGuestDeletionWork(serial) }
         if let saved = guestDeletion { return try await reconcileGuestDeletion(saved, serial: serial, retryOriginal: true) }
         let captured = try await readyScope(anonymous: true)
         guard guestDeletionSerial == serial, guestDeletionBusy else { throw NativeAPIError.sessionChanged }
-        guard credentials?.auth_method == "anonymous", let original = credentials else { throw NativeAPIError.unsupported("Use the registered account privacy flow for this account.") }
+        guard credentials?.auth_method == "anonymous", let original = credentials else { throw NativeAPIError.unsupported(String(localized: "Use the registered account privacy flow for this account.")) }
         try check(captured)
         let record = NativeGuestDeletionRecord(accountID: original.account_id, operationKey: UUID().uuidString.lowercased(),
             statusToken: try Self.deletionToken(), apiOrigin: origin.absoluteString, reason: reason, preparedAt: Date(), originalCredentials: original)
@@ -1132,7 +1132,7 @@ actor BackendRepository {
     }
     private func activateOriginalGuest(_ record: NativeGuestDeletionRecord, serial: Int) async throws -> Scope {
         try checkGuestDeletion(record, serial: serial)
-        guard let original = guestDeletion?.originalCredentials, original.account_id == record.accountID, original.auth_method == "anonymous" else { throw NativeAPIError.unsupported("The original guest credentials are unavailable. Keep this deletion status receipt.") }
+        guard let original = guestDeletion?.originalCredentials, original.account_id == record.accountID, original.auth_method == "anonymous" else { throw NativeAPIError.unsupported(String(localized: "The original guest credentials are unavailable. Keep this deletion status receipt.")) }
         if credentials == nil { credentials = original; epoch += 1 }
         let captured = try await readyScope(anonymous: true)
         try checkGuestDeletion(record, serial: serial)
@@ -1187,9 +1187,9 @@ actor BackendRepository {
     }
     func resumeGuestSetup() async throws -> NativeSessionSummary {
         let serial = try beginGuestDeletionWork(); defer { endGuestDeletionWork(serial) }
-        guard let record = guestDeletion, guestDeletionSummary()?.canResumeSetup == true else { throw NativeAPIError.unsupported("Check the current deletion result before resuming this guest account.") }
+        guard let record = guestDeletion, guestDeletionSummary()?.canResumeSetup == true else { throw NativeAPIError.unsupported(String(localized: "Check the current deletion result before resuming this guest account.")) }
         let latest = try await reconcileGuestDeletion(record, serial: serial, retryOriginal: false)
-        guard latest.canResumeSetup, let currentRecord = guestDeletion else { throw NativeAPIError.unsupported("This account cannot resume while its deletion outcome is unresolved.") }
+        guard latest.canResumeSetup, let currentRecord = guestDeletion else { throw NativeAPIError.unsupported(String(localized: "This account cannot resume while its deletion outcome is unresolved.")) }
         let captured = try await activateOriginalGuest(currentRecord, serial: serial)
         try checkGuestDeletion(currentRecord, serial: serial); try check(captured)
         if enrollment != nil {
@@ -1198,7 +1198,7 @@ actor BackendRepository {
                 let restored = try await reconcileEnrollment(serial: enrollmentTicket, allowDeletionResume: true)
                 endEnrollmentWork(enrollmentTicket)
                 try checkGuestDeletion(currentRecord, serial: serial); try check(captured)
-                guard !restored.awaitingServer, restored.state != .registered else { throw NativeAPIError.unsupported("Enrollment is still unresolved. Keep checking this account before resuming setup.") }
+                guard !restored.awaitingServer, restored.state != .registered else { throw NativeAPIError.unsupported(String(localized: "Enrollment is still unresolved. Keep checking this account before resuming setup.")) }
             } catch { endEnrollmentWork(enrollmentTicket); throw error }
         }
         guard let current = credentials else { throw NativeAPIError.sessionChanged }
@@ -1207,8 +1207,8 @@ actor BackendRepository {
         return summary()!
     }
     func startAgainAfterGuestDeletion() async throws -> NativeSessionSummary? {
-        guard let record = guestDeletion, record.status?.completed == true, record.originalCredentials == nil else { throw NativeAPIError.unsupported("A new account can start only after completed deletion is confirmed.") }
-        guard !guestDeletionBusy else { throw NativeAPIError.unsupported("Wait for the current deletion check to finish.") }
+        guard let record = guestDeletion, record.status?.completed == true, record.originalCredentials == nil else { throw NativeAPIError.unsupported(String(localized: "A new account can start only after completed deletion is confirmed.")) }
+        guard !guestDeletionBusy else { throw NativeAPIError.unsupported(String(localized: "Wait for the current deletion check to finish.")) }
         try record.validate(origin: origin)
         try secrets.write("guest-deletion-receipt", data: nil); guestDeletion = nil; guestDeletionSerial += 1
         return try await bootstrap()
@@ -1350,7 +1350,7 @@ actor BackendRepository {
         let state = try await protectedJSON("/uploads/\(id)/status")
         if state["status"].string == "uploading" { _ = try await request("/uploads/\(id)", method: "PUT", raw: bytes, headers: ["Content-Type": mime], scope: captured) }
         if ["uploading", "uploaded"].contains(state["status"].string ?? "") { _ = try await post("/uploads/\(id)/complete", payload: .object([:]), operation: "photo.upload.complete") }
-        else if !["processing", "ready"].contains(state["status"].string ?? "") { throw NativeAPIError.unsupported("The upload failed on the server. Keep this photo and review its current processing status.") }
+        else if !["processing", "ready"].contains(state["status"].string ?? "") { throw NativeAPIError.unsupported(String(localized: "The upload failed on the server. Keep this photo and review its current processing status.")) }
         try check(captured)
         if let index = uploads.firstIndex(where: { $0.localID == localID && $0.accountID == captured.account }) { uploads[index].status = "received" }
         try secrets.write("upload-stages", data: JSONEncoder().encode(uploads)); return id
@@ -1397,7 +1397,7 @@ extension BackendRepository {
             if let metadata = record.metadata, metadata.expiresAt > Date() {
                 let current = try await recoveryKeyMetadata(); try check(captured)
                 if current?.keyID == metadata.keyID && current?.operationKey == record.operationKey { return record.backup }
-                throw NativeAPIError.unsupported("The saved recovery key is no longer current. Revoke it before creating a replacement.")
+                throw NativeAPIError.unsupported(String(localized: "The saved recovery key is no longer current. Revoke it before creating a replacement."))
             }
         } else {
             record = NativeRecoveryKeyRecord(accountID: captured.account!, apiOrigin: origin.absoluteString, operationKey: UUID().uuidString.lowercased(), secret: try Self.recoveryRandom("lfr_"), createdAt: Date())
@@ -1448,7 +1448,7 @@ extension BackendRepository {
         return try NativeFaceChallenge(wire, accountID: record.accountID, purpose: "login", allowExpired: true).expiresAt > Date()
     }
     private func beginRecoveryWork() throws -> Int {
-        guard ordinaryLogin == nil, faceLifecycle?.blocksAlternateRecovery != true, !lifecycleBusy, !recoveryBusy, !enrollmentBusy, !guestDeletionBusy, guestDeletion == nil else { throw NativeAPIError.unsupported("Check the current account or deletion request before recovering.") }
+        guard ordinaryLogin == nil, faceLifecycle?.blocksAlternateRecovery != true, !lifecycleBusy, !recoveryBusy, !enrollmentBusy, !guestDeletionBusy, guestDeletion == nil else { throw NativeAPIError.unsupported(String(localized: "Check the current account or deletion request before recovering.")) }
         recoverySerial += 1; recoveryBusy = true; return recoverySerial
     }
     private func endRecoveryWork(_ serial: Int) { if recoverySerial == serial { recoveryBusy = false } }
@@ -1460,7 +1460,7 @@ extension BackendRepository {
     private func assertRecoveryKey(_ record: NativeAccountRecoveryRecord) throws {
         let bytes = try record.startEnvelope.canonical(), signature = try signer.sign(bytes, alias: record.keyAlias)
         guard let raw = Data(base64URL: signature), raw.count == 64,
-              try record.publicKey().isValidSignature(P256.Signing.ECDSASignature(rawRepresentation: raw), for: bytes) else { throw NativeAPIError.unsupported("The original recovery device key is missing. Keep your private backup and recovery status; this request cannot replace its key.") }
+              try record.publicKey().isValidSignature(P256.Signing.ECDSASignature(rawRepresentation: raw), for: bytes) else { throw NativeAPIError.unsupported(String(localized: "The original recovery device key is missing. Keep your private backup and recovery status; this request cannot replace its key.")) }
     }
     private func prepareRecoveryKey(_ record: NativeAccountRecoveryRecord) throws -> NativeAccountRecoveryRecord {
         guard record.state == .preparingKey else { try assertRecoveryKey(record); return record }
@@ -1491,9 +1491,9 @@ extension BackendRepository {
     }
     func startAccountRecovery(backup: String) async throws -> NativeAccountRecoverySummary {
         let parsed = try NativeAccountRecoveryRecord.backup(backup)
-        guard guestDeletion == nil else { throw NativeAPIError.unsupported("Check the current deletion request before recovering.") }
+        guard guestDeletion == nil else { throw NativeAPIError.unsupported(String(localized: "Check the current deletion request before recovering.")) }
         if let lifecycle = faceLifecycle {
-            guard lifecycle.accountID == parsed.0, !lifecycle.blocksAlternateRecovery else { throw NativeAPIError.unsupported("Check your face-profile action before recovering this account.") }
+            guard lifecycle.accountID == parsed.0, !lifecycle.blocksAlternateRecovery else { throw NativeAPIError.unsupported(String(localized: "Check your face-profile action before recovering this account.")) }
         }
         if let credentials, credentials.authenticated, accountRecovery == nil {
             guard credentials.account_id == parsed.0 else { throw NativeAPIError.sessionChanged }
@@ -1502,7 +1502,7 @@ extension BackendRepository {
         let serial = try beginRecoveryWork(); defer { endRecoveryWork(serial) }
         if let saved = accountRecovery { guard saved.accountID == parsed.0, saved.recoveryKey == parsed.1 else { throw NativeAPIError.sessionChanged } }
         else {
-            if let known = try device() { guard known.accountID == parsed.0 else { throw NativeAPIError.unsupported("This device retains another account's identity. Recovery cannot overwrite it.") } }
+            if let known = try device() { guard known.accountID == parsed.0 else { throw NativeAPIError.unsupported(String(localized: "This device retains another account's identity. Recovery cannot overwrite it.")) } }
             if let enrollment { guard enrollment.accountID == parsed.0 else { throw NativeAPIError.sessionChanged } }
             let policy = try await policy(); guard recoverySerial == serial, guestDeletion == nil else { throw NativeAPIError.sessionChanged }
             let requestID = UUID().uuidString.lowercased()
@@ -1686,11 +1686,11 @@ extension BackendRepository {
     /// Explicitly confirmed replacement archives metadata/key ownership. It does
     /// not claim the server cancelled the retired request or erased its proofs.
     func useAnotherRecoveryKey() async throws {
-        guard guestDeletion == nil, !guestDeletionBusy, !enrollmentBusy else { throw NativeAPIError.unsupported("Check your deletion or enrollment request before replacing this recovery attempt.") }
+        guard guestDeletion == nil, !guestDeletionBusy, !enrollmentBusy else { throw NativeAPIError.unsupported(String(localized: "Check your deletion or enrollment request before replacing this recovery attempt.")) }
         if let current = credentials, current.authenticated { try await logout() }
         guard let record = accountRecovery else { throw NativeAPIError.invalidResponse }
         try record.validate(origin: origin)
-        guard recoveryArchives.count < 16 else { throw NativeAPIError.unsupported("Sixteen earlier recovery attempts are retained. Keep their status; this device cannot create another attempt until your account is recovered and they can be retired safely.") }
+        guard recoveryArchives.count < 16 else { throw NativeAPIError.unsupported(String(localized: "Sixteen earlier recovery attempts are retained. Keep their status; this device cannot create another attempt until your account is recovered and they can be retired safely.")) }
         var history = recoveryArchives; if !history.contains(where: { $0.requestID == record.requestID }) { history.append(record) }
         let data = try JSONEncoder().encode(history); guard data.count <= 512 * 1024 else { throw NativeAPIError.invalidResponse }
         try secrets.write("retired-account-recoveries", data: data); recoveryArchives = history
@@ -1736,7 +1736,7 @@ extension BackendRepository {
     }
     private func beginLifecycleWork() throws -> Int {
         guard ordinaryLogin == nil, guestDeletion == nil, !guestDeletionBusy, !lifecycleBusy, !recoveryBusy, !enrollmentBusy,
-              accountRecovery == nil else { throw NativeAPIError.unsupported("Check the current account or deletion request before managing your face profile.") }
+              accountRecovery == nil else { throw NativeAPIError.unsupported(String(localized: "Check the current account or deletion request before managing your face profile.")) }
         lifecycleSerial += 1; lifecycleBusy = true; return lifecycleSerial
     }
     private func endLifecycleWork(_ serial: Int) { if lifecycleSerial == serial { lifecycleBusy = false } }
@@ -1750,7 +1750,7 @@ extension BackendRepository {
         let bytes = try record.controlEnvelope.canonical(), signature = try signer.sign(bytes, alias: record.keyAlias)
         guard let raw = Data(base64URL: signature), raw.count == 64,
               try record.publicKey().isValidSignature(P256.Signing.ECDSASignature(rawRepresentation: raw), for: bytes) else {
-            throw NativeAPIError.unsupported("The original device key is missing. Keep this face-profile record; another account or device key cannot replace it.")
+            throw NativeAPIError.unsupported(String(localized: "The original device key is missing. Keep this face-profile record; another account or device key cannot replace it."))
         }
     }
     private func lifecycleRequest(_ record: NativeFaceLifecycleRecord, step: String, extra: [String: WireValue] = [:]) throws -> (WireValue, String) {
@@ -1883,7 +1883,7 @@ extension BackendRepository {
                 let value = try WireValue.decoded(data)
                 let owned = value["accountID"].string == account
                 if owned && !history.contains(where: { $0["kind"].string == name && $0["payload"] == value }) {
-                    guard history.count < 16 else { throw NativeAPIError.unsupported("Private identity history is full. Keep this action status; it cannot discard earlier recovery records.") }
+                    guard history.count < 16 else { throw NativeAPIError.unsupported(String(localized: "Private identity history is full. Keep this action status; it cannot discard earlier recovery records.")) }
                     history.append(.object(["kind": .string(name), "accountID": .string(account), "payload": value]))
                 }
                 if owned { try secrets.write("face-lifecycle-retired-identities", data: JSONEncoder().encode(history)); try secrets.write(name, data: nil) }
@@ -1919,7 +1919,7 @@ extension BackendRepository {
             guard var next = faceLifecycle, var intent = next.pending else { throw NativeAPIError.invalidResponse }
             intent.missingOnServer = true; next.pending = intent; try saveFaceLifecycle(next)
             guard retryOriginal else { return try faceLifecycleSummary()! }
-            guard next.metadata.version == intent.expectedVersion else { throw NativeAPIError.unsupported("Your face-profile state changed. Keep the original action record; it cannot be resent against a different version.") }
+            guard next.metadata.version == intent.expectedVersion else { throw NativeAPIError.unsupported(String(localized: "Your face-profile state changed. Keep the original action record; it cannot be resent against a different version.")) }
             if intent.cancelRequested { return try await dispatchLifecycleCancellation(serial: serial) }
             return try await dispatchLifecycleIntent(serial: serial)
         }
@@ -1951,8 +1951,8 @@ extension BackendRepository {
         guard var record = faceLifecycle, record.controlReady, !record.authorityUnavailable else { throw NativeAPIError.authenticationRequired }
         guard expectedVersion == nil || expectedVersion == record.metadata.version else { throw NativeAPIError.reviewChanged }
         if let pending = record.pending, !["applied", "completed", "cancelled"].contains(pending.serverState ?? "") { throw NativeAPIError.operationUnconfirmed(pending.operationKey) }
-        if action == .resume { guard consentPolicy == record.metadata.photoPolicy else { throw NativeAPIError.unsupported("Accept the current photo-matching policy to resume.") } }
-        if let previous = record.pending { guard record.history.count < 32 else { throw NativeAPIError.unsupported("Face-profile history is full. Keep the existing status.") }; record.history.append(previous) }
+        if action == .resume { guard consentPolicy == record.metadata.photoPolicy else { throw NativeAPIError.unsupported(String(localized: "Accept the current photo-matching policy to resume.")) } }
+        if let previous = record.pending { guard record.history.count < 32 else { throw NativeAPIError.unsupported(String(localized: "Face-profile history is full. Keep the existing status.")) }; record.history.append(previous) }
         let consent: WireValue? = action == .resume ? .object(["purpose": .string("photo_matching"), "policy_version": .string(consentPolicy!), "granted": .bool(true)]) : nil
         record.pending = NativeFaceLifecycleIntent(operationKey: UUID().uuidString.lowercased(), action: action, expectedVersion: record.metadata.version, consent: consent, createdAt: Date())
         try saveFaceLifecycle(record)
@@ -1987,7 +1987,7 @@ extension BackendRepository {
         guard action.captures else { throw NativeAPIError.invalidResponse }
         let serial = try beginLifecycleWork(); defer { endLifecycleWork(serial) }
         _ = try await lifecycleStatus(serial: serial)
-        guard var record = faceLifecycle, !record.authorityUnavailable, consentPolicy == record.metadata.authPolicy else { throw NativeAPIError.unsupported("Accept the current face-authentication policy before capturing.") }
+        guard var record = faceLifecycle, !record.authorityUnavailable, consentPolicy == record.metadata.authPolicy else { throw NativeAPIError.unsupported(String(localized: "Accept the current face-authentication policy before capturing.")) }
         guard expectedVersion == nil || expectedVersion == record.metadata.version else { throw NativeAPIError.reviewChanged }
         if let pending = record.pending, !["applied", "completed", "cancelled"].contains(pending.serverState ?? "") {
             guard pending.action == action else { throw NativeAPIError.operationUnconfirmed(pending.operationKey) }
@@ -1995,10 +1995,10 @@ extension BackendRepository {
             guard !pending.awaitingServer else { return try faceLifecycleSummary()! }
             return try faceLifecycleSummary()!
         }
-        if action == .enroll { guard record.metadata.profile == nil, record.metadata.removalState == "completed" else { throw NativeAPIError.unsupported("Wait for confirmed reference cleanup before enrolling again.") } }
-        else { guard record.metadata.profile != nil else { throw NativeAPIError.unsupported("This reference was removed. Confirm cleanup before enrolling again.") } }
+        if action == .enroll { guard record.metadata.profile == nil, record.metadata.removalState == "completed" else { throw NativeAPIError.unsupported(String(localized: "Wait for confirmed reference cleanup before enrolling again.")) } }
+        else { guard record.metadata.profile != nil else { throw NativeAPIError.unsupported(String(localized: "This reference was removed. Confirm cleanup before enrolling again.")) } }
         if action == .replace { guard record.metadata.authenticationEnabled else { throw NativeAPIError.authenticationRequired } }
-        if action == .restoreAuthentication { guard !record.metadata.authenticationEnabled else { throw NativeAPIError.unsupported("Face authentication is already enabled.") } }
+        if action == .restoreAuthentication { guard !record.metadata.authenticationEnabled else { throw NativeAPIError.unsupported(String(localized: "Face authentication is already enabled.")) } }
         if let previous = record.pending { guard record.history.count < 32 else { throw NativeAPIError.invalidResponse }; record.history.append(previous) }
         let consent: WireValue = .object(["purpose": .string("face_authentication"), "policy_version": .string(consentPolicy), "granted": .bool(true)])
         record.pending = NativeFaceLifecycleIntent(operationKey: UUID().uuidString.lowercased(), action: action, expectedVersion: record.metadata.version, consent: consent, createdAt: Date())
@@ -2164,7 +2164,7 @@ extension BackendRepository {
         record.credentials = nil; record.promotionCredentials = nil; record.promotionProfile = nil; record.loginChallengeWire = nil; record.loginTerminalCode = nil; record.loginCaptures = []
         var history: [NativeFaceLifecycleRecord] = []
         if let existing = try secrets.read("deleted-face-profile-controls") { guard existing.count <= 2 * 1024 * 1024 else { throw NativeAPIError.invalidResponse }; history = try JSONDecoder().decode([NativeFaceLifecycleRecord].self, from: existing) }
-        if !history.contains(where: { $0.controlOperationKey == record.controlOperationKey }) { guard history.count < 16 else { throw NativeAPIError.unsupported("Deleted-account private history is full. Keep the deletion receipt.") }; history.append(record) }
+        if !history.contains(where: { $0.controlOperationKey == record.controlOperationKey }) { guard history.count < 16 else { throw NativeAPIError.unsupported(String(localized: "Deleted-account private history is full. Keep the deletion receipt.")) }; history.append(record) }
         try secrets.write("deleted-face-profile-controls", data: JSONEncoder().encode(history))
         try secrets.write("face-profile-lifecycle", data: nil); faceLifecycle = nil; lifecycleSerial += 1
         // The server-completed deletion is the authority for retiring this exact
@@ -2224,7 +2224,7 @@ extension BackendRepository {
         guard var record = faceLifecycle, record.metadata.authenticationEnabled, record.credentials != nil,
               record.pending == nil || ["applied", "completed", "cancelled"].contains(record.pending!.serverState ?? "") else { throw NativeAPIError.authenticationRequired }
         if record.renewal != nil { return try await reconcileControlRenewal(serial: serial, retry: true) }
-        guard record.authorityUnavailable, record.authorityFailure == "face_profile_control_unavailable", record.controlHistory.count < 8 else { throw NativeAPIError.unsupported("Check the expired control and your current face session before explicitly renewing it.") }
+        guard record.authorityUnavailable, record.authorityFailure == "face_profile_control_unavailable", record.controlHistory.count < 8 else { throw NativeAPIError.unsupported(String(localized: "Check the expired control and your current face session before explicitly renewing it.")) }
         try assertLifecycleKey(record); credentials = record.credentials
         if credentials!.expiresAt <= Date() { try await refresh() }; try checkLifecycle(record, serial: serial)
         let captured = try scope(anonymous: true), current = try await json("/me/face-profile", scope: captured); try check(captured); try checkLifecycle(record, serial: serial)
@@ -2283,7 +2283,7 @@ extension BackendRepository {
         guard !uploadBusy, let device = try device(), device.accountID == captured.account, (1...30).contains(sources.count), caption.utf16.count <= 500,
               Set(sources.map(\.id)).count == sources.count else { throw NativeAPIError.invalidResponse }
         if let previous = try uploadSummary(), previous.batch.started && !previous.batch.received && !previous.batch.finished {
-            throw NativeAPIError.unsupported("Resume or cancel the saved upload before selecting another batch.")
+            throw NativeAPIError.unsupported(String(localized: "Resume or cancel the saved upload before selecting another batch."))
         }
         var nextBatches = uploadBatches
         var retired: [NativeResumableUploadBatch] = []
@@ -2298,7 +2298,7 @@ extension BackendRepository {
                 retired.append(value); nextBatches.removeAll { $0.id == value.id }
             }
         }
-        guard nextBatches.count < 10 else { throw NativeAPIError.unsupported("Check the saved uploads before adding another batch.") }
+        guard nextBatches.count < 10 else { throw NativeAPIError.unsupported(String(localized: "Check the saved uploads before adding another batch.")) }
         let id = UUID().uuidString.lowercased()
         do {
             let files = try sources.map { try uploadFiles.stage($0, batch: id) }
@@ -2504,7 +2504,7 @@ extension BackendRepository {
                         if file.retryProcessingRequested && file.acknowledgedBytes == file.byteSize && file.processingAttemptID != nil {
                             try await completeResumablePhoto(batchID: batchID, fileID: id, serial: serial, captured: captured); break
                         }
-                        throw NativeAPIError.unsupported("This photo failed on the server. Check its status and choose Retry for that photo.")
+                        throw NativeAPIError.unsupported(String(localized: "This photo failed on the server. Check its status and choose Retry for that photo."))
                     }
                     if status.phase == .completing { try await completeResumablePhoto(batchID: batchID, fileID: id, serial: serial, captured: captured); break }
                     guard status.expiresAt > Date() else { throw NativeAPIError.denied(409, "upload_expired") }
@@ -2683,11 +2683,11 @@ extension BackendRepository {
         return record
     }
     func finishRegisteredDeletionReceipt() async throws -> NativeSessionSummary? {
-        guard let record = try registeredDeletionReceipt(), record.completed else { throw NativeAPIError.unsupported("The server must confirm completed deletion before starting again.") }
+        guard let record = try registeredDeletionReceipt(), record.completed else { throw NativeAPIError.unsupported(String(localized: "The server must confirm completed deletion before starting again.")) }
         try secrets.write("registered-deletion-receipt", data: nil); clearSession(identity: true); return try await bootstrap()
     }
     func continueRegisteredAccount() throws {
-        guard let record = try registeredDeletionReceipt(), ["rejected", "cancelled"].contains(record.response?["privacy_request"]["status"].string ?? "") else { throw NativeAPIError.unsupported("Keep this receipt until the deletion request is resolved.") }
+        guard let record = try registeredDeletionReceipt(), ["rejected", "cancelled"].contains(record.response?["privacy_request"]["status"].string ?? "") else { throw NativeAPIError.unsupported(String(localized: "Keep this receipt until the deletion request is resolved.")) }
         try secrets.write("registered-deletion-receipt", data: nil)
     }
 }

@@ -1,0 +1,72 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="controller_30f58b93760b">"Uburenganzira ku mafoto y’umwimerere buragenzurwa…"</string>
+    <string name="controller_15669a062c47">"Hitamo porogaramu yo gusangiza iyi foto."</string>
+    <string name="controller_ad87b0a11a23">"Ifoto y’umwimerere yabitswe mu mafoto yawe."</string>
+    <string name="controller_57d25e1f7252">"Ifoto y’umwimerere ntiyashoboye kubikwa. Reba ububiko bw’igikoresho wongere ugerageze."</string>
+    <string name="controller_17d1551e8be5">"Imenyesha ry’iki gikoresho riravugururwa…"</string>
+    <string name="controller_995526390e92">"Igikoresho cyanditswe kwakira imenyesha kandi biracyakora."</string>
+    <string name="controller_9efb2f41cf2d">"Imenyesha ry’iki gikoresho rirazimye."</string>
+    <string name="controller_528d89ad72cb">"Umwirondoro wawe"</string>
+    <string name="controller_ec7d2382fde4">"Vugurura uburenganzira bwo gucunga umwirondoro?"</string>
+    <string name="controller_f108323d93e8">"Koresha uburenganzira bwawe bwa none bwo kwinjira ukoresheje isura yanditswe n’urufunguzo rw’igikoresho rw’umwimerere kugira ngo uvugurure uburenganzira bw’ibanga bwarangiye. Amahitamo yo kubyemera aracyatandukanye."</string>
+    <string name="controller_90c1689b0b74">"Vugurura"</string>
+    <string name="controller_cadcad9e7c2a">"Banza winjire"</string>
+    <string name="controller_a9e347551eb0">"Banza wemeze isura yawe mbere yo guhitamo amafoto yo kohereza."</string>
+    <string name="controller_c45abd8cb088">"Amafoto aracyoherezwa"</string>
+    <string name="controller_173a1e5aeead">"Tegereza igikorwa kiri gukorwa kirangire mbere yo guhitamo andi mafoto."</string>
+    <string name="controller_c572c62d9ac7">"Kohereza amafoto asigaye byahagaritswe. Amafoto yatangiye gutunganywa araguma mu bubiko bw’amafoto yawe."</string>
+    <string name="controller_84050f9a2b22">"Kohereza amafoto asigaye birahagarikwa"</string>
+    <string name="controller_a9d087af281a">"Hagarika kohereza amafoto asigaye?"</string>
+    <string name="controller_23a3f52d76e9">"Amafoto yoherejwe kandi yatangiye gutunganywa araguma mu bubiko bw’amafoto yawe. Kohereza ibitararangira birahagarara."</string>
+    <string name="controller_b3f81aca8528">"Hagarika kohereza amafoto"</string>
+    <string name="controller_94cbfcc0d1d3">"Raporo yatanzwe"</string>
+    <string name="controller_41f9a4941e80">"Raporo yawe yabitswe kugira ngo isuzumwe."</string>
+    <string name="controller_0a0d775d7d14">"Kopi y’amakuru yabitswe"</string>
+    <string name="controller_eaec755aa61d">"Kopi y’amakuru yawe yanditswe mu nyandiko wahisemo."</string>
+    <string name="controller_a50a0663baa7">"Kopi y’amakuru yasabwe"</string>
+    <string name="controller_6834ba087c0b">"Icyifuzo cyawe cyabitswe. Kuboneka kwabyo bigenwa n’uko seriveri ibyerekana."</string>
+    <string name="controller_c6f0b6f0a522">"Siba iyi konti y’umushyitsi?"</string>
+    <string name="controller_05c6f53286dc">"Ibi bisaba gusiba konti y’umushyitsi ukoresha ubu. Bisaba kubanza gusuzumwa. Ushobora kugenzura uko bihagaze hano mbere yo kwandikisha isura yawe."</string>
+    <string name="controller_0e07b0e306d0">"Saba gusiba"</string>
+    <string name="controller_bb1d294c8d56">"Kugura byahagaritswe. Iki gikorwa nta mafaranga cyakwishyuye."</string>
+    <string name="controller_311651867b2f">"Google Play yavuye ku murongo. Ongera ugerageze igihe ibonetse."</string>
+    <string name="controller_b7dd6131b8f4">"Google Play irafunguka…"</string>
+    <string name="controller_43a45b864afc">"; hanyuma "</string>
+    <string name="controller_2d3b500866f8">"Nta gahunda y’ifatabuguzi yujuje ibisabwa iboneka muri Google Play."</string>
+    <string name="controller_c5dd9ec980ef">"Hitamo gahunda. Google Play irakwereka amabwiriza yayo yose mbere y’uko wemeza."</string>
+    <string name="controller_0d9613931369">"Soza kugura muri Google Play."</string>
+    <string name="controller_ca350dda4dc7">"Ibyaguzwe muri Google Play biragenzurwa…"</string>
+    <string name="controller_7bc8522e0cb4">"Nta fatabuguzi rya Google Play rikora ryabonetse kuri iyi konti ya Play."</string>
+    <string name="controller_4f6eed6a9fe6">"Injira muri konti wakoresheje ugura ibi, hanyuma ugarure ibyo waguze."</string>
+    <string name="controller_04a714d06d40">"Ubwishyu buracyategerejwe muri Google Play. Uburenganzira ku mafoto buzavugururwa nyuma y’uko ubwishyu bwemejwe."</string>
+    <string name="controller_04cb36080a3e">"Ibi byaguzwe ni iby’indi konti ya Lovelies."</string>
+    <string name="controller_e5581cbfef39">"Ibyo waguze biragenzurwa…"</string>
+    <string name="controller_7baa8299b4a7">"Ibyaguzwe byo kugerageza byemejwe. Uburenganzira ku mafoto y’umwimerere muri serivisi nyakuri buracyafite imbibi."</string>
+    <string name="controller_846e2c78f9fc">"Ibyaguzwe byemejwe. Uburenganzira bwawe bwa none bwemejwe na seriveri."</string>
+    <string name="controller_acc527e9244f">"Kugura byahagaritswe."</string>
+    <string name="controller_ec3bb17ddb0a">"Usanzwe ufite iri fatabuguzi. Garura ibyo waguze kugira ngo rigenzurwe."</string>
+    <string name="controller_4161e060779d">"Iri fatabuguzi ntiriboneka kuri konti yawe ya Play cyangwa mu karere kawe."</string>
+    <string name="controller_0f2a4fcc93e6">"Kugura muri Google Play ntibishoboka kuri iki gikoresho."</string>
+    <string name="controller_f81e04a747c2">"Google Play ntiyashoboye kugerwaho. Reba uko uhagaze ku murongo wongere ugerageze."</string>
+    <string name="controller_47fb027a47f9">"Google Play ntiyashoboye gusoza iki gikorwa. Ongera ugerageze cyangwa ugarure ibyo waguze."</string>
+    <string name="controller_d5bc59f2366c">" Garura ibyo waguze kugira ngo wongere ugerageze kubyemeza."</string>
+    <plurals name="controller_photos_processed">
+        <item quantity="one">Ifoto %1$d yatunganyijwe</item>
+        <item quantity="other">Amafoto %1$d yatunganyijwe</item>
+    </plurals>
+    <plurals name="controller_photos_preparing">
+        <item quantity="one">Hategurwa ifoto %1$d kuri %2$d</item>
+        <item quantity="other">Hategurwa amafoto %1$d kuri %2$d</item>
+    </plurals>
+    <plurals name="controller_photos_progress">
+        <item quantity="one">Hatunganijwe ifoto %1$d kuri %2$d</item>
+        <item quantity="other">Hatunganijwe amafoto %1$d kuri %2$d</item>
+    </plurals>
+    <plurals name="controller_bytes_saved">
+        <item quantity="one">Habitswe bayiti %1$d kuri %2$d</item>
+        <item quantity="other">Habitswe bayiti %1$d kuri %2$d</item>
+    </plurals>
+    <string name="controller_a6e0f9a6503b">"Amakuru mashya y’ibanga ya konti"</string>
+    <string name="controller_f72a6f212afb">"Ifoto ya Lovelies"</string>
+</resources>

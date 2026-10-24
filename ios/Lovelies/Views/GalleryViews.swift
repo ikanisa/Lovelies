@@ -33,8 +33,8 @@ struct GalleryViews: View {
             HStack(spacing: 9) {
                 Wordmark(width: 154)
                 Spacer()
-                circleCommand("magnifyingglass", label: "Search") { store.go(.search) }
-                circleCommand("bell", label: "Notifications") { store.go(.notifications) }
+                circleCommand("magnifyingglass", label: String(localized: "Search")) { store.go(.search) }
+                circleCommand("bell", label: String(localized: "Notifications")) { store.go(.notifications) }
             }.padding(.horizontal, 19).padding(.top, 4)
             HomeMosaicView().padding(.horizontal, 11).padding(.bottom, 65)
         }.safeAreaInset(edge: .bottom, spacing: 0) { BottomNavigation(active: .home) }
@@ -44,7 +44,7 @@ struct GalleryViews: View {
         VStack(spacing: 8) {
             HStack {
                 Button { store.go(.matchSummary) } label: {
-                    HStack(spacing: 15) { Text("New Matches").loveliesFont(size: 21, weight: .semibold); Image(systemName: "chevron.right").font(.system(size: 16)) }
+                    HStack(spacing: 15) { Text("New Matches").loveliesFont(size: 21, weight: .semibold); Image(systemName: "chevron.right").font(.system(size: 16)) }.frame(minHeight: 44).contentShape(Rectangle())
                 }
                 Spacer()
                 Button { store.go(.matchedPhotos) } label: { Image(systemName: "chevron.right").frame(width: 44, height: 44).background(.white.opacity(0.05), in: Circle()) }.accessibilityLabel("View all matches")
@@ -78,7 +78,8 @@ struct GalleryViews: View {
     private var photoViewer: some View {
         GeometryReader { geometry in
             ZStack {
-                AssetImage(name: store.currentPhoto.asset).scaledToFill().frame(width: geometry.size.width, height: geometry.size.height + geometry.safeAreaInsets.top + geometry.safeAreaInsets.bottom).clipped().ignoresSafeArea()
+                AssetImage(name: store.currentPhoto.asset).scaledToFill().frame(width: geometry.size.width, height: geometry.size.height).clipped().ignoresSafeArea()
+                    .accessibilityElement(children: .ignore).accessibilityLabel(Text("Photo \(store.currentPhoto.id)")).accessibilityAddTraits(.isImage)
                 LinearGradient(colors: [.black.opacity(0.22), .clear, .black.opacity(0.35)], startPoint: .top, endPoint: .bottom).ignoresSafeArea()
                 VStack {
                     HStack {
@@ -97,13 +98,13 @@ struct GalleryViews: View {
                             Image(systemName: store.favoriteIDs.contains(store.currentPhoto.id) ? "heart.fill" : "heart").font(.system(size: 25))
                                 .foregroundStyle(store.favoriteIDs.contains(store.currentPhoto.id) ? LoveliesTheme.pink : .white)
                                 .frame(width: 47, height: 47).background(.black.opacity(0.4), in: Circle())
-                        }.accessibilityLabel(store.favoriteIDs.contains(store.currentPhoto.id) ? "Remove from favorites" : "Add to favorites")
+                        }.accessibilityLabel(store.favoriteIDs.contains(store.currentPhoto.id) ? String(localized: "Remove from favorites") : String(localized: "Add to favorites"))
                         Button { store.beginSharing(store.currentPhoto); store.go(.shareSelection) } label: {
                             Image(systemName: "square.and.arrow.up").font(.system(size: 23)).frame(width: 47, height: 47).background(.black.opacity(0.4), in: Circle())
                         }.accessibilityLabel("Share photo")
                     }.padding(11).background(.ultraThinMaterial, in: Capsule()).padding(.horizontal, 10).padding(.bottom, 4)
                 }
-            }.foregroundStyle(.white)
+            }.frame(width: geometry.size.width, height: geometry.size.height).foregroundStyle(.white)
         }
     }
 
@@ -121,7 +122,7 @@ struct GalleryViews: View {
                     LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 15), count: 3), spacing: 22) {
                         ForEach(store.people) { person in
                             Button { store.openPerson(person) } label: {
-                                VStack(spacing: 9) { Avatar(asset: person.asset, size: 89, pink: true); Text(person.name).loveliesFont(size: 15); Text("\(person.matches) photos").loveliesFont(size: 12).foregroundStyle(LoveliesTheme.secondary) }
+                                VStack(spacing: 9) { Avatar(asset: person.asset, size: 89, pink: true); Text(person.name).loveliesFont(size: 15); Text(NativeCountCopy.text(.photos, person.matches)).loveliesFont(size: 12).foregroundStyle(LoveliesTheme.secondary) }
                             }
                         }
                     }.padding(.horizontal, 20).padding(.top, 10)
@@ -156,7 +157,7 @@ struct GalleryViews: View {
             }.padding(.horizontal, 19).padding(.top, 3)
             ScrollView {
                 if store.favoriteIDs.isEmpty {
-                    VStack(spacing: 15) { Image(systemName: "heart").font(.system(size: 42)).foregroundStyle(LoveliesTheme.pink); Text("Save your favorite moments"); PinkButton(title: "Explore Photos") { store.go(.allPhotos) } }.padding(30)
+                    VStack(spacing: 15) { Image(systemName: "heart").font(.system(size: 42)).foregroundStyle(LoveliesTheme.pink); Text("Save your favorite moments"); PinkButton(title: String(localized: "Explore Photos")) { store.go(.allPhotos) } }.padding(30)
                 } else {
                     if SourceReferenceCatalog.layout(14) != nil {
                         SourcePhotoGrid(route: 14, selection: store.favoriteIDs, badge: .heart, badgeAction: { store.toggleFavorite($0.id) }) { store.openPhoto($0) }.padding(.horizontal, 13).padding(.bottom, 12)
@@ -179,14 +180,14 @@ struct GalleryViews: View {
             }.padding(.top, 5)
             HStack(spacing: 10) {
                 Image(systemName: "magnifyingglass").foregroundStyle(LoveliesTheme.secondary)
-                TextField("Search photos, people, places...", text: $store.query).loveliesFont(size: 15).submitLabel(.search).autocorrectionDisabled()
+                TextField("Search photos, people, places...", text: $store.query, prompt: Text("Search photos, people, places...").foregroundColor(LoveliesTheme.secondary)).loveliesFont(size: 15).submitLabel(.search).autocorrectionDisabled().frame(minHeight: 44).contentShape(Rectangle()).accessibilityLabel("Search photos, people, places")
                 if !store.query.isEmpty { Button { store.query = "" } label: { Image(systemName: "xmark.circle.fill").frame(width: 44, height: 44) }.accessibilityLabel("Clear search") }
                 Button { store.go(.filters) } label: { Image(systemName: "slider.horizontal.3").frame(width: 44, height: 44) }.accessibilityLabel("Search filters")
             }.padding(13).background(LoveliesTheme.raised, in: Capsule())
             AdaptiveActions {
                 ForEach(categoryItems, id: \.0) { item in
                     Button { store.searchCategory = store.searchCategory == item.0 ? "" : item.0; if item.0 == "Dates" { store.go(.filters) } } label: {
-                        VStack(spacing: 7) { Image(systemName: item.1).font(.system(size: 25, weight: .light)); Text(item.0).loveliesFont(size: 12) }
+                        VStack(spacing: 7) { Image(systemName: item.1).font(.system(size: 25, weight: .light)); Text(LocalizedStringKey(item.0)).loveliesFont(size: 12) }
                             .frame(maxWidth: .infinity).frame(minHeight: 74).background(store.searchCategory == item.0 ? LoveliesTheme.pink.opacity(0.22) : LoveliesTheme.surface, in: RoundedRectangle(cornerRadius: 13))
                     }.buttonStyle(LoveliesPressStyle())
                 }
@@ -197,7 +198,7 @@ struct GalleryViews: View {
                     ScrollView(.horizontal) { HStack(spacing: 13) {
                         ForEach(Array([("Sunsets", 1), ("Travel", 7), ("Friends", 11), ("Food", 12)].enumerated()), id: \.offset) { index, item in
                             Button { store.query = item.0 == "Sunsets" ? "sunset" : item.0.lowercased() } label: {
-                                VStack(spacing: 7) { AssetImage(name: SourceReferenceCatalog.recentAsset(index, route: 15) ?? DemoPhoto.all[item.1 - 1].asset).scaledToFill().frame(width: 70, height: 70).clipped().clipShape(RoundedRectangle(cornerRadius: 20)); Text(item.0).loveliesFont(size: 13) }
+                                VStack(spacing: 7) { AssetImage(name: SourceReferenceCatalog.recentAsset(index, route: 15) ?? DemoPhoto.all[item.1 - 1].asset).scaledToFill().frame(width: 70, height: 70).clipped().clipShape(RoundedRectangle(cornerRadius: 20)); Text(LocalizedStringKey(item.0)).loveliesFont(size: 13) }
                             }.buttonStyle(LoveliesPressStyle()).frame(maxWidth: .infinity)
                         }
                     } }.padding(.bottom, 10)
@@ -224,12 +225,12 @@ struct GalleryViews: View {
                 Button { store.back() } label: { Image(systemName: "chevron.left").font(.system(size: 22)).frame(width: 44, height: 44) }.accessibilityLabel("Back")
                 Text("Filters").loveliesFont(size: 23, weight: .semibold)
                 Spacer()
-                Button("Reset") { store.resetFilters() }.loveliesFont(size: 15).foregroundStyle(LoveliesTheme.pink).frame(minHeight: 44)
+                Button { store.resetFilters() } label: { Text("Reset").loveliesFont(size: 15).foregroundStyle(LoveliesTheme.pink).frame(minWidth: 44, minHeight: 44).contentShape(Rectangle()) }
             }
             AdaptiveActions {
                 ForEach(categoryItems, id: \.0) { item in
                     Button { filterTab = item.0; if item.0 == "Dates" { filterSheet = .date }; if item.0 == "Places" { filterSheet = .location }; if item.0 == "Favorites" { store.searchCategory = "Favorites" } } label: {
-                        VStack(spacing: 7) { Image(systemName: item.1).font(.system(size: 26, weight: .light)); Text(item.0).loveliesFont(size: 13) }
+                        VStack(spacing: 7) { Image(systemName: item.1).font(.system(size: 26, weight: .light)); Text(LocalizedStringKey(item.0)).loveliesFont(size: 13) }
                             .foregroundStyle(filterTab == item.0 ? .black : .white).frame(maxWidth: .infinity).frame(minHeight: 78)
                             .background(filterTab == item.0 ? LoveliesTheme.pink : LoveliesTheme.surface, in: RoundedRectangle(cornerRadius: 16))
                     }.buttonStyle(LoveliesPressStyle())
@@ -245,14 +246,14 @@ struct GalleryViews: View {
                         Button { filterSheet = .people } label: { Image(systemName: "plus").font(.system(size: 28, weight: .light)).frame(width: 72, height: 72).background(LoveliesTheme.raised, in: Circle()).overlay(Circle().stroke(LoveliesTheme.stroke)) }.accessibilityLabel("Add people to filter")
                     }
                     Text("Date Range").loveliesFont(size: 18, weight: .medium)
-                    GroupSurface { SettingsRow(icon: "calendar", title: store.filterDate) { filterSheet = .date } }
+                    GroupSurface { SettingsRow(icon: "calendar", title: store.filterDate == "Any date" ? String(localized: "Any date") : store.filterDate) { filterSheet = .date } }
                     Text("Location").loveliesFont(size: 18, weight: .medium)
-                    GroupSurface { SettingsRow(icon: "mappin.and.ellipse", title: store.filterLocation) { location = store.filterLocation == "Any location" ? "" : store.filterLocation; filterSheet = .location } }
+                    GroupSurface { SettingsRow(icon: "mappin.and.ellipse", title: store.filterLocation == "Any location" ? String(localized: "Any location") : store.filterLocation) { location = store.filterLocation == "Any location" ? "" : store.filterLocation; filterSheet = .location } }
                     Text("Media Type").loveliesFont(size: 18, weight: .medium)
                     AdaptiveActions {
                         ForEach([("Photos", "photo"), ("Videos", "video"), ("Live Photos", "livephoto")], id: \.0) { item in
                             Button { store.filterMedia = item.0 } label: {
-                                VStack(spacing: 8) { Image(systemName: item.1).font(.system(size: 24)); Text(item.0).loveliesFont(size: 12) }
+                                VStack(spacing: 8) { Image(systemName: item.1).font(.system(size: 24)); Text(LocalizedStringKey(item.0)).loveliesFont(size: 12) }
                                     .foregroundStyle(store.filterMedia == item.0 ? .black : .white).frame(maxWidth: .infinity).frame(minHeight: 74)
                                     .background(store.filterMedia == item.0 ? LoveliesTheme.pink : LoveliesTheme.surface, in: RoundedRectangle(cornerRadius: 16))
                             }.buttonStyle(LoveliesPressStyle())
@@ -260,17 +261,17 @@ struct GalleryViews: View {
                     }
                 }.padding(.bottom, 12)
             }.scrollIndicators(.hidden)
-            PinkButton(title: "Show Results (\(filterResultCount))") { store.query = ""; store.filtersApplied = true; store.go(.search) }.padding(.bottom, 6)
+            PinkButton(title: String(localized: "Show Results (\(filterResultCount))")) { store.query = ""; store.filtersApplied = true; store.go(.search) }.padding(.bottom, 6)
         }.foregroundStyle(.white)
             .sheet(item: $filterSheet) { sheet in
-                DemoSheet(title: sheet == .date ? "Date range" : sheet == .location ? "Location" : "Choose people") {
+                DemoSheet(title: sheet == .date ? String(localized: "Date range") : sheet == .location ? String(localized: "Location") : String(localized: "Choose people")) {
                     if sheet == .date {
                         DatePicker("Photos from", selection: $date, displayedComponents: .date).datePickerStyle(.graphical)
-                        PinkButton(title: "Use this date") { store.filterDate = date.formatted(date: .abbreviated, time: .omitted); filterSheet = nil }
-                        QuietButton(title: "Any date") { store.filterDate = "Any date"; filterSheet = nil }
+                        PinkButton(title: String(localized: "Use this date")) { store.filterDate = date.formatted(date: .abbreviated, time: .omitted); filterSheet = nil }
+                        QuietButton(title: String(localized: "Any date")) { store.filterDate = "Any date"; filterSheet = nil }
                     } else if sheet == .location {
                         TextField("City, country or place", text: $location).textFieldStyle(.roundedBorder)
-                        PinkButton(title: "Apply location") { store.filterLocation = location.isEmpty ? "Any location" : location; filterSheet = nil }
+                        PinkButton(title: String(localized: "Apply location")) { store.filterLocation = location.isEmpty ? "Any location" : location; filterSheet = nil }
                     } else {
                         ForEach(store.people) { person in
                             Button { if store.filterPeople.contains(person.id) { store.filterPeople.remove(person.id) } else { store.filterPeople.insert(person.id) } } label: {
@@ -285,7 +286,7 @@ struct GalleryViews: View {
 
     private var activity: some View {
         VStack(spacing: 15) {
-            PageHeader(title: "Activity", trailing: false, leadingTitle: true, back: true)
+            PageHeader(title: String(localized: "Activity"), trailing: false, leadingTitle: true, back: true)
             SegmentPills(values: ["All", "Matches", "Shares", "Mentions"], selected: $segment).padding(.horizontal, 20)
             ScrollView {
                 VStack(spacing: 0) {
@@ -307,16 +308,16 @@ struct GalleryViews: View {
         }.foregroundStyle(.white)
     }
     private var activityItems: [ActivityItem] {
-        [ActivityItem(text: "Maya matched\nwith your photos", time: "2m ago", person: 7, photo: 5, symbol: "heart", category: "Matches", destination: .matchedPhotos),
-         ActivityItem(text: "Alex liked 3 of\nyour photos", time: "12m ago", person: 3, photo: 6, symbol: "heart", category: "Mentions", destination: .favorites),
-         ActivityItem(text: "You and Sam\nmatched on 12 photos", time: "1h ago", person: 0, photo: 11, symbol: "link", category: "Matches", destination: .matchSummary),
-         ActivityItem(text: "Priya shared\na photo with you", time: "3h ago", person: 5, photo: 5, symbol: "square.and.arrow.up", category: "Shares", destination: .photoViewer),
-         ActivityItem(text: "New people found\nin your photos", time: "5h ago", person: 0, photo: 7, symbol: "person.2", category: "Matches", destination: .newMatches)]
+        [ActivityItem(text: String(localized: "Maya matched\nwith your photos"), time: String(localized: "2m ago"), person: 7, photo: 5, symbol: "heart", category: "Matches", destination: .matchedPhotos),
+         ActivityItem(text: String(localized: "Alex liked 3 of\nyour photos"), time: String(localized: "12m ago"), person: 3, photo: 6, symbol: "heart", category: "Mentions", destination: .favorites),
+         ActivityItem(text: String(localized: "You and Sam\nmatched on 12 photos"), time: String(localized: "1h ago"), person: 0, photo: 11, symbol: "link", category: "Matches", destination: .matchSummary),
+         ActivityItem(text: String(localized: "Priya shared\na photo with you"), time: String(localized: "3h ago"), person: 5, photo: 5, symbol: "square.and.arrow.up", category: "Shares", destination: .photoViewer),
+         ActivityItem(text: String(localized: "New people found\nin your photos"), time: String(localized: "5h ago"), person: 0, photo: 7, symbol: "person.2", category: "Matches", destination: .newMatches)]
     }
 
     private var notifications: some View {
         VStack(spacing: 15) {
-            PageHeader(title: "Notifications", trailing: false, leadingTitle: true, back: true)
+            PageHeader(title: String(localized: "Notifications"), trailing: false, leadingTitle: true, back: true)
             SegmentPills(values: ["All", "People", "System"], selected: $segment).padding(.horizontal, 20)
             ScrollView {
                 VStack(spacing: 0) {
@@ -336,12 +337,12 @@ struct GalleryViews: View {
         }.foregroundStyle(.white)
     }
     private var notificationItems: [ActivityItem] {
-        [ActivityItem(text: "You have 5 new matches!", time: "2m ago", person: 0, photo: 1, symbol: "heart.fill", category: "People", destination: .newMatches),
-         ActivityItem(text: "Emma joined Lovelies\nand found you", time: "14m ago", person: 0, photo: 1, symbol: "person.badge.plus", category: "People", destination: .personPhotos),
-         ActivityItem(text: "Taylor commented\non your photo", time: "1h ago", person: 0, photo: 1, symbol: "bubble.left.fill", category: "People", destination: .photoViewer),
-         ActivityItem(text: "Jordan shared a photo\nwith you", time: "2h ago", person: 0, photo: 1, symbol: "square.and.arrow.up", category: "People", destination: .sharedHistory),
-         ActivityItem(text: "Your upload is complete", time: "3h ago", person: 0, photo: 1, symbol: "bell.fill", category: "System", destination: .uploadComplete),
-         ActivityItem(text: "New memories ready\nto explore", time: "5h ago", person: 0, photo: 1, symbol: "star.fill", category: "System", destination: .home)]
+        [ActivityItem(text: String(localized: "You have 5 new matches!"), time: String(localized: "2m ago"), person: 0, photo: 1, symbol: "heart.fill", category: "People", destination: .newMatches),
+         ActivityItem(text: String(localized: "Emma joined Lovelies\nand found you"), time: String(localized: "14m ago"), person: 0, photo: 1, symbol: "person.badge.plus", category: "People", destination: .personPhotos),
+         ActivityItem(text: String(localized: "Taylor commented\non your photo"), time: String(localized: "1h ago"), person: 0, photo: 1, symbol: "bubble.left.fill", category: "People", destination: .photoViewer),
+         ActivityItem(text: String(localized: "Jordan shared a photo\nwith you"), time: String(localized: "2h ago"), person: 0, photo: 1, symbol: "square.and.arrow.up", category: "People", destination: .sharedHistory),
+         ActivityItem(text: String(localized: "Your upload is complete"), time: String(localized: "3h ago"), person: 0, photo: 1, symbol: "bell.fill", category: "System", destination: .uploadComplete),
+         ActivityItem(text: String(localized: "New memories ready\nto explore"), time: String(localized: "5h ago"), person: 0, photo: 1, symbol: "star.fill", category: "System", destination: .home)]
     }
 
     private func circleCommand(_ icon: String, label: String, action: @escaping () -> Void) -> some View {
@@ -394,7 +395,7 @@ private struct HomeMosaicView: View {
                         .accessibilityLabel("Open gallery photo \(tile.id)")
                         .offset(x: geometry.size.width * tile.x, y: geometry.size.height * tile.y)
                 }
-            }.frame(width: geometry.size.width, height: geometry.size.height)
+            }.frame(width: geometry.size.width, height: geometry.size.height, alignment: .topLeading)
         }
     }
 }

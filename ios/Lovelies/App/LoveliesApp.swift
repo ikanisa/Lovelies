@@ -34,11 +34,16 @@ struct LoveliesRootView: View {
         }
         .safeAreaInset(edge: .top, spacing: 0) {
             if store.isReferenceMode {
-                HStack(spacing: 12) {
-                    Text("Preview · \(store.screen.id) of 48").font(.caption).foregroundStyle(LoveliesTheme.secondary)
-                    Spacer(minLength: 4)
-                    Button { store.showGallery = true } label: { Label("Screen gallery", systemImage: "xmark").font(.subheadline).frame(minHeight: 44) }
-                        .accessibilityLabel("Close preview and open screen gallery")
+                ViewThatFits(in: .horizontal) {
+                    HStack(spacing: 12) {
+                        referenceStatus.fixedSize()
+                        Spacer(minLength: 4)
+                        referenceGalleryButton.fixedSize()
+                    }
+                    VStack(alignment: .leading, spacing: 0) {
+                        referenceStatus
+                        referenceGalleryButton.frame(maxWidth: .infinity, alignment: .trailing)
+                    }
                 }.padding(.horizontal, 16).background(LoveliesTheme.canvas)
             }
         }
@@ -88,6 +93,18 @@ struct LoveliesRootView: View {
         } message: {
             Text("Reference review mode uses sample photos and people. Its actions are local fixtures and send no data. The connected app uses its real backend separately. Use Return to connected app in the screen gallery to leave reference review.")
         }
+    }
+    private var referenceStatus: some View {
+        Text(String.localizedStringWithFormat(NSLocalizedString("Preview · %lld of 48", comment: "Reference screen position"), store.screen.id))
+            .font(.caption).foregroundStyle(LoveliesTheme.secondary)
+            .fixedSize(horizontal: false, vertical: true)
+    }
+    private var referenceGalleryButton: some View {
+        Button { store.showGallery = true } label: {
+            Label("Screen gallery", systemImage: "xmark")
+                .font(.subheadline).multilineTextAlignment(.leading)
+                .fixedSize(horizontal: false, vertical: true).frame(minHeight: 44)
+        }.accessibilityLabel("Close preview and open screen gallery")
     }
     private func attachConnectedServices() {
         purchases.attach(live)

@@ -1,0 +1,55 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">Lovelies</string>
+    <string name="search_photos">Shakisha amafoto yawe</string>
+    <string name="add_photos">Ongeramo amafoto</string>
+    <string name="previous">Ifoto ibanziriza iyi</string>
+    <string name="next">Ikurikira</string>
+    <string name="show_controls">Garagaza ibigenzura</string>
+    <string name="save_original">Bika ifoto y’umwimerere</string>
+    <string name="share_original">Sangiza ifoto y’umwimerere</string>
+    <string name="notification_channel">Amakuru mashya ya Lovelies</string>
+    <string name="notification_title">Lovelies</string>
+    <string name="notification_body">Fungura Lovelies urebe amakuru yawe mashya.</string>
+    <string name="back">Subira inyuma</string>
+    <string name="clear_search">Siba ibyo washakishije</string>
+    <string name="filters">Ibyungurura</string>
+    <string name="zoom_photo">Ongera ingano y’ifoto</string>
+    <string name="reset_zoom">Subiza ifoto ku ngano yabanje</string>
+    <string name="show_photo_controls">Garagaza ibigenzura ifoto</string>
+    <string name="hide_photo_controls">Hisha ibigenzura ifoto</string>
+    <string name="privacy_policy">Politiki y’ibanga</string>
+    <string name="terms_of_use">Amabwiriza y’imikoreshereze</string>
+    <string name="account_deletion_help">Gusiba konti</string>
+    <string name="legal_link_unavailable">Politiki ntiboneka</string>
+    <string name="legal_link_unavailable_detail">Iyi politiki ntirashyirwaho muri iyi verisiyo. Saba ubufasha unyuze mu Kigo cy’ubufasha.</string>
+    <string name="legal_link_open_failed">Mushakisha ntiyashoboye gufungura iyi politiki. Ongera ugerageze igihe mushakisha ibonetse.</string>
+    <string name="loaded_photo_count">Byafunguwe: %1$s</string>
+    <string name="photo_status">%1$s · %2$s</string>
+    <string name="photo_summary">%1$s · %2$s</string>
+    <string name="photos_processed">Byatunganijwe: %1$s. Reba abantu bahujwe n’amafoto mbere yo kuyasangiza.</string>
+    <string name="photos_in_subset">Mu mafoto yatoranyirijwe uyu muntu: %1$s</string>
+    <string name="photos_available">Biraboneka: %1$s</string>
+    <string name="include_person">Shyiramo %1$s</string>
+    <string name="open_person">Fungura %1$s</string>
+    <string name="photo_of_total">Ifoto %1$d muri %2$d</string>
+    <string name="selected">Byatoranyijwe</string>
+    <string name="not_selected">Ntibyatoranyijwe</string>
+    <plurals name="photo_count">
+        <item quantity="one">ifoto %d</item>
+        <item quantity="other">amafoto %d</item>
+    </plurals>
+    <plurals name="person_count">
+        <item quantity="one">umuntu %d</item>
+        <item quantity="other">abantu %d</item>
+    </plurals>
+    <string name="a11y_close">Funga</string>
+    <string name="a11y_continue_preview">Komeza kureba icyitegererezo</string>
+    <string name="a11y_preview_paused">Kwerekana icyitegererezo byahagaritswe by’agateganyo. Iyi paji yerekana urugero rw’aho igikorwa kigeze.</string>
+    <string name="a11y_loading">Birafunguka</string>
+    <string name="a11y_camera_loading">Kamera irategurwa</string>
+    <string name="a11y_profile_photos">Amafoto yo ku mwirondoro</string>
+    <string name="a11y_profile_favorites">Amafoto akunzwe yo ku mwirondoro</string>
+    <string name="a11y_profile_people">Abantu bo ku mwirondoro</string>
+    <string name="a11y_more_matched_people">Abandi bantu bahujwe n’amafoto</string>
+</resources>

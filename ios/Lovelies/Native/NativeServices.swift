@@ -64,7 +64,7 @@ struct NativeSystemShare: UIViewControllerRepresentable {
             let available = try await Product.products(for: [productID]).first
             guard isCurrent(live, binding: binding) else { return }
             product = available
-            if product == nil { message = "This subscription is currently unavailable from the App Store." }
+            if product == nil { message = String(localized: "This subscription is currently unavailable from the App Store.") }
             try await refreshEntitlement()
         } catch { if isCurrent(live, binding: binding) { message = error.localizedDescription } }
     }
@@ -85,9 +85,9 @@ struct NativeSystemShare: UIViewControllerRepresentable {
                   let account = UUID(uuidString: live.session?.accountID ?? "") else { throw NativeAPIError.authenticationRequired }
             switch try await product.purchase(options: [.appAccountToken(account)]) {
             case .success(let result): try await verify(result)
-            case .pending: message = "Purchase awaits App Store approval. Original access has not been granted."
-            case .userCancelled: message = "Purchase cancelled."
-            @unknown default: message = "The App Store returned an unknown purchase state. Check or restore purchases."
+            case .pending: message = String(localized: "Purchase awaits App Store approval. Original access has not been granted.")
+            case .userCancelled: message = String(localized: "Purchase cancelled.")
+            @unknown default: message = String(localized: "The App Store returned an unknown purchase state. Check or restore purchases.")
             }
         } catch { message = error.localizedDescription }
     }
@@ -103,14 +103,14 @@ struct NativeSystemShare: UIViewControllerRepresentable {
                 }
             }
             try await refreshEntitlement()
-            if !restored { message = "No current matching subscription was returned by the App Store." }
+            if !restored { message = String(localized: "No current matching subscription was returned by the App Store.") }
         } catch { message = error.localizedDescription }
     }
     private func verify(_ result: VerificationResult<StoreKit.Transaction>) async throws {
         try Task.checkCancellation()
-        guard case .verified(let transaction) = result, transaction.productID == productID else { throw NativeAPIError.unsupported("The App Store transaction could not be verified.") }
+        guard case .verified(let transaction) = result, transaction.productID == productID else { throw NativeAPIError.unsupported(String(localized: "The App Store transaction could not be verified.")) }
         guard let live, let session = live.session, session.authenticated, let repository = live.repository,
-              transaction.appAccountToken?.uuidString.lowercased() == session.accountID else { throw NativeAPIError.unsupported("This purchase belongs to another Lovelies account. Sign in to the purchasing account before restoring.") }
+              transaction.appAccountToken?.uuidString.lowercased() == session.accountID else { throw NativeAPIError.unsupported(String(localized: "This purchase belongs to another Lovelies account. Sign in to the purchasing account before restoring.")) }
         let binding = bindingGeneration
         let response = try await repository.post("/subscriptions/apple/transactions", payload: .object([
             "product_id": .string(transaction.productID), "signed_transaction": .string(result.jwsRepresentation)
@@ -124,7 +124,7 @@ struct NativeSystemShare: UIViewControllerRepresentable {
         await transaction.finish()
         guard isCurrent(live, binding: binding) else { throw NativeAPIError.sessionChanged }
         try await refreshEntitlement()
-        message = response["billing_environment"].string == "sandbox" ? "Sandbox transaction verified. Production original access is unchanged." : response["active"].bool == true ? "Subscription verified by Lovelies." : "Subscription is expired or revoked."
+        message = response["billing_environment"].string == "sandbox" ? String(localized: "Sandbox transaction verified. Production original access is unchanged.") : response["active"].bool == true ? String(localized: "Subscription verified by Lovelies.") : String(localized: "Subscription is expired or revoked.")
     }
     private func isCurrent(_ store: LiveAppStore, binding: Int) -> Bool {
         !Task.isCancelled && live === store && bindingGeneration == binding
@@ -134,7 +134,7 @@ struct NativeSystemShare: UIViewControllerRepresentable {
 
 @MainActor final class NativePush: NSObject, ObservableObject, UNUserNotificationCenterDelegate {
     static let shared = NativePush()
-    @Published private(set) var permission = "Not requested"
+    @Published private(set) var permission = String(localized: "Not requested")
     @Published private(set) var failure: String?
     private(set) var token: String?
     private weak var live: LiveAppStore?
@@ -156,10 +156,10 @@ struct NativeSystemShare: UIViewControllerRepresentable {
     func requestPermission() async {
         do {
             let accepted = try await UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .badge, .sound])
-            permission = accepted ? "Allowed" : "Disabled in Settings"
+            permission = accepted ? String(localized: "Allowed") : String(localized: "Disabled in Settings")
             if accepted { UIApplication.shared.registerForRemoteNotifications() }
             else { await unregister() }
-        } catch { failure = "Notification permission could not be requested." }
+        } catch { failure = String(localized: "Notification permission could not be requested.") }
     }
     func foreground() async {
         guard !Task.isCancelled, let live else { return }
@@ -167,13 +167,13 @@ struct NativeSystemShare: UIViewControllerRepresentable {
         let settings = await UNUserNotificationCenter.current().notificationSettings()
         guard isCurrent(live, binding: binding) else { return }
         let allowed = [.authorized, .provisional, .ephemeral].contains(settings.authorizationStatus)
-        permission = allowed ? "Allowed" : settings.authorizationStatus == .notDetermined ? "Not requested" : "Disabled in Settings"
+        permission = allowed ? String(localized: "Allowed") : settings.authorizationStatus == .notDetermined ? String(localized: "Not requested") : String(localized: "Disabled in Settings")
         if allowed { UIApplication.shared.registerForRemoteNotifications(); await register() }
         else { await unregister() }
         if isCurrent(live, binding: binding) { routePending() }
     }
     func receivedToken(_ data: Data) { token = data.map { String(format: "%02x", $0) }.joined(); Task { await register() } }
-    func registrationFailed() { failure = "Push registration is unavailable. In-app notifications remain available." }
+    func registrationFailed() { failure = String(localized: "Push registration is unavailable. In-app notifications remain available.") }
     func register() async {
         guard let live, !live.busy, let session = live.session, session.authenticated, let repository = live.repository, let token else { return }
         let binding = bindingGeneration
@@ -233,7 +233,7 @@ struct NativeSystemShare: UIViewControllerRepresentable {
                           let row = response["items"].array?.first(where: { $0["id"].string == id }),
                           let kind = row["kind"].string, let entity = row["entity_id"].string else { throw NativeAPIError.sessionChanged }
                     self.queue(kind: kind, entity: entity)
-                } catch { if self.isCurrent(live, binding: binding) { self.failure = "This account update is unavailable. Open your notification inbox." } }
+                } catch { if self.isCurrent(live, binding: binding) { self.failure = String(localized: "This account update is unavailable. Open your notification inbox.") } }
             }
             return
         }

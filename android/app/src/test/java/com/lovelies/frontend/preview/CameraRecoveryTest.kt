@@ -16,6 +16,18 @@ class CameraRecoveryTest {
         "profile_id" to cid,"profile_revision" to "revision-1","model_id" to "sface-v1","expires_at" to Instant.ofEpochMilli(1000000).toString())
     private fun journal()=CameraLoginJournal(origin,account,alias,device,challenge())
     private fun denied(block: ()->Unit) { try { block();fail("Expected a bounded camera or ownership denial") } catch(problem: LiveFailure) { } }
+    private fun cameraRecoveryEnglishMessage(code: String): String {
+        fun source(path: String)=listOf(java.io.File(path),java.io.File("app/$path"),java.io.File("android/app/$path"))
+            .first { it.isFile }
+        val mapping=source("src/main/java/com/lovelies/frontend/preview/CameraRecovery.kt").readText()
+            .substringAfter("internal fun cameraRecoveryMessage(")
+        val branch=mapping.lineSequence().single { it.substringBefore("->").contains("\"$code\"") }
+        val name=Regex("R\\.string\\.([a-z0-9_]+)").find(branch)!!.groupValues[1]
+        val entries=javax.xml.parsers.DocumentBuilderFactory.newInstance().newDocumentBuilder()
+            .parse(source("src/main/res/values/camera-copy.xml")).getElementsByTagName("string")
+        return (0 until entries.length).map { entries.item(it) }
+            .single { it.attributes.getNamedItem("name").nodeValue==name }.textContent
+    }
 
     @Test fun permissionStatesDistinguishFirstChoiceDenialPermanentDenialAndSettingsRevocation() {
         assertEquals(CameraPermissionState.NOT_REQUESTED,cameraPermission(false,false,false,false))
@@ -109,7 +121,9 @@ class CameraRecoveryTest {
         val held=journal().plan(byteArrayOf(1))
         for(code in listOf("face_capture_no_face","face_capture_multiple_faces","face_capture_quality_low","face_capture_invalid_image")) {
             assertTrue(held.terminal(LiveFailure(code,422)));assertFalse(held.terminal(LiveFailure(code,503,true)))
-            assertFalse(cameraRecoveryMessage(code).contains("verified",true))
+            val message=cameraRecoveryEnglishMessage(code)
+            assertTrue("A rejection must resolve to actual English guidance",message.isNotBlank())
+            assertFalse(message.contains("verified",true))
         }
         assertTrue(held.terminal(LiveFailure("face_verification_failed",401)))
         assertFalse(held.terminal(LiveFailure("connection_unavailable",ambiguous=true)));assertFalse(held.terminal(LiveFailure("server_unavailable",503,true)))

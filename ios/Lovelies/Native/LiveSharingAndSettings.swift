@@ -3,7 +3,7 @@ import UIKit
 import UniformTypeIdentifiers
 import ImageIO
 
-private enum NativeCountCopy {
+enum NativeCountCopy {
     enum Phrase: String {
         case upload = "upload_photo_count"
         case review = "review_photo_people_count"
@@ -44,9 +44,9 @@ struct LiveUploadView: View {
         switch screen {
         case .uploadEntry, .uploadSource:
             VStack(spacing: 12) {
-                PageHeader(title: screen == .uploadEntry ? "Add Photos" : "Choose Source", close: true)
+                PageHeader(title: screen == .uploadEntry ? String(localized: "Add Photos") : String(localized: "Choose Source"), close: true)
                 if let saved = live.uploadRecovery, !saved.batch.finished {
-                    Button { live.showPhotoUploads() } label: { HStack { Image(systemName: "arrow.up.circle"); Text(saved.batch.started ? "Resume saved upload" : "Continue selected photos"); Spacer(); Image(systemName: "chevron.right") }.font(.system(size: 15)).padding(14).background(LoveliesTheme.surface, in: RoundedRectangle(cornerRadius: 14)) }.buttonStyle(LoveliesPressStyle()).accessibilityLabel("Open saved upload")
+                    Button { live.showPhotoUploads() } label: { HStack { Image(systemName: "arrow.up.circle"); Text(saved.batch.started ? String(localized: "Resume saved upload") : String(localized: "Continue selected photos")); Spacer(); Image(systemName: "chevron.right") }.font(.system(size: 15)).padding(14).background(LoveliesTheme.surface, in: RoundedRectangle(cornerRadius: 14)) }.buttonStyle(LoveliesPressStyle()).accessibilityLabel("Open saved upload")
                 }
                 ScrollView {
                     VStack(alignment: .leading, spacing: 18) {
@@ -77,13 +77,13 @@ struct LiveUploadView: View {
                     if chosen == .googlePhotos {
                         Text("Save the photos you want from Google Photos to Apple Photos first. Then choose those saved photos in the Photos picker.")
                             .loveliesFont(size: 16).foregroundStyle(LoveliesTheme.secondary).fixedSize(horizontal: false, vertical: true)
-                        PinkButton(title: "Continue to Photos") { pendingPicker = chosen; sourceHelp = nil }
+                        PinkButton(title: String(localized: "Continue to Photos")) { pendingPicker = chosen; sourceHelp = nil }
                     } else {
                         Text("In Files, tap Browse and choose \(chosen.title) under Locations. Install its app, sign in and enable its location in Files if it is missing.")
                             .loveliesFont(size: 16).foregroundStyle(LoveliesTheme.secondary).fixedSize(horizontal: false, vertical: true)
-                        PinkButton(title: "Open Files") { pendingPicker = chosen; sourceHelp = nil }
+                        PinkButton(title: String(localized: "Open Files")) { pendingPicker = chosen; sourceHelp = nil }
                     }
-                    QuietButton(title: "Cancel") { sourceHelp = nil }
+                    QuietButton(title: String(localized: "Cancel")) { sourceHelp = nil }
                 }
             }
             .sheet(item: $photoRequest) { request in
@@ -104,7 +104,7 @@ struct LiveUploadView: View {
             }
         case .uploadSelection:
             VStack(spacing: 12) {
-                PageHeader(title: "\(live.selectedImports.count) selected")
+                PageHeader(title: String(localized: "\(live.selectedImports.count) selected"))
                 importContext
                 ScrollView {
                     LazyVGrid(columns: [GridItem(.flexible(), spacing: 4), GridItem(.flexible(), spacing: 4), GridItem(.flexible())], spacing: 4) {
@@ -112,17 +112,17 @@ struct LiveUploadView: View {
                             Button { live.toggleUploadPhoto(item.id) } label: {
                                 NativeImportThumbnail(item: item).frame(height: 160).clipped().clipShape(RoundedRectangle(cornerRadius: 12))
                                     .overlay(alignment: .topTrailing) { CheckBadge(selected: live.selectedImports.contains(item.id), size: 26).padding(6) }
-                            }.buttonStyle(LoveliesPressStyle()).accessibilityLabel(item.title.isEmpty ? "Imported photo" : item.title)
-                                .accessibilityValue(live.selectedImports.contains(item.id) ? "Selected" : "Not selected")
+                            }.buttonStyle(LoveliesPressStyle()).accessibilityLabel(item.title.isEmpty ? String(localized: "Imported photo") : item.title)
+                                .accessibilityValue(live.selectedImports.contains(item.id) ? String(localized: "Selected") : String(localized: "Not selected"))
                                 .accessibilityAddTraits(live.selectedImports.contains(item.id) ? .isSelected : [])
                         }
                     }.padding(.horizontal, 8)
                 }
-                PinkButton(title: "Next", enabled: !live.selectedImports.isEmpty) { store.go(.uploadReview, simulateProgress: false) }.padding(18)
+                PinkButton(title: String(localized: "Next"), enabled: !live.selectedImports.isEmpty) { store.go(.uploadReview, simulateProgress: false) }.padding(18)
             }.foregroundStyle(.white)
         case .uploadReview:
             VStack(spacing: 16) {
-                PageHeader(title: "Review Upload")
+                PageHeader(title: String(localized: "Review Upload"))
                 importContext
                 ScrollView {
                     VStack(spacing: 16) {
@@ -142,16 +142,16 @@ struct LiveUploadView: View {
             }.padding(.horizontal, 18).padding(.bottom, 16).foregroundStyle(.white)
         case .uploadProgress:
             VStack(spacing: 16) {
-                PageHeader(title: "Uploading")
+                PageHeader(title: String(localized: "Uploading"))
                 uploadRows
                 Text(live.transferText).loveliesFont(size: 14).foregroundStyle(LoveliesTheme.secondary).multilineTextAlignment(.center)
                 AdaptiveActions {
                     if live.uploadRecovery?.batch.cancellationRequested == true {
-                        QuietButton(title: "Back to photos") { store.go(.home, simulateProgress: false) }
-                        if live.uploadRecovery?.batch.finished == false { QuietButton(title: "Check cancellation", enabled: !live.busy) { live.cancelPhotoUploads() } }
+                        QuietButton(title: String(localized: "Back to photos")) { store.go(.home, simulateProgress: false) }
+                        if live.uploadRecovery?.batch.finished == false { QuietButton(title: String(localized: "Check cancellation"), enabled: !live.busy) { live.cancelPhotoUploads() } }
                     } else {
-                        QuietButton(title: live.uploadRunning ? "Pause" : "Resume upload", enabled: live.uploadRunning || !live.busy) { if live.uploadRunning { live.pausePhotoUploads() } else { live.upload() } }
-                        QuietButton(title: "Cancel pending", enabled: !live.busy || live.uploadRunning) { cancelUploads = true }
+                        QuietButton(title: live.uploadRunning ? String(localized: "Pause") : String(localized: "Resume upload"), enabled: live.uploadRunning || !live.busy) { if live.uploadRunning { live.pausePhotoUploads() } else { live.upload() } }
+                        QuietButton(title: String(localized: "Cancel pending"), enabled: !live.busy || live.uploadRunning) { cancelUploads = true }
                     }
                 }
             }.padding(.horizontal, 21).padding(.bottom, 16).foregroundStyle(.white)
@@ -161,13 +161,13 @@ struct LiveUploadView: View {
                 } message: { Text("This stops pending transfers. Photos already processing stay in your library. Sharing still requires your review and approval.") }
         default:
             VStack(spacing: 20) {
-                PageHeader(title: "Upload received")
+                PageHeader(title: String(localized: "Upload received"))
                 Spacer(minLength: 0)
                 AssetImage(name: "upload-hero").scaledToFit().frame(maxWidth: 250, maxHeight: 210)
                 Text(live.transferText).loveliesFont(size: 19).multilineTextAlignment(.center)
                 uploadRows
-                PinkButton(title: "Check matching", enabled: !live.busy) { live.checkProcessing() }
-                QuietButton(title: "Review matches", enabled: live.processingStatuses.values.contains("ready")) { live.beginReview(photoIDs: live.uploadedIDs.filter { live.processingStatuses[$0] == "ready" }) }
+                PinkButton(title: String(localized: "Check matching"), enabled: !live.busy) { live.checkProcessing() }
+                QuietButton(title: String(localized: "Review matches"), enabled: live.processingStatuses.values.contains("ready")) { live.beginReview(photoIDs: live.uploadedIDs.filter { live.processingStatuses[$0] == "ready" }) }
             }.padding(22).foregroundStyle(.white)
 
         }
@@ -199,7 +199,7 @@ struct LiveUploadView: View {
                             VStack(alignment: .leading, spacing: 7) {
                                 Text(item.title).loveliesFont(size: 14).lineLimit(2)
                                 Text(uploadStatus(item, paused: batch.paused)).loveliesFont(size: 12).foregroundStyle(LoveliesTheme.secondary)
-                                ProgressView(value: item.uploadProgress).tint(LoveliesTheme.pink).accessibilityLabel("Bytes received for " + item.title)
+                                ProgressView(value: item.uploadProgress).tint(LoveliesTheme.pink).accessibilityLabel(String(localized: "Bytes received for \(item.title)"))
                                     .accessibilityValue("\(item.acknowledgedBytes) of \(item.byteSize) bytes")
                                 if item.phase == .failed, item.received { Button("Retry processing") { live.retryUploadPhoto(item.id) }.loveliesFont(size: 13).foregroundStyle(LoveliesTheme.pink).frame(minHeight: 44).disabled(live.busy || live.uploadRunning) }
                             }
@@ -211,15 +211,15 @@ struct LiveUploadView: View {
     }
     private func uploadStatus(_ file: NativeResumableUploadFile, paused: Bool) -> String {
         switch file.phase {
-        case .draft, .queued: return "Waiting"
-        case .reserving: return "Checking original upload"
-        case .uploading: return "\(Int(file.uploadProgress * 100))% received" + (paused ? " · Paused" : "")
-        case .completing: return "Upload received · Starting processing"
-        case .processing: return "Upload received · Processing"
-        case .ready: return "Ready to review matches"
-        case .failed: return file.discardedTerminalTransfer == true ? "Rejected source · Cancelled locally" : file.received ? "Processing failed · Retry available" : "Upload failed · Check status"
-        case .cancelling: return "Checking cancellation"
-        case .cancelled: return "Cancelled"
+        case .draft, .queued: return String(localized: "Waiting")
+        case .reserving: return String(localized: "Checking original upload")
+        case .uploading: return String(localized: "\(Int(file.uploadProgress * 100))% received") + (paused ? String(localized: " · Paused") : "")
+        case .completing: return String(localized: "Upload received · Starting processing")
+        case .processing: return String(localized: "Upload received · Processing")
+        case .ready: return String(localized: "Ready to review matches")
+        case .failed: return file.discardedTerminalTransfer == true ? String(localized: "Rejected source · Cancelled locally") : file.received ? String(localized: "Processing failed · Retry available") : String(localized: "Upload failed · Check status")
+        case .cancelling: return String(localized: "Checking cancellation")
+        case .cancelled: return String(localized: "Cancelled")
         }
     }
     private func source(_ title: String, detail: String, icon: String, action: @escaping () -> Void) -> some View {
@@ -250,7 +250,7 @@ struct LiveSharingView: View {
     @ViewBuilder var body: some View {
         if screen == .sharingProgress {
             LoveliesPage(spacing: 20) {
-                PageHeader(title: "Sharing", close: true, trailing: false)
+                PageHeader(title: String(localized: "Sharing"), close: true, trailing: false)
                 AssetImage(name: "sharing-hero").scaledToFit().frame(maxWidth: 240, maxHeight: 240).accessibilityHidden(true)
                 Text("Submitting your reviewed selection…").font(.title2.weight(.medium)).multilineTextAlignment(.center).accessibilityAddTraits(.isHeader)
                 ProgressView().tint(LoveliesTheme.pink).accessibilityLabel("Share request in progress")
@@ -258,7 +258,7 @@ struct LiveSharingView: View {
             }.foregroundStyle(.white)
         } else if screen == .sharedHistory { LiveInboxView() }
         else if screen == .incorrectMatch {
-                LoveliesPage(spacing: 20) { PageHeader(title: "Not Me"); Text("Exclude this photo/person pair before sharing.").foregroundStyle(LoveliesTheme.secondary); if let photo = live.currentPhoto, let person = live.currentPerson { ProtectedNativePhoto(photo: photo).frame(height: 260).clipped().clipShape(RoundedRectangle(cornerRadius: 18)); PinkButton(title: "Exclude this match") { live.togglePair(photo: photo.id, person: person.id); store.back() }; QuietButton(title: "Report incorrect match", enabled: live.canEdit) { live.reportCurrentPair() } } }.foregroundStyle(.white)
+                LoveliesPage(spacing: 20) { PageHeader(title: String(localized: "Not Me")); Text("Exclude this photo/person pair before sharing.").foregroundStyle(LoveliesTheme.secondary); if let photo = live.currentPhoto, let person = live.currentPerson { ProtectedNativePhoto(photo: photo).frame(height: 260).clipped().clipShape(RoundedRectangle(cornerRadius: 18)); PinkButton(title: String(localized: "Exclude this match")) { live.togglePair(photo: photo.id, person: person.id); store.back() }; QuietButton(title: String(localized: "Report incorrect match"), enabled: live.canEdit) { live.reportCurrentPair() } } }.foregroundStyle(.white)
         } else if let snapshot = live.snapshot, let draft = live.draft {
             VStack(spacing: 10) {
                 PageHeader(title: title, subtitle: NativeCountCopy.text(.review, Set(live.effective.map(\.asset_id)).count, live.subsets.count))
@@ -275,7 +275,7 @@ struct LiveSharingView: View {
                     }
                 }
                 if screen == .shareReview {
-                    PinkButton(title: "Share", enabled: !live.effective.isEmpty && live.preview != nil && live.canEdit) { live.share() }.padding(.horizontal, 18).padding(.bottom, 12)
+                    PinkButton(title: String(localized: "Share"), enabled: !live.effective.isEmpty && live.preview != nil && live.canEdit) { live.share() }.padding(.horizontal, 18).padding(.bottom, 12)
                 } else {
                     HStack {
                         Menu { Button("Select all") { live.edit { $0.selectedPhotos = Set(snapshot.photos.map(\.id)) } }; Button("Deselect all photos") { live.edit { $0.selectedPhotos = [] } }; Button("Deselect people") { store.go(.deselectPeople, simulateProgress: false) } } label: { Image(systemName: "square.and.arrow.up").frame(width: 48, height: 48) }
@@ -288,16 +288,16 @@ struct LiveSharingView: View {
                 }
             }.foregroundStyle(.white)
         } else {
-            LoveliesPage(spacing: 20) { PageHeader(title: title); AssetImage(name: "matches-hero").scaledToFit().frame(maxWidth: 180, maxHeight: 180).accessibilityHidden(true); Text("Review the people in your photos").loveliesFont(size: 22, weight: .medium).multilineTextAlignment(.center); PinkButton(title: "Find current matches", enabled: live.canEdit) { live.beginReview() } }.foregroundStyle(.white)
+            LoveliesPage(spacing: 20) { PageHeader(title: title); AssetImage(name: "matches-hero").scaledToFit().frame(maxWidth: 180, maxHeight: 180).accessibilityHidden(true); Text("Review the people in your photos").loveliesFont(size: 22, weight: .medium).multilineTextAlignment(.center); PinkButton(title: String(localized: "Find current matches"), enabled: live.canEdit) { live.beginReview() } }.foregroundStyle(.white)
         }
     }
-    private var title: String { screen == .photoPeople ? "People in This Photo" : screen == .personPhotos ? (live.currentPerson?.name ?? "Matched photos") : screen == .peopleSelection ? "Choose People to Share With" : screen == .deselectPeople ? "Deselect People" : screen == .shareReview ? "Review & Share" : screen == .deselectPhotos ? "Deselect Photos" : "Select Photos to Share" }
+    private var title: String { screen == .photoPeople ? String(localized: "People in This Photo") : screen == .personPhotos ? (live.currentPerson?.name ?? String(localized: "Matched photos")) : screen == .peopleSelection ? String(localized: "Choose People to Share With") : screen == .deselectPeople ? String(localized: "Deselect People") : screen == .shareReview ? String(localized: "Review & Share") : screen == .deselectPhotos ? String(localized: "Deselect Photos") : String(localized: "Select Photos to Share") }
     private func people(_ snapshot: NativeSnapshot, _ draft: NativeShareDraft) -> some View {
         LazyVStack(spacing: 5) {
             ForEach(snapshot.people) { person in
                 HStack(spacing: 13) {
                     Button { live.currentPerson = person; store.go(.personPhotos, simulateProgress: false) } label: {
-                        HStack { NativePersonAvatar(person: person); VStack(alignment: .leading, spacing: 4) { Text(person.name.isEmpty ? "Matched person" : person.name).loveliesFont(size: 16, weight: .medium); Text(NativeCountCopy.text(.matched, snapshot.pairs.filter { $0.recipient_id == person.id }.count)).loveliesFont(size: 12).foregroundStyle(LoveliesTheme.secondary) } }
+                        HStack { NativePersonAvatar(person: person); VStack(alignment: .leading, spacing: 4) { Text(person.name.isEmpty ? String(localized: "Matched person") : person.name).loveliesFont(size: 16, weight: .medium); Text(NativeCountCopy.text(.matched, snapshot.pairs.filter { $0.recipient_id == person.id }.count)).loveliesFont(size: 12).foregroundStyle(LoveliesTheme.secondary) } }
                     }.buttonStyle(LoveliesPressStyle())
                     Spacer()
                     Button {
@@ -306,17 +306,17 @@ struct LiveSharingView: View {
                     } label: {
                         let selected = !live.blockedPersonIDs.contains(person.id) && (screen == .photoPeople && live.currentPhoto != nil ? !draft.excludedPairs.contains(NativePair(asset: live.currentPhoto!.id, recipient: person.id)) && draft.selectedPhotos.contains(live.currentPhoto!.id) && draft.selectedPeople.contains(person.id) : draft.selectedPeople.contains(person.id))
                         CheckBadge(selected: selected, size: 28).frame(width: 48, height: 48)
-                    }.disabled(!live.canEdit || live.blockedPersonIDs.contains(person.id)).accessibilityLabel(live.blockedPersonIDs.contains(person.id) ? "\(person.name) is blocked" : "Include \(person.name)")
-                        .accessibilityValue(draft.selectedPeople.contains(person.id) && !live.blockedPersonIDs.contains(person.id) ? "Selected" : "Not selected")
+                    }.disabled(!live.canEdit || live.blockedPersonIDs.contains(person.id)).accessibilityLabel(live.blockedPersonIDs.contains(person.id) ? String(localized: "\(person.name) is blocked") : String(localized: "Include \(person.name)"))
+                        .accessibilityValue(draft.selectedPeople.contains(person.id) && !live.blockedPersonIDs.contains(person.id) ? String(localized: "Selected") : String(localized: "Not selected"))
                 }.padding(12).background(LoveliesTheme.surface, in: RoundedRectangle(cornerRadius: 16))
             }
         }.padding(.horizontal, 14)
     }
     private func finalReview(_ snapshot: NativeSnapshot, _ draft: NativeShareDraft) -> some View {
         VStack(alignment: .leading, spacing: 16) {
-            HStack { Text("Photos").loveliesFont(size: 17, weight: .semibold); Spacer(); QuietButton(title: "Edit") { store.go(.shareSelection, simulateProgress: false) }.frame(width: 70) }
+            HStack { Text("Photos").loveliesFont(size: 17, weight: .semibold); Spacer(); QuietButton(title: String(localized: "Edit")) { store.go(.shareSelection, simulateProgress: false) }.frame(width: 70) }
             LivePhotoGrid(photos: snapshot.photos.filter { photo in live.effective.contains { $0.asset_id == photo.id } }) { live.currentPhoto = $0; store.go(.photoViewer, simulateProgress: false) }
-            HStack { Text("People").loveliesFont(size: 17, weight: .semibold); Spacer(); QuietButton(title: "Edit") { store.go(.peopleSelection, simulateProgress: false) }.frame(width: 70) }
+            HStack { Text("People").loveliesFont(size: 17, weight: .semibold); Spacer(); QuietButton(title: String(localized: "Edit")) { store.go(.peopleSelection, simulateProgress: false) }.frame(width: 70) }
             ForEach(snapshot.people.filter { live.subsets[$0.id] != nil }) { person in
                 VStack(alignment: .leading, spacing: 9) {
                     HStack { NativePersonAvatar(person: person, size: 40); Text(person.name); Spacer(); Text(NativeCountCopy.text(.photos, live.subsets[person.id]?.count ?? 0)).foregroundStyle(LoveliesTheme.secondary) }
@@ -339,13 +339,13 @@ struct LiveInboxView: View {
     @EnvironmentObject private var live: LiveAppStore
     var body: some View {
         VStack(spacing: 10) {
-            PageHeader(title: store.screen == .sharedHistory ? "Shared History" : "Activity")
+            PageHeader(title: store.screen == .sharedHistory ? String(localized: "Shared History") : String(localized: "Activity"))
             ScrollView {
                 LazyVStack(spacing: 8) {
-                    if let outcome = live.outcome { Text(outcome["status"].string == "pending_acceptance" ? "Requests submitted · awaiting recipient acceptance" : (outcome["status"].string ?? "Result not confirmed")).loveliesFont(size: 16, weight: .medium).padding(16).background(LoveliesTheme.surface, in: RoundedRectangle(cornerRadius: 16)) }
+                    if let outcome = live.outcome { Text(outcome["status"].string == "pending_acceptance" ? String(localized: "Requests submitted · awaiting recipient acceptance") : (outcome["status"].string.map(NativeStatusCopy.sharing) ?? String(localized: "Result not confirmed"))).loveliesFont(size: 16, weight: .medium).padding(16).background(LoveliesTheme.surface, in: RoundedRectangle(cornerRadius: 16)) }
                     ForEach(Array((store.screen == .sharedHistory ? live.outgoing : live.inbox).enumerated()), id: \.offset) { _, item in
                         Button { if let id = item["id"].string { live.openReceipt(id) } } label: {
-                            HStack { Image(systemName: "person.crop.circle").font(.system(size: 36)); VStack(alignment: .leading, spacing: 4) { Text(item["person"]["name"].string ?? "Photo request"); Text(NativeCountCopy.text(.photoStatus, item["photo_count"].integer ?? 0, item["status"].string ?? "unavailable")).loveliesFont(size: 13).foregroundStyle(LoveliesTheme.secondary); Text("\(item["available_count"].integer ?? 0) currently available").loveliesFont(size: 12).foregroundStyle(LoveliesTheme.secondary) }; Spacer(); Image(systemName: "chevron.right") }.padding(14).background(LoveliesTheme.surface, in: RoundedRectangle(cornerRadius: 16))
+                            HStack { Image(systemName: "person.crop.circle").font(.system(size: 36)); VStack(alignment: .leading, spacing: 4) { Text(item["person"]["name"].string ?? String(localized: "Photo request")); Text(NativeCountCopy.text(.photoStatus, item["photo_count"].integer ?? 0, item["status"].string.map(NativeStatusCopy.sharing) ?? String(localized: "Unavailable"))).loveliesFont(size: 13).foregroundStyle(LoveliesTheme.secondary); Text("\(item["available_count"].integer ?? 0) currently available").loveliesFont(size: 12).foregroundStyle(LoveliesTheme.secondary) }; Spacer(); Image(systemName: "chevron.right") }.padding(14).background(LoveliesTheme.surface, in: RoundedRectangle(cornerRadius: 16))
                         }.buttonStyle(LoveliesPressStyle())
                     }
                     if (store.screen == .sharedHistory ? live.outgoing : live.inbox).isEmpty { Text("No photo requests yet").foregroundStyle(LoveliesTheme.secondary).padding(40) }
@@ -355,14 +355,14 @@ struct LiveInboxView: View {
         }.foregroundStyle(.white).onAppear { if !live.busy { if store.screen == .sharedHistory { live.refreshOutgoing() } else { live.refreshInbox() } } }
             .sheet(isPresented: Binding(get: { live.receipt != nil }, set: { if !$0 { live.receipt = nil; live.pendingReceiptID = nil } })) {
                 VStack(spacing: 18) {
-                    Text(live.receipt?["person"]["name"].string ?? "Photo request").loveliesFont(size: 22, weight: .semibold)
+                    Text(live.receipt?["person"]["name"].string ?? String(localized: "Photo request")).loveliesFont(size: 22, weight: .semibold)
                     Text(NativeCountCopy.text(.reviewed, live.receipt?["photo_count"].integer ?? 0)).foregroundStyle(LoveliesTheme.secondary)
-                    Text(live.receipt?["status"].string ?? "Unavailable")
+                    Text(live.receipt?["status"].string.map(NativeStatusCopy.sharing) ?? String(localized: "Unavailable"))
                     if live.receipt?["status"].string == "requested", live.receipt?["sender"].bool == false {
-                        PinkButton(title: "Accept", enabled: live.canEdit) { live.decide("accept") }; QuietButton(title: "Decline", enabled: live.canEdit) { live.decide("decline") }
+                        PinkButton(title: String(localized: "Accept"), enabled: live.canEdit) { live.decide("accept") }; QuietButton(title: String(localized: "Decline"), enabled: live.canEdit) { live.decide("decline") }
                     }
-                    if live.receipt?["status"].string == "accepted" { PinkButton(title: "View received photos") { live.receipt = nil; store.go(.allPhotos, simulateProgress: false); live.reloadPhotos() }; QuietButton(title: "Revoke access", enabled: live.canEdit) { live.decide("revoke") } }
-                    if live.receipt?["sender"].bool == true, live.receipt?["status"].string == "requested" { QuietButton(title: "Withdraw request", enabled: live.canEdit) { live.decide("withdraw") } }
+                    if live.receipt?["status"].string == "accepted" { PinkButton(title: String(localized: "View received photos")) { live.receipt = nil; store.go(.allPhotos, simulateProgress: false); live.reloadPhotos() }; QuietButton(title: String(localized: "Revoke access"), enabled: live.canEdit) { live.decide("revoke") } }
+                    if live.receipt?["sender"].bool == true, live.receipt?["status"].string == "requested" { QuietButton(title: String(localized: "Withdraw request"), enabled: live.canEdit) { live.decide("withdraw") } }
                     Button("Close") { live.receipt = nil }.frame(minHeight: 48)
                 }.padding(25).frame(maxWidth: .infinity, maxHeight: .infinity).background(LoveliesTheme.canvas).foregroundStyle(.white).presentationDetents([.medium, .large])
             }
@@ -374,7 +374,7 @@ struct LiveNotificationsView: View {
     @EnvironmentObject private var live: LiveAppStore
     var body: some View {
         VStack(spacing: 12) {
-            PageHeader(title: "Notifications", trailing: true)
+            PageHeader(title: String(localized: "Notifications"), trailing: true)
             ScrollView {
                 LazyVStack(spacing: 8) {
                     if live.notifications.isEmpty { Text("No notifications yet").foregroundStyle(LoveliesTheme.secondary).padding(28) }
@@ -385,12 +385,12 @@ struct LiveNotificationsView: View {
                         } label: {
                             HStack(spacing: 13) {
                                 Image(systemName: item["kind"].string == "match" ? "person.2" : "bell").font(.system(size: 22)).foregroundStyle(LoveliesTheme.pink).frame(width: 45)
-                                VStack(alignment: .leading, spacing: 5) { Text(item["title"].string ?? "Notification").loveliesFont(size: 16, weight: .medium); Text(item["created_at"].string ?? "").loveliesFont(size: 12).foregroundStyle(LoveliesTheme.secondary) }
+                                VStack(alignment: .leading, spacing: 5) { Text(item["title"].string ?? String(localized: "Notification")).loveliesFont(size: 16, weight: .medium); Text(item["created_at"].string ?? "").loveliesFont(size: 12).foregroundStyle(LoveliesTheme.secondary) }
                                 Spacer(); if item["read_at"] == .null { Circle().fill(LoveliesTheme.pink).frame(width: 8, height: 8) }
                             }.frame(minHeight: 56).padding(12).background(LoveliesTheme.surface, in: RoundedRectangle(cornerRadius: 16))
                         }.buttonStyle(LoveliesPressStyle()).disabled(!live.canEdit)
                     }
-                    QuietButton(title: "Photo requests") { store.go(.activity, simulateProgress: false); live.refreshInbox() }
+                    QuietButton(title: String(localized: "Photo requests")) { store.go(.activity, simulateProgress: false); live.refreshInbox() }
                 }.padding(.horizontal, 16)
             }
             BottomNavigation(active: .newMatches)
@@ -406,13 +406,13 @@ struct LiveSettingsView: View {
         if screen == .faceManagement || (live.faceLifecycle != nil && live.accountRecovery == nil && live.session?.authenticated != true) { LiveFaceProfileManagementView() }
         else if screen == .privacy && live.session?.authenticated != true { LiveGuestDeletionView() }
         else { VStack(spacing: 12) {
-            PageHeader(title: screen == .profile ? "Profile" : screen.title, trailing: true)
+            PageHeader(title: screen == .profile ? String(localized: "Profile") : screen.title, trailing: true)
             ScrollView {
                 VStack(alignment: .leading, spacing: 15) {
                     if screen == .profile {
-                        HStack { Image(systemName: "person.crop.circle").font(.system(size: 80)).foregroundStyle(LoveliesTheme.pink); VStack(alignment: .leading, spacing: 8) { Text(live.name.isEmpty ? "Your profile" : live.name).loveliesFont(size: 24, weight: .medium); Text(live.session?.authenticated == true ? "Registered face" : "Enrollment account").foregroundStyle(LoveliesTheme.secondary) } }
+                        HStack { Image(systemName: "person.crop.circle").font(.system(size: 80)).foregroundStyle(LoveliesTheme.pink); VStack(alignment: .leading, spacing: 8) { Text(live.name.isEmpty ? String(localized: "Your profile") : live.name).loveliesFont(size: 24, weight: .medium); Text(live.session?.authenticated == true ? String(localized: "Registered face") : String(localized: "Enrollment account")).foregroundStyle(LoveliesTheme.secondary) } }
                         TextField("Your name", text: $live.name).padding(14).background(LoveliesTheme.surface, in: RoundedRectangle(cornerRadius: 15))
-                        PinkButton(title: "Save profile", enabled: live.canEdit) { live.saveProfile() }
+                        PinkButton(title: String(localized: "Save profile"), enabled: live.canEdit) { live.saveProfile() }
                     }
                     if screen == .privacy || screen == .profile {
                         if screen == .privacy {
@@ -426,45 +426,45 @@ struct LiveSettingsView: View {
                         Toggle("Receive photo requests", isOn: preference("receive_matches", read: "receive_matches")).tint(LoveliesTheme.pink)
                         Toggle("Process the photos I add", isOn: preference("processing_consent", read: "processing_enabled")).tint(LoveliesTheme.pink)
                         Text("Matching and processing do not grant photo access. You review sharing and accept incoming requests separately.").loveliesFont(size: 13).foregroundStyle(LoveliesTheme.secondary)
-                        QuietButton(title: "Privacy center") { store.go(.privacy); live.loadPrivacy() }
+                        QuietButton(title: String(localized: "Privacy center")) { store.go(.privacy); live.loadPrivacy() }
                     }
                     if screen == .faceManagement || screen == .profile {
-                        QuietButton(title: "Manage your registered face") { live.openFaceManagement() }
+                        QuietButton(title: String(localized: "Manage your registered face")) { live.openFaceManagement() }
                     }
                     if screen == .security {
                         Text("Account recovery").loveliesFont(size: 18, weight: .medium)
                         Text("Save a private recovery key before losing this device. A fresh selfie is also required. Without a saved key, a lost device key cannot recover this account.").loveliesFont(size: 14).foregroundStyle(LoveliesTheme.secondary)
                         if let key = live.recoveryKey { Text("Recovery key expires \(key.expiresAt.formatted(date: .abbreviated, time: .omitted))").loveliesFont(size: 13).foregroundStyle(LoveliesTheme.secondary) }
-                        QuietButton(title: "Check recovery key", enabled: live.canEdit) { live.loadRecoveryKey() }
-                        PinkButton(title: "Create or view private recovery key", enabled: live.canEdit) { live.createRecoveryBackup() }
-                        QuietButton(title: "Revoke recovery key", enabled: live.canEdit) { live.revokeRecoveryBackup() }
+                        QuietButton(title: String(localized: "Check recovery key"), enabled: live.canEdit) { live.loadRecoveryKey() }
+                        PinkButton(title: String(localized: "Create or view private recovery key"), enabled: live.canEdit) { live.createRecoveryBackup() }
+                        QuietButton(title: String(localized: "Revoke recovery key"), enabled: live.canEdit) { live.revokeRecoveryBackup() }
                         Text("Devices").loveliesFont(size: 18, weight: .medium)
                         ForEach(Array(live.devices.enumerated()), id: \.offset) { _, device in
-                            HStack { Image(systemName: "iphone"); Text(device["current"].bool == true ? "This device" : "Registered device"); Spacer(); Button("Revoke") { live.revoke(device, device: true) }.foregroundStyle(LoveliesTheme.pink).frame(minHeight: 48) }.padding(12).background(LoveliesTheme.surface, in: RoundedRectangle(cornerRadius: 16))
+                            HStack { Image(systemName: "iphone"); Text(device["current"].bool == true ? String(localized: "This device") : String(localized: "Registered device")); Spacer(); Button("Revoke") { live.revoke(device, device: true) }.foregroundStyle(LoveliesTheme.pink).frame(minHeight: 48) }.padding(12).background(LoveliesTheme.surface, in: RoundedRectangle(cornerRadius: 16))
                         }
                         Text("Sessions").loveliesFont(size: 18, weight: .medium)
                         ForEach(Array(live.sessions.enumerated()), id: \.offset) { _, session in
-                            HStack { Text(session["current"].bool == true ? "Current session" : "Other session"); Spacer(); Button("Revoke") { live.revoke(session, device: false) }.foregroundStyle(LoveliesTheme.pink).frame(minHeight: 48) }.padding(12).background(LoveliesTheme.surface, in: RoundedRectangle(cornerRadius: 16))
+                            HStack { Text(session["current"].bool == true ? String(localized: "Current session") : String(localized: "Other session")); Spacer(); Button("Revoke") { live.revoke(session, device: false) }.foregroundStyle(LoveliesTheme.pink).frame(minHeight: 48) }.padding(12).background(LoveliesTheme.surface, in: RoundedRectangle(cornerRadius: 16))
                         }
                     }
                     if screen == .exportData || screen == .privacy {
                         NativePrivacyPanel()
                     }
-                    if screen == .storage { Text("Protected previews are kept only in bounded memory.").foregroundStyle(LoveliesTheme.secondary); QuietButton(title: "Clear cache") { live.clearPreviewCache() } }
-                    if screen == .photoAccessSettings { Text("Your selected Photos access is controlled by iOS. The system picker shares only the photos you choose.").foregroundStyle(LoveliesTheme.secondary); QuietButton(title: "Open iOS Settings") { if let url = URL(string: UIApplication.openSettingsURLString) { UIApplication.shared.open(url) } } }
+                    if screen == .storage { Text("Protected previews are kept only in bounded memory.").foregroundStyle(LoveliesTheme.secondary); QuietButton(title: String(localized: "Clear cache")) { live.clearPreviewCache() } }
+                    if screen == .photoAccessSettings { Text("Your selected Photos access is controlled by iOS. The system picker shares only the photos you choose.").foregroundStyle(LoveliesTheme.secondary); QuietButton(title: String(localized: "Open iOS Settings")) { if let url = URL(string: UIApplication.openSettingsURLString) { UIApplication.shared.open(url) } } }
                     if screen == .help { Text("Register your face, choose photo permissions, add real photos, then review the exact recipients and subsets before sharing. Incoming photos become available after acceptance. Original saving requires the backend's verified entitlement.").foregroundStyle(LoveliesTheme.secondary); NativeSupportPanel() }
                     if screen == .profile { NativeSubscriptionPanel() }
                     if screen == .notificationSettings {
                         NativeNotificationPermissionPanel()
-                        ForEach([("match_alerts", "New Matches"), ("support_alerts", "Support")], id: \.0) { item in Toggle(item.1, isOn: Binding(get: { live.notificationSettings[item.0].bool ?? false }, set: { live.setNotification(item.0, enabled: $0) })).tint(LoveliesTheme.pink).disabled(!live.canEdit) }
+                        ForEach([("match_alerts", String(localized: "New Matches")), ("support_alerts", String(localized: "Support"))], id: \.0) { item in Toggle(item.1, isOn: Binding(get: { live.notificationSettings[item.0].bool ?? false }, set: { live.setNotification(item.0, enabled: $0) })).tint(LoveliesTheme.pink).disabled(!live.canEdit) }
                     }
                     if screen == .allowedPeople {
                         peopleManagement
                     }
-                    if [.noMatches, .offline].contains(screen) { Text(screen == .offline ? "Connection unavailable. Your pending requests are retained under their original keys." : "No confirmed items are available for this account.").foregroundStyle(LoveliesTheme.secondary); PinkButton(title: "Refresh") { live.reloadPhotos() } }
-                    QuietButton(title: "Activity") { store.go(.activity); live.refreshInbox() }
-                    QuietButton(title: "Account & security") { store.go(.security); live.loadDevices() }
-                    QuietButton(title: "Sign out") { live.logout() }
+                    if [.noMatches, .offline].contains(screen) { Text(screen == .offline ? String(localized: "Connection unavailable. Your pending requests are retained under their original keys.") : String(localized: "No confirmed items are available for this account.")).foregroundStyle(LoveliesTheme.secondary); PinkButton(title: String(localized: "Refresh")) { live.reloadPhotos() } }
+                    QuietButton(title: String(localized: "Activity")) { store.go(.activity); live.refreshInbox() }
+                    QuietButton(title: String(localized: "Account & security")) { store.go(.security); live.loadDevices() }
+                    QuietButton(title: String(localized: "Sign out")) { live.logout() }
                 }.padding(20)
             }.scrollDismissesKeyboard(.interactively)
             if screen == .profile { BottomNavigation(active: .profile) }
@@ -487,7 +487,7 @@ struct LiveSettingsView: View {
                 HStack(spacing: 13) {
                     NativePersonAvatar(person: person)
                     VStack(alignment: .leading, spacing: 4) {
-                        Text(person.name.isEmpty ? "Matched person" : person.name)
+                        Text(person.name.isEmpty ? String(localized: "Matched person") : person.name)
                         Text("Can share with").loveliesFont(size: 12).foregroundStyle(LoveliesTheme.secondary)
                     }
                     Spacer()
@@ -517,7 +517,7 @@ struct LiveGuestDeletionView: View {
     @State private var confirming = false
     var body: some View {
         VStack(spacing: 12) {
-            PageHeader(title: "Guest account privacy", trailing: false, back: live.guestDeletion == nil)
+            PageHeader(title: String(localized: "Guest account privacy"), trailing: false, back: live.guestDeletion == nil)
             ScrollView {
                 VStack(alignment: .leading, spacing: 20) {
                     Image(systemName: "person.crop.circle.badge.minus").font(.system(size: 44)).foregroundStyle(LoveliesTheme.pink).accessibilityHidden(true)
@@ -531,17 +531,17 @@ struct LiveGuestDeletionView: View {
                             }.font(.footnote).foregroundStyle(LoveliesTheme.secondary).fixedSize(horizontal: false, vertical: true)
                         }
                         if deletion.completed {
-                            PinkButton(title: "Start again", enabled: !live.busy) { live.startAgainAfterGuestDeletion() }
+                            PinkButton(title: String(localized: "Start again"), enabled: !live.busy) { live.startAgainAfterGuestDeletion() }
                         } else {
-                            PinkButton(title: "Check deletion status", enabled: !live.busy) { live.checkGuestDeletion() }
-                            if deletion.canResumeSetup { action("Resume setup") { live.resumeGuestSetup() } }
-                            if deletion.canRetryOriginal { action("Retry original request") { live.checkGuestDeletion(retry: true) } }
+                            PinkButton(title: String(localized: "Check deletion status"), enabled: !live.busy) { live.checkGuestDeletion() }
+                            if deletion.canResumeSetup { action(String(localized: "Resume setup")) { live.resumeGuestSetup() } }
+                            if deletion.canRetryOriginal { action(String(localized: "Retry original request")) { live.checkGuestDeletion(retry: true) } }
                         }
                     } else {
                         Text("Delete guest account").font(.title2.weight(.semibold)).fixedSize(horizontal: false, vertical: true)
                         Text("You can request deletion of the guest account created on this device before registering your face. No face setup is required.").font(.body).foregroundStyle(LoveliesTheme.secondary).fixedSize(horizontal: false, vertical: true)
                         Text("Requests require independent review. A request is complete only after the server confirms erasure and private-file cleanup.").font(.footnote).foregroundStyle(LoveliesTheme.secondary).fixedSize(horizontal: false, vertical: true)
-                        PinkButton(title: "Request guest account deletion", enabled: live.canDeleteGuest) { confirming = true }
+                        PinkButton(title: String(localized: "Request guest account deletion"), enabled: live.canDeleteGuest) { confirming = true }
                     }
                     if live.busy { HStack(spacing: 12) { ProgressView().tint(LoveliesTheme.pink); Text("Checking with Lovelies…").font(.body) } }
                     Color.clear.frame(height: live.error == nil ? 12 : 120)
@@ -564,28 +564,28 @@ struct LiveGuestDeletionView: View {
         }.buttonStyle(LoveliesPressStyle()).disabled(live.busy)
     }
     private func title(_ deletion: NativeGuestDeletionSummary) -> String {
-        if deletion.completed { return "Guest account deleted" }
-        if deletion.statusUnavailable { return "Deletion status unavailable" }
-        if deletion.requestExpired { return "Approval window expired" }
+        if deletion.completed { return String(localized: "Guest account deleted") }
+        if deletion.statusUnavailable { return String(localized: "Deletion status unavailable") }
+        if deletion.requestExpired { return String(localized: "Approval window expired") }
         switch deletion.status?.phase {
-        case .pendingApproval: return "Awaiting review"
-        case .approved: return "Deletion approved"
-        case .queued: return "Deletion queued"
-        case .processing: return "Deletion in progress"
-        case .rejected: return "Deletion request rejected"
-        case .failed: return "Deletion needs attention"
-        case .cancelled: return "Deletion request cancelled"
-        default: return "Request outcome not confirmed"
+        case .pendingApproval: return String(localized: "Awaiting review")
+        case .approved: return String(localized: "Deletion approved")
+        case .queued: return String(localized: "Deletion queued")
+        case .processing: return String(localized: "Deletion in progress")
+        case .rejected: return String(localized: "Deletion request rejected")
+        case .failed: return String(localized: "Deletion needs attention")
+        case .cancelled: return String(localized: "Deletion request cancelled")
+        default: return String(localized: "Request outcome not confirmed")
         }
     }
     private func detail(_ deletion: NativeGuestDeletionSummary) -> String {
-        if deletion.completed { return "The server confirmed that this guest account and its private files were deleted. Start again only if you want a new guest account." }
-        if deletion.statusUnavailable { return "The server cannot resolve this receipt. It may be unknown, expired or revoked. This does not mean the account was deleted. Your receipt is kept; a new account will not start automatically." }
-        if deletion.requestExpired { return "The seven-day approval window ended before erasure. This is not completed deletion. Resume setup checks the original guest account; it never creates a replacement." }
-        if [.rejected, .cancelled].contains(deletion.status?.phase ?? .pendingApproval) { return "This request did not complete deletion. Resume setup checks the same guest account and restores it only if the server still accepts its credentials." }
-        if deletion.status?.phase == .failed { return "The server reported a failure. Private-file cleanup has not been confirmed. Keep this receipt and check the status again." }
-        if deletion.status == nil { return "A recovery receipt was saved before sending the request. Check its status first. If no request is found, retry uses the original request and the same guest credentials." }
-        return "Setup is paused while the server reviews and completes this request. The encrypted recovery receipt is kept on this device. Checking status does not grant account or photo access." 
+        if deletion.completed { return String(localized: "The server confirmed that this guest account and its private files were deleted. Start again only if you want a new guest account.") }
+        if deletion.statusUnavailable { return String(localized: "The server cannot resolve this receipt. It may be unknown, expired or revoked. This does not mean the account was deleted. Your receipt is kept; a new account will not start automatically.") }
+        if deletion.requestExpired { return String(localized: "The seven-day approval window ended before erasure. This is not completed deletion. Resume setup checks the original guest account; it never creates a replacement.") }
+        if [.rejected, .cancelled].contains(deletion.status?.phase ?? .pendingApproval) { return String(localized: "This request did not complete deletion. Resume setup checks the same guest account and restores it only if the server still accepts its credentials.") }
+        if deletion.status?.phase == .failed { return String(localized: "The server reported a failure. Private-file cleanup has not been confirmed. Keep this receipt and check the status again.") }
+        if deletion.status == nil { return String(localized: "A recovery receipt was saved before sending the request. Check its status first. If no request is found, retry uses the original request and the same guest credentials.") }
+        return String(localized: "Setup is paused while the server reviews and completes this request. The encrypted recovery receipt is kept on this device. Checking status does not grant account or photo access.")
     }
 }
 
@@ -600,14 +600,14 @@ struct LiveAccountRecoveryView: View {
                 HStack { Text("Recover my account").font(.title2.weight(.semibold)); Spacer(); Button("Close") { backup = ""; dismiss() }.frame(minHeight: 48) }
                 Text("Use the private recovery backup you saved in Account & security. We verify one fresh selfie against that account's existing registered face.").foregroundStyle(LoveliesTheme.secondary)
                 if let recovery = live.accountRecovery {
-                    Text(recovery.awaitingServer ? "Recovery is still processing. Check its status before capturing again." : "Your original recovery request is saved on this device.").fixedSize(horizontal: false, vertical: true)
-                    PinkButton(title: "Check recovery", enabled: !live.busy) { live.checkAccountRecovery() }
-                    QuietButton(title: "Use another recovery key", enabled: live.guestDeletion == nil) { replacing = true }
+                    Text(recovery.awaitingServer ? String(localized: "Recovery is still processing. Check its status before capturing again.") : String(localized: "Your original recovery request is saved on this device.")).fixedSize(horizontal: false, vertical: true)
+                    PinkButton(title: String(localized: "Check recovery"), enabled: !live.busy) { live.checkAccountRecovery() }
+                    QuietButton(title: String(localized: "Use another recovery key"), enabled: live.guestDeletion == nil) { replacing = true }
                 } else {
                     SecureField("Private LVR1 recovery backup", text: $backup).textInputAutocapitalization(.never).autocorrectionDisabled()
                         .padding(16).frame(minHeight: 56).background(LoveliesTheme.surface, in: RoundedRectangle(cornerRadius: 16))
                         .accessibilityLabel("Private account recovery backup")
-                    PinkButton(title: "Continue", enabled: !live.busy && !backup.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty) {
+                    PinkButton(title: String(localized: "Continue"), enabled: !live.busy && !backup.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty) {
                         let input = backup; backup = ""; live.beginAccountRecovery(input)
                     }
                 }
@@ -634,7 +634,7 @@ struct LiveRecoveryBackupView: View {
                 if let backup = live.recoveryBackup {
                     Text(backup).font(.system(.body, design: .monospaced)).textSelection(.enabled).padding(16)
                         .frame(maxWidth: .infinity, alignment: .leading).background(LoveliesTheme.surface, in: RoundedRectangle(cornerRadius: 16))
-                    PinkButton(title: copied ? "Copied" : "Copy private backup") {
+                    PinkButton(title: copied ? String(localized: "Copied") : String(localized: "Copy private backup")) {
                         UIPasteboard.general.setItems([["public.utf8-plain-text": backup]], options: [.localOnly: true, .expirationDate: Date().addingTimeInterval(60)])
                         copied = true
                     }
@@ -657,55 +657,55 @@ struct LiveFaceProfileManagementView: View {
     @State private var authenticationConsent = false
     var body: some View {
         VStack(spacing: 12) {
-            PageHeader(title: "Your registered face", trailing: false, back: live.session?.authenticated == true)
+            PageHeader(title: String(localized: "Your registered face"), trailing: false, back: live.session?.authenticated == true)
             ScrollView {
                 VStack(alignment: .leading, spacing: 18) {
                     Image(systemName: "person.crop.rectangle").font(.system(size: 42)).foregroundStyle(LoveliesTheme.pink).accessibilityHidden(true)
                     if let value = live.faceLifecycle {
                         Text(title(value)).font(.title2.weight(.semibold)).fixedSize(horizontal: false, vertical: true)
                         Text(detail(value)).foregroundStyle(LoveliesTheme.secondary).fixedSize(horizontal: false, vertical: true)
-                        status("Face authentication", enabled: value.metadata.authenticationEnabled)
-                        status("Photo matching", enabled: value.metadata.matchingEnabled)
-                        status("Photo processing", enabled: value.metadata.processingEnabled)
-                        if let operation = value.operation { Text("Saved action: \(label(operation.action)) · \(operation.serverState?.replacingOccurrences(of: "_", with: " ") ?? "not confirmed")").font(.footnote).foregroundStyle(LoveliesTheme.secondary).fixedSize(horizontal: false, vertical: true) }
-                        PinkButton(title: "Check status", enabled: !live.busy) { live.checkFaceProfile() }
+                        status(String(localized: "Face authentication"), enabled: value.metadata.authenticationEnabled)
+                        status(String(localized: "Photo matching"), enabled: value.metadata.matchingEnabled)
+                        status(String(localized: "Photo processing"), enabled: value.metadata.processingEnabled)
+                        if let operation = value.operation { Text("Saved action: \(label(operation.action)) · \(operation.serverState.map(NativeStatusCopy.faceOperation) ?? String(localized: "not confirmed"))").font(.footnote).foregroundStyle(LoveliesTheme.secondary).fixedSize(horizontal: false, vertical: true) }
+                        PinkButton(title: String(localized: "Check status"), enabled: !live.busy) { live.checkFaceProfile() }
                         if value.canRenewControl {
-                            QuietButton(title: "Renew expired management control", enabled: !live.busy) { live.renewFaceManagementControl() }
+                            QuietButton(title: String(localized: "Renew expired management control"), enabled: !live.busy) { live.renewFaceManagementControl() }
                         }
                         if value.authorityUnavailable, value.metadata.authenticationEnabled, value.operation == nil || ["applied", "completed", "cancelled"].contains(value.operation?.serverState ?? "") {
-                            QuietButton(title: "Verify retained face", enabled: !live.busy) { live.verifyManagedFace() }
+                            QuietButton(title: String(localized: "Verify retained face"), enabled: !live.busy) { live.verifyManagedFace() }
                             Text("A current matching selfie may restore existing authentication on this device. It does not regrant withdrawn consent or renew this management control.").font(.footnote).foregroundStyle(LoveliesTheme.secondary)
                         }
                         if value.operation?.missingOnServer == true || value.operation?.serverState == nil || value.authorityUnavailable {
-                            QuietButton(title: "Retry saved action", enabled: !live.busy) { live.checkFaceProfile(retry: true) }
+                            QuietButton(title: String(localized: "Retry saved action"), enabled: !live.busy) { live.checkFaceProfile(retry: true) }
                         }
                         if value.operation?.action.captures == true, value.operation?.terminal != true {
-                            QuietButton(title: "Cancel face update") { live.cancelManagedCapture() }
+                            QuietButton(title: String(localized: "Cancel face update")) { live.cancelManagedCapture() }
                         }
                         if let action = value.operation?.action, action.captures, ["pending", "capture_pending", "restart_required", "failed"].contains(value.operation?.serverState ?? ""), !value.awaitingServer {
-                            QuietButton(title: value.operation?.serverState == "restart_required" || value.operation?.serverState == "failed" ? "Start fresh captures" : "Continue capture", enabled: !live.busy) { live.manageFace(action, explicitlyConsented: true) }
+                            QuietButton(title: value.operation?.serverState == "restart_required" || value.operation?.serverState == "failed" ? String(localized: "Start fresh captures") : String(localized: "Continue capture"), enabled: !live.busy) { live.manageFace(action, explicitlyConsented: true) }
                         }
                         if canChoose(value) {
                             if value.metadata.profile != nil {
                                 if value.metadata.matchingEnabled {
-                                    QuietButton(title: "Pause photo matching", enabled: !live.busy) { live.manageFace(.pause) }
+                                    QuietButton(title: String(localized: "Pause photo matching"), enabled: !live.busy) { live.manageFace(.pause) }
                                 } else {
                                     Toggle("I agree to the current photo-matching policy", isOn: $matchingConsent).tint(LoveliesTheme.pink).disabled(live.busy)
                                     Text(value.metadata.photoPolicy).font(.footnote).foregroundStyle(LoveliesTheme.secondary)
-                                    QuietButton(title: "Resume photo matching", enabled: matchingConsent && !live.busy) { live.manageFace(.resume, explicitlyConsented: matchingConsent); matchingConsent = false }
+                                    QuietButton(title: String(localized: "Resume photo matching"), enabled: matchingConsent && !live.busy) { live.manageFace(.resume, explicitlyConsented: matchingConsent); matchingConsent = false }
                                 }
                                 if value.metadata.authenticationEnabled {
-                                    QuietButton(title: "Replace face profile", enabled: !live.busy) { confirmationFor(.replace, value: value) }
-                                    QuietButton(title: "Withdraw face authentication consent", enabled: !live.busy) { confirmationFor(.withdrawAuthentication, value: value) }
-                                    if !value.authenticated { QuietButton(title: "Verify my face", enabled: !live.busy) { live.verifyManagedFace() } }
+                                    QuietButton(title: String(localized: "Replace face profile"), enabled: !live.busy) { confirmationFor(.replace, value: value) }
+                                    QuietButton(title: String(localized: "Withdraw face authentication consent"), enabled: !live.busy) { confirmationFor(.withdrawAuthentication, value: value) }
+                                    if !value.authenticated { QuietButton(title: String(localized: "Verify my face"), enabled: !live.busy) { live.verifyManagedFace() } }
                                 }
-                                QuietButton(title: "Remove face profile", enabled: !live.busy) { confirmationFor(.remove, value: value) }
+                                QuietButton(title: String(localized: "Remove face profile"), enabled: !live.busy) { confirmationFor(.remove, value: value) }
                             }
                             if !value.metadata.authenticationEnabled, !value.cleanupPending {
                                 Toggle("I agree to the current face-authentication policy", isOn: $authenticationConsent).tint(LoveliesTheme.pink).disabled(live.busy)
                                 Text(value.metadata.authPolicy).font(.footnote).foregroundStyle(LoveliesTheme.secondary)
                                 let action: NativeFaceProfileAction = value.metadata.profile == nil ? .enroll : .restoreAuthentication
-                                PinkButton(title: action == .enroll ? "Enroll face again" : "Restore face authentication", enabled: authenticationConsent && !live.busy && (value.metadata.profile != nil || value.metadata.removalState == "completed")) {
+                                PinkButton(title: action == .enroll ? String(localized: "Enroll face again") : String(localized: "Restore face authentication"), enabled: authenticationConsent && !live.busy && (value.metadata.profile != nil || value.metadata.removalState == "completed")) {
                                     live.manageFace(action, explicitlyConsented: authenticationConsent); authenticationConsent = false
                                 }
                             }
@@ -714,7 +714,7 @@ struct LiveFaceProfileManagementView: View {
                     } else {
                         Text("Manage your face profile").font(.title2.weight(.semibold))
                         Text("Check the current server profile before changing matching, authentication or the private reference.").foregroundStyle(LoveliesTheme.secondary).fixedSize(horizontal: false, vertical: true)
-                        PinkButton(title: "Check face profile", enabled: !live.busy) { live.openFaceManagement() }
+                        PinkButton(title: String(localized: "Check face profile"), enabled: !live.busy) { live.openFaceManagement() }
                     }
                     if live.busy { HStack(spacing: 12) { ProgressView().tint(LoveliesTheme.pink); Text("Checking with Lovelies…") } }
                     Color.clear.frame(height: live.error == nil ? 12 : 130)
@@ -724,10 +724,10 @@ struct LiveFaceProfileManagementView: View {
             .onChange(of: live.faceLifecycle?.metadata.version) { _, _ in matchingConsent = false; authenticationConsent = false }
             .onChange(of: live.faceLifecycle?.metadata.authPolicy) { _, _ in authenticationConsent = false }
             .onChange(of: live.faceLifecycle?.metadata.photoPolicy) { _, _ in matchingConsent = false }
-            .confirmationDialog(confirming.map(label) ?? "Manage face profile", isPresented: Binding(get: { confirming != nil }, set: { if !$0 { confirming = nil } }), titleVisibility: .visible) {
+            .confirmationDialog(confirming.map(label) ?? String(localized: "Manage face profile"), isPresented: Binding(get: { confirming != nil }, set: { if !$0 { confirming = nil } }), titleVisibility: .visible) {
                 if let action = confirming {
-                    Button(action == .replace ? "Accept current policy and capture three selfies" : label(action), role: action == .replace ? nil : .destructive) {
-                        guard live.faceLifecycle?.metadata.version == confirmingVersion, live.faceLifecycle?.metadata.authPolicy == confirmingPolicy else { live.error = "Your face profile or policy changed. Check the current status and confirm again."; confirming = nil; return }
+                    Button(action == .replace ? String(localized: "Accept current policy and capture three selfies") : label(action), role: action == .replace ? nil : .destructive) {
+                        guard live.faceLifecycle?.metadata.version == confirmingVersion, live.faceLifecycle?.metadata.authPolicy == confirmingPolicy else { live.error = String(localized: "Your face profile or policy changed. Check the current status and confirm again."); confirming = nil; return }
                         live.manageFace(action, explicitlyConsented: action == .replace); confirming = nil
                     }
                 }
@@ -738,36 +738,36 @@ struct LiveFaceProfileManagementView: View {
         confirmingVersion = value.metadata.version; confirmingPolicy = value.metadata.authPolicy; confirming = action
     }
     private func status(_ title: String, enabled: Bool) -> some View {
-        HStack { Text(title); Spacer(); Text(enabled ? "Enabled" : "Off").foregroundStyle(LoveliesTheme.secondary) }.frame(minHeight: 48)
+        HStack { Text(title); Spacer(); Text(enabled ? String(localized: "Enabled") : String(localized: "Off")).foregroundStyle(LoveliesTheme.secondary) }.frame(minHeight: 48)
     }
     private func canChoose(_ value: NativeFaceLifecycleSummary) -> Bool {
         !value.authorityUnavailable && !value.awaitingServer && (value.operation == nil || ["applied", "completed", "cancelled"].contains(value.operation?.serverState ?? ""))
     }
     private func label(_ action: NativeFaceProfileAction) -> String {
-        switch action { case .pause: return "Pause photo matching"; case .resume: return "Resume photo matching"; case .withdrawAuthentication: return "Withdraw authentication consent"; case .remove: return "Remove face profile"; case .replace: return "Replace face profile"; case .restoreAuthentication: return "Restore face authentication"; case .enroll: return "Enroll face again" }
+        switch action { case .pause: return String(localized: "Pause photo matching"); case .resume: return String(localized: "Resume photo matching"); case .withdrawAuthentication: return String(localized: "Withdraw authentication consent"); case .remove: return String(localized: "Remove face profile"); case .replace: return String(localized: "Replace face profile"); case .restoreAuthentication: return String(localized: "Restore face authentication"); case .enroll: return String(localized: "Enroll face again") }
     }
     private func title(_ value: NativeFaceLifecycleSummary) -> String {
-        if value.authorityUnavailable { return "Profile status unavailable" }
-        if value.cleanupPending { return "Private reference cleanup \(value.metadata.removalState == "none" ? value.operation?.cleanupState ?? "pending" : value.metadata.removalState)" }
-        if value.metadata.profile == nil, value.metadata.removalState == "completed" { return "Face reference removed" }
-        if !value.metadata.authenticationEnabled { return "Face authentication is off" }
-        if value.operation?.serverState == "completed" { return "Face profile updated" }
-        if value.awaitingServer { return "Result not confirmed" }
-        return value.metadata.matchingEnabled ? "Your face profile is active" : "Photo matching is paused"
+        if value.authorityUnavailable { return String(localized: "Profile status unavailable") }
+        if value.cleanupPending { return String(localized: "Private reference cleanup \(NativeStatusCopy.cleanup(value.metadata.removalState == "none" ? value.operation?.cleanupState ?? "pending" : value.metadata.removalState))") }
+        if value.metadata.profile == nil, value.metadata.removalState == "completed" { return String(localized: "Face reference removed") }
+        if !value.metadata.authenticationEnabled { return String(localized: "Face authentication is off") }
+        if value.operation?.serverState == "completed" { return String(localized: "Face profile updated") }
+        if value.awaitingServer { return String(localized: "Result not confirmed") }
+        return value.metadata.matchingEnabled ? String(localized: "Your face profile is active") : String(localized: "Photo matching is paused")
     }
     private func detail(_ value: NativeFaceLifecycleSummary) -> String {
-        if value.authorityUnavailable { return "The saved account and original device key are retained. Status cannot sign you in, and another account will not start automatically." }
-        if value.cleanupPending { return "The server has not yet confirmed removal of all private reference bytes. Keep this saved action and check again; re-enrollment remains unavailable until cleanup is verified." }
-        if !value.metadata.authenticationEnabled { return value.metadata.profile == nil ? "Authentication is off. After confirmed cleanup, you can explicitly enroll three new selfies on this same account and device." : "Your reference is retained for the separately granted matching purpose. Restoring authentication requires current consent and one fresh selfie." }
-        if value.awaitingServer { return "Check the original action before capturing or sending another request. No result or access is inferred from a connection failure." }
-        return value.authenticated ? "Use these controls to manage matching, authentication consent and your private registered reference." : "Your profile is current. Verify one fresh selfie with the retained device key to regain account access."
+        if value.authorityUnavailable { return String(localized: "The saved account and original device key are retained. Status cannot sign you in, and another account will not start automatically.") }
+        if value.cleanupPending { return String(localized: "The server has not yet confirmed removal of all private reference bytes. Keep this saved action and check again; re-enrollment remains unavailable until cleanup is verified.") }
+        if !value.metadata.authenticationEnabled { return value.metadata.profile == nil ? String(localized: "Authentication is off. After confirmed cleanup, you can explicitly enroll three new selfies on this same account and device.") : String(localized: "Your reference is retained for the separately granted matching purpose. Restoring authentication requires current consent and one fresh selfie.") }
+        if value.awaitingServer { return String(localized: "Check the original action before capturing or sending another request. No result or access is inferred from a connection failure.") }
+        return value.authenticated ? String(localized: "Use these controls to manage matching, authentication consent and your private registered reference.") : String(localized: "Your profile is current. Verify one fresh selfie with the retained device key to regain account access.")
     }
     private var confirmation: String {
         switch confirming {
-        case .replace: return "Accept face-authentication policy \(confirmingPolicy ?? "unavailable") and capture three fresh selfies. Each must match your existing registered reference. Completion updates this profile and retires older sessions, recovery keys and photo-access bindings."
-        case .withdrawAuthentication: return "Face sign-in and existing sessions will stop. Matching and processing remain separate. A reference is retained only while separately granted matching needs it; otherwise verified private-reference cleanup is required."
-        case .remove: return "Stop face authentication and matching, then remove the private reference. Account uploads and separately granted photo processing remain. Re-enrollment waits for confirmed cleanup. Downloaded copies cannot be recalled."
-        default: return "Check the current profile before continuing."
+        case .replace: return String(localized: "Accept face-authentication policy \(confirmingPolicy ?? "unavailable") and capture three fresh selfies. Each must match your existing registered reference. Completion updates this profile and retires older sessions, recovery keys and photo-access bindings.")
+        case .withdrawAuthentication: return String(localized: "Face sign-in and existing sessions will stop. Matching and processing remain separate. A reference is retained only while separately granted matching needs it; otherwise verified private-reference cleanup is required.")
+        case .remove: return String(localized: "Stop face authentication and matching, then remove the private reference. Account uploads and separately granted photo processing remain. Re-enrollment waits for confirmed cleanup. Downloaded copies cannot be recalled.")
+        default: return String(localized: "Check the current profile before continuing.")
         }
     }
 }

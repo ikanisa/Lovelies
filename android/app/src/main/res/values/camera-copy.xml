@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="camera_recovery_permission_required">Allow camera access to take a fresh photo.</string>
+    <string name="camera_recovery_initialization_timeout">The camera did not start. Close other camera apps and retry.</string>
+    <string name="camera_recovery_disconnected">The camera was interrupted. Return here and retry.</string>
+    <string name="camera_recovery_surface_replaced">The camera view changed. Retry the preview.</string>
+    <string name="camera_recovery_unavailable">The camera is unavailable. Close other camera apps and retry.</string>
+    <string name="camera_recovery_capture_failed">The photo was not captured. Hold the phone steady and retry.</string>
+    <string name="camera_recovery_review_expired">This preview is no longer current. Take another photo.</string>
+    <string name="camera_recovery_image_invalid">That photo could not be read. Retake it.</string>
+    <string name="camera_recovery_capture_too_large">That photo is too large. Retake it with the camera.</string>
+    <string name="camera_recovery_no_face">No usable face was found. Keep your face inside the frame and retake.</string>
+    <string name="camera_recovery_multiple_faces">More than one face was found. Take the photo with only you in the frame.</string>
+    <string name="camera_recovery_quality_low">Retake in better light and hold the phone steady.</string>
+    <string name="camera_recovery_cannot_continue">The camera could not continue. Retry when it is available.</string>
+    <string name="camera_permission_prompt">Use your camera to take a fresh photo.</string>
+    <string name="camera_permission_changed">Camera access changed. Allow access to continue your saved setup.</string>
+    <string name="camera_permission_denied">Camera access was denied. You can allow it when you’re ready.</string>
+    <string name="camera_permission_disabled">Camera access is disabled. Enable Camera in Lovelies settings.</string>
+    <string name="camera_allow_access">Allow camera</string>
+    <string name="camera_open_settings">Open Settings</string>
+    <string name="camera_starting">Starting camera…</string>
+    <string name="camera_retry">Retry camera</string>
+    <string name="camera_paused">Camera paused. Return to Lovelies to continue.</string>
+</resources>

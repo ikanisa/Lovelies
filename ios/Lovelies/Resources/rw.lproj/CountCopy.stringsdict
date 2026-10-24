@@ -1,0 +1,129 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>upload_photo_count</key>
+	<dict>
+		<key>NSStringLocalizedFormatKey</key>
+		<string>Ohereza %#@photos@</string>
+		<key>photos</key>
+		<dict>
+			<key>NSStringFormatSpecTypeKey</key>
+			<string>NSStringPluralRuleType</string>
+			<key>NSStringFormatValueTypeKey</key>
+			<string>ld</string>
+			<key>one</key>
+			<string>ifoto %ld</string>
+			<key>other</key>
+			<string>amafoto %ld</string>
+		</dict>
+	</dict>
+	<key>review_photo_people_count</key>
+	<dict>
+		<key>NSStringLocalizedFormatKey</key>
+		<string>%#@photos@ · %#@people@</string>
+		<key>photos</key>
+		<dict>
+			<key>NSStringFormatSpecTypeKey</key>
+			<string>NSStringPluralRuleType</string>
+			<key>NSStringFormatValueTypeKey</key>
+			<string>ld</string>
+			<key>one</key>
+			<string>ifoto %ld</string>
+			<key>other</key>
+			<string>amafoto %ld</string>
+		</dict>
+		<key>people</key>
+		<dict>
+			<key>NSStringFormatSpecTypeKey</key>
+			<string>NSStringPluralRuleType</string>
+			<key>NSStringFormatValueTypeKey</key>
+			<string>ld</string>
+			<key>one</key>
+			<string>umuntu %ld</string>
+			<key>other</key>
+			<string>abantu %ld</string>
+		</dict>
+	</dict>
+	<key>limited_review_photo_count</key>
+	<dict>
+		<key>NSStringLocalizedFormatKey</key>
+		<string>Iri suzuma rireba %#@photos@. Hitamo irindi tsinda kugira ngo usuzume ayandi.</string>
+		<key>photos</key>
+		<dict>
+			<key>NSStringFormatSpecTypeKey</key>
+			<string>NSStringPluralRuleType</string>
+			<key>NSStringFormatValueTypeKey</key>
+			<string>ld</string>
+			<key>one</key>
+			<string>ifoto %ld</string>
+			<key>other</key>
+			<string>amafoto %ld</string>
+		</dict>
+	</dict>
+	<key>matched_photo_count</key>
+	<dict>
+		<key>NSStringLocalizedFormatKey</key>
+		<string>%#@photos@</string>
+		<key>photos</key>
+		<dict>
+			<key>NSStringFormatSpecTypeKey</key>
+			<string>NSStringPluralRuleType</string>
+			<key>NSStringFormatValueTypeKey</key>
+			<string>ld</string>
+			<key>one</key>
+			<string>ifoto %ld yahujwe n’uyu muntu</string>
+			<key>other</key>
+			<string>amafoto %ld yahujwe n’uyu muntu</string>
+		</dict>
+	</dict>
+	<key>photo_count</key>
+	<dict>
+		<key>NSStringLocalizedFormatKey</key>
+		<string>%#@photos@</string>
+		<key>photos</key>
+		<dict>
+			<key>NSStringFormatSpecTypeKey</key>
+			<string>NSStringPluralRuleType</string>
+			<key>NSStringFormatValueTypeKey</key>
+			<string>ld</string>
+			<key>one</key>
+			<string>ifoto %ld</string>
+			<key>other</key>
+			<string>amafoto %ld</string>
+		</dict>
+	</dict>
+	<key>photo_status_count</key>
+	<dict>
+		<key>NSStringLocalizedFormatKey</key>
+		<string>%#@photos@ · %@</string>
+		<key>photos</key>
+		<dict>
+			<key>NSStringFormatSpecTypeKey</key>
+			<string>NSStringPluralRuleType</string>
+			<key>NSStringFormatValueTypeKey</key>
+			<string>ld</string>
+			<key>one</key>
+			<string>ifoto %ld</string>
+			<key>other</key>
+			<string>amafoto %ld</string>
+		</dict>
+	</dict>
+	<key>reviewed_photo_count</key>
+	<dict>
+		<key>NSStringLocalizedFormatKey</key>
+		<string>%#@photos@</string>
+		<key>photos</key>
+		<dict>
+			<key>NSStringFormatSpecTypeKey</key>
+			<string>NSStringPluralRuleType</string>
+			<key>NSStringFormatValueTypeKey</key>
+			<string>ld</string>
+			<key>one</key>
+			<string>ifoto %ld yasuzumwe</string>
+			<key>other</key>
+			<string>amafoto %ld yasuzumwe</string>
+		</dict>
+	</dict>
+</dict>
+</plist>

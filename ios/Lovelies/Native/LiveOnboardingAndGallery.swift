@@ -100,17 +100,17 @@ struct LiveOnboardingView: View {
                 Text("Your photos\nfind their people").loveliesFont(size: 23, weight: .semibold).multilineTextAlignment(.center)
                 Text("We match your photos.\nYou choose what to share.").loveliesFont(size: 16).foregroundStyle(LoveliesTheme.secondary).multilineTextAlignment(.center)
                 Spacer()
-                PinkButton(title: "Get Started", enabled: live.connected && !live.busy) { store.go(.photoAccessPrompt) }
-                QuietButton(title: "Recover my account", enabled: !live.busy && live.guestDeletion == nil) { live.accountRecoverySheet = true }
+                PinkButton(title: String(localized: "Get Started"), enabled: live.connected && !live.busy) { store.go(.photoAccessPrompt) }
+                QuietButton(title: String(localized: "Recover my account"), enabled: !live.busy && live.guestDeletion == nil) { live.accountRecoverySheet = true }
                 NativePolicyPanel()
                 if live.session?.authenticated == false {
-                    QuietButton(title: "Delete guest account", enabled: live.canDeleteGuest) { store.go(.privacy, simulateProgress: false) }
+                    QuietButton(title: String(localized: "Delete guest account"), enabled: live.canDeleteGuest) { store.go(.privacy, simulateProgress: false) }
                 }
                 if live.busy { ProgressView().tint(LoveliesTheme.pink) }
             }.padding(22).foregroundStyle(.white)
         case .photoAccessPrompt, .photoAccessOptions:
             LoveliesPage(spacing: 14, padding: 0) {
-                PageHeader(title: "Choose Photo Access")
+                PageHeader(title: String(localized: "Choose Photo Access"))
                 PhotoHeart(size: 80).padding(.vertical, 20)
                 VStack(alignment: .leading, spacing: 14) {
                     Label("You choose the photos", systemImage: "photo.on.rectangle.angled").font(.title3.weight(.semibold))
@@ -122,9 +122,9 @@ struct LiveOnboardingView: View {
                 if !live.policy.isEmpty { Text("Face policy: \(live.policy)").loveliesFont(size: 11).foregroundStyle(LoveliesTheme.secondary) }
                 NativePolicyPanel()
                 Spacer(minLength: 0)
-                PinkButton(title: "Continue", enabled: live.authConsent && !live.busy) { store.go(.faceEnrollment, simulateProgress: false); live.prepareFace() }
+                PinkButton(title: String(localized: "Continue"), enabled: live.authConsent && !live.busy) { store.go(.faceEnrollment, simulateProgress: false); live.prepareFace() }
                 if live.session?.authenticated == false {
-                    QuietButton(title: "Delete guest account", enabled: live.canDeleteGuest) { store.go(.privacy, simulateProgress: false) }
+                    QuietButton(title: String(localized: "Delete guest account"), enabled: live.canDeleteGuest) { store.go(.privacy, simulateProgress: false) }
                 }
             }.padding(.horizontal, 20).padding(.bottom, 16).foregroundStyle(.white).onAppear { if live.policy.isEmpty { live.loadFacePolicy() } }
         case .faceEnrollment: LiveCameraEnrollment(camera: live.camera)
@@ -133,29 +133,29 @@ struct LiveOnboardingView: View {
                 PageHeader(title: "", trailing: false)
                 if let image = live.lastSelfie { Image(uiImage: image).resizable().scaledToFit().frame(maxHeight: 330).clipShape(RoundedRectangle(cornerRadius: 24)) }
                 Text("Let's try that again").loveliesFont(size: 23, weight: .medium)
-                Text(live.faceQualityFailure?.message ?? "Make sure your face is well lit, in focus, and centered.").loveliesFont(size: 16).foregroundStyle(LoveliesTheme.secondary).multilineTextAlignment(.center)
+                Text(live.faceQualityFailure?.message ?? String(localized: "Make sure your face is well lit, in focus, and centered.")).loveliesFont(size: 16).foregroundStyle(LoveliesTheme.secondary).multilineTextAlignment(.center)
                 Text("Your face has not been verified. The rejected sequence must be checked before starting fresh selfies.")
                     .loveliesFont(size: 14).foregroundStyle(LoveliesTheme.secondary).multilineTextAlignment(.center)
-                Spacer(); PinkButton(title: "Retake selfies", enabled: !live.busy) { live.retakeRejectedSequence() }
+                Spacer(); PinkButton(title: String(localized: "Retake selfies"), enabled: !live.busy) { live.retakeRejectedSequence() }
             }.padding(22).foregroundStyle(.white)
         case .processing:
             LoveliesPage(spacing: 20) {
-                PageHeader(title: "Face Setup", close: true, trailing: false)
+                PageHeader(title: String(localized: "Face Setup"), close: true, trailing: false)
                 AssetImage(name: "processing-hero").scaledToFit().frame(maxWidth: 240, maxHeight: 240).accessibilityHidden(true)
                 Text("Verifying your face…").font(.title2.weight(.medium)).accessibilityAddTraits(.isHeader)
                 if live.busy { ProgressView().tint(LoveliesTheme.pink).accessibilityLabel("Verification in progress") }
                 Text("Leaving this screen keeps the saved request. Verification is complete only after the backend confirms it.").font(.body).foregroundStyle(LoveliesTheme.secondary)
-                if live.faceLifecycle != nil, live.accountRecovery == nil { QuietButton(title: "Check face profile", enabled: !live.busy) { live.checkFaceProfile() } }
-                else if live.accountRecovery != nil { QuietButton(title: "Check recovery", enabled: !live.busy) { live.checkAccountRecovery() } }
-                else if live.enrollment != nil { QuietButton(title: "Check enrollment", enabled: !live.busy) { live.checkEnrollment() } }
+                if live.faceLifecycle != nil, live.accountRecovery == nil { QuietButton(title: String(localized: "Check face profile"), enabled: !live.busy) { live.checkFaceProfile() } }
+                else if live.accountRecovery != nil { QuietButton(title: String(localized: "Check recovery"), enabled: !live.busy) { live.checkAccountRecovery() } }
+                else if live.enrollment != nil { QuietButton(title: String(localized: "Check enrollment"), enabled: !live.busy) { live.checkEnrollment() } }
             }.foregroundStyle(.white)
         default:
             LoveliesPage(spacing: 20, padding: 0) {
-                PageHeader(title: "Setup Complete", trailing: false)
+                PageHeader(title: String(localized: "Setup Complete"), trailing: false)
                 Spacer(); AssetImage(name: "setup-hero").scaledToFit().frame(width: 270)
                 Text("You're all set!").loveliesFont(size: 25, weight: .medium)
                 Text("Your face is registered.\nYou decide who sees your photos.").loveliesFont(size: 17).foregroundStyle(LoveliesTheme.secondary).multilineTextAlignment(.center)
-                Spacer(); PinkButton(title: "Let's Go", enabled: live.session?.authenticated == true) { store.go(.home, replace: true, simulateProgress: false); live.reloadPhotos() }
+                Spacer(); PinkButton(title: String(localized: "Let's Go"), enabled: live.session?.authenticated == true) { store.go(.home, replace: true, simulateProgress: false); live.reloadPhotos() }
             }.padding(23).foregroundStyle(.white)
         }
     }
@@ -175,14 +175,14 @@ struct LiveCameraEnrollment: View {
                         Image(uiImage: image).resizable().scaledToFit().background(.black)
                     } else if !camera.ready {
                         VStack(spacing: 16) {
-                            if camera.state.phase == .initializing || camera.state.phase == .permissionPending { ProgressView().tint(.white); Text(camera.state.phase == .permissionPending ? "Waiting for camera permission" : "Opening camera") }
+                            if camera.state.phase == .initializing || camera.state.phase == .permissionPending { ProgressView().tint(.white); Text(camera.state.phase == .permissionPending ? String(localized: "Waiting for camera permission") : String(localized: "Opening camera")) }
                             else {
                                 Image(systemName: "camera").font(.system(size: 30))
-                                Text(camera.error ?? "Open the camera to take your selfie.").multilineTextAlignment(.center)
+                                Text(camera.error ?? String(localized: "Open the camera to take your selfie.")).multilineTextAlignment(.center)
                                 if camera.state.canOpenSettings {
-                                    QuietButton(title: "Open Settings") { if let url = URL(string: UIApplication.openSettingsURLString) { UIApplication.shared.open(url) } }
+                                    QuietButton(title: String(localized: "Open Settings")) { if let url = URL(string: UIApplication.openSettingsURLString) { UIApplication.shared.open(url) } }
                                 } else if camera.state.phase != .restricted {
-                                    QuietButton(title: "Open camera again", enabled: !live.busy) { live.recoverCamera() }
+                                    QuietButton(title: String(localized: "Open camera again"), enabled: !live.busy) { live.recoverCamera() }
                                 }
                             }
                         }.padding(24).foregroundStyle(.white).background(.black.opacity(0.7), in: RoundedRectangle(cornerRadius: 20))
@@ -195,8 +195,8 @@ struct LiveCameraEnrollment: View {
                     Text("Review your selfie").loveliesFont(size: 20, weight: .medium).foregroundStyle(.white)
                     Text("Captured on this device. Not yet verified.").loveliesFont(size: 14).multilineTextAlignment(.center).foregroundStyle(LoveliesTheme.secondary)
                     HStack(spacing: 12) {
-                        QuietButton(title: "Retake", enabled: !live.busy) { live.retakeReviewedSelfie() }
-                        PinkButton(title: "Use photo", enabled: !live.busy && live.isForeground) { live.useReviewedSelfie() }
+                        QuietButton(title: String(localized: "Retake"), enabled: !live.busy) { live.retakeReviewedSelfie() }
+                        PinkButton(title: String(localized: "Use photo"), enabled: !live.busy && live.isForeground) { live.useReviewedSelfie() }
                     }.padding(.horizontal, 20)
                 } else {
                     Button { live.takeSelfie() } label: { Circle().fill(.white).frame(width: 52, height: 52).padding(5).overlay(Circle().stroke(.white, lineWidth: 2)) }
@@ -205,19 +205,19 @@ struct LiveCameraEnrollment: View {
                     Text(instruction).loveliesFont(size: 14).multilineTextAlignment(.center).foregroundStyle(LoveliesTheme.secondary)
                 }
                 if live.challenge == nil, live.faceLifecycle != nil, live.accountRecovery == nil {
-                    QuietButton(title: "Check face profile", enabled: !live.busy) { live.checkFaceProfile() }.padding(.horizontal, 20)
+                    QuietButton(title: String(localized: "Check face profile"), enabled: !live.busy) { live.checkFaceProfile() }.padding(.horizontal, 20)
                 } else if live.challenge == nil, live.accountRecovery != nil {
-                    QuietButton(title: "Check recovery", enabled: !live.busy) { live.checkAccountRecovery() }.padding(.horizontal, 20)
+                    QuietButton(title: String(localized: "Check recovery"), enabled: !live.busy) { live.checkAccountRecovery() }.padding(.horizontal, 20)
                 } else if live.challenge == nil, live.enrollment != nil {
-                    QuietButton(title: "Check enrollment", enabled: !live.busy) { live.checkEnrollment() }.padding(.horizontal, 20)
+                    QuietButton(title: String(localized: "Check enrollment"), enabled: !live.busy) { live.checkEnrollment() }.padding(.horizontal, 20)
                 }
                 if live.captureNeedsStatus {
                     Text("This capture has not been confirmed. Check the saved request before taking another selfie.")
                         .loveliesFont(size: 14).foregroundStyle(LoveliesTheme.secondary).multilineTextAlignment(.center).padding(.horizontal, 20)
-                    QuietButton(title: "Check saved capture", enabled: !live.busy) { live.retakeRejectedSequence() }.padding(.horizontal, 20)
+                    QuietButton(title: String(localized: "Check saved capture"), enabled: !live.busy) { live.retakeRejectedSequence() }.padding(.horizontal, 20)
                 }
                 if live.faceLifecycle?.operation?.action.captures == true, live.faceLifecycle?.operation?.terminal != true {
-                    QuietButton(title: "Cancel face update") { live.cancelManagedCapture() }.padding(.horizontal, 20)
+                    QuietButton(title: String(localized: "Cancel face update")) { live.cancelManagedCapture() }.padding(.horizontal, 20)
                 }
                 if let cameraError = camera.error { Text(cameraError).loveliesFont(size: 13).foregroundStyle(LoveliesTheme.pink).multilineTextAlignment(.center) }
                 Spacer(minLength: 0)
@@ -229,9 +229,9 @@ struct LiveCameraEnrollment: View {
         .onDisappear { live.stopFaceCameraPresentation() }
     }
     private var instruction: String {
-        guard let challenge = live.challenge, challenge.poses.indices.contains(live.captureReceipts.count) else { return "Position your face\nin the frame" }
+        guard let challenge = live.challenge, challenge.poses.indices.contains(live.captureReceipts.count) else { return String(localized: "Position your face\nin the frame") }
         let pose = challenge.poses[live.captureReceipts.count]
-        return (pose == "left" ? "Turn slightly to your left" : pose == "right" ? "Turn slightly to your right" : "Position your face in the frame") + "\n\(live.captureReceipts.count + 1) of \(challenge.poses.count) selfies"
+        return (pose == "left" ? String(localized: "Turn slightly to your left") : pose == "right" ? String(localized: "Turn slightly to your right") : String(localized: "Position your face in the frame")) + String(localized: "\n\(live.captureReceipts.count + 1) of \(challenge.poses.count) selfies")
     }
 }
 
@@ -307,7 +307,7 @@ struct LivePhotoGrid: View {
                                     .frame(width: width, height: width * photo.ratio).clipped().clipShape(RoundedRectangle(cornerRadius: 12))
                                     .overlay(alignment: .topTrailing) { if let selection { CheckBadge(selected: selection.contains(photo.id), size: 26).padding(6) } }
                             }.buttonStyle(LoveliesPressStyle()).id(photo.id).accessibilityLabel(photo.title)
-                                .accessibilityValue(selection.map { $0.contains(photo.id) ? "Selected" : "Not selected" } ?? "")
+                                .accessibilityValue(selection.map { $0.contains(photo.id) ? String(localized: "Selected") : String(localized: "Not selected") } ?? "")
                                 .accessibilityAddTraits(selection?.contains(photo.id) == true ? .isSelected : [])
                         }
                     }.frame(width: width)
@@ -332,13 +332,13 @@ struct LiveGalleryView: View {
         else if screen == .notifications { LiveNotificationsView() }
         else if screen == .filters {
             LoveliesPage {
-                PageHeader(title: "Photo Filters", trailing: false)
+                PageHeader(title: String(localized: "Photo Filters"), trailing: false)
                 Picker("Photo source", selection: $live.gallerySource) { Text("All").tag("all"); Text("Added by me").tag("contributions"); Text("Received").tag("received") }.pickerStyle(.menu)
                 Picker("Orientation", selection: $live.galleryCategory) { Text("Any orientation").tag("all"); Text("Portrait").tag("portraits"); Text("Landscape").tag("landscapes") }.pickerStyle(.menu)
-                PinkButton(title: "Apply filters", enabled: live.canEdit) { live.searchLibrary() }
+                PinkButton(title: String(localized: "Apply filters"), enabled: live.canEdit) { live.searchLibrary() }
                 if live.busy { ProgressView("Finding photos…").tint(LoveliesTheme.pink) }
                 Text("\(visible.count) matching photos loaded").font(.body).foregroundStyle(LoveliesTheme.secondary)
-                QuietButton(title: "View matching photos") { store.go(.search) }
+                QuietButton(title: String(localized: "View matching photos")) { store.go(.search) }
             }.foregroundStyle(.white).onAppear { live.showLibrary(screen) }
         }
         else {
@@ -347,7 +347,7 @@ struct LiveGalleryView: View {
                     if screen == .home { Wordmark(width: 154) }
                     else {
                         Button { store.back() } label: { Image(systemName: "chevron.left").frame(width: 44, height: 44) }.accessibilityLabel("Back")
-                        Text(screen == .search ? "Search" : screen == .favorites ? "Favorites" : screen == .newMatches ? "Matches" : "Photos").font(.headline).accessibilityAddTraits(.isHeader)
+                        Text(screen == .search ? String(localized: "Search") : screen == .favorites ? String(localized: "Favorites") : screen == .newMatches ? String(localized: "Matches") : String(localized: "Photos")).font(.headline).accessibilityAddTraits(.isHeader)
                     }
                     Spacer(minLength: 0)
                     Button { store.go(.search) } label: { Image(systemName: "magnifyingglass").frame(width: 48, height: 48) }.accessibilityLabel("Search all authorized photos")
@@ -368,9 +368,9 @@ struct LiveGalleryView: View {
                     if visible.isEmpty {
                         VStack(spacing: 18) {
                             Image(systemName: screen == .favorites ? "heart" : "photo.on.rectangle").font(.system(size: 52)).foregroundStyle(LoveliesTheme.pink).accessibilityHidden(true)
-                            Text(live.busy ? "Loading photos…" : screen == .favorites ? "No favorites here yet" : live.query.isEmpty && live.galleryCategory == "all" ? "No photos yet" : "No matching photos").font(.title2.weight(.medium))
-                            Text(screen == .favorites ? "Favorite a photo in its viewer. Load more to find favorites from older pages." : screen == .newMatches ? "Received photos appear after a contributor shares them and you accept access." : "Add photos or accept a photo request. Search and filters use only photos your account can currently access.").font(.body).foregroundStyle(LoveliesTheme.secondary)
-                            if !live.busy, screen != .newMatches { PinkButton(title: "Add Photos") { store.go(.uploadEntry) } }
+                            Text(live.busy ? String(localized: "Loading photos…") : screen == .favorites ? String(localized: "No favorites here yet") : live.query.isEmpty && live.galleryCategory == "all" ? String(localized: "No photos yet") : String(localized: "No matching photos")).font(.title2.weight(.medium))
+                            Text(screen == .favorites ? String(localized: "Favorite a photo in its viewer. Load more to find favorites from older pages.") : screen == .newMatches ? String(localized: "Received photos appear after a contributor shares them and you accept access.") : String(localized: "Add photos or accept a photo request. Search and filters use only photos your account can currently access.")).font(.body).foregroundStyle(LoveliesTheme.secondary)
+                            if !live.busy, screen != .newMatches { PinkButton(title: String(localized: "Add Photos")) { store.go(.uploadEntry) } }
                         }.padding(24).padding(.top, 50)
                     } else {
                         LivePhotoGrid(photos: visible, columnCount: live.galleryColumns) { live.openPhoto($0) }.padding(.horizontal, 8)
@@ -387,7 +387,7 @@ struct LiveGalleryView: View {
                     Button { live.galleryColumns = max(2, live.galleryColumns - 1); live.persistLibraryState() } label: { Image(systemName: "square.grid.2x2").frame(width: 44, height: 44) }.accessibilityLabel("Show larger photos").disabled(live.galleryColumns == 2)
                 }.padding(.horizontal, 16)
                 if let upload = live.uploadRecovery, !upload.batch.finished {
-                    Button { live.showPhotoUploads() } label: { HStack(spacing: 10) { Image(systemName: "arrow.up.circle").font(.system(size: 22)); Text(upload.batch.received ? "Photo matching" : live.uploadRunning ? "Uploading photos" : "Saved photo upload").font(.subheadline); Spacer(); Text("\(Int(upload.batch.uploadProgress * 100))% received").font(.footnote); Image(systemName: "chevron.right") }.padding(.horizontal, 16).frame(minHeight: 48).background(LoveliesTheme.surface, in: Capsule()) }.buttonStyle(LoveliesPressStyle()).padding(.horizontal, 12).accessibilityLabel("Open saved photo upload")
+                    Button { live.showPhotoUploads() } label: { HStack(spacing: 10) { Image(systemName: "arrow.up.circle").font(.system(size: 22)); Text(upload.batch.received ? String(localized: "Photo matching") : live.uploadRunning ? String(localized: "Uploading photos") : String(localized: "Saved photo upload")).font(.subheadline); Spacer(); Text("\(Int(upload.batch.uploadProgress * 100))% received").font(.footnote); Image(systemName: "chevron.right") }.padding(.horizontal, 16).frame(minHeight: 48).background(LoveliesTheme.surface, in: Capsule()) }.buttonStyle(LoveliesPressStyle()).padding(.horizontal, 12).accessibilityLabel("Open saved photo upload")
                 }
                 if live.busy { ProgressView().tint(LoveliesTheme.pink).accessibilityLabel("Loading") }
                 BottomNavigation(active: screen == .allPhotos ? .allPhotos : screen == .favorites ? .favorites : screen == .newMatches ? .newMatches : .home)
@@ -425,7 +425,7 @@ struct LiveGalleryView: View {
                         Button { live.saveCurrentPhoto() } label: { Image(systemName: "square.and.arrow.down").frame(width: 48, height: 48) }.accessibilityLabel("Save authorized original to Photos")
                         Button { live.shareCurrentPhoto() } label: { Image(systemName: "square.and.arrow.up").frame(width: 48, height: 48) }.accessibilityLabel("Share authorized original")
                         if photo.feedSource != "received" { Button { live.beginReview(photoIDs: [photo.id], source: photo.source, destination: .photoPeople) } label: { Image(systemName: "person.2").frame(width: 48, height: 48) }.accessibilityLabel("Matched people and exclusions") }
-                        Button { live.toggleFavorite(photo.id) } label: { Image(systemName: live.favoriteIDs.contains(photo.id) ? "heart.fill" : "heart").frame(width: 48, height: 48).foregroundStyle(live.favoriteIDs.contains(photo.id) ? LoveliesTheme.pink : .white) }.accessibilityLabel(live.favoriteIDs.contains(photo.id) ? "Remove favorite" : "Favorite photo")
+                        Button { live.toggleFavorite(photo.id) } label: { Image(systemName: live.favoriteIDs.contains(photo.id) ? "heart.fill" : "heart").frame(width: 48, height: 48).foregroundStyle(live.favoriteIDs.contains(photo.id) ? LoveliesTheme.pink : .white) }.accessibilityLabel(live.favoriteIDs.contains(photo.id) ? String(localized: "Remove favorite") : String(localized: "Favorite photo"))
                         Button { movePhoto(1) } label: { Image(systemName: "chevron.right").frame(width: 48, height: 48) }.accessibilityLabel("Next photo")
                     }.padding(.horizontal, 12) }.background(LoveliesTheme.canvas) }
                 } else { ContentUnavailableView("Photo unavailable", systemImage: "photo", description: Text("Return to your library and refresh current access.")) }

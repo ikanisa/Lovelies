@@ -1,0 +1,232 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>
+%lld of %lld selfies</key>
+	<dict>
+		<key>NSStringLocalizedFormatKey</key>
+		<string>
+%lld of %#@selfies@</string>
+		<key>selfies</key>
+		<dict>
+			<key>NSStringFormatSpecTypeKey</key>
+			<string>NSStringPluralRuleType</string>
+			<key>NSStringFormatValueTypeKey</key>
+			<string>lld</string>
+			<key>one</key>
+			<string>%lld selfie</string>
+			<key>other</key>
+			<string>%lld selfies</string>
+		</dict>
+	</dict>
+	<key>%lld devices</key>
+	<dict>
+		<key>NSStringLocalizedFormatKey</key>
+		<string>%#@devices@</string>
+		<key>devices</key>
+		<dict>
+			<key>NSStringFormatSpecTypeKey</key>
+			<string>NSStringPluralRuleType</string>
+			<key>NSStringFormatValueTypeKey</key>
+			<string>lld</string>
+			<key>one</key>
+			<string>%lld device</string>
+			<key>other</key>
+			<string>%lld devices</string>
+		</dict>
+	</dict>
+	<key>%lld matching photos loaded</key>
+	<dict>
+		<key>NSStringLocalizedFormatKey</key>
+		<string>%#@photos@ loaded</string>
+		<key>photos</key>
+		<dict>
+			<key>NSStringFormatSpecTypeKey</key>
+			<string>NSStringPluralRuleType</string>
+			<key>NSStringFormatValueTypeKey</key>
+			<string>lld</string>
+			<key>one</key>
+			<string>%lld matching photo</string>
+			<key>other</key>
+			<string>%lld matching photos</string>
+		</dict>
+	</dict>
+	<key>%lld of %lld bytes</key>
+	<dict>
+		<key>NSStringLocalizedFormatKey</key>
+		<string>%lld of %#@bytes@</string>
+		<key>bytes</key>
+		<dict>
+			<key>NSStringFormatSpecTypeKey</key>
+			<string>NSStringPluralRuleType</string>
+			<key>NSStringFormatValueTypeKey</key>
+			<string>lld</string>
+			<key>one</key>
+			<string>%lld byte</string>
+			<key>other</key>
+			<string>%lld bytes</string>
+		</dict>
+	</dict>
+	<key>%lld photos added to your library
+and ready to find their people.</key>
+	<dict>
+		<key>NSStringLocalizedFormatKey</key>
+		<string>%#@photos@</string>
+		<key>photos</key>
+		<dict>
+			<key>NSStringFormatSpecTypeKey</key>
+			<string>NSStringPluralRuleType</string>
+			<key>NSStringFormatValueTypeKey</key>
+			<string>lld</string>
+			<key>one</key>
+			<string>%lld photo added to your library
+and ready to find its people.</string>
+			<key>other</key>
+			<string>%lld photos added to your library
+and ready to find their people.</string>
+		</dict>
+	</dict>
+	<key>Just now  ·  %lld photos</key>
+	<dict>
+		<key>NSStringLocalizedFormatKey</key>
+		<string>Just now  ·  %#@photos@</string>
+		<key>photos</key>
+		<dict>
+			<key>NSStringFormatSpecTypeKey</key>
+			<string>NSStringPluralRuleType</string>
+			<key>NSStringFormatValueTypeKey</key>
+			<string>lld</string>
+			<key>one</key>
+			<string>%lld photo</string>
+			<key>other</key>
+			<string>%lld photos</string>
+		</dict>
+	</dict>
+	<key>Matched in %lld photos</key>
+	<dict>
+		<key>NSStringLocalizedFormatKey</key>
+		<string>Matched in %#@photos@</string>
+		<key>photos</key>
+		<dict>
+			<key>NSStringFormatSpecTypeKey</key>
+			<string>NSStringPluralRuleType</string>
+			<key>NSStringFormatValueTypeKey</key>
+			<string>lld</string>
+			<key>one</key>
+			<string>%lld photo</string>
+			<key>other</key>
+			<string>%lld photos</string>
+		</dict>
+	</dict>
+	<key>People (%lld)</key>
+	<dict>
+		<key>NSStringLocalizedFormatKey</key>
+		<string>%#@people@</string>
+		<key>people</key>
+		<dict>
+			<key>NSStringFormatSpecTypeKey</key>
+			<string>NSStringPluralRuleType</string>
+			<key>NSStringFormatValueTypeKey</key>
+			<string>lld</string>
+			<key>one</key>
+			<string>Person (%lld)</string>
+			<key>other</key>
+			<string>People (%lld)</string>
+		</dict>
+	</dict>
+	<key>Photos (%lld)</key>
+	<dict>
+		<key>NSStringLocalizedFormatKey</key>
+		<string>%#@photos@</string>
+		<key>photos</key>
+		<dict>
+			<key>NSStringFormatSpecTypeKey</key>
+			<string>NSStringPluralRuleType</string>
+			<key>NSStringFormatValueTypeKey</key>
+			<string>lld</string>
+			<key>one</key>
+			<string>Photo (%lld)</string>
+			<key>other</key>
+			<string>Photos (%lld)</string>
+		</dict>
+	</dict>
+	<key>Sharing with %lld people...</key>
+	<dict>
+		<key>NSStringLocalizedFormatKey</key>
+		<string>Sharing with %#@people@...</string>
+		<key>people</key>
+		<dict>
+			<key>NSStringFormatSpecTypeKey</key>
+			<string>NSStringPluralRuleType</string>
+			<key>NSStringFormatValueTypeKey</key>
+			<string>lld</string>
+			<key>one</key>
+			<string>%lld person</string>
+			<key>other</key>
+			<string>%lld people</string>
+		</dict>
+	</dict>
+	<key>Show Results (%lld)</key>
+	<dict>
+		<key>NSStringLocalizedFormatKey</key>
+		<string>%#@results@</string>
+		<key>results</key>
+		<dict>
+			<key>NSStringFormatSpecTypeKey</key>
+			<string>NSStringPluralRuleType</string>
+			<key>NSStringFormatValueTypeKey</key>
+			<string>lld</string>
+			<key>one</key>
+			<string>Show Result (%lld)</string>
+			<key>other</key>
+			<string>Show Results (%lld)</string>
+		</dict>
+	</dict>
+	<key>You're about to share %lld photos
+with %lld people.</key>
+	<dict>
+		<key>NSStringLocalizedFormatKey</key>
+		<string>You're about to share %#@photos@
+with %#@people@.</string>
+		<key>people</key>
+		<dict>
+			<key>NSStringFormatSpecTypeKey</key>
+			<string>NSStringPluralRuleType</string>
+			<key>NSStringFormatValueTypeKey</key>
+			<string>lld</string>
+			<key>one</key>
+			<string>%lld person</string>
+			<key>other</key>
+			<string>%lld people</string>
+		</dict>
+		<key>photos</key>
+		<dict>
+			<key>NSStringFormatSpecTypeKey</key>
+			<string>NSStringPluralRuleType</string>
+			<key>NSStringFormatValueTypeKey</key>
+			<string>lld</string>
+			<key>one</key>
+			<string>%lld photo</string>
+			<key>other</key>
+			<string>%lld photos</string>
+		</dict>
+	</dict>
+	<key>controller_bytes_received</key>
+	<dict>
+		<key>NSStringLocalizedFormatKey</key>
+		<string>%ld of %#@total@ received</string>
+		<key>total</key>
+		<dict>
+			<key>NSStringFormatSpecTypeKey</key>
+			<string>NSStringPluralRuleType</string>
+			<key>NSStringFormatValueTypeKey</key>
+			<string>ld</string>
+			<key>one</key>
+			<string>%ld byte</string>
+			<key>other</key>
+			<string>%ld bytes</string>
+		</dict>
+	</dict>
+</dict>
+</plist>

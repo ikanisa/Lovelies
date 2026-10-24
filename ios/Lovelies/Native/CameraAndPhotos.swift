@@ -274,27 +274,27 @@ struct NativeImport: Identifiable, Codable, Sendable {
               let properties = CGImageSourceCopyPropertiesAtIndex(source, 0, nil) as? [CFString: Any],
               let rawWidth = properties[kCGImagePropertyPixelWidth] as? Int, let rawHeight = properties[kCGImagePropertyPixelHeight] as? Int,
               rawWidth > 0, rawHeight > 0, rawWidth <= 100_000, rawHeight <= 100_000,
-              Int64(rawWidth) * Int64(rawHeight) <= 100_000_000 else { throw NativeAPIError.unsupported("Choose one still image within the photo size limit. Animated images and RAW require conversion first.") }
+              Int64(rawWidth) * Int64(rawHeight) <= 100_000_000 else { throw NativeAPIError.unsupported(String(localized: "Choose one still image within the photo size limit. Animated images and RAW require conversion first.")) }
         if let sourceType = CGImageSourceGetType(source), UTType(sourceType as String)?.conforms(to: .rawImage) == true {
-            throw NativeAPIError.unsupported("RAW requires an exported JPEG, PNG or WebP copy before importing.")
+            throw NativeAPIError.unsupported(String(localized: "RAW requires an exported JPEG, PNG or WebP copy before importing."))
         }
         let bytes: Data, content: NativeUploadContentType, width: Int, height: Int, title: String
         if let original = NativeUploadContentType.detect(data) {
-            guard data.count <= 20 * 1024 * 1024 else { throw NativeAPIError.unsupported("This original exceeds 20 MB. Export a smaller copy before selecting it.") }
+            guard data.count <= 20 * 1024 * 1024 else { throw NativeAPIError.unsupported(String(localized: "This original exceeds 20 MB. Export a smaller copy before selecting it.")) }
             // Preserve the exact original JPEG/PNG/WebP bytes. Display metadata
             // accounts for orientation without re-encoding the uploaded photo.
             bytes = data; content = original
             let orientation = properties[kCGImagePropertyOrientation] as? Int ?? 1
             width = (5...8).contains(orientation) ? rawHeight : rawWidth
             height = (5...8).contains(orientation) ? rawWidth : rawHeight
-            title = "Imported photo"
+            title = String(localized: "Imported photo")
         } else {
             // Inference accepts JPEG/PNG/WebP. HEIC and other decodable still
             // images become an explicit converted copy, visible before Upload.
             guard let image = CGImageSourceCreateThumbnailAtIndex(source, 0, [kCGImageSourceCreateThumbnailFromImageAlways: true,
                 kCGImageSourceCreateThumbnailWithTransform: true, kCGImageSourceThumbnailMaxPixelSize: 4096] as CFDictionary),
-                  let converted = UIImage(cgImage: image).jpegData(compressionQuality: 0.9), converted.count <= 20 * 1024 * 1024 else { throw NativeAPIError.unsupported("This format needs conversion to JPEG, PNG or WebP before importing.") }
-            bytes = converted; content = .jpeg; width = image.width; height = image.height; title = "Converted photo (JPEG)"
+                  let converted = UIImage(cgImage: image).jpegData(compressionQuality: 0.9), converted.count <= 20 * 1024 * 1024 else { throw NativeAPIError.unsupported(String(localized: "This format needs conversion to JPEG, PNG or WebP before importing.")) }
+            bytes = converted; content = .jpeg; width = image.width; height = image.height; title = String(localized: "Converted photo (JPEG)")
         }
         let root = FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask)[0].appendingPathComponent("LoveliesPrivateImports", isDirectory: true)
         try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
@@ -364,7 +364,7 @@ struct NativePhotoPicker: UIViewControllerRepresentable {
 enum NativePhotoLibrary {
     static func save(_ data: Data) async throws {
         let status = await PHPhotoLibrary.requestAuthorization(for: .addOnly)
-        guard status == .authorized || status == .limited else { throw NativeAPIError.unsupported("Allow saving to Photos in Settings.") }
+        guard status == .authorized || status == .limited else { throw NativeAPIError.unsupported(String(localized: "Allow saving to Photos in Settings.")) }
         try await PHPhotoLibrary.shared().performChanges {
             PHAssetCreationRequest.forAsset().addResource(with: .photo, data: data, options: nil)
         }
@@ -385,7 +385,7 @@ struct NativeOrdinaryPhotoCamera: UIViewControllerRepresentable {
         func imagePickerControllerDidCancel(_ picker: UIImagePickerController) { picker.dismiss(animated: true); completion([], nil) }
         func imagePickerController(_ picker: UIImagePickerController, didFinishPickingMediaWithInfo info: [UIImagePickerController.InfoKey: Any]) {
             picker.dismiss(animated: true)
-            guard let image = info[.originalImage] as? UIImage, let bytes = image.jpegData(compressionQuality: 0.92) else { completion([], "The camera image was unavailable."); return }
+            guard let image = info[.originalImage] as? UIImage, let bytes = image.jpegData(compressionQuality: 0.92) else { completion([], String(localized: "The camera image was unavailable.")); return }
             Task {
                 do { let item = try await Task.detached { try NativeImport.store(bytes) }.value; await MainActor.run { self.completion([item], nil) } }
                 catch { await MainActor.run { self.completion([], error.localizedDescription) } }

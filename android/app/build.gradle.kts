@@ -23,6 +23,7 @@ android {
         applicationId = "com.lovelies.memories"
         minSdk = 26
         targetSdk = 36
+        resourceConfigurations += listOf("en", "rw")
         versionCode = providers.gradleProperty("loveliesVersionCode").orElse("18").get().toInt().also { require(it >= 18) { "This replacement candidate starts at versionCode 18; verify the current Play Console maximum before release." } }
         versionName = providers.gradleProperty("loveliesVersionName").orElse("2.0.0").get()
         buildConfigField("String", "FACE_TOKEN_ISSUER", "\"${providers.gradleProperty("loveliesTokenIssuer").orElse("lovelies-supabase").get()}\"")

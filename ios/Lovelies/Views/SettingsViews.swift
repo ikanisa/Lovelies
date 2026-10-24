@@ -73,11 +73,11 @@ struct SettingsViews: View {
                     Text(store.profileName).loveliesFont(size: 24, weight: .medium)
                     Text(store.profileBio).loveliesFont(size: 16).foregroundStyle(LoveliesTheme.secondary).multilineTextAlignment(.center).lineSpacing(2)
                     HStack {
-                        profileStatistic("248", title: "Photos") { store.go(.allPhotos) }
-                        profileStatistic("36", title: "Matches") { store.go(.matchedPhotos) }
-                        profileStatistic("\(store.matchedPeople.count)", title: "People") { store.go(.allowedPeople) }
+                        profileStatistic("248", title: String(localized: "Photos")) { store.go(.allPhotos) }
+                        profileStatistic("36", title: String(localized: "Matches")) { store.go(.matchedPhotos) }
+                        profileStatistic("\(store.matchedPeople.count)", title: String(localized: "People")) { store.go(.allowedPeople) }
                     }.padding(.vertical, 9)
-                    PinkButton(title: "Edit Profile") { beginProfileEdit() }.padding(.horizontal, 22)
+                    PinkButton(title: String(localized: "Edit Profile")) { beginProfileEdit() }.padding(.horizontal, 22)
                     HStack {
                         profileTabButton("Photos", icon: "square.grid.3x3")
                         profileTabButton("Favorites", icon: "heart")
@@ -117,7 +117,7 @@ struct SettingsViews: View {
         Button { profileTab = title } label: {
             Image(systemName: icon).font(.system(size: 24, weight: .light)).foregroundStyle(profileTab == title ? LoveliesTheme.pink : .white)
                 .frame(maxWidth: .infinity).frame(minHeight: 44).background(profileTab == title ? LoveliesTheme.surface : .clear, in: Capsule())
-        }.buttonStyle(LoveliesPressStyle()).accessibilityLabel(title).accessibilityAddTraits(profileTab == title ? .isSelected : [])
+        }.buttonStyle(LoveliesPressStyle()).accessibilityLabel(Text(LocalizedStringKey(title))).accessibilityAddTraits(profileTab == title ? .isSelected : [])
     }
     private func beginProfileEdit() { name = store.profileName; bio = store.profileBio; sheet = .editProfile }
 
@@ -125,7 +125,7 @@ struct SettingsViews: View {
         GeometryReader { geometry in
             ScrollView {
             VStack(spacing: 17) {
-                PageHeader(title: "Manage Your Face", trailing: false)
+                PageHeader(title: String(localized: "Manage Your Face"), trailing: false)
                 Text("Help Lovelies find you in photos\nacross your matches.").loveliesFont(size: 17).foregroundStyle(LoveliesTheme.secondary).multilineTextAlignment(.center)
                 if let camera = SourceReferenceCatalog.layout(38)?.cameraAsset {
                     AssetImage(name: camera).scaledToFit().frame(width: geometry.size.width * 0.687).clipShape(RoundedRectangle(cornerRadius: 19))
@@ -146,8 +146,8 @@ struct SettingsViews: View {
                     .padding(.vertical, 3)
                 }
                 Spacer(minLength: 0)
-                PinkButton(title: "Replace Face") { store.captures = 0; store.go(.faceEnrollment) }
-                GroupSurface { SettingsRow(icon: "lightbulb", title: "Tips for best results") { sheet = .faceTips } }.padding(.bottom, 15)
+                PinkButton(title: String(localized: "Replace Face")) { store.captures = 0; store.go(.faceEnrollment) }
+                GroupSurface { SettingsRow(icon: "lightbulb", title: String(localized: "Tips for best results")) { sheet = .faceTips } }.padding(.bottom, 15)
             }.padding(.horizontal, 21).foregroundStyle(.white)
         
                 .frame(minHeight: geometry.size.height)
@@ -176,7 +176,7 @@ struct SettingsViews: View {
                                 Avatar(asset: person.asset, size: 43)
                                 Text(person.fullName).loveliesFont(size: 14)
                                 Spacer()
-                                Text(peopleTab == "Blocked" ? "Blocked" : "Can share with").loveliesFont(size: 12).foregroundStyle(LoveliesTheme.secondary)
+                                Text(peopleTab == "Blocked" ? String(localized: "Blocked") : String(localized: "Can share with")).loveliesFont(size: 12).foregroundStyle(LoveliesTheme.secondary)
                                 Image(systemName: "chevron.right").font(.system(size: 14)).foregroundStyle(LoveliesTheme.secondary)
                             }.padding(.vertical, 11).contentShape(Rectangle())
                         }.buttonStyle(LoveliesPressStyle())
@@ -188,20 +188,20 @@ struct SettingsViews: View {
     }
     private func peopleSegment(_ title: String, count: Int) -> some View {
         Button { peopleTab = title } label: {
-            Text("\(title) (\(count))").loveliesFont(size: 15, weight: peopleTab == title ? .medium : .regular).foregroundStyle(peopleTab == title ? .black : .white)
+            Text("\(NSLocalizedString(title, comment: "App-owned people segment")) (\(count))").loveliesFont(size: 15, weight: peopleTab == title ? .medium : .regular).foregroundStyle(peopleTab == title ? .black : .white)
                 .frame(maxWidth: .infinity).padding(.vertical, 11).background(peopleTab == title ? LoveliesTheme.pink : .clear, in: RoundedRectangle(cornerRadius: 14))
         }.buttonStyle(LoveliesPressStyle())
     }
 
     private var privacy: some View {
         VStack(spacing: 16) {
-            PageHeader(title: "Privacy & Sharing", trailing: false)
+            PageHeader(title: String(localized: "Privacy & Sharing"), trailing: false)
             ScrollView {
                 VStack(spacing: 15) {
                     GroupSurface {
-                        SettingsRow(icon: "person.crop.circle.badge.checkmark", title: "Who can find you", subtitle: store.findability) { sheet = .findMe }
+                        SettingsRow(icon: "person.crop.circle.badge.checkmark", title: String(localized: "Who can find you"), subtitle: NSLocalizedString(store.findability, comment: "App-owned findability option")) { sheet = .findMe }
                         insetDivider
-                        SettingsRow(icon: "camera", title: "Photo visibility", subtitle: store.visibility) { sheet = .visibility }
+                        SettingsRow(icon: "camera", title: String(localized: "Photo visibility"), subtitle: NSLocalizedString(store.visibility, comment: "App-owned photo visibility option")) { sheet = .visibility }
                         insetDivider
                         preferenceRow("Allow others to save", icon: "square.and.arrow.down")
                         insetDivider
@@ -226,7 +226,7 @@ struct SettingsViews: View {
 
     private var photoAccess: some View {
         VStack(spacing: 17) {
-            PageHeader(title: "Photo Access", trailing: false)
+            PageHeader(title: String(localized: "Photo Access"), trailing: false)
             Spacer(minLength: 0)
             PhotoHeart(size: 185)
             Text("Lovelies needs access to your\nphotos to find people in them.").loveliesFont(size: 17).foregroundStyle(LoveliesTheme.secondary).multilineTextAlignment(.center)
@@ -236,8 +236,8 @@ struct SettingsViews: View {
                         HStack(spacing: 17) {
                             CheckBadge(selected: store.access == mode, size: 30)
                             VStack(alignment: .leading, spacing: 5) {
-                                Text(mode.rawValue).loveliesFont(size: 16, weight: .medium)
-                                Text(mode == .all ? "Access to your entire library" : mode == .albums ? "Choose specific albums" : "Allow only certain photos").loveliesFont(size: 13).foregroundStyle(LoveliesTheme.secondary)
+                                Text(LocalizedStringKey(mode.rawValue)).loveliesFont(size: 16, weight: .medium)
+                                Text(mode == .all ? String(localized: "Access to your entire library") : mode == .albums ? String(localized: "Choose specific albums") : String(localized: "Allow only certain photos")).loveliesFont(size: 13).foregroundStyle(LoveliesTheme.secondary)
                             }
                             Spacer()
                             Circle().stroke(store.access == mode ? LoveliesTheme.pink : .white.opacity(0.6), lineWidth: store.access == mode ? 5 : 1.3).frame(width: 25, height: 25)
@@ -247,13 +247,13 @@ struct SettingsViews: View {
                 }
             }
             Spacer(minLength: 0)
-            PinkButton(title: "Continue") { store.go(.profile) }.padding(.bottom, 14)
+            PinkButton(title: String(localized: "Continue")) { store.go(.profile) }.padding(.bottom, 14)
         }.padding(.horizontal, 22).foregroundStyle(.white)
     }
 
     private var notificationSettings: some View {
         VStack(spacing: 15) {
-            PageHeader(title: "Notifications", trailing: false)
+            PageHeader(title: String(localized: "Notifications"), trailing: false)
             GroupSurface {
                 preferenceRow("New Matches", icon: "heart", subtitle: "When you're matched in photos")
                 insetDivider
@@ -274,7 +274,7 @@ struct SettingsViews: View {
         Toggle(isOn: store.preference(title)) {
             HStack(spacing: 15) {
                 Image(systemName: icon).font(.system(size: 23, weight: .light)).frame(width: 27)
-                VStack(alignment: .leading, spacing: 6) { Text(title).loveliesFont(size: 16); if let subtitle { Text(subtitle).loveliesFont(size: 12).foregroundStyle(LoveliesTheme.secondary) } }
+                VStack(alignment: .leading, spacing: 6) { Text(LocalizedStringKey(title)).loveliesFont(size: 16); if let subtitle { Text(LocalizedStringKey(subtitle)).loveliesFont(size: 12).foregroundStyle(LoveliesTheme.secondary) } }
             }
         }.tint(LoveliesTheme.pink).padding(.horizontal, 16).padding(.vertical, subtitle == nil ? 17 : 21)
     }
@@ -285,7 +285,7 @@ struct SettingsViews: View {
             let chartSize = min(max(0, geometry.size.width - 48), min(190, geometry.size.width * 0.431) * storageChartScale)
             ScrollView {
             VStack(spacing: 20) {
-                PageHeader(title: "Storage", trailing: false)
+                PageHeader(title: String(localized: "Storage"), trailing: false)
                 Spacer(minLength: 0)
                 VStack(spacing: 16) {
                     storageDonut.frame(width: chartSize, height: chartSize)
@@ -293,12 +293,12 @@ struct SettingsViews: View {
                 }.accessibilityElement(children: .combine)
                 Spacer(minLength: 0)
                 VStack(spacing: 21) {
-                    storageRow("Photos", amount: "1.8 GB", color: LoveliesTheme.pink)
-                    storageRow("Matches", amount: "420 MB", color: Color(red: 0.68, green: 0.51, blue: 0.96))
-                    storageRow("Cache", amount: store.cacheCleared ? "0 MB" : "180 MB", color: Color(red: 0.95, green: 0.92, blue: 0.8))
-                    storageRow("Other", amount: "60 MB", color: Color(red: 0.85, green: 0.82, blue: 0.73))
+                    storageRow(String(localized: "Photos"), amount: "1.8 GB", color: LoveliesTheme.pink)
+                    storageRow(String(localized: "Matches"), amount: "420 MB", color: Color(red: 0.68, green: 0.51, blue: 0.96))
+                    storageRow(String(localized: "Cache"), amount: store.cacheCleared ? "0 MB" : "180 MB", color: Color(red: 0.95, green: 0.92, blue: 0.8))
+                    storageRow(String(localized: "Other"), amount: "60 MB", color: Color(red: 0.85, green: 0.82, blue: 0.73))
                 }
-                PinkButton(title: "Manage Storage") { sheet = .storage }.padding(.top, 9).padding(.bottom, 15)
+                PinkButton(title: String(localized: "Manage Storage")) { sheet = .storage }.padding(.top, 9).padding(.bottom, 15)
             }.padding(.horizontal, 24).foregroundStyle(.white)
         
                 .frame(minHeight: geometry.size.height)
@@ -328,7 +328,7 @@ struct SettingsViews: View {
         GeometryReader { geometry in
             ScrollView {
             VStack(spacing: 19) {
-                PageHeader(title: "Export Your Data", trailing: false)
+                PageHeader(title: String(localized: "Export Your Data"), trailing: false)
                 Spacer(minLength: 0)
                 ZStack { Image(systemName: "doc").font(.system(size: 91, weight: .ultraLight)); Image(systemName: "arrow.down").font(.system(size: 37, weight: .light)).offset(y: 8) }
                     .foregroundStyle(LoveliesTheme.pink).shadow(color: LoveliesTheme.pink.opacity(0.5), radius: 16).frame(height: 112)
@@ -338,13 +338,13 @@ struct SettingsViews: View {
                         Image(systemName: "lightbulb").font(.system(size: 27, weight: .light)).padding(.top, 3)
                         VStack(alignment: .leading, spacing: 11) {
                             Text("Your data, your choice").loveliesFont(size: 16, weight: .medium)
-                            ForEach(["Photos you've shared", "Your matches and messages", "Profile information", "Settings and preferences"], id: \.self) { title in HStack(spacing: 10) { Image(systemName: "checkmark"); Text(title) }.loveliesFont(size: 13).foregroundStyle(LoveliesTheme.secondary) }
+                            ForEach([String(localized: "Photos you've shared"), String(localized: "Your matches and messages"), String(localized: "Profile information"), String(localized: "Settings and preferences")], id: \.self) { title in HStack(spacing: 10) { Image(systemName: "checkmark"); Text(title) }.loveliesFont(size: 13).foregroundStyle(LoveliesTheme.secondary) }
                         }
                         Spacer(minLength: 0)
                     }.padding(23)
                 }
                 Spacer(minLength: 0)
-                PinkButton(title: "Request Export") { sheet = .export }.padding(.bottom, 15)
+                PinkButton(title: String(localized: "Request Export")) { sheet = .export }.padding(.bottom, 15)
             }.padding(.horizontal, 23).foregroundStyle(.white)
         
                 .frame(minHeight: geometry.size.height)
@@ -354,12 +354,12 @@ struct SettingsViews: View {
 
     private var help: some View {
         VStack(spacing: 10) {
-            PageHeader(title: "Help Center", trailing: false)
+            PageHeader(title: String(localized: "Help Center"), trailing: false)
             HStack(spacing: 11) { Image(systemName: "magnifyingglass").foregroundStyle(LoveliesTheme.secondary); TextField("Search for help...", text: $helpQuery).loveliesFont(size: 15).submitLabel(.search) }.padding(14).background(LoveliesTheme.raised, in: RoundedRectangle(cornerRadius: 12)).padding(.horizontal, 20)
             ScrollView {
                 GroupSurface {
                     ForEach(helpTopics.filter { helpQuery.isEmpty || $0.0.localizedCaseInsensitiveContains(helpQuery) || $0.1.localizedCaseInsensitiveContains(helpQuery) }, id: \.0) { topic in
-                        SettingsRow(icon: topic.2, title: topic.0, subtitle: topic.1) { article = topic.0; sheet = .helpArticle }
+                        SettingsRow(icon: topic.2, title: NSLocalizedString(topic.0, comment: "App-owned help topic"), subtitle: NSLocalizedString(topic.1, comment: "App-owned help topic description")) { article = topic.0; sheet = .helpArticle }
                         insetDivider
                     }
                 }.padding(.horizontal, 20).padding(.bottom, 12)
@@ -371,24 +371,24 @@ struct SettingsViews: View {
 
     private var security: some View {
         VStack(spacing: 16) {
-            PageHeader(title: "Account & Security", trailing: false)
+            PageHeader(title: String(localized: "Account & Security"), trailing: false)
             ScrollView {
                 VStack(spacing: 16) {
                     GroupSurface {
-                        SettingsRow(icon: "envelope", title: "Email", value: store.email) { editedValue = store.email; sheet = .email }
+                        SettingsRow(icon: "envelope", title: String(localized: "Email"), value: store.email) { editedValue = store.email; sheet = .email }
                         insetDivider
-                        SettingsRow(icon: "iphone", title: "Phone", value: store.phone) { editedValue = store.phone; sheet = .phone }
+                        SettingsRow(icon: "iphone", title: String(localized: "Phone"), value: store.phone) { editedValue = store.phone; sheet = .phone }
                         insetDivider
-                        SettingsRow(icon: "lock", title: "Password", value: "••••••••") { editedValue = ""; sheet = .password }
+                        SettingsRow(icon: "lock", title: String(localized: "Password"), value: "••••••••") { editedValue = ""; sheet = .password }
                         insetDivider
-                        SettingsRow(icon: "checkmark.shield", title: "Two-Factor Authentication", value: store.twoFactor ? "On" : "Off") { sheet = .twoFactor }
+                        SettingsRow(icon: "checkmark.shield", title: String(localized: "Two-Factor Authentication"), value: store.twoFactor ? String(localized: "On") : String(localized: "Off")) { sheet = .twoFactor }
                         insetDivider
-                        SettingsRow(icon: "laptopcomputer", title: "Active Devices", value: "\(store.activeDevices.count) devices") { sheet = .devices }
+                        SettingsRow(icon: "laptopcomputer", title: String(localized: "Active Devices"), value: String(localized: "\(store.activeDevices.count) devices")) { sheet = .devices }
                     }
                     GroupSurface {
-                        SettingsRow(icon: "rectangle.portrait.and.arrow.right", title: "Sign Out", tint: Color(red: 1, green: 0.38, blue: 0.5)) { showSignOut = true }
+                        SettingsRow(icon: "rectangle.portrait.and.arrow.right", title: String(localized: "Sign Out"), tint: Color(red: 1, green: 0.38, blue: 0.5)) { showSignOut = true }
                         insetDivider
-                        SettingsRow(icon: "trash", title: "Delete Account", tint: Color(red: 1, green: 0.38, blue: 0.5)) { showDelete = true }
+                        SettingsRow(icon: "trash", title: String(localized: "Delete Account"), tint: Color(red: 1, green: 0.38, blue: 0.5)) { showDelete = true }
                     }
                 }.padding(.horizontal, 21).padding(.bottom, 15)
             }.scrollIndicators(.hidden)
@@ -399,13 +399,13 @@ struct SettingsViews: View {
         GeometryReader { geometry in
             ScrollView {
             VStack(spacing: 20) {
-                PageHeader(title: "Matches", trailing: false)
+                PageHeader(title: String(localized: "Matches"), trailing: false)
                 Spacer().frame(height: geometry.size.height * 0.04)
                 AssetImage(name: "empty-hero").scaledToFit().frame(width: min(260, geometry.size.width * 0.598)).accessibilityHidden(true)
                 Text("No Matches Yet").loveliesFont(size: 25, weight: .medium).padding(.top, 10)
                 Text("Your people are out there.\nKeep sharing your photos\nand we'll find them!").loveliesFont(size: 17).foregroundStyle(LoveliesTheme.secondary).multilineTextAlignment(.center).lineSpacing(3)
                 Spacer(minLength: 15)
-                PinkButton(title: "Keep Exploring") { store.go(.home) }.padding(.bottom, 28)
+                PinkButton(title: String(localized: "Keep Exploring")) { store.go(.home) }.padding(.bottom, 28)
             }.padding(.horizontal, 34).frame(maxWidth: .infinity).foregroundStyle(.white)
         
                 .frame(minHeight: geometry.size.height)
@@ -417,13 +417,13 @@ struct SettingsViews: View {
         GeometryReader { geometry in
             ScrollView {
             VStack(spacing: 20) {
-                PageHeader(title: "Connection", trailing: false)
+                PageHeader(title: String(localized: "Connection"), trailing: false)
                 Spacer().frame(height: geometry.size.height * 0.04)
                 AssetImage(name: "offline-hero").scaledToFit().frame(width: min(250, geometry.size.width * 0.504)).accessibilityHidden(true)
                 Text("You're Offline").loveliesFont(size: 25, weight: .medium)
                 Text("Check your connection\nand try again.").loveliesFont(size: 17).foregroundStyle(LoveliesTheme.secondary).multilineTextAlignment(.center)
                 Spacer(minLength: 20)
-                PinkButton(title: "Try Again") { store.go(.home) }
+                PinkButton(title: String(localized: "Try Again")) { store.go(.home) }
                 Button { store.back() } label: { Text("Go Back").loveliesFont(size: 15).underline().foregroundStyle(LoveliesTheme.secondary).padding(13).frame(minHeight: 44) }.padding(.bottom, 15)
             }.padding(.horizontal, 30).frame(maxWidth: .infinity).foregroundStyle(.white)
         
@@ -435,86 +435,86 @@ struct SettingsViews: View {
     @ViewBuilder private func settingsSheet(_ value: SettingsSheet) -> some View {
         switch value {
         case .editProfile:
-            DemoSheet(title: "Edit Profile") {
+            DemoSheet(title: String(localized: "Edit Profile")) {
                 Avatar(asset: "person01", size: 92)
                 TextField("Name", text: $name).textFieldStyle(.roundedBorder).textContentType(.name)
                 TextField("About you", text: $bio, axis: .vertical).textFieldStyle(.roundedBorder).lineLimit(2...4)
-                PinkButton(title: "Save Profile", enabled: !name.trimmingCharacters(in: .whitespaces).isEmpty) { store.profileName = name.trimmingCharacters(in: .whitespaces); store.profileBio = bio; sheet = nil }
+                PinkButton(title: String(localized: "Save Profile"), enabled: !name.trimmingCharacters(in: .whitespaces).isEmpty) { store.profileName = name.trimmingCharacters(in: .whitespaces); store.profileBio = bio; sheet = nil }
             }
         case .faceTips:
-            DemoSheet(title: "Tips for best results") {
+            DemoSheet(title: String(localized: "Tips for best results")) {
                 Label("Use bright, even lighting", systemImage: "sun.max")
                 Label("Keep your whole face in the frame", systemImage: "face.smiling")
                 Label("Look straight, then left and right", systemImage: "arrow.left.and.right")
                 Text("The shutter in this preview collects three sample steps from an included photo. Camera access and face processing are not connected.").font(.subheadline).foregroundStyle(LoveliesTheme.secondary)
-                PinkButton(title: "Try the three captures") { sheet = nil; store.captures = 0; store.go(.faceEnrollment) }
+                PinkButton(title: String(localized: "Try the three captures")) { sheet = nil; store.captures = 0; store.go(.faceEnrollment) }
             }
         case .managePerson:
             DemoSheet(title: store.currentPerson.fullName) {
                 Avatar(asset: store.currentPerson.asset, size: 85)
-                Text(store.blockedIDs.contains(store.currentPerson.id) ? "This person is excluded from future matching and sharing. Unblocking allows future eligibility; it does not restore past access or add them to your current selection." : "This matched person can share with you. Photo access still needs your review and approval. Blocking excludes them from future matching and sharing.").foregroundStyle(LoveliesTheme.secondary)
-                PinkButton(title: store.blockedIDs.contains(store.currentPerson.id) ? "Unblock Person" : "Block Person") {
+                Text(store.blockedIDs.contains(store.currentPerson.id) ? String(localized: "This person is excluded from future matching and sharing. Unblocking allows future eligibility; it does not restore past access or add them to your current selection.") : String(localized: "This matched person can share with you. Photo access still needs your review and approval. Blocking excludes them from future matching and sharing.")).foregroundStyle(LoveliesTheme.secondary)
+                PinkButton(title: store.blockedIDs.contains(store.currentPerson.id) ? String(localized: "Unblock Person") : String(localized: "Block Person")) {
                     let id = store.currentPerson.id
                     store.setBlocked(id, blocked: !store.blockedIDs.contains(id))
                     sheet = nil
                 }
-                if store.currentPerson.matches > 0 { QuietButton(title: "View Matched Photos") { sheet = nil; store.go(.personPhotos) } }
+                if store.currentPerson.matches > 0 { QuietButton(title: String(localized: "View Matched Photos")) { sheet = nil; store.go(.personPhotos) } }
             }
         case .findMe:
-            DemoSheet(title: "Who can find you") {
+            DemoSheet(title: String(localized: "Who can find you")) {
                 Text("Finding you never grants access to your photos. You choose every photo and recipient before sharing.").loveliesFont(size: 14).foregroundStyle(LoveliesTheme.secondary)
                 choiceList(["Anyone", "Only people you're matched with", "Nobody"], selected: store.findability) { store.findability = $0; sheet = nil }
             }
         case .visibility:
-            DemoSheet(title: "Photo visibility") {
+            DemoSheet(title: String(localized: "Photo visibility")) {
                 choiceList(["Matched people only", "Allowed people", "Only me"], selected: store.visibility) { store.visibility = $0; sheet = nil }
             }
         case .storage:
-            DemoSheet(title: "Manage Storage") {
+            DemoSheet(title: String(localized: "Manage Storage")) {
                 Text("Sample library: 1.8 GB of photos and 420 MB of matches.").foregroundStyle(LoveliesTheme.secondary)
-                SettingsRow(icon: "trash", title: "Clear cached previews", value: store.cacheCleared ? "0 MB" : "180 MB") { store.cacheCleared = true; sheet = nil }
+                SettingsRow(icon: "trash", title: String(localized: "Clear cached previews"), value: store.cacheCleared ? "0 MB" : "180 MB") { store.cacheCleared = true; sheet = nil }
                 Text("This updates the demo storage display. No device photos or files are removed.").font(.subheadline).foregroundStyle(LoveliesTheme.secondary)
-                QuietButton(title: "Review Photos") { sheet = nil; store.go(.allPhotos) }
+                QuietButton(title: String(localized: "Review Photos")) { sheet = nil; store.go(.allPhotos) }
             }
         case .export:
-            DemoSheet(title: "Demo Export Ready") {
+            DemoSheet(title: String(localized: "Demo Export Ready")) {
                 Image(systemName: "doc.badge.arrow.up").font(.system(size: 45)).foregroundStyle(LoveliesTheme.pink)
                 Text("This preview can share a text summary of your sample profile and selections. A real account archive is not connected.").foregroundStyle(LoveliesTheme.secondary)
-                ShareLink(item: "Lovelies frontend demo\nProfile: \(store.profileName)\nBio: \(store.profileBio)\nSelected photos: \(store.sharePhotoIDs.sorted().map { String($0) }.joined(separator: ", "))\nSelected people: \(store.sharingPeople.map(\.name).joined(separator: ", "))\nNo real account, messages, photos or face data included.") {
+                ShareLink(item: String(localized: "Lovelies frontend demo\nProfile: \(store.profileName)\nBio: \(store.profileBio)\nSelected photos: \(store.sharePhotoIDs.sorted().map { String($0) }.joined(separator: ", "))\nSelected people: \(store.sharingPeople.map(\.name).joined(separator: ", "))\nNo real account, messages, photos or face data included.")) {
                     Label("Share Demo Summary", systemImage: "square.and.arrow.up").loveliesFont(size: 16, weight: .semibold).foregroundStyle(.black).frame(maxWidth: .infinity).padding(.vertical, 16).background(LoveliesTheme.pink, in: Capsule())
                 }
             }
         case .helpArticle:
-            DemoSheet(title: article) {
+            DemoSheet(title: NSLocalizedString(article, comment: "App-owned help topic")) {
                 Text(helpArticleText).loveliesFont(size: 17).lineSpacing(5)
                 Text("This is a frontend preview. Sample captures, matching, uploads, sharing, sign-in and account settings stay local. Nothing is sent to a backend or another person.").loveliesFont(size: 14).foregroundStyle(LoveliesTheme.secondary)
-                PinkButton(title: article == "Contact Support" ? "Return to Help" : "Open this feature") { sheet = nil; if article != "Contact Support" { store.go(helpDestination) } }
-                QuietButton(title: "Browse All 48 Screens") { sheet = nil; store.showGallery = true }
+                PinkButton(title: article == "Contact Support" ? String(localized: "Return to Help") : String(localized: "Open this feature")) { sheet = nil; if article != "Contact Support" { store.go(helpDestination) } }
+                QuietButton(title: String(localized: "Browse All 48 Screens")) { sheet = nil; store.showGallery = true }
             }
         case .email, .phone, .password:
-            DemoSheet(title: value == .email ? "Email" : value == .phone ? "Phone" : "Password") {
+            DemoSheet(title: value == .email ? String(localized: "Email") : value == .phone ? String(localized: "Phone") : String(localized: "Password")) {
                 Text("Changes apply only to this local frontend preview.").foregroundStyle(LoveliesTheme.secondary)
                 if value == .password { SecureField("New password", text: $editedValue).textFieldStyle(.roundedBorder) }
-                else { TextField(value == .email ? "Email address" : "Phone number", text: $editedValue).textFieldStyle(.roundedBorder).keyboardType(value == .email ? .emailAddress : .phonePad).textInputAutocapitalization(.never).autocorrectionDisabled() }
-                PinkButton(title: "Save", enabled: value == .password ? editedValue.count >= 8 : !editedValue.trimmingCharacters(in: .whitespaces).isEmpty) {
+                else { TextField(value == .email ? String(localized: "Email address") : String(localized: "Phone number"), text: $editedValue).textFieldStyle(.roundedBorder).keyboardType(value == .email ? .emailAddress : .phonePad).textInputAutocapitalization(.never).autocorrectionDisabled() }
+                PinkButton(title: String(localized: "Save"), enabled: value == .password ? editedValue.count >= 8 : !editedValue.trimmingCharacters(in: .whitespaces).isEmpty) {
                     if value == .email { store.email = editedValue }
                     if value == .phone { store.phone = editedValue }
                     sheet = nil
-                    if value == .password { message = "Sample password step completed. No account password was changed or stored." }
+                    if value == .password { message = String(localized: "Sample password step completed. No account password was changed or stored.") }
                 }
                 if value == .password { Text("Use at least 8 characters for this sample step.").font(.subheadline).foregroundStyle(LoveliesTheme.secondary) }
             }
         case .twoFactor:
-            DemoSheet(title: "Two-Factor Authentication") {
+            DemoSheet(title: String(localized: "Two-Factor Authentication")) {
                 Toggle("Enable two-factor authentication", isOn: $store.twoFactor).tint(LoveliesTheme.pink)
                 Text("This switch previews the enabled and disabled interface states. Verification codes and account protection are not connected.").foregroundStyle(LoveliesTheme.secondary)
             }
         case .devices:
-            DemoSheet(title: "Active Devices") {
+            DemoSheet(title: String(localized: "Active Devices")) {
                 ForEach(store.activeDevices, id: \.self) { device in
                     HStack(spacing: 15) {
                         Image(systemName: device.contains("iPhone") ? "iphone" : device == "iPad" ? "ipad" : "laptopcomputer").font(.system(size: 27))
-                        VStack(alignment: .leading, spacing: 5) { Text(device); Text(device.contains("iPhone") ? "Current sample device" : "Sample session").font(.caption).foregroundStyle(LoveliesTheme.secondary) }
+                        VStack(alignment: .leading, spacing: 5) { Text(device); Text(device.contains("iPhone") ? String(localized: "Current sample device") : String(localized: "Sample session")).font(.caption).foregroundStyle(LoveliesTheme.secondary) }
                         Spacer()
                         if !device.contains("iPhone") { Button("Remove") { store.activeDevices.removeAll { $0 == device } }.loveliesFont(size: 14).foregroundStyle(LoveliesTheme.pink) }
                     }.padding(.vertical, 10)
@@ -526,18 +526,18 @@ struct SettingsViews: View {
     private func choiceList(_ choices: [String], selected: String, action: @escaping (String) -> Void) -> some View {
         VStack(spacing: 14) {
             ForEach(choices, id: \.self) { choice in
-                Button { action(choice) } label: { HStack { Text(choice); Spacer(); if selected == choice { Image(systemName: "checkmark").foregroundStyle(LoveliesTheme.pink) } }.padding(.vertical, 10) }.buttonStyle(LoveliesPressStyle())
+                Button { action(choice) } label: { HStack { Text(LocalizedStringKey(choice)); Spacer(); if selected == choice { Image(systemName: "checkmark").foregroundStyle(LoveliesTheme.pink) } }.padding(.vertical, 10) }.buttonStyle(LoveliesPressStyle())
             }
         }
     }
     private var helpArticleText: String {
         switch article {
-        case "Getting Started": return "Join Lovelies, choose your photo access, and take three guided selfie steps. You can explore each screen from the gallery in the more menu."
-        case "Your Photos": return "Add photos from a device, album, files or a camera preview. Select your favorites, review the upload and caption, then explore matched photos. Sharing always includes a photo and people review."
-        case "Privacy & Safety": return "Choose who can find you and control saving, location information and suggestions. Every matched person is allowed unless you block them. You choose each photo and recipient before sharing."
-        case "Account & Settings": return "Edit your profile, explore notification preferences, storage, export, sample devices and account settings."
-        case "Troubleshooting": return "Retry a sample selfie, change the selected photos, or return to exploring from the no-matches and offline screens. Existing selections stay available when you edit a review."
-        default: return "Support is a planned connected feature. You can inspect every current screen in this preview and share feedback with the project owner. No support message is sent by this screen."
+        case "Getting Started": return String(localized: "Join Lovelies, choose your photo access, and take three guided selfie steps. You can explore each screen from the gallery in the more menu.")
+        case "Your Photos": return String(localized: "Add photos from a device, album, files or a camera preview. Select your favorites, review the upload and caption, then explore matched photos. Sharing always includes a photo and people review.")
+        case "Privacy & Safety": return String(localized: "Choose who can find you and control saving, location information and suggestions. Every matched person is allowed unless you block them. You choose each photo and recipient before sharing.")
+        case "Account & Settings": return String(localized: "Edit your profile, explore notification preferences, storage, export, sample devices and account settings.")
+        case "Troubleshooting": return String(localized: "Retry a sample selfie, change the selected photos, or return to exploring from the no-matches and offline screens. Existing selections stay available when you edit a review.")
+        default: return String(localized: "Support is a planned connected feature. You can inspect every current screen in this preview and share feedback with the project owner. No support message is sent by this screen.")
         }
     }
     private var helpDestination: Screen {

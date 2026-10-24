@@ -1,5 +1,12 @@
 # Android replacement readiness — 24 October 2026
 
+## 24 October2026 — integrated English/Kinyarwanda checkpoint
+
+Current Debug/test packaging passes157 fresh units in14 suites; all XMLs follow the build start and report zero failures/errors/skips. Product SHA256 `fcd89930b4ce3ca2870da47ff284809689b88b7a883520f0fa0ffb5104a97ab0`, test `96763d3731b14cc8ec5bd6358e127083fcc49dea6cafbcbed002cedf2be8ef65`.903 strings/17 plurals and actual packaged en/rw locale configuration are checked. Missing/null titles localize only at presentation; real supplied titles and persisted metadata are preserved. No new APK runtime/locale acceptance is claimed.
+
+See [localization scope](release/localization/README.md), `native-localization-build/result.json` and the preserved historical checkpoints below.
+
+
 ## Latest connected count-copy checkpoint — 24 October
 
 Upload/Share actions now wrap the existing photo plural resource, including their inherited accessible labels. Zero/one/many copy is corrected without changing actions, enablement or layout. Current Debug app/test builds and a fresh156-test/14-suite run pass with unchanged244 inputs. Product SHA256 `bd1e9ed1bf78a0b338870f186dd40e9b9377ccd9b0984e6e3c8f74c8f121622b`; test remains ac7. No new device runtime is asserted for this APK. Prior referencea36 artifacts/receipts remain preserved and explicitly scoped below. The [211-resource Kinyarwanda draft](release/localization/README.md) is unshipped. Broader hardcoded-copy extraction, language/locale runtime and hosted journeys remain Q02 gates. `q02-count-copy/result.json` binds this slice.

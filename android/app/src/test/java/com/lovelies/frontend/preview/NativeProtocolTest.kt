@@ -169,6 +169,22 @@ class NativeProtocolTest {
             fail("source_mismatch") { LivePhoto.parse(first-"media_source") }
         }
     }
+    @Test fun missingPhotoTitleUsesLocalizedFallbackWithoutTranslatingProvidedTitles() {
+        val metadata: WireObject=mapOf("id" to id(1),"version" to "asset-1","media_source" to "personal")
+        listOf(metadata,metadata+mapOf("title" to null)).forEach { wire ->
+            val photo=LivePhoto.parse(wire)
+            assertTrue(photo.titleDefaulted)
+            assertEquals("Photo",photo.title)
+            assertEquals("Ifoto",displayedPhotoTitle(photo,"Ifoto"))
+        }
+        listOf("Photo","","Family 2026 💗").forEach { title ->
+            val photo=LivePhoto.parse(metadata+mapOf("title" to title))
+            assertFalse(photo.titleDefaulted)
+            assertEquals(title,photo.title)
+            assertEquals(title,displayedPhotoTitle(photo,"Ifoto"))
+        }
+        fail("invalid_response") { LivePhoto.parse(metadata+mapOf("title" to 42)) }
+    }
     @Test fun readyChangedAndEmptyPreviewResponsesRemainBoundToTheRequestedSource() {
         listOf("personal").forEach { source ->
             val snap=snapshot(source);val d=draft(snap);val response=reviewed(snap,d);val value=NativeProtocol.obj(response["preview"])

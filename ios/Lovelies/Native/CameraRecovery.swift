@@ -7,16 +7,16 @@ enum NativeCameraIssue: String, Error, LocalizedError, Sendable {
     case cameraUnavailable, interrupted, mediaServicesReset, captureUnavailable, invalidImage, captureTooLarge
     var errorDescription: String? {
         switch self {
-        case .permissionDenied, .permissionChanged: return "Allow camera access in Settings, then return to take your selfie."
-        case .permissionRestricted: return "Camera access is restricted on this device. Check the device restrictions before continuing."
-        case .initializingTimeout: return "The camera did not start. Try opening it again."
-        case .captureTimeout: return "The camera did not return this photo. Retake it; no selfie was sent."
-        case .cameraUnavailable: return "A front camera is unavailable. Try again on a device with a working front camera."
-        case .interrupted: return "The camera was interrupted. Return to the app and try again."
-        case .mediaServicesReset: return "The camera service restarted. Open the camera again."
-        case .captureUnavailable: return "The camera photo is unavailable. Retake it."
-        case .invalidImage: return "This photo could not be read. Retake it."
-        case .captureTooLarge: return "This photo is too large. Retake it at a smaller size."
+        case .permissionDenied, .permissionChanged: return String(localized: "Allow camera access in Settings, then return to take your selfie.")
+        case .permissionRestricted: return String(localized: "Camera access is restricted on this device. Check the device restrictions before continuing.")
+        case .initializingTimeout: return String(localized: "The camera did not start. Try opening it again.")
+        case .captureTimeout: return String(localized: "The camera did not return this photo. Retake it; no selfie was sent.")
+        case .cameraUnavailable: return String(localized: "A front camera is unavailable. Try again on a device with a working front camera.")
+        case .interrupted: return String(localized: "The camera was interrupted. Return to the app and try again.")
+        case .mediaServicesReset: return String(localized: "The camera service restarted. Open the camera again.")
+        case .captureUnavailable: return String(localized: "The camera photo is unavailable. Retake it.")
+        case .invalidImage: return String(localized: "This photo could not be read. Retake it.")
+        case .captureTooLarge: return String(localized: "This photo is too large. Retake it at a smaller size.")
         }
     }
 }
@@ -117,10 +117,10 @@ enum NativeFaceQualityFailure: String, Sendable, CaseIterable {
     }
     var message: String {
         switch self {
-        case .noFace: return "No face was found. Center your face in the frame and retake the selfies."
-        case .multipleFaces: return "More than one face was found. Make sure only your face is in the frame and retake the selfies."
-        case .qualityLow: return "The selfies were not clear enough. Hold the phone steady, use even lighting, and retake them."
-        case .invalidImage: return "A selfie could not be read. Retake the selfies."
+        case .noFace: return String(localized: "No face was found. Center your face in the frame and retake the selfies.")
+        case .multipleFaces: return String(localized: "More than one face was found. Make sure only your face is in the frame and retake the selfies.")
+        case .qualityLow: return String(localized: "The selfies were not clear enough. Hold the phone steady, use even lighting, and retake them.")
+        case .invalidImage: return String(localized: "A selfie could not be read. Retake the selfies.")
         }
     }
 }
@@ -151,7 +151,7 @@ struct NativeSelfieCandidate: Sendable {
               self.publicationGeneration == publicationGeneration, self.sessionEpoch == sessionEpoch else { throw NativeAPIError.sessionChanged }
         guard receipts.reduce(0, { $0 + ($1["byte_size"].integer ?? 0) }) + bytes.count <= 8 * 1024 * 1024 else { throw NativeCameraIssue.captureTooLarge }
         let hash = SHA256.hash(data: bytes).map { String(format: "%02x", $0) }.joined()
-        guard receipts.allSatisfy({ $0["sha256"].string != hash }) else { throw NativeAPIError.unsupported("Take a new selfie for this pose. Previously submitted captures cannot be reused.") }
+        guard receipts.allSatisfy({ $0["sha256"].string != hash }) else { throw NativeAPIError.unsupported(String(localized: "Take a new selfie for this pose. Previously submitted captures cannot be reused.")) }
     }
     mutating func retire() { bytes.resetBytes(in: 0..<bytes.count); bytes.removeAll(keepingCapacity: false) }
 }

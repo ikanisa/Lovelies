@@ -113,21 +113,20 @@ struct PageHeader: View {
         HStack(alignment: .center, spacing: 10) {
             if back {
                 Button { store.back() } label: { Image(systemName: close ? "xmark" : "chevron.left").font(.system(size: 21, weight: .regular)).frame(width: 44, height: 44).contentShape(Rectangle()) }
-                    .accessibilityLabel(close ? "Close" : "Back")
+                    .accessibilityLabel(close ? String(localized: "Close") : String(localized: "Back"))
             }
             if leadingTitle {
-                Text(title).font(.title2.weight(.semibold)).accessibilityAddTraits(.isHeader)
+                if !title.isEmpty { Text(title).font(.title2.weight(.semibold)).accessibilityAddTraits(.isHeader) }
                 Spacer(minLength: 0)
             } else {
                 VStack(spacing: 4) {
-                    Text(title).font(.headline).multilineTextAlignment(.center).accessibilityAddTraits(.isHeader)
+                    if !title.isEmpty { Text(title).font(.headline).multilineTextAlignment(.center).accessibilityAddTraits(.isHeader) }
                     if let subtitle { Text(subtitle).font(.subheadline).foregroundStyle(LoveliesTheme.secondary).multilineTextAlignment(.center).fixedSize(horizontal: false, vertical: true) }
                 }.frame(maxWidth: .infinity)
             }
             if trailing { OverflowMenu() }
             else if !leadingTitle, back { Color.clear.frame(width: 44, height: 44) }
         }.foregroundStyle(.white).padding(.horizontal, 13).padding(.top, 3).padding(.bottom, 7)
-        .contentShape(Rectangle()).onLongPressGesture { store.showGallery = DemoStore.referenceReviewEnabled }
     }
 }
 
@@ -238,11 +237,11 @@ struct PhotoTile: View {
                 }
             }.buttonStyle(LoveliesPressStyle()).accessibilityLabel("Photo \(photo.id), \(photo.tags)")
             .accessibilityAddTraits(selected == true ? .isSelected : [])
-            .accessibilityValue(selected.map { $0 ? "Selected" : "Not selected" } ?? "")
-            .accessibilityAction(named: selected == nil && badgeAction == nil ? "Open photo" : heart ? (selected == true ? "Remove from favorites" : "Add to favorites") : (selected == true ? "Deselect photo" : "Select photo")) { if let badgeAction { badgeAction() } else { action() } }
+            .accessibilityValue(selected.map { $0 ? String(localized: "Selected") : String(localized: "Not selected") } ?? "")
+            .accessibilityAction(named: selected == nil && badgeAction == nil ? String(localized: "Open photo") : heart ? (selected == true ? String(localized: "Remove from favorites") : String(localized: "Add to favorites")) : (selected == true ? String(localized: "Deselect photo") : String(localized: "Select photo"))) { if let badgeAction { badgeAction() } else { action() } }
             if let selected, let badgeAction {
                 Button(action: badgeAction) { CheckBadge(selected: selected, heart: heart).frame(width: 44, height: 44).contentShape(Rectangle()) }
-                    .buttonStyle(LoveliesPressStyle()).accessibilityLabel(heart ? (selected ? "Remove from favorites" : "Add to favorites") : "Change photo selection")
+                    .buttonStyle(LoveliesPressStyle()).accessibilityLabel(heart ? (selected ? String(localized: "Remove from favorites") : String(localized: "Add to favorites")) : String(localized: "Change photo selection"))
                     .accessibilityHidden(true)
             }
         }.frame(height: height)
@@ -313,8 +312,8 @@ struct BottomNavigation: View {
     var active: Screen
     var compact = false
     private var destinations: [(String, String, Screen)] {
-        compact ? [("house", "Home", .home), ("magnifyingglass", "Search", .search), ("heart", "Favorites", .favorites), ("person", "Profile", .profile)] :
-        [("house", "Home", .home), ("person.2", "Matches", .newMatches), ("photo", "Photos", .allPhotos), ("heart", "Favorites", .favorites), ("person", "Profile", .profile)]
+        compact ? [("house", String(localized: "Home"), .home), ("magnifyingglass", String(localized: "Search"), .search), ("heart", String(localized: "Favorites"), .favorites), ("person", String(localized: "Profile"), .profile)] :
+        [("house", String(localized: "Home"), .home), ("person.2", String(localized: "Matches"), .newMatches), ("photo", String(localized: "Photos"), .allPhotos), ("heart", String(localized: "Favorites"), .favorites), ("person", String(localized: "Profile"), .profile)]
     }
     var body: some View {
         HStack {
@@ -343,7 +342,7 @@ struct SegmentPills: View {
         AdaptiveActions {
             ForEach(values, id: \.self) { value in
                 Button { selected = value } label: {
-                    Text(value).loveliesFont(size: 14, weight: selected == value ? .semibold : .regular)
+                    Text(LocalizedStringKey(value)).loveliesFont(size: 14, weight: selected == value ? .semibold : .regular)
                         .foregroundStyle(selected == value ? .black : .white)
                         .frame(maxWidth: .infinity).frame(minHeight: 44).padding(.vertical, 8)
                         .background(selected == value ? LoveliesTheme.pink : LoveliesTheme.surface, in: Capsule())
@@ -573,7 +572,7 @@ struct SourcePhotoGrid: View {
                         .offset(x: geometry.size.width * tile.x, y: geometry.size.height * tile.y)
                         .accessibilityHidden(tiles.firstIndex(where: { $0.id == tile.id }) != index)
                 }
-            }.frame(width: geometry.size.width, height: geometry.size.height)
+            }.frame(width: geometry.size.width, height: geometry.size.height, alignment: .topLeading)
         }.aspectRatio(layout.aspectRatio, contentMode: .fit)
     }
 
@@ -605,8 +604,8 @@ struct SourcePhotoGrid: View {
                         .clipShape(RoundedRectangle(cornerRadius: 9)).contentShape(Rectangle())
                 }.buttonStyle(LoveliesPressStyle()).accessibilityLabel("Photo \(photo.id), \(photo.tags)")
                     .accessibilityAddTraits(chosen ? .isSelected : [])
-                    .accessibilityValue(selection == nil ? "" : chosen ? "Selected" : "Not selected")
-                    .accessibilityAction(named: selection == nil && badgeAction == nil ? "Open photo" : badge == .heart ? (chosen ? "Remove from favorites" : "Add to favorites") : (chosen ? "Deselect photo" : "Select photo")) { if let badgeAction { badgeAction(photo) } else { action(photo) } }
+                    .accessibilityValue(selection == nil ? "" : chosen ? String(localized: "Selected") : String(localized: "Not selected"))
+                    .accessibilityAction(named: selection == nil && badgeAction == nil ? String(localized: "Open photo") : badge == .heart ? (chosen ? String(localized: "Remove from favorites") : String(localized: "Add to favorites")) : (chosen ? String(localized: "Deselect photo") : String(localized: "Select photo"))) { if let badgeAction { badgeAction(photo) } else { action(photo) } }
                 if outlineSelection {
                     if tile.selected == true && !chosen {
                         RoundedRectangle(cornerRadius: min(imageWidth, imageHeight) * 0.28).stroke(Color.black, lineWidth: 6)
@@ -618,7 +617,7 @@ struct SourcePhotoGrid: View {
                     }
                 }
                 if badge != .none, let bounds = SourceReferenceCatalog.bakedControlBounds(tile, route: route), bounds.count == 4 {
-                    Color.black.frame(width: imageWidth * bounds[2] + 1, height: imageHeight * bounds[3] + 1)
+                    Ellipse().fill(Color.black).frame(width: imageWidth * bounds[2] + 1, height: imageHeight * bounds[3] + 1)
                         .position(x: imageX + imageWidth * (bounds[0] + bounds[2] / 2), y: imageY + imageHeight * (bounds[1] + bounds[3] / 2)).allowsHitTesting(false)
                 }
                 if badge != .none && (showUnselectedBadges || chosen || tile.selected == true) {
@@ -632,14 +631,14 @@ struct SourcePhotoGrid: View {
                             SourceNativePhotoBadge(selected: chosen, heart: heart, outlined: tile.badgeOutlined == true, size: size)
                                 .frame(width: 44, height: 44).contentShape(Rectangle())
                         }.buttonStyle(LoveliesPressStyle()).position(x: min(max(22, x), max(22, width - 22)), y: min(max(22, y), max(22, height - 22)))
-                            .accessibilityLabel(heart ? (chosen ? "Remove from favorites" : "Add to favorites") : (chosen ? "Deselect photo" : "Select photo"))
+                            .accessibilityLabel(heart ? (chosen ? String(localized: "Remove from favorites") : String(localized: "Add to favorites")) : (chosen ? String(localized: "Deselect photo") : String(localized: "Select photo")))
                             .accessibilityHidden(true)
                     } else {
                         SourceNativePhotoBadge(selected: chosen, heart: heart, outlined: tile.badgeOutlined == true, size: size).position(x: x, y: y).allowsHitTesting(false)
                     }
                 }
                 if let baked = SourceReferenceCatalog.bakedPeopleBounds(tile, route: route), baked.count == 4 {
-                    Color.black.frame(width: imageWidth * baked[2] + 1, height: imageHeight * baked[3] + 1)
+                    Ellipse().fill(Color.black).frame(width: imageWidth * baked[2] + 1, height: imageHeight * baked[3] + 1)
                         .position(x: imageX + imageWidth * (baked[0] + baked[2] / 2), y: imageY + imageHeight * (baked[1] + baked[3] / 2)).allowsHitTesting(false)
                 }
                 if tile.peopleBadge == true {

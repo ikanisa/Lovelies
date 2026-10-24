@@ -59,6 +59,7 @@ import kotlinx.coroutines.launch
 /** Live screens reuse the screenshot's native controls and palette, with server-owned identity and photos. */
 @Composable
 fun LiveScreen(state: PreviewState) {
+    val uiContext = androidx.compose.ui.platform.LocalContext.current
     val live=state.live
     AccountRecoveryDialogs(state)
     PurchaseDialog(state)
@@ -74,21 +75,21 @@ fun LiveScreen(state: PreviewState) {
         live.beginPhotoPicker()?.let { owner ->
             photoPickerOwner=owner
             try { picker.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)) }
-            catch(problem: Exception) { photoPickerOwner=null;live.cancelPhotoPicker(owner);state.info("Photo picker unavailable","Choose From Files to select photos on this device.") }
+            catch(problem: Exception) { photoPickerOwner=null;live.cancelPhotoPicker(owner);state.info(uiContext.getString(R.string.copy_photo_picker_unavailable_97ae963d),uiContext.getString(R.string.copy_choose_from_files_to_select_photos_o_5320fffa)) }
         }
     }
     val chooseFiles: ()->Unit={
         live.beginPhotoPicker()?.let { owner ->
             filePickerOwner=owner
             try { files.launch(arrayOf("image/*")) }
-            catch(problem: Exception) { filePickerOwner=null;live.cancelPhotoPicker(owner);state.info("File picker unavailable","Choose From This Device to select photos.") }
+            catch(problem: Exception) { filePickerOwner=null;live.cancelPhotoPicker(owner);state.info(uiContext.getString(R.string.copy_file_picker_unavailable_eb77ff9d),uiContext.getString(R.string.copy_choose_from_this_device_to_select_ph_19666de8)) }
         }
     }
     when(state.route) {
         1,2 -> OnboardingScreen(state)
         3,4,5 -> LiveWelcome(state,choose)
         6,7 -> LiveCapture(state)
-        8 -> LiveProgress(state,"Setting up your face", "Your registered face authenticates your account.","processing-hero.png",live.busy)
+        8 -> LiveProgress(state,uiContext.getString(R.string.copy_setting_up_your_face_500180cc), uiContext.getString(R.string.copy_your_registered_face_authenticates_y_741dff9b),"processing-hero.png",live.busy)
         9 -> LiveSetupComplete(state)
         in 10..16 -> LiveGallery(state)
         17,18 -> LiveActivity(state)
@@ -103,7 +104,7 @@ fun LiveScreen(state: PreviewState) {
         28 -> LivePersonPhotos(state)
         31,32 -> LiveSelectPeople(state)
         33 -> LiveFinalReview(state)
-        34 -> LiveProgress(state,"Sharing your photos","Saving your reviewed selections…","sharing-hero.png",live.busy)
+        34 -> LiveProgress(state,uiContext.getString(R.string.copy_sharing_your_photos_4cca8673),uiContext.getString(R.string.copy_saving_your_reviewed_selections_ec9aac60),"sharing-hero.png",live.busy)
         35 -> LiveReceipts(state)
         36 -> LiveReport(state)
         in 37..46 -> LiveAccount(state,choose)
@@ -124,6 +125,7 @@ private fun LivePage(state: PreviewState,title: String,back: Boolean=true,bottom
 
 @Composable
 private fun AccountRecoveryDialogs(state: PreviewState) {
+    val uiContext = androidx.compose.ui.platform.LocalContext.current
     val live=state.live;val context=LocalContext.current
     if(live.recoveryImportVisible) {
         var backup by remember { mutableStateOf("") }
@@ -147,7 +149,7 @@ private fun AccountRecoveryDialogs(state: PreviewState) {
                 androidx.compose.foundation.text.selection.SelectionContainer { Text(backup,color=Color.White,fontSize=13.sp,modifier=Modifier.padding(top=16.dp)) }
             }},confirmButton={TextButton(onClick={
                 val manager=context.getSystemService(android.content.Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager
-                val clip=android.content.ClipData.newPlainText("Private recovery backup",backup)
+                val clip=android.content.ClipData.newPlainText(uiContext.getString(R.string.copy_private_recovery_backup_0573f471),backup)
                 clip.description.extras=android.os.PersistableBundle().apply { putBoolean("android.content.extra.IS_SENSITIVE",true) }
                 manager.setPrimaryClip(clip)
             }) { Text(stringResource(R.string.copy_copy_backup_c76efb2a),color=Pink) }},dismissButton={TextButton(onClick=live::hideRecoveryBackup) { Text(stringResource(R.string.copy_done_e9b450d1),color=Muted) }})
@@ -156,8 +158,9 @@ private fun AccountRecoveryDialogs(state: PreviewState) {
 
 @Composable
 private fun LiveWelcome(state: PreviewState,choose: ()->Unit) {
+    val uiContext = androidx.compose.ui.platform.LocalContext.current
     val live=state.live
-    LivePage(state,if(state.route==5)"Let’s get you set up" else "Your photos") {
+    LivePage(state,if(state.route==5)uiContext.getString(R.string.copy_let_s_get_you_set_up_2bfbee62) else uiContext.getString(R.string.copy_your_photos_5f6f6aaf)) {
         Spacer(Modifier.weight(1f))
         SourceHero("photo-heart.png",.40f,1f)
         Text(stringResource(R.string.copy_your_photos_your_choice_5f10a2e7),color=Color.White,fontSize=25.sp,lineHeight=32.sp,textAlign=TextAlign.Center,
@@ -169,10 +172,10 @@ private fun LiveWelcome(state: PreviewState,choose: ()->Unit) {
             OutlineButton(stringResource(R.string.copy_choose_photos_0df966e4),Modifier.padding(top=12.dp),icon=Glyph.PHOTO,onClick=choose)
         } else {
             BodyText(stringResource(R.string.copy_by_continuing_you_consent_to_use_yo_7c404e1b),Modifier.padding(bottom=18.dp),size=12)
-            PinkButton(if(live.repository.identity!=null)"Sign in with my face" else "Set Up My Face",enabled=!live.busy) { state.navigate(6) }
+            PinkButton(if(live.repository.identity!=null)uiContext.getString(R.string.copy_sign_in_with_my_face_cd6b18c6) else uiContext.getString(R.string.copy_set_up_my_face_5d397ceb),enabled=!live.busy) { state.navigate(6) }
         }
         if(!live.hasGuestDeletion)TextButton(onClick={if(live.hasAccountRecovery)state.navigate(6) else live.showAccountRecoveryImport()},enabled=!live.busy,
-            modifier=Modifier.align(Alignment.CenterHorizontally)) { Text(if(live.hasAccountRecovery)"Continue account recovery" else "Recover my account",color=Pink) }
+            modifier=Modifier.align(Alignment.CenterHorizontally)) { Text(if(live.hasAccountRecovery)uiContext.getString(R.string.copy_continue_account_recovery_f4bc949a) else uiContext.getString(R.string.copy_recover_my_account_8b0b03be),color=Pink) }
         if(live.canDeleteGuest)OutlineButton(stringResource(R.string.copy_delete_guest_account_8e0f6d76),Modifier.padding(top=12.dp),enabled=!live.busy) { live.confirmGuestDeletion() }
         Spacer(Modifier.height(20.dp))
     }
@@ -180,6 +183,7 @@ private fun LiveWelcome(state: PreviewState,choose: ()->Unit) {
 
 @Composable
 private fun LiveCapture(state: PreviewState) {
+    val uiContext = androidx.compose.ui.platform.LocalContext.current
     val live=state.live
     val captureContext=live.captureContext()
     var shutter by remember(captureContext) { mutableStateOf<(() -> Unit)?>(null) }
@@ -187,35 +191,35 @@ private fun LiveCapture(state: PreviewState) {
     val pose=poses.getOrNull(live.captureCount) ?: "front"
     val ready=live.cameraForUpload || live.faceChallenge!=null
     Column(Modifier.fillMaxSize().padding(horizontal=18.dp),horizontalAlignment=Alignment.CenterHorizontally) {
-        ScreenHeader(if(live.cameraForUpload)"Take a photo" else if(live.faceChallenge?.get("purpose")=="login")"Welcome back"
-            else when(live.repository.faceLifecycle?.intent?.action) { "replace"->"Replace Your Face Profile";"restore_authentication"->"Restore Face Sign-In";"enroll"->"Set Up Your Face";
-                else->if(live.hasAccountRecovery)"Recover your account" else "Set Up Your Face" },onBack={live.cancelFace()})
-        Text(if(live.cameraForUpload)"Capture a memory" else when(pose){"left"->"Turn slightly to your left";"right"->"Turn slightly to your right";else->"Look straight at the camera"},
+        ScreenHeader(if(live.cameraForUpload)uiContext.getString(R.string.copy_take_a_photo_8b458ff5) else if(live.faceChallenge?.get("purpose")=="login")uiContext.getString(R.string.copy_welcome_back_48e13026)
+            else when(live.repository.faceLifecycle?.intent?.action) { "replace"->uiContext.getString(R.string.copy_replace_your_face_profile_4310dffa);"restore_authentication"->uiContext.getString(R.string.copy_restore_face_sign_in_5364a734);"enroll"->uiContext.getString(R.string.copy_set_up_your_face_8b4da1f4);
+                else->if(live.hasAccountRecovery)uiContext.getString(R.string.copy_recover_your_account_86fc8c3d) else uiContext.getString(R.string.copy_set_up_your_face_8b4da1f4) },onBack={live.cancelFace()})
+        Text(if(live.cameraForUpload)uiContext.getString(R.string.copy_capture_a_memory_ea1a2bed) else when(pose){"left"->uiContext.getString(R.string.copy_turn_slightly_to_your_left_b867edb7);"right"->uiContext.getString(R.string.copy_turn_slightly_to_your_right_daf941a8);else->uiContext.getString(R.string.copy_look_straight_at_the_camera_ffa9c481)},
             color=Color.White,fontSize=18.sp,modifier=Modifier.padding(top=14.dp,bottom=10.dp))
-        BodyText(if(live.cameraForUpload)"Review this photo before uploading." else "Keep your face inside the frame.",size=13)
+        BodyText(if(live.cameraForUpload)uiContext.getString(R.string.copy_review_this_photo_before_uploading_ddc1112d) else uiContext.getString(R.string.copy_keep_your_face_inside_the_frame_cf529b50),size=13)
         Box(Modifier.weight(1f).padding(top=22.dp,bottom=20.dp).fillMaxWidth().clip(RoundedCornerShape(24.dp)).background(Panel)) {
             if(live.reviewingCapture && live.reviewPreview!=null)androidx.compose.foundation.Image(live.reviewPreview!!.asImageBitmap(),
-                contentDescription="Unsent ${if(live.cameraForUpload)"photo" else "selfie"} preview",modifier=Modifier.fillMaxSize(),contentScale=androidx.compose.ui.layout.ContentScale.Fit)
+                contentDescription=if(live.cameraForUpload)uiContext.getString(R.string.copy_unsent_photo_preview_c002e430) else uiContext.getString(R.string.copy_unsent_selfie_preview_3c3da050),modifier=Modifier.fillMaxSize(),contentScale=androidx.compose.ui.layout.ContentScale.Fit)
             else if(ready && captureContext!=null)NativeCameraPane(Modifier.fillMaxSize(),front=!live.cameraForUpload,active=live.foregroundActive,
                 captureContext=captureContext,onShutter=live::shutterContext,
                 onReady={owner,action->if(owner==live.captureContext()) { shutter=action;live.cameraReady=action!=null }},
                 onPhoto=live::capture,onError=live::cameraError,onStatus=live::cameraState)
-            else Box(Modifier.fillMaxSize(),contentAlignment=Alignment.Center) { CircularProgressIndicator(color=Pink,modifier=Modifier.semantics { contentDescription="Preparing camera" }) }
+            else Box(Modifier.fillMaxSize(),contentAlignment=Alignment.Center) { CircularProgressIndicator(color=Pink,modifier=Modifier.semantics { contentDescription=uiContext.getString(R.string.a11y_camera_loading) }) }
             if(ready && !live.cameraForUpload && !live.reviewingCapture)Box(Modifier.align(Alignment.Center).fillMaxWidth(.78f).fillMaxHeight(.66f)
                 .border(2.dp,Pink,RoundedCornerShape(55.dp)))
-            if(live.busy)Box(Modifier.fillMaxSize().background(Ink.copy(alpha=.62f)),contentAlignment=Alignment.Center) { CircularProgressIndicator(color=Pink,modifier=Modifier.semantics { contentDescription="Preparing camera" }) }
+            if(live.busy)Box(Modifier.fillMaxSize().background(Ink.copy(alpha=.62f)),contentAlignment=Alignment.Center) { CircularProgressIndicator(color=Pink,modifier=Modifier.semantics { contentDescription=uiContext.getString(R.string.a11y_camera_loading) }) }
         }
-        live.error?.let { BodyText(readableError(it.code),Modifier.padding(bottom=12.dp),size=13) }
+        live.error?.let { BodyText(readableError(it.code, uiContext),Modifier.padding(bottom=12.dp),size=13) }
         if(live.reviewingCapture) {
-            BodyText(if(live.cameraForUpload)"Review your photo." else "Review this selfie. Face quality will be checked after you use it.",Modifier.padding(bottom=12.dp),size=13)
-            PinkButton("Use this ${if(live.cameraForUpload)"photo" else "selfie"}",enabled=!live.busy,onClick=live::approveCapture)
+            BodyText(if(live.cameraForUpload)uiContext.getString(R.string.copy_review_your_photo_71d1318e) else uiContext.getString(R.string.copy_review_this_selfie_face_quality_will_521c4dfc),Modifier.padding(bottom=12.dp),size=13)
+            PinkButton(if(live.cameraForUpload)uiContext.getString(R.string.copy_use_this_photo_ea9cb38c) else uiContext.getString(R.string.copy_use_this_selfie_3beb5dec),enabled=!live.busy,onClick=live::approveCapture)
             OutlineButton(stringResource(R.string.copy_retake_16457335),Modifier.padding(top=10.dp,bottom=12.dp),enabled=!live.busy,onClick=live::retakeCapture)
         }
         if(live.error?.code in setOf("camera_image_invalid","capture_too_large","camera_review_expired","capture_context_changed") && ready)
             OutlineButton(stringResource(R.string.copy_retake_16457335),Modifier.padding(bottom=12.dp),enabled=!live.busy,onClick=live::retakeCapture)
-        if(live.error!=null && !ready)OutlineButton(if(live.error?.code in setOf("enrollment_in_flight","account_recovery_in_flight","face_profile_in_flight","face_login_in_flight"))"Check setup status" else if(isFaceCaptureRejection(live.error?.code.orEmpty()))"Retake selfies" else "Try again") { live.beginFace() }
+        if(live.error!=null && !ready)OutlineButton(if(live.error?.code in setOf("enrollment_in_flight","account_recovery_in_flight","face_profile_in_flight","face_login_in_flight"))uiContext.getString(R.string.copy_check_setup_status_a667adcc) else if(isFaceCaptureRejection(live.error?.code.orEmpty()))uiContext.getString(R.string.copy_retake_selfies_8dfea8d6) else uiContext.getString(R.string.copy_try_again_213e90fa)) { live.beginFace() }
         if(live.hasAccountRecovery && live.error!=null)TextButton(onClick={
-            state.confirm("Use another recovery key?","Your previous request will stay saved on this device. This does not cancel it on the server.","Use another key") { live.showAccountRecoveryImport(true) }
+            state.confirm(uiContext.getString(R.string.copy_use_another_recovery_key_095a4d22),uiContext.getString(R.string.copy_your_previous_request_will_stay_save_8ef24849),uiContext.getString(R.string.copy_use_another_key_f93e8abc)) { live.showAccountRecoveryImport(true) }
         },enabled=!live.busy) { Text(stringResource(R.string.copy_use_another_recovery_key_99e60eca),color=Pink) }
         if(!live.cameraForUpload)Row(horizontalArrangement=Arrangement.spacedBy(12.dp),modifier=Modifier.padding(bottom=15.dp)) {
             repeat(if(poses.isEmpty())3 else poses.size) { index -> Box(Modifier.size(9.dp).clip(CircleShape).background(if(index<live.captureCount)Pink else Hairline)) }
@@ -223,7 +227,7 @@ private fun LiveCapture(state: PreviewState) {
         if(!live.reviewingCapture)Box(Modifier.padding(bottom=18.dp).size(72.dp).border(3.dp,Color.White,CircleShape).padding(7.dp).clip(CircleShape)
             .background(if(shutter!=null && !live.busy)Color.White else Hairline)
             .clickable(enabled=shutter!=null && !live.busy,role=Role.Button){shutter?.invoke()}
-            .semantics { contentDescription="Capture ${if(live.cameraForUpload)"photo" else "$pose selfie"}" })
+            .semantics { contentDescription=if(live.cameraForUpload)uiContext.getString(R.string.copy_capture_photo_2265ce8d) else when(pose) { "left" -> uiContext.getString(R.string.copy_capture_left_selfie_07580492); "right" -> uiContext.getString(R.string.copy_capture_right_selfie_429ff19d); else -> uiContext.getString(R.string.copy_capture_front_selfie_64a040fa) } })
         TextButton(onClick={live.cancelFace()}) { Text(stringResource(R.string.copy_cancel_77dfd213),color=Muted) }
     }
 }
@@ -242,23 +246,24 @@ private fun LiveSetupComplete(state: PreviewState) {
 
 @Composable
 private fun LiveUploadProgress(state: PreviewState) {
+    val uiContext = androidx.compose.ui.platform.LocalContext.current
     val live=state.live;val record=live.uploadRecovery
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(24.dp),horizontalAlignment=Alignment.CenterHorizontally) {
         Spacer(Modifier.height(56.dp));SourceHero("upload-hero.png",.68f,184f/101f)
-        Text(when { record?.cancelled==true->"Uploads cancelled";record?.finished==true->"Upload Complete";live.busy->"Uploading your photos";else->"Upload paused" },
+        Text(when { record?.cancelled==true->uiContext.getString(R.string.copy_uploads_cancelled_e5964596);record?.finished==true->uiContext.getString(R.string.copy_upload_complete_38fda4db);live.busy->uiContext.getString(R.string.copy_uploading_your_photos_8c4581b8);else->uiContext.getString(R.string.copy_upload_paused_a3ddf64e) },
             color=Color.White,fontSize=23.sp,modifier=Modifier.padding(top=24.dp,bottom=12.dp))
-        BodyText(live.error?.let { readableError(it.code) } ?: live.uploadStatus)
-        if(record!=null && !record.finished && !record.cancelled)LiveToggle("Continue with background scheduling","Android may defer work. Each accepted chunk remains saved.",live.backgroundUploads) { live.configureBackgroundUploads(!live.backgroundUploads) }
+        BodyText(live.error?.let { readableError(it.code, uiContext) } ?: live.uploadStatus)
+        if(record!=null && !record.finished && !record.cancelled)LiveToggle(uiContext.getString(R.string.copy_continue_with_background_scheduling_552c020e),uiContext.getString(R.string.copy_android_may_defer_work_each_accepted_44065179),live.backgroundUploads) { live.configureBackgroundUploads(!live.backgroundUploads) }
         if(record!=null && record.files.all { it.sha256!=null } && record.bytesTotal>0) {
             LinearProgressIndicator(progress=(record.bytesAcknowledged.toDouble()/record.bytesTotal).toFloat(),color=Pink,backgroundColor=Hairline,
-                modifier=Modifier.fillMaxWidth().padding(top=24.dp).semantics { contentDescription="${record.bytesAcknowledged} of ${record.bytesTotal} photo bytes saved" })
-            BodyText("${(record.bytesAcknowledged*100/record.bytesTotal)}% saved",Modifier.padding(top=10.dp),size=13)
+                modifier=Modifier.fillMaxWidth().padding(top=24.dp).semantics { contentDescription=uiContext.getString(R.string.copy_1_s_of_2_s_photo_bytes_saved_c04a54b3, record.bytesAcknowledged, record.bytesTotal) })
+            BodyText(uiContext.getString(R.string.copy_1_s_saved_1fcf155b, (record.bytesAcknowledged*100/record.bytesTotal)),Modifier.padding(top=10.dp),size=13)
         } else if(live.busy)CircularProgressIndicator(color=Pink,modifier=Modifier.padding(top=24.dp).size(28.dp))
         Spacer(Modifier.height(28.dp))
         if(record?.finished==true)PinkButton(stringResource(R.string.copy_view_matches_731444f2),enabled=!live.busy) { live.reviewPhotos(batch=record.batch) }
         else if(record?.cancelled!=true) {
             if(live.busy)OutlineButton(stringResource(R.string.copy_pause_781961bc),onClick=live::pauseUploads)
-            else PinkButton(if(record?.cancelling==true)"Finish cancellation" else if(live.error!=null || record?.error!=null)"Retry" else "Resume",enabled=live.registered) { live.resumeUploads(retryFailed=true) }
+            else PinkButton(if(record?.cancelling==true)uiContext.getString(R.string.copy_finish_cancellation_1b0d976d) else if(live.error!=null || record?.error!=null)uiContext.getString(R.string.copy_retry_8036af59) else uiContext.getString(R.string.copy_resume_454d1d8a),enabled=live.registered) { live.resumeUploads(retryFailed=true) }
             if(record?.cancelling!=true)OutlineButton(stringResource(R.string.copy_cancel_remaining_uploads_8e597ca8),Modifier.padding(top=12.dp),onClick=live::cancelUploads)
         }
         OutlineButton(stringResource(R.string.copy_back_to_photos_b080279d),Modifier.padding(top=12.dp),enabled=!live.busy) { state.navigate(13) }
@@ -281,10 +286,11 @@ private fun LiveProgress(state: PreviewState,title: String,message: String,art: 
 
 @Composable
 private fun LiveGallery(state: PreviewState) {
+    val uiContext = androidx.compose.ui.platform.LocalContext.current
     val live=state.live
     if(state.route==12) { LiveViewer(state);return }
     if(state.route==16) {
-        LivePage(state,"Filters") {
+        LivePage(state,uiContext.getString(R.string.filters)) {
             BodyText(stringResource(R.string.copy_photo_source_dfe0371b),center=false,modifier=Modifier.padding(vertical=18.dp))
             Segments(listOf("All","Contributed","Received"),state.category,onSelect=live::updateSource)
             BodyText(stringResource(R.string.copy_newest_first_search_and_photo_sourc_8b7617ee),Modifier.padding(top=16.dp),center=false,size=13)
@@ -292,7 +298,7 @@ private fun LiveGallery(state: PreviewState) {
         };return
     }
     if(state.route==11 && state.category!="Received") {
-        LivePage(state,"Matches",back=false,bottom=11) {
+        LivePage(state,uiContext.getString(R.string.copy_matches_a7d4102e),back=false,bottom=11) {
             LiveMatchesNavigation(state,received=false)
             BodyText(stringResource(R.string.copy_review_matched_people_before_sharin_c105f158),Modifier.padding(vertical=14.dp),center=false)
             if(live.snapshot!=null) {
@@ -309,22 +315,22 @@ private fun LiveGallery(state: PreviewState) {
         };return
     }
     val received=state.route==11
-    val title=when { received->"Matches";state.route==10->"Your memories";state.route==14->"Favorites";state.route==15->"Search";else->"All Photos" }
+    val title=when { received->uiContext.getString(R.string.copy_matches_a7d4102e);state.route==10->uiContext.getString(R.string.copy_your_memories_ef9aa575);state.route==14->uiContext.getString(R.string.copy_favorites_7c2c53ba);state.route==15->uiContext.getString(R.string.copy_search_c646a2c9);else->uiContext.getString(R.string.copy_all_photos_343464c9) }
     val rows=live.photos.filter { photo -> state.route!=14 || photo.id in live.favorites }
     LivePage(state,title,back=state.route==15,bottom=when { received->11;state.route==10->10;state.route==14->14;else->13 }) {
         if(received) {
             LiveMatchesNavigation(state,received=true)
-            BodyText("Photos you can access as a recipient.",Modifier.padding(top=12.dp),center=false,size=13)
+            BodyText(uiContext.getString(R.string.copy_photos_you_can_access_as_a_recipient_f7e2fb5f),Modifier.padding(top=12.dp),center=false,size=13)
         }
         SearchInput(live.search,stringResource(R.string.search_photos),Modifier.padding(top=8.dp,bottom=12.dp),onValue={live.updateSearch(it);if(state.route!=15)state.navigate(15)},onFilter={state.navigate(16)})
         Row(Modifier.fillMaxWidth(),horizontalArrangement=Arrangement.SpaceBetween,verticalAlignment=Alignment.CenterVertically) {
             Text(if(live.libraryCursor!=null)stringResource(R.string.loaded_photo_count,photoCount(rows.size)) else photoCount(rows.size),color=Muted,fontSize=13.sp)
             TextButton(onClick={state.navigate(19)}) { Text(stringResource(R.string.add_photos),color=Pink,fontSize=13.sp) }
         }
-        if(rows.isEmpty())Box(Modifier.weight(1f).fillMaxWidth(),contentAlignment=Alignment.Center) { BodyText(if(live.libraryLoading)"Searching…" else if(state.route==14)"Your favorite photos will appear here. Load more to find favorites outside this page." else "No photos match this search.") }
+        if(rows.isEmpty())Box(Modifier.weight(1f).fillMaxWidth(),contentAlignment=Alignment.Center) { BodyText(if(live.libraryLoading)uiContext.getString(R.string.copy_searching_2713de23) else if(state.route==14)uiContext.getString(R.string.copy_your_favorite_photos_will_appear_her_d57e4158) else uiContext.getString(R.string.copy_no_photos_match_this_search_cbcdf970)) }
         else LivePhotoGrid(live,rows,Modifier.weight(1f),columns=if(state.route==10)4 else 3,route=state.route,onClick={live.openPhoto(it,rows)})
-        live.libraryError?.let { BodyText(readableError(it.code),Modifier.semantics { liveRegion=LiveRegionMode.Polite },size=13) }
-        if(live.libraryCursor!=null)OutlineButton(if(live.libraryLoading)"Loading…" else "Load More Photos",enabled=!live.libraryLoading && !live.busy) { live.loadMorePhotos() }
+        live.libraryError?.let { BodyText(readableError(it.code, uiContext),Modifier.semantics { liveRegion=LiveRegionMode.Polite },size=13) }
+        if(live.libraryCursor!=null)OutlineButton(if(live.libraryLoading)uiContext.getString(R.string.copy_loading_2e7e4ae3) else uiContext.getString(R.string.copy_load_more_photos_1969bbc3),enabled=!live.libraryLoading && !live.busy) { live.loadMorePhotos() }
         else if(live.libraryLoading)LinearProgressIndicator(color=Pink,modifier=Modifier.fillMaxWidth())
     }
 }
@@ -344,20 +350,21 @@ private fun LiveMatchesNavigation(state: PreviewState,received: Boolean) {
 
 @Composable
 private fun LiveViewer(state: PreviewState) {
+    val uiContext = androidx.compose.ui.platform.LocalContext.current
     val live=state.live
     val rows=live.viewerRows.toList().ifEmpty { listOfNotNull(live.selectedPhoto) }
-    if(rows.isEmpty()) { LivePage(state,"Photo") { BodyText(stringResource(R.string.copy_this_photo_is_unavailable_return_to_9a6755dc));OutlineButton(stringResource(R.string.copy_back_to_photos_b080279d)) { state.navigate(13) } };return }
+    if(rows.isEmpty()) { LivePage(state,uiContext.getString(R.string.copy_photo_53219983)) { BodyText(stringResource(R.string.copy_this_photo_is_unavailable_return_to_9a6755dc));OutlineButton(stringResource(R.string.copy_back_to_photos_b080279d)) { state.navigate(13) } };return }
     val pager=rememberPagerState(initialPage=rows.indexOfFirst { it.id==live.selectedPhoto?.id }.coerceAtLeast(0),pageCount={rows.size})
     var chrome by remember { mutableStateOf(true) }
     var zoomed by remember { mutableStateOf(false) }
     val context=LocalContext.current
     val savePermission=rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted->
         if(granted)live.selectedPhoto?.let { live.original(it) }
-        else state.info("Allow photo saving","Open Android Settings and allow storage access to save originals on this Android version.")
+        else state.info(uiContext.getString(R.string.copy_allow_photo_saving_b73adb30),uiContext.getString(R.string.copy_open_android_settings_and_allow_stor_a8cc21b8))
     }
     LaunchedEffect(live.shareIntent) { live.shareIntent?.let { intent->
-        try { context.startActivity(android.content.Intent.createChooser(intent,"Share photo"));live.clearShareIntent() }
-        catch(_: android.content.ActivityNotFoundException) { live.clearShareIntent();state.info("Share unavailable","No installed app can share this photo.") }
+        try { context.startActivity(android.content.Intent.createChooser(intent,uiContext.getString(R.string.copy_share_photo_58c755ac)));live.clearShareIntent() }
+        catch(_: android.content.ActivityNotFoundException) { live.clearShareIntent();state.info(uiContext.getString(R.string.copy_share_unavailable_9fa6cce2),uiContext.getString(R.string.copy_no_installed_app_can_share_this_phot_6764d270)) }
     } }
     val scope=rememberCoroutineScope()
     LaunchedEffect(pager.settledPage) {
@@ -365,7 +372,7 @@ private fun LiveViewer(state: PreviewState) {
     }
     val photo=rows.getOrNull(pager.currentPage) ?: rows.first()
     Column(Modifier.fillMaxSize()) {
-        if(chrome)ScreenHeader(photo.title,onBack=state::back,right={Overflow(state)})
+        if(chrome)ScreenHeader(displayedPhotoTitle(photo,uiContext.getString(R.string.copy_photo_53219983)),onBack=state::back,right={Overflow(state)})
         HorizontalPager(state=pager,userScrollEnabled=!zoomed,modifier=Modifier.fillMaxWidth().weight(1f)) { page ->
             var scale by remember(rows[page].id) { mutableFloatStateOf(1f) }
             var pan by remember(rows[page].id) { mutableStateOf(Offset.Zero) }
@@ -379,7 +386,7 @@ private fun LiveViewer(state: PreviewState) {
                 if(page==pager.currentPage)zoomed=scale>1.01f
             }
             Box(Modifier.fillMaxSize().clipToBounds().onSizeChanged { bounds=it }.semantics {
-                contentDescription=rows[page].title;stateDescription=pageDescription
+                contentDescription=displayedPhotoTitle(rows[page],uiContext.getString(R.string.copy_photo_53219983));stateDescription=pageDescription
                 customActions=listOf(
                     CustomAccessibilityAction(zoomLabel) { scale=if(scale>1f)1f else 2f;pan=Offset.Zero;zoomed=scale>1f;true },
                     CustomAccessibilityAction(controlsLabel) { chrome=!chrome;true })
@@ -396,9 +403,9 @@ private fun LiveViewer(state: PreviewState) {
                 TextButton(enabled=pager.currentPage<rows.lastIndex,onClick={scope.launch { pager.scrollToPage(pager.currentPage+1) }}) { Text(stringResource(R.string.next),color=if(pager.currentPage<rows.lastIndex)Pink else Muted) }
             }
             Row(Modifier.fillMaxWidth().padding(vertical=12.dp),horizontalArrangement=Arrangement.SpaceEvenly) {
-                IconAction(Glyph.HEART,if(photo.id in live.favorites)"Remove favorite" else "Add favorite",color=if(photo.id in live.favorites)Pink else Color.White) { live.toggleFavorite(photo.id) }
-                if(photo.source=="contributions")IconAction(Glyph.PEOPLE,"Matched people") { live.selectedPhotoMatches() }
-                IconAction(Glyph.HELP,"Report") { state.navigate(36) }
+                IconAction(Glyph.HEART,if(photo.id in live.favorites)uiContext.getString(R.string.copy_remove_favorite_95ed8147) else uiContext.getString(R.string.copy_add_favorite_5f2be110),color=if(photo.id in live.favorites)Pink else Color.White) { live.toggleFavorite(photo.id) }
+                if(photo.source=="contributions")IconAction(Glyph.PEOPLE,uiContext.getString(R.string.copy_matched_people_8307585e)) { live.selectedPhotoMatches() }
+                IconAction(Glyph.HELP,uiContext.getString(R.string.copy_report_4681fa0b)) { state.navigate(36) }
             }
             if(photo.source=="contributions")PinkButton(stringResource(R.string.copy_review_matched_people_bda254b4),enabled=!live.busy) { live.selectedPhotoMatches() }
             Row(Modifier.fillMaxWidth(),horizontalArrangement=Arrangement.SpaceEvenly) {
@@ -413,20 +420,21 @@ private fun LiveViewer(state: PreviewState) {
 
 @Composable
 private fun LiveActivity(state: PreviewState) {
+    val uiContext = androidx.compose.ui.platform.LocalContext.current
     val live=state.live;val isNotification=state.route==18
-    LivePage(state,if(isNotification)"Notifications" else "Activity",bottom=10) {
+    LivePage(state,if(isNotification)uiContext.getString(R.string.copy_notifications_753a22b2) else uiContext.getString(R.string.copy_activity_9e75940c),bottom=10) {
         Row(Modifier.fillMaxWidth(),horizontalArrangement=Arrangement.SpaceBetween) {
-            TextButton(onClick={state.navigate(17)}) { Text("Requests (${live.inbox.size})",color=if(!isNotification)Pink else Muted) }
+            TextButton(onClick={state.navigate(17)}) { Text(uiContext.resources.getQuantityString(R.plurals.copy_request_heading_count, live.inbox.size, live.inbox.size),color=if(!isNotification)Pink else Muted) }
             TextButton(onClick={state.navigate(18)}) { Text(stringResource(R.string.copy_notifications_753a22b2),color=if(isNotification)Pink else Muted) }
         }
         if(isNotification)LazyColumn(verticalArrangement=Arrangement.spacedBy(9.dp)) {
-            items(live.notifications,key={it["id"] as String}) { row -> SettingRow(row["title"] as? String ?: "Notification",subtitle=row["kind"] as? String,
-                icon=Glyph.BELL,trailing=if(row["read_at"]!=null)"Read" else "New") { live.readNotification(row) } }
+            items(live.notifications,key={it["id"] as String}) { row -> SettingRow(row["title"] as? String ?: uiContext.getString(R.string.copy_notification_146a2866),subtitle=row["kind"] as? String,
+                icon=Glyph.BELL,trailing=if(row["read_at"]!=null)uiContext.getString(R.string.copy_read_4f0befe5) else uiContext.getString(R.string.copy_new_8b242db1)) { live.readNotification(row) } }
         } else if(live.inbox.isEmpty())Box(Modifier.fillMaxSize(),contentAlignment=Alignment.Center) { BodyText(stringResource(R.string.copy_photo_requests_will_appear_here_375f2958)) }
         else LazyColumn(verticalArrangement=Arrangement.spacedBy(9.dp)) {
             items(live.inbox,key={it["id"] as String}) { row ->
                 val person=row["person"] as? Map<*,*>;val count=(row["photo_count"] as? Number)?.toInt() ?: 0
-                SettingRow(person?.get("name") as? String ?: "Photo request",subtitle=stringResource(R.string.photo_status,photoCount(count),receiptLabel(row["status"] as? String)),icon=Glyph.PEOPLE) { live.openReceipt(row) }
+                SettingRow(person?.get("name") as? String ?: uiContext.getString(R.string.copy_photo_request_1f865c7e),subtitle=stringResource(R.string.photo_status,photoCount(count),receiptLabel(row["status"] as? String, uiContext)),icon=Glyph.PEOPLE) { live.openReceipt(row) }
             }
         }
     }
@@ -434,7 +442,8 @@ private fun LiveActivity(state: PreviewState) {
 
 @Composable
 private fun LiveUploadEntry(state: PreviewState) {
-    LivePage(state,"Add Photos") {
+    val uiContext = androidx.compose.ui.platform.LocalContext.current
+    LivePage(state,uiContext.getString(R.string.add_photos)) {
         Spacer(Modifier.weight(1f));SourceHero("photo-heart.png",.45f,1f)
         Text(stringResource(R.string.copy_bring_your_memories_to_lovelies_40789f6a),color=Color.White,fontSize=24.sp,lineHeight=31.sp,textAlign=TextAlign.Center,modifier=Modifier.fillMaxWidth().padding(vertical=20.dp))
         BodyText(stringResource(R.string.copy_choose_photos_review_matched_people_bc56958c))
@@ -446,6 +455,7 @@ private fun LiveUploadEntry(state: PreviewState) {
 
 @Composable
 private fun LiveUploadSources(state: PreviewState,choose: ()->Unit,files: ()->Unit) {
+    val uiContext = androidx.compose.ui.platform.LocalContext.current
     Column(Modifier.fillMaxSize().padding(horizontal = 18.dp)) {
         ScreenHeader(stringResource(R.string.copy_choose_source_8bc9b333), onBack = state::back, leading = Glyph.CLOSE)
         UploadSourceList(Modifier.weight(1f)) { source ->
@@ -454,12 +464,12 @@ private fun LiveUploadSources(state: PreviewState,choose: ()->Unit,files: ()->Un
                 UploadSourceChoice.FILES -> files()
                 UploadSourceChoice.CAMERA -> state.live.cameraUpload()
                 UploadSourceChoice.GOOGLE_PHOTOS -> state.confirm("Google Photos",
-                    "In the Android photo picker, choose Google Photos if it is available as your cloud media provider. You can change the cloud provider in the picker's settings.",
-                    "Open photos", choose)
+                    uiContext.getString(R.string.copy_in_the_android_photo_picker_choose_1_5119a3c3, "Google Photos"),
+                    uiContext.getString(R.string.copy_open_photos_080b49e2), choose)
                 UploadSourceChoice.GOOGLE_DRIVE, UploadSourceChoice.DROPBOX, UploadSourceChoice.ONEDRIVE ->
                     state.confirm(source.title,
-                        "In the Android file picker, open Browse and choose ${source.title}. Its app must be installed, signed in, and available as a file provider. Only the photos you choose are added to Lovelies.",
-                        "Open files", files)
+                        uiContext.getString(R.string.copy_in_the_android_file_picker_open_brow_ec2fd73d, source.title),
+                        uiContext.getString(R.string.copy_open_files_dcbec6c2), files)
             }
         }
     }
@@ -467,14 +477,15 @@ private fun LiveUploadSources(state: PreviewState,choose: ()->Unit,files: ()->Un
 
 @Composable
 private fun LiveUploadReview(state: PreviewState,choose: ()->Unit) {
+    val uiContext = androidx.compose.ui.platform.LocalContext.current
     val live=state.live
-    LivePage(state,if(state.route==22)"Review Upload" else "Select Photos") {
-        SectionTitle("${live.selectedUploads.size} selected",trailing="Add more",onTrailing=choose)
+    LivePage(state,if(state.route==22)uiContext.getString(R.string.copy_review_upload_da9297a6) else uiContext.getString(R.string.copy_select_photos_e7fbdbd6)) {
+        SectionTitle(uiContext.getString(R.string.copy_1_s_selected_35eec3bf, live.selectedUploads.size),trailing=uiContext.getString(R.string.copy_add_more_5d2a8a05),onTrailing=choose)
         LazyVerticalStaggeredGrid(columns=StaggeredGridCells.Fixed(3),modifier=Modifier.weight(1f),horizontalArrangement=Arrangement.spacedBy(6.dp),verticalItemSpacing=6.dp) {
             items(live.picked,key={it.toString()}) { uri ->
                 Box(Modifier.fillMaxWidth().aspectRatio(1f).clip(RoundedCornerShape(10.dp))
                     .toggleable(uri in live.selectedUploads,role=Role.Checkbox,onValueChange={live.toggleUpload(uri)})
-                    .semantics { contentDescription="Upload photo${if(uri in live.selectedUploads)", selected" else ", not selected"}" }) {
+                    .semantics { contentDescription=if(uri in live.selectedUploads)uiContext.getString(R.string.copy_upload_photo_selected_5353a6ed) else uiContext.getString(R.string.copy_upload_photo_not_selected_d4d32cde) }) {
                     LocalPhotoImage(uri,Modifier.fillMaxSize(),live.foregroundActive);SelectionMark(uri in live.selectedUploads,Modifier.align(Alignment.TopEnd).padding(6.dp))
                 }
             }
@@ -482,7 +493,7 @@ private fun LiveUploadReview(state: PreviewState,choose: ()->Unit) {
         if(state.route==22) {
             OutlinedTextField(value=live.caption,onValueChange=live::uploadCaption,label={Text(stringResource(R.string.copy_photo_title_optional_029237d2))},modifier=Modifier.fillMaxWidth().padding(vertical=12.dp),
                 colors=TextFieldDefaults.outlinedTextFieldColors(textColor=Color.White,focusedBorderColor=Pink,unfocusedBorderColor=Hairline,cursorColor=Pink))
-            if(!live.processingConsent)SettingRow(stringResource(R.string.copy_enable_photo_processing_5ba32687),subtitle="Save this choice before uploading",icon=Glyph.SHIELD) { state.navigate(40) }
+            if(!live.processingConsent)SettingRow(stringResource(R.string.copy_enable_photo_processing_5ba32687),subtitle=uiContext.getString(R.string.copy_save_this_choice_before_uploading_fc2f3491),icon=Glyph.SHIELD) { state.navigate(40) }
             PinkButton(stringResource(R.string.copy_upload_photo_count,photoCount(live.selectedUploads.size)),enabled=live.selectedUploads.isNotEmpty() && live.processingConsent && !live.busy) { live.upload() }
         } else PinkButton(stringResource(R.string.copy_continue_2e026239),enabled=live.selectedUploads.isNotEmpty()) { state.navigate(22) }
         Spacer(Modifier.height(18.dp))
@@ -491,8 +502,9 @@ private fun LiveUploadReview(state: PreviewState,choose: ()->Unit) {
 
 @Composable
 private fun LiveUploadComplete(state: PreviewState) {
+    val uiContext = androidx.compose.ui.platform.LocalContext.current
     val live=state.live
-    LivePage(state,"Upload Complete",back=false) {
+    LivePage(state,uiContext.getString(R.string.copy_upload_complete_38fda4db),back=false) {
         Spacer(Modifier.weight(1f));SourceHero("upload-hero.png",.716f,184f/101f)
         Text(stringResource(R.string.copy_photos_uploaded_40ce29e6),color=Color.White,fontSize=25.sp,modifier=Modifier.align(Alignment.CenterHorizontally).padding(top=25.dp))
         BodyText(stringResource(R.string.photos_processed,photoCount(live.uploadIds.size)),Modifier.padding(top=14.dp))
@@ -504,8 +516,9 @@ private fun LiveUploadComplete(state: PreviewState) {
 
 @Composable
 private fun LiveMatchSummary(state: PreviewState) {
+    val uiContext = androidx.compose.ui.platform.LocalContext.current
     val live=state.live;val snap=live.snapshot
-    LivePage(state,"Matches Found") {
+    LivePage(state,uiContext.getString(R.string.copy_matches_found_270ad966)) {
         Spacer(Modifier.weight(1f));SourceHero("matches-hero.png",.531f,127f/106f)
         Text(stringResource(R.string.copy_your_memories_connected_ea90b2ef),color=Color.White,fontSize=22.sp,textAlign=TextAlign.Center,modifier=Modifier.fillMaxWidth().padding(top=22.dp,bottom=12.dp))
         BodyText(stringResource(R.string.photo_summary,photoCount(snap?.photos?.size),personCount(snap?.people?.size)))
@@ -517,10 +530,11 @@ private fun LiveMatchSummary(state: PreviewState) {
 
 @Composable
 private fun LiveSelectPhotos(state: PreviewState) {
+    val uiContext = androidx.compose.ui.platform.LocalContext.current
     val live=state.live;val snap=live.snapshot
-    LivePage(state,if(state.route==26)"Matched Photos" else "Select Photos to Share") {
+    LivePage(state,if(state.route==26)uiContext.getString(R.string.copy_matched_photos_d2c8fc60) else uiContext.getString(R.string.copy_select_photos_to_share_52f9b7e4)) {
         if(snap==null) { BodyText(stringResource(R.string.copy_open_a_photo_review_from_your_galle_7b747039));return@LivePage }
-        SectionTitle("Photos (${live.draft.photos.size})",trailing=if(live.draft.photos.isEmpty())"Select all" else "Deselect all",onTrailing={
+        SectionTitle(uiContext.resources.getQuantityString(R.plurals.copy_photo_heading_count, live.draft.photos.size, live.draft.photos.size),trailing=if(live.draft.photos.isEmpty())uiContext.getString(R.string.copy_select_all_6af21072) else uiContext.getString(R.string.copy_deselect_all_4547f79d),onTrailing={
             live.allPhotos(live.draft.photos.isEmpty())
         })
         if(snap.limited)ScopeNotice()
@@ -533,16 +547,17 @@ private fun LiveSelectPhotos(state: PreviewState) {
 
 @Composable
 private fun LivePhotoPeople(state: PreviewState) {
+    val uiContext = androidx.compose.ui.platform.LocalContext.current
     val live=state.live;val snap=live.snapshot
     val photo=live.selectedPhoto?.let { selected -> snap?.photos?.firstOrNull { it.id==selected.id } } ?: snap?.photos?.firstOrNull()
-    LivePage(state,"People in this photo") {
+    LivePage(state,uiContext.getString(R.string.copy_people_in_this_photo_c3d0005b)) {
         if(snap==null || photo==null) { BodyText(stringResource(R.string.copy_open_a_photo_to_review_its_matches_cd430a24));return@LivePage }
         LivePhotoImage(live,photo,Modifier.fillMaxWidth().height(230.dp).clip(RoundedCornerShape(18.dp)))
         SectionTitle(stringResource(R.string.copy_matched_people_27323e24))
         LazyColumn(Modifier.weight(1f),verticalArrangement=Arrangement.spacedBy(8.dp)) {
             items(snap.people.filter { person -> snap.pairs.any { it.photo==photo.id && it.person==person.id } },key={it.id}) { person ->
                 val selected=live.effective.any { it.photo==photo.id && it.person==person.id }
-                LivePersonRow(person,if(person.id !in live.draft.people)"Excluded from all photos" else "This photo only",selected,
+                LivePersonRow(person,if(person.id !in live.draft.people)uiContext.getString(R.string.copy_excluded_from_all_photos_f276f04f) else uiContext.getString(R.string.copy_this_photo_only_fd5e4779),selected,
                     onCheck={live.togglePair(photo.id,person.id)},onOpen={live.openPerson(person.id)})
             }
         }
@@ -553,27 +568,29 @@ private fun LivePhotoPeople(state: PreviewState) {
 
 @Composable
 private fun LivePersonPhotos(state: PreviewState) {
+    val uiContext = androidx.compose.ui.platform.LocalContext.current
     val live=state.live;val snap=live.snapshot
     val person=snap?.people?.firstOrNull { it.id==live.focusedPerson } ?: snap?.people?.firstOrNull()
-    LivePage(state,person?.name ?: "Matched Person") {
+    LivePage(state,person?.name ?: uiContext.getString(R.string.copy_matched_person_687f11b0)) {
         if(snap==null || person==null) { BodyText(stringResource(R.string.copy_select_a_matched_person_first_ba1e7627));return@LivePage }
         InitialAvatar(person.name,Modifier.align(Alignment.CenterHorizontally).padding(vertical=16.dp).size(76.dp))
         val rows=snap.photos.filter { photo -> snap.pairs.any { it.photo==photo.id && it.person==person.id } }
         val selected=live.effective.filter { it.person==person.id }.map { it.photo }.toSet()
-        SectionTitle("Photos (${selected.size})")
+        SectionTitle(uiContext.resources.getQuantityString(R.plurals.copy_photo_heading_count, selected.size, selected.size))
         LivePhotoGrid(live,rows,Modifier.weight(1f),selections=selected,onClick={live.togglePair(it.id,person.id)})
-        BodyText(if(person.id !in live.draft.people)"This person is excluded from all sharing." else "Only checked photos will be included for ${person.name}.",Modifier.padding(vertical=12.dp),size=12)
-        OutlineButton(if(person.id in live.draft.people)"Exclude this person globally" else "Include this person globally") { live.togglePerson(person.id) }
+        BodyText(if(person.id !in live.draft.people)uiContext.getString(R.string.copy_this_person_is_excluded_from_all_sha_22e6fc93) else uiContext.getString(R.string.copy_only_checked_photos_will_be_included_44fd6a86, person.name),Modifier.padding(vertical=12.dp),size=12)
+        OutlineButton(if(person.id in live.draft.people)uiContext.getString(R.string.copy_exclude_this_person_globally_5b824bb4) else uiContext.getString(R.string.copy_include_this_person_globally_b3ee2ea6)) { live.togglePerson(person.id) }
         PinkButton(stringResource(R.string.copy_continue_2e026239),Modifier.padding(top=12.dp),enabled=live.effective.isNotEmpty()) { state.navigate(31) };Spacer(Modifier.height(18.dp))
     }
 }
 
 @Composable
 private fun LiveSelectPeople(state: PreviewState) {
+    val uiContext = androidx.compose.ui.platform.LocalContext.current
     val live=state.live;val snap=live.snapshot
-    LivePage(state,"Select People to Share With") {
+    LivePage(state,uiContext.getString(R.string.copy_select_people_to_share_with_f00ebe36)) {
         if(snap==null) { BodyText(stringResource(R.string.copy_open_a_photo_review_first_e2f30cd2));return@LivePage }
-        SectionTitle("People (${live.draft.people.size})")
+        SectionTitle(uiContext.resources.getQuantityString(R.plurals.copy_people_heading_count, live.draft.people.size, live.draft.people.size))
         LazyColumn(Modifier.weight(1f),verticalArrangement=Arrangement.spacedBy(9.dp)) {
             items(snap.people,key={it.id}) { person ->
                 val count=live.effective.count { it.person==person.id }
@@ -588,17 +605,18 @@ private fun LiveSelectPeople(state: PreviewState) {
 
 @Composable
 private fun LiveFinalReview(state: PreviewState) {
+    val uiContext = androidx.compose.ui.platform.LocalContext.current
     val live=state.live;val snap=live.snapshot;val view=live.preview
-    LivePage(state,"Review & Share") {
+    LivePage(state,uiContext.getString(R.string.copy_review_share_023d8493)) {
         if(snap==null || view==null) { BodyText(stringResource(R.string.copy_review_your_current_selection_befor_b592a97e));PinkButton(stringResource(R.string.copy_review_selection_04dd6243)) { live.prepareShare() };return@LivePage }
         Column(Modifier.weight(1f).verticalScroll(rememberScrollState())) {
-            ReviewHeading("Photos (${view.pairs.map { it.photo }.toSet().size})") { state.navigate(29) }
+            ReviewHeading(uiContext.resources.getQuantityString(R.plurals.copy_photo_heading_count, view.pairs.map { it.photo }.toSet().size, view.pairs.map { it.photo }.toSet().size)) { state.navigate(29) }
             Row(Modifier.fillMaxWidth().height(155.dp),horizontalArrangement=Arrangement.spacedBy(5.dp)) {
                 snap.photos.filter { photo -> view.pairs.any { it.photo==photo.id } }.take(6).forEach { photo ->
                     LivePhotoImage(live,photo,Modifier.weight(1f).fillMaxHeight().clip(RoundedCornerShape(9.dp)))
                 }
             }
-            ReviewHeading("People (${view.pairs.map { it.person }.toSet().size})") { state.navigate(31) }
+            ReviewHeading(uiContext.resources.getQuantityString(R.plurals.copy_people_heading_count, view.pairs.map { it.person }.toSet().size, view.pairs.map { it.person }.toSet().size)) { state.navigate(31) }
             snap.people.filter { p -> view.pairs.any { it.person==p.id } }.forEach { person ->
                 val ids=view.pairs.filter { it.person==person.id }.map { it.photo }.toSet()
                 Row(Modifier.fillMaxWidth().padding(vertical=9.dp),verticalAlignment=Alignment.CenterVertically) {
@@ -628,13 +646,14 @@ private fun ReviewHeading(title: String,onEdit: ()->Unit) {
 
 @Composable
 private fun LiveReceipts(state: PreviewState) {
+    val uiContext = androidx.compose.ui.platform.LocalContext.current
     val live=state.live;val receipt=live.focusedReceipt
-    LivePage(state,if(receipt!=null)"Photo Request" else "Shared History") {
+    LivePage(state,if(receipt!=null)uiContext.getString(R.string.copy_photo_request_7c286e1e) else uiContext.getString(R.string.copy_shared_history_966f258c)) {
         if(receipt!=null) {
             val person=receipt["person"] as? Map<*,*>;val status=receipt["status"] as? String
-            InitialAvatar(person?.get("name") as? String ?: "Person",Modifier.align(Alignment.CenterHorizontally).padding(top=24.dp).size(78.dp))
-            Text(person?.get("name") as? String ?: "Photo request",color=Color.White,fontSize=24.sp,modifier=Modifier.align(Alignment.CenterHorizontally).padding(vertical=16.dp))
-            BodyText(stringResource(R.string.photo_status,photoCount(receipt["photo_count"]),receiptLabel(status)))
+            InitialAvatar(person?.get("name") as? String ?: uiContext.getString(R.string.copy_person_c36eeba0),Modifier.align(Alignment.CenterHorizontally).padding(top=24.dp).size(78.dp))
+            Text(person?.get("name") as? String ?: uiContext.getString(R.string.copy_photo_request_1f865c7e),color=Color.White,fontSize=24.sp,modifier=Modifier.align(Alignment.CenterHorizontally).padding(vertical=16.dp))
+            BodyText(stringResource(R.string.photo_status,photoCount(receipt["photo_count"]),receiptLabel(status, uiContext)))
             BodyText(stringResource(R.string.photos_available,photoCount(receipt["available_count"])),Modifier.padding(top=12.dp))
             Spacer(Modifier.weight(1f))
             if(receipt["sender"]!=true && status=="requested") {
@@ -651,16 +670,16 @@ private fun LiveReceipts(state: PreviewState) {
             LazyColumn(Modifier.weight(1f),verticalArrangement=Arrangement.spacedBy(9.dp)) {
                 items(live.outgoing,key={NativeProtocol.id(it["id"])}) { row->
                     val person=row["person"] as? Map<*,*>
-                    SettingRow(person?.get("name") as? String ?: "Photo request",subtitle=stringResource(R.string.photo_status,photoCount(row["photo_count"]),receiptLabel(row["status"] as? String)),icon=Glyph.PEOPLE) { live.openReceipt(row) }
+                    SettingRow(person?.get("name") as? String ?: uiContext.getString(R.string.copy_photo_request_1f865c7e),subtitle=stringResource(R.string.photo_status,photoCount(row["photo_count"]),receiptLabel(row["status"] as? String, uiContext)),icon=Glyph.PEOPLE) { live.openReceipt(row) }
                 }
             }
             OutlineButton(stringResource(R.string.copy_refresh_history_5ffdb33d),enabled=!live.busy) { live.refreshHistory() };return@LivePage
         }
-        BodyText(when(result["status"]){"pending_acceptance"->"Your requests are saved. Access starts after each person accepts.";"access_available"->"All approved photos are available to the accepted recipients.";"partial"->"Some approved photos are available. Check each person’s status.";else->"No photos are currently available from this operation."},Modifier.padding(vertical=20.dp))
+        BodyText(when(result["status"]){"pending_acceptance"->uiContext.getString(R.string.copy_your_requests_are_saved_access_start_7f3d2fb7);"access_available"->uiContext.getString(R.string.copy_all_approved_photos_are_available_to_de39c160);"partial"->uiContext.getString(R.string.copy_some_approved_photos_are_available_c_08ef81e8);else->uiContext.getString(R.string.copy_no_photos_are_currently_available_fr_673b8129)},Modifier.padding(vertical=20.dp))
         LazyColumn(Modifier.weight(1f),verticalArrangement=Arrangement.spacedBy(9.dp)) {
             items(NativeProtocol.rows(result["recipients"] ?: emptyList<WireObject>()),key={it["recipient_id"] as String}) { row ->
                 val person=live.snapshot?.people?.firstOrNull { it.id==row["recipient_id"] }
-                SettingRow(person?.name ?: "Recipient",subtitle=stringResource(R.string.photo_status,photoCount(row["photo_count"]),receiptLabel(row["status"] as? String)),
+                SettingRow(person?.name ?: uiContext.getString(R.string.copy_recipient_da952418),subtitle=stringResource(R.string.photo_status,photoCount(row["photo_count"]),receiptLabel(row["status"] as? String, uiContext)),
                     trailing=stringResource(R.string.photos_available,photoCount(row["available_count"])),icon=Glyph.PEOPLE) { live.openRequest(NativeProtocol.id(row["request_id"])) }
             }
         }
@@ -672,14 +691,15 @@ private fun LiveReceipts(state: PreviewState) {
 
 @Composable
 private fun LiveReport(state: PreviewState) {
+    val uiContext = androidx.compose.ui.platform.LocalContext.current
     val live=state.live
-    LivePage(state,"Report Incorrect Match") {
+    LivePage(state,uiContext.getString(R.string.copy_report_incorrect_match_cd851491)) {
         live.selectedPhoto?.let { LivePhotoImage(live,it,Modifier.fillMaxWidth().height(210.dp).clip(RoundedCornerShape(18.dp))) }
         SectionTitle(stringResource(R.string.copy_tell_us_what_s_wrong_08e99516))
         var reason by remember { mutableStateOf("This isn’t me") }
         listOf("This isn’t me","Wrong person","Other").forEach { option ->
             Row(Modifier.fillMaxWidth().toggleable(reason==option,role=Role.RadioButton,onValueChange={reason=option}).padding(vertical=15.dp),verticalAlignment=Alignment.CenterVertically) {
-                RadioButton(selected=reason==option,onClick=null,colors=RadioButtonDefaults.colors(selectedColor=Pink,unselectedColor=Muted));Text(option,color=Color.White,fontSize=15.sp)
+                RadioButton(selected=reason==option,onClick=null,colors=RadioButtonDefaults.colors(selectedColor=Pink,unselectedColor=Muted));Text(choiceLabel(uiContext,option),color=Color.White,fontSize=15.sp)
             }
         }
         Spacer(Modifier.weight(1f));PinkButton(stringResource(R.string.copy_submit_report_1ca00033),enabled=live.selectedPhoto!=null && !live.busy) { live.report(reason) };Spacer(Modifier.height(18.dp))
@@ -688,9 +708,10 @@ private fun LiveReport(state: PreviewState) {
 
 @Composable
 private fun LiveAccount(state: PreviewState,choose: ()->Unit) {
+    val uiContext = androidx.compose.ui.platform.LocalContext.current
     val live=state.live
     when(state.route) {
-        37 -> LivePage(state,"Profile",back=false,bottom=37) {
+        37 -> LivePage(state,uiContext.getString(R.string.copy_profile_cd17328e),back=false,bottom=37) {
             Column(Modifier.weight(1f).verticalScroll(rememberScrollState())) {
                 InitialAvatar(live.name,Modifier.align(Alignment.CenterHorizontally).padding(top=18.dp).size(80.dp))
                 Text(live.name,color=Color.White,fontSize=26.sp,modifier=Modifier.align(Alignment.CenterHorizontally).padding(top=14.dp))
@@ -700,36 +721,36 @@ private fun LiveAccount(state: PreviewState,choose: ()->Unit) {
                 if(editing)AlertDialog(onDismissRequest={editing=false},backgroundColor=Panel,title={Text(stringResource(R.string.copy_edit_profile_cd280a41),color=Color.White)},text={TextField(name,{name=it.take(80)},label={Text(stringResource(R.string.copy_name_709a2322))})},
                     confirmButton={TextButton(onClick={editing=false;live.rename(name)},enabled=name.isNotBlank()){Text(stringResource(R.string.copy_save_efc007a3),color=Pink)}},dismissButton={TextButton(onClick={editing=false}){Text(stringResource(R.string.copy_cancel_77dfd213),color=Muted)}})
                 Spacer(Modifier.height(18.dp))
-                listOf(Triple("Manage Your Face",Glyph.FACE,38),Triple("Manage People",Glyph.PEOPLE,39),Triple("Privacy & Sharing",Glyph.SHIELD,40),Triple("Photo Access",Glyph.PHOTO,41),
-                    Triple("Notifications",Glyph.BELL,42),Triple("Storage",Glyph.ANALYTICS,43),Triple("Export Your Data",Glyph.EXPORT,44),Triple("Account & Security",Glyph.LOCK,46),Triple("Help Center",Glyph.HELP,45)).forEach { (label,icon,route) ->
+                listOf(Triple(uiContext.getString(R.string.copy_manage_your_face_990044ce),Glyph.FACE,38),Triple(uiContext.getString(R.string.copy_manage_people_a3539654),Glyph.PEOPLE,39),Triple(uiContext.getString(R.string.copy_privacy_sharing_576d0d35),Glyph.SHIELD,40),Triple(uiContext.getString(R.string.copy_photo_access_7b04cc07),Glyph.PHOTO,41),
+                    Triple(uiContext.getString(R.string.copy_notifications_753a22b2),Glyph.BELL,42),Triple(uiContext.getString(R.string.copy_storage_34eddf06),Glyph.ANALYTICS,43),Triple(uiContext.getString(R.string.copy_export_your_data_726c5cda),Glyph.EXPORT,44),Triple(uiContext.getString(R.string.copy_account_security_fb84c56c),Glyph.LOCK,46),Triple(uiContext.getString(R.string.copy_help_center_bbf4ae03),Glyph.HELP,45)).forEach { (label,icon,route) ->
                     SettingRow(label,icon=icon,modifier=Modifier.padding(bottom=8.dp)) { state.navigate(route) }
                 }
-                SettingRow(stringResource(R.string.copy_all_48_reference_screens_6b3d3425),subtitle="Explicit screenshot review with local sample data",icon=Glyph.PHOTO) { state.enterReview() }
+                SettingRow(stringResource(R.string.copy_all_48_reference_screens_6b3d3425),subtitle=uiContext.getString(R.string.copy_explicit_screenshot_review_with_loca_f4ff7992),icon=Glyph.PHOTO) { state.enterReview() }
             }
         }
         38 -> LiveFaceProfile(state)
         39 -> LivePeopleSettings(state)
-        40 -> LivePage(state,"Privacy & Sharing") {
+        40 -> LivePage(state,uiContext.getString(R.string.copy_privacy_sharing_576d0d35)) {
             Column(Modifier.weight(1f).verticalScroll(rememberScrollState())) {
                 SectionTitle(stringResource(R.string.copy_your_preferences_41bc34e5))
                 PolicyRow(state,R.string.privacy_policy,BuildConfig.PRIVACY_POLICY_URL)
-                LiveToggle("Process my uploaded photos","Find matches in the photos I choose to upload",live.processingConsent) { live.processingConsent=!live.processingConsent }
-                LiveToggle("Use my face for photo matching","Allow my registered face to appear as a possible match",live.matchingConsent) { live.matchingConsent=!live.matchingConsent }
-                LiveToggle("Receive matched photos","Requires contributor approval and my acceptance",live.receiveMatches) { live.receiveMatches=!live.receiveMatches }
+                LiveToggle(uiContext.getString(R.string.copy_process_my_uploaded_photos_a1711fdd),uiContext.getString(R.string.copy_find_matches_in_the_photos_i_choose__a3884f90),live.processingConsent) { live.processingConsent=!live.processingConsent }
+                LiveToggle(uiContext.getString(R.string.copy_use_my_face_for_photo_matching_96d31c57),uiContext.getString(R.string.copy_allow_my_registered_face_to_appear_a_6bcc6a60),live.matchingConsent) { live.matchingConsent=!live.matchingConsent }
+                LiveToggle(uiContext.getString(R.string.copy_receive_matched_photos_b9710793),uiContext.getString(R.string.copy_requires_contributor_approval_and_my_f2cd514f),live.receiveMatches) { live.receiveMatches=!live.receiveMatches }
                 BodyText(stringResource(R.string.copy_these_choices_are_separate_from_fac_234cd232),Modifier.padding(vertical=20.dp),center=false,size=12)
                 SettingRow(stringResource(R.string.copy_manage_people_a3539654),icon=Glyph.PEOPLE) { state.navigate(39) }
             }
             PinkButton(stringResource(R.string.copy_save_preferences_e9fdd169),enabled=live.photoPolicy["policy_version"] is String && !live.busy) { live.savePhotoPreferences() };Spacer(Modifier.height(18.dp))
         }
-        41 -> LivePage(state,"Photo Access") {
-            Spacer(Modifier.height(18.dp));SettingRow(stringResource(R.string.copy_choose_photos_155a4f76),subtitle="Android grants access only to the photos you select",icon=Glyph.PHOTO,onClick=choose)
+        41 -> LivePage(state,uiContext.getString(R.string.copy_photo_access_7b04cc07)) {
+            Spacer(Modifier.height(18.dp));SettingRow(stringResource(R.string.copy_choose_photos_155a4f76),subtitle=uiContext.getString(R.string.copy_android_grants_access_only_to_the_ph_18b59e49),icon=Glyph.PHOTO,onClick=choose)
             BodyText(stringResource(R.string.copy_lovelies_uses_the_system_photo_pick_a33bfeb7),Modifier.padding(top=22.dp),center=false)
             Spacer(Modifier.weight(1f));PinkButton(stringResource(R.string.copy_choose_photos_155a4f76),onClick=choose);Spacer(Modifier.height(18.dp))
         }
-        42 -> LivePage(state,"Notifications") {
-            val notificationPermission=rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted->if(granted)live.enablePush(true) else state.info("Notifications are off","You can allow notifications later in Android Settings.") }
+        42 -> LivePage(state,uiContext.getString(R.string.copy_notifications_753a22b2)) {
+            val notificationPermission=rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted->if(granted)live.enablePush(true) else state.info(uiContext.getString(R.string.copy_notifications_are_off_bdb15edc),uiContext.getString(R.string.copy_you_can_allow_notifications_later_in_abf7623a)) }
             val context=LocalContext.current
-            LiveToggle("This device",null,PushConfiguration.optedIn(context) && PushConfiguration.permitted(context)) {
+            LiveToggle(uiContext.getString(R.string.copy_this_device_8fc5c8b9),null,PushConfiguration.optedIn(context) && PushConfiguration.permitted(context)) {
                 if(PushConfiguration.optedIn(context))live.enablePush(false)
                 else if(android.os.Build.VERSION.SDK_INT>=33 && !PushConfiguration.permitted(context))notificationPermission.launch(android.Manifest.permission.POST_NOTIFICATIONS)
                 else live.enablePush(true)
@@ -737,17 +758,17 @@ private fun LiveAccount(state: PreviewState,choose: ()->Unit) {
             if(live.pushStatus.isNotBlank())BodyText(live.pushStatus,Modifier.semantics { liveRegion=LiveRegionMode.Polite },size=13)
 
             SectionTitle(stringResource(R.string.copy_notification_preferences_0ead6c12))
-            listOf("match_alerts" to "New Matches","support_alerts" to "Support Updates").forEach { (key,title) ->
+            listOf("match_alerts" to uiContext.getString(R.string.copy_new_matches_2c63d230),"support_alerts" to uiContext.getString(R.string.copy_support_updates_39e875be)).forEach { (key,title) ->
                 LiveToggle(title,null,live.notificationSettings[key]==true) { live.saveNotification(key,live.notificationSettings[key]!=true) }
             }
             BodyText(stringResource(R.string.copy_these_preferences_are_saved_to_your_a848bd4b),Modifier.padding(top=18.dp),center=false,size=12)
         }
-        43 -> LivePage(state,"Storage") {
+        43 -> LivePage(state,uiContext.getString(R.string.copy_storage_34eddf06)) {
             SectionTitle(stringResource(R.string.copy_private_photo_storage_d3b1cb7a))
             BodyText(stringResource(R.string.copy_protected_previews_are_held_in_memo_951bd453),Modifier.padding(vertical=18.dp),center=false)
-            SettingRow(stringResource(R.string.copy_clear_previews_7c3c42fd),subtitle="Discard currently loaded preview images",icon=Glyph.ANALYTICS) { live.clearImages();state.info("Previews cleared","Private previews will be loaded again only after a current authorization check.") }
+            SettingRow(stringResource(R.string.copy_clear_previews_7c3c42fd),subtitle=uiContext.getString(R.string.copy_discard_currently_loaded_preview_ima_b99c82d2),icon=Glyph.ANALYTICS) { live.clearImages();state.info(uiContext.getString(R.string.copy_previews_cleared_5b33a690),uiContext.getString(R.string.copy_private_previews_will_be_loaded_agai_697b49ca)) }
         }
-        44 -> if(live.accountDeletion!=null || live.repository.accountDeletion!=null)LiveAccountDeletion(state) else if(!live.registered)LiveGuestDeletion(state) else LivePage(state,"Export Your Data") {
+        44 -> if(live.accountDeletion!=null || live.repository.accountDeletion!=null)LiveAccountDeletion(state) else if(!live.registered)LiveGuestDeletion(state) else LivePage(state,uiContext.getString(R.string.copy_export_your_data_726c5cda)) {
             SectionTitle(stringResource(R.string.copy_your_account_data_41640209))
             BodyText(stringResource(R.string.copy_request_a_copy_of_your_data_the_sta_5aa86443),Modifier.padding(vertical=15.dp),center=false)
             var selectedExport by remember { mutableStateOf<String?>(null) }
@@ -758,18 +779,18 @@ private fun LiveAccount(state: PreviewState,choose: ()->Unit) {
             NativeProtocol.rows(live.privacyCenter["requests"] ?: emptyList<WireObject>()).forEach { row ->
                 val id=NativeProtocol.id(row["id"])
                 val ready=row["request_type"]=="export" && (row["download_state"]=="ready" || live.repository.stagedExport()?.get("request")==id)
-                SettingRow(row["request_type"] as? String ?: "Request",subtitle=listOfNotNull(row["status"] as? String,row["failure_code"] as? String).joinToString(" · "),trailing=if(ready)"Save" else "Status",icon=Glyph.EXPORT,modifier=Modifier.padding(bottom=8.dp)) {
+                SettingRow(row["request_type"] as? String ?: uiContext.getString(R.string.copy_request_82454152),subtitle=listOfNotNull(row["status"] as? String,row["failure_code"] as? String).joinToString(" · "),trailing=if(ready)uiContext.getString(R.string.copy_save_efc007a3) else uiContext.getString(R.string.copy_status_005ef20f),icon=Glyph.EXPORT,modifier=Modifier.padding(bottom=8.dp)) {
                     if(ready) { selectedExport=id;document.launch("lovelies-export-$id.json") }
-                    else state.info("Request status",listOfNotNull(row["status"] as? String,row["reason"] as? String,row["failure_code"] as? String).joinToString("\n"))
+                    else state.info(uiContext.getString(R.string.copy_request_status_2b321858),listOfNotNull(row["status"] as? String,row["reason"] as? String,row["failure_code"] as? String).joinToString("\n"))
                 }
             }
             OutlineButton(stringResource(R.string.copy_refresh_requests_3dc3afd4),enabled=!live.busy) { live.refreshPrivacy() }
-            live.error?.let { BodyText(readableError(it.code),Modifier.padding(top=12.dp).semantics { liveRegion=LiveRegionMode.Polite },size=13) }
+            live.error?.let { BodyText(readableError(it.code, uiContext),Modifier.padding(top=12.dp).semantics { liveRegion=LiveRegionMode.Polite },size=13) }
             Spacer(Modifier.weight(1f));PinkButton(stringResource(R.string.copy_request_export_cfe37002),enabled=!live.busy) { live.requestExport() }
-            OutlineButton(stringResource(R.string.copy_request_account_deletion_faa6919a),Modifier.padding(top=12.dp)) { state.confirm("Request account deletion?","This sends your account deletion request for review.","Request") { live.requestDeletion() } }
+            OutlineButton(stringResource(R.string.copy_request_account_deletion_faa6919a),Modifier.padding(top=12.dp)) { state.confirm(uiContext.getString(R.string.copy_request_account_deletion_a97861fe),uiContext.getString(R.string.copy_this_sends_your_account_deletion_req_cd4c70b8),uiContext.getString(R.string.copy_request_82454152)) { live.requestDeletion() } }
             Spacer(Modifier.height(18.dp))
         }
-        45 -> LivePage(state,"Help Center") {
+        45 -> LivePage(state,uiContext.getString(R.string.copy_help_center_bbf4ae03)) {
             Column(Modifier.weight(1f).verticalScroll(rememberScrollState())) {
             SectionTitle(stringResource(R.string.copy_how_lovelies_works_964ea584))
             BodyText(stringResource(R.string.copy_register_your_face_using_the_camera_5215d56a),Modifier.padding(vertical=18.dp),center=false)
@@ -777,47 +798,47 @@ private fun LiveAccount(state: PreviewState,choose: ()->Unit) {
             PolicyRow(state,R.string.privacy_policy,BuildConfig.PRIVACY_POLICY_URL)
             PolicyRow(state,R.string.terms_of_use,BuildConfig.TERMS_URL)
             PolicyRow(state,R.string.account_deletion_help,BuildConfig.DELETION_URL)
-            if(!live.registered)SettingRow(if(live.hasGuestDeletion)"Guest deletion status" else "Delete guest account",icon=Glyph.SHIELD,
+            if(!live.registered)SettingRow(if(live.hasGuestDeletion)uiContext.getString(R.string.copy_guest_deletion_status_956e7f23) else uiContext.getString(R.string.copy_delete_guest_account_8e0f6d76),icon=Glyph.SHIELD,
                 modifier=Modifier.padding(top=9.dp)) { state.navigate(44) }
-            if(BuildConfig.REFERENCE_SCREENS)SettingRow(stringResource(R.string.copy_review_reference_screens_693e2915),subtitle="Local screenshot fixtures",icon=Glyph.PHOTO,modifier=Modifier.padding(top=9.dp)) { state.enterReview() }
+            if(BuildConfig.REFERENCE_SCREENS)SettingRow(stringResource(R.string.copy_review_reference_screens_693e2915),subtitle=uiContext.getString(R.string.copy_local_screenshot_fixtures_10e65f7a),icon=Glyph.PHOTO,modifier=Modifier.padding(top=9.dp)) { state.enterReview() }
             if(live.registered) {
                 OutlinedTextField(value=live.supportSubject,onValueChange={live.supportSubject=it.take(160);live.persistNavigation()},label={Text(stringResource(R.string.copy_subject_8d183dbd))},modifier=Modifier.fillMaxWidth().padding(top=12.dp),colors=liveFieldColors())
                 OutlinedTextField(value=live.supportDetails,onValueChange={live.supportDetails=it.take(4000);live.persistNavigation()},label={Text(stringResource(R.string.copy_how_can_we_help_d9961547))},modifier=Modifier.fillMaxWidth().padding(top=8.dp),minLines=3,colors=liveFieldColors())
                 PinkButton(stringResource(R.string.copy_send_support_request_5ebcb06b),Modifier.padding(top=12.dp),enabled=!live.busy && live.supportSubject.trim().length>=3 && live.supportDetails.trim().length>=5) { live.submitSupport() }
                 live.supportSubmitted?.let { BodyText(stringResource(R.string.copy_your_support_request_is_saved_9fb2c9cf),Modifier.padding(top=10.dp).semantics { liveRegion=LiveRegionMode.Polite },size=13) }
-                live.error?.let { BodyText(readableError(it.code),Modifier.padding(top=8.dp),size=13) }
-                SectionTitle(stringResource(R.string.copy_your_requests_91d672ff),trailing="Refresh",onTrailing=live::refreshSupport)
+                live.error?.let { BodyText(readableError(it.code, uiContext),Modifier.padding(top=8.dp),size=13) }
+                SectionTitle(stringResource(R.string.copy_your_requests_91d672ff),trailing=uiContext.getString(R.string.copy_refresh_0815aad4),onTrailing=live::refreshSupport)
                 Column {
-                    live.supportRequests.forEach { row->SettingRow(row["subject"] as? String ?: "Support request",subtitle=receiptLabel(row["status"] as? String),icon=Glyph.HELP,modifier=Modifier.padding(bottom=8.dp)) {
-                        state.info(row["subject"] as? String ?: "Support request",listOfNotNull(row["status"] as? String,row["review_notes"] as? String).joinToString("\n"))
+                    live.supportRequests.forEach { row->SettingRow(row["subject"] as? String ?: uiContext.getString(R.string.copy_support_request_b40eff29),subtitle=receiptLabel(row["status"] as? String, uiContext),icon=Glyph.HELP,modifier=Modifier.padding(bottom=8.dp)) {
+                        state.info(row["subject"] as? String ?: uiContext.getString(R.string.copy_support_request_b40eff29),listOfNotNull(row["status"] as? String,row["review_notes"] as? String).joinToString("\n"))
                     } }
                 }
             }
             }
         }
-        46 -> LivePage(state,"Account & Security") {
+        46 -> LivePage(state,uiContext.getString(R.string.copy_account_security_fb84c56c)) {
             Column(Modifier.weight(1f).verticalScroll(rememberScrollState())) {
                 SectionTitle(stringResource(R.string.copy_sessions_e11e37a9))
-                live.sessions.forEach { row -> SettingRow(if(row["current"]==true)"This session" else "Session",subtitle=row["created_at"]?.toString(),trailing="Revoke",icon=Glyph.LOCK,modifier=Modifier.padding(bottom=8.dp)) {
-                    state.confirm("Revoke session?","The session will lose access immediately.","Revoke") { live.revoke(row,false) }
+                live.sessions.forEach { row -> SettingRow(if(row["current"]==true)uiContext.getString(R.string.copy_this_session_9a3715bd) else uiContext.getString(R.string.copy_session_2048cc97),subtitle=row["created_at"]?.toString(),trailing=uiContext.getString(R.string.copy_revoke_2219c453),icon=Glyph.LOCK,modifier=Modifier.padding(bottom=8.dp)) {
+                    state.confirm(uiContext.getString(R.string.copy_revoke_session_4581739c),uiContext.getString(R.string.copy_the_session_will_lose_access_immedia_2f78f3ab),uiContext.getString(R.string.copy_revoke_2219c453)) { live.revoke(row,false) }
                 } }
                 SectionTitle(stringResource(R.string.copy_recovery_key_2e524a4f))
                 BodyText(stringResource(R.string.copy_save_a_private_backup_key_to_recove_845d2912),Modifier.padding(vertical=10.dp),size=13)
-                live.recoveryKeyMetadata?.let { BodyText("Backup key available · expires ${java.text.DateFormat.getDateInstance(java.text.DateFormat.MEDIUM).format(java.util.Date(it.expiresAt))}",size=12) }
-                SettingRow(if(live.recoveryKeyMetadata==null)"Create recovery key" else "Create a new recovery key",icon=Glyph.LOCK,modifier=Modifier.padding(top=9.dp)) {
-                    state.confirm("Create recovery key?","This replaces any previous recovery key. Save the new backup before changing devices.","Create") { live.generateRecoveryKey(true) }
+                live.recoveryKeyMetadata?.let { BodyText(uiContext.getString(R.string.copy_backup_key_available_expires_1_s_eb8db8ed, java.text.DateFormat.getDateInstance(java.text.DateFormat.MEDIUM).format(java.util.Date(it.expiresAt))),size=12) }
+                SettingRow(if(live.recoveryKeyMetadata==null)uiContext.getString(R.string.copy_create_recovery_key_97e14983) else uiContext.getString(R.string.copy_create_a_new_recovery_key_e6ba2d0c),icon=Glyph.LOCK,modifier=Modifier.padding(top=9.dp)) {
+                    state.confirm(uiContext.getString(R.string.copy_create_recovery_key_d3a712f4),uiContext.getString(R.string.copy_this_replaces_any_previous_recovery__86a443b6),uiContext.getString(R.string.copy_create_990de47d)) { live.generateRecoveryKey(true) }
                 }
                 if(live.repository.recoveryKeyIntent?.receipt==null && live.repository.recoveryKeyIntent!=null)SettingRow(stringResource(R.string.copy_retry_saved_key_request_c8c5da9e),icon=Glyph.LOCK,modifier=Modifier.padding(top=9.dp)) { live.generateRecoveryKey() }
                 if(live.recoveryKeyMetadata!=null) {
                     SettingRow(stringResource(R.string.copy_view_saved_backup_ff31fab2),icon=Glyph.LOCK,modifier=Modifier.padding(top=9.dp)) { live.showRecoveryBackup() }
                     SettingRow(stringResource(R.string.copy_revoke_recovery_key_f01a6d60),icon=Glyph.LOCK,modifier=Modifier.padding(top=9.dp,bottom=12.dp)) {
-                        state.confirm("Revoke recovery key?","The saved backup will stop working.","Revoke") { live.revokeRecoveryKey() }
+                        state.confirm(uiContext.getString(R.string.copy_revoke_recovery_key_e4028eee),uiContext.getString(R.string.copy_the_saved_backup_will_stop_working_ac4cfb3a),uiContext.getString(R.string.copy_revoke_2219c453)) { live.revokeRecoveryKey() }
                     }
                 }
-                live.error?.let { BodyText(readableError(it.code),Modifier.padding(vertical=8.dp),size=12) }
+                live.error?.let { BodyText(readableError(it.code, uiContext),Modifier.padding(vertical=8.dp),size=12) }
                 SectionTitle(stringResource(R.string.copy_registered_devices_4faea88f))
-                live.devices.forEach { row -> SettingRow(if(row["current"]==true)"This device" else "Device",subtitle=row["created_at"]?.toString(),trailing="Revoke",icon=Glyph.PHONE,modifier=Modifier.padding(bottom=8.dp)) {
-                    state.confirm("Revoke device?","This clears the revoked device’s authentication reference.","Revoke") { live.revoke(row,true) }
+                live.devices.forEach { row -> SettingRow(if(row["current"]==true)uiContext.getString(R.string.copy_this_device_8fc5c8b9) else uiContext.getString(R.string.copy_device_bdcbb413),subtitle=row["created_at"]?.toString(),trailing=uiContext.getString(R.string.copy_revoke_2219c453),icon=Glyph.PHONE,modifier=Modifier.padding(bottom=8.dp)) {
+                    state.confirm(uiContext.getString(R.string.copy_revoke_device_75522348),uiContext.getString(R.string.copy_this_clears_the_revoked_device_s_aut_fb79e363),uiContext.getString(R.string.copy_revoke_2219c453)) { live.revoke(row,true) }
                 } }
             }
             PinkButton(stringResource(R.string.copy_sign_out_61fd08ff),enabled=!live.busy) { live.logout() }
@@ -828,63 +849,64 @@ private fun LiveAccount(state: PreviewState,choose: ()->Unit) {
 
 @Composable
 private fun LiveFaceProfile(state: PreviewState) {
+    val uiContext = androidx.compose.ui.platform.LocalContext.current
     val live=state.live;val meta=live.faceProfile ?: live.repository.faceLifecycle?.metadata;val record=live.repository.faceLifecycle
-    LivePage(state,"Manage Your Face") {
+    LivePage(state,uiContext.getString(R.string.copy_manage_your_face_990044ce)) {
         Column(Modifier.weight(1f).verticalScroll(rememberScrollState()),horizontalAlignment=Alignment.CenterHorizontally) {
             GlowSymbol(Glyph.FACE,Modifier.padding(top=18.dp))
-            Text(when { meta==null->"Your registered face";meta.removal=="completed"->"Profile removed";!meta.authenticationEnabled->"Face sign-in is off";
-                meta.matchingPaused->"Photo matching is paused";else->"Your registered face" },color=Color.White,fontSize=22.sp,
+            Text(when { meta==null->uiContext.getString(R.string.copy_your_registered_face_6942c7bb);meta.removal=="completed"->uiContext.getString(R.string.copy_profile_removed_5319ff9e);!meta.authenticationEnabled->uiContext.getString(R.string.copy_face_sign_in_is_off_7110159c);
+                meta.matchingPaused->uiContext.getString(R.string.copy_photo_matching_is_paused_9eb0ca28);else->uiContext.getString(R.string.copy_your_registered_face_6942c7bb) },color=Color.White,fontSize=22.sp,
                 textAlign=TextAlign.Center,modifier=Modifier.fillMaxWidth().padding(top=20.dp,bottom=14.dp))
             BodyText(stringResource(R.string.copy_face_sign_in_photo_matching_and_upl_c6aedef1),size=13)
             if(meta!=null) {
                 SectionTitle(stringResource(R.string.copy_current_status_3aa1d93d))
-                BodyText("Face sign-in: ${if(meta.authenticationEnabled)"On" else "Off"}\nPhoto matching: ${if(meta.matchingPaused)"Paused" else if(meta.matchingEnabled)"On" else "Off"}\nUpload processing: ${if(meta.processingEnabled)"On" else "Off"}",
+                BodyText(uiContext.getString(R.string.copy_face_sign_in_1_s_photo_matching_2_s__e3d4c57a, if(meta.authenticationEnabled)uiContext.getString(R.string.copy_on_60e47df0) else uiContext.getString(R.string.copy_off_0dc6b4aa), if(meta.matchingPaused)uiContext.getString(R.string.copy_paused_de281feb) else if(meta.matchingEnabled)uiContext.getString(R.string.copy_on_60e47df0) else uiContext.getString(R.string.copy_off_0dc6b4aa), if(meta.processingEnabled)uiContext.getString(R.string.copy_on_60e47df0) else uiContext.getString(R.string.copy_off_0dc6b4aa)),
                     Modifier.fillMaxWidth().padding(bottom=12.dp),center=false,size=13)
                 if(meta.removal!="none")BodyText(when(meta.removal) {
-                    "completed"->"The server verified that the removed face reference is gone."
-                    "failed"->"Reference removal failed. Check the status before setting up another profile."
-                    "blocked"->"Reference removal is blocked by unresolved work. Check the status again."
-                    else->"Sign-in and matching have stopped. Reference removal is still pending."
+                    "completed"->uiContext.getString(R.string.copy_the_server_verified_that_the_removed_7a755192)
+                    "failed"->uiContext.getString(R.string.copy_reference_removal_failed_check_the_s_60c0819e)
+                    "blocked"->uiContext.getString(R.string.copy_reference_removal_is_blocked_by_unre_e853cdb8)
+                    else->uiContext.getString(R.string.copy_sign_in_and_matching_have_stopped_re_4bb2dc0b)
                 },Modifier.fillMaxWidth().padding(bottom=15.dp).semantics { liveRegion=LiveRegionMode.Polite },center=false,size=13)
                 if(meta.operation?.cleanup in setOf("pending","failed","blocked") && meta.removal=="none")
-                    BodyText("Previous reference cleanup: ${meta.operation?.cleanup}. Your current profile remains separate.",Modifier.padding(bottom=12.dp),size=12)
+                    BodyText(uiContext.getString(R.string.copy_previous_reference_cleanup_1_s_your__cf7ae9bd, meta.operation?.cleanup),Modifier.padding(bottom=12.dp),size=12)
             }
-            live.error?.let { BodyText(readableError(it.code),Modifier.padding(vertical=12.dp).semantics { liveRegion=LiveRegionMode.Polite },size=13) }
+            live.error?.let { BodyText(readableError(it.code, uiContext),Modifier.padding(vertical=12.dp).semantics { liveRegion=LiveRegionMode.Polite },size=13) }
             if(record?.intent!=null || record?.acknowledged==false || record?.loginKey!=null) {
-                BodyText(when(record?.state) { "cancelled"->"This change was cancelled by the server. No saved capture can be reused."
-                    "registered"->"The profile update is complete. Verify your face once to sign in."
-                    "credentials_pending"->"The server response is saved. Current sign-in still needs confirmation."
-                    "restart_required"->"Fresh captures are required. Your original account and device key remain saved."
-                    "removal_pending"->"Reference cleanup must finish before a new profile can be enrolled."
-                    "login_start","login_pending","login_capture_pending","login_completion_pending","login_credentials_pending"->"Your original account and key are saved. A fresh face sign-in must be confirmed by the server before private access returns."
-                    else->"Your change is saved on this device. Check its server status before continuing." },Modifier.padding(bottom=14.dp),size=13)
+                BodyText(when(record?.state) { "cancelled"->uiContext.getString(R.string.copy_this_change_was_cancelled_by_the_ser_ab7a1099)
+                    "registered"->uiContext.getString(R.string.copy_the_profile_update_is_complete_verif_b9f32166)
+                    "credentials_pending"->uiContext.getString(R.string.copy_the_server_response_is_saved_current_62fc5991)
+                    "restart_required"->uiContext.getString(R.string.copy_fresh_captures_are_required_your_ori_5995322d)
+                    "removal_pending"->uiContext.getString(R.string.copy_reference_cleanup_must_finish_before_2e865949)
+                    "login_start","login_pending","login_capture_pending","login_completion_pending","login_credentials_pending"->uiContext.getString(R.string.copy_your_original_account_and_key_are_sa_c6917527)
+                    else->uiContext.getString(R.string.copy_your_change_is_saved_on_this_device__13c25982) },Modifier.padding(bottom=14.dp),size=13)
                 OutlineButton(stringResource(R.string.copy_check_profile_status_a4432f02),enabled=!live.busy) { live.checkFaceProfile() }
                 if(record?.state=="cancel_pending")OutlineButton(stringResource(R.string.copy_retry_stop_f7cc0a3e),Modifier.padding(top=10.dp),enabled=!live.busy) { live.retryProfileCancellation() }
                 if(record?.intent?.capture==true && record.state!="cancelled")OutlineButton(stringResource(R.string.copy_continue_face_setup_cf156d7e),Modifier.padding(top=10.dp),enabled=!live.busy) { state.navigate(6) }
                 if(record?.loginKey!=null)OutlineButton(stringResource(R.string.copy_continue_face_sign_in_51a3763a),Modifier.padding(top=10.dp),enabled=!live.busy) { live.verifyFaceProfile() }
             } else if(meta!=null) {
                 if(meta.profile!=null && meta.removal=="none") {
-                    SettingRow(if(meta.matchingEnabled)"Pause Photo Matching" else "Resume Photo Matching",icon=Glyph.PEOPLE,modifier=Modifier.padding(top=10.dp)) {
-                        live.confirmFaceProfile(if(meta.matchingEnabled)"pause" else "resume",if(meta.matchingEnabled)"Pause photo matching?" else "Resume photo matching?",
-                            if(meta.matchingEnabled)"Future matching and receiving stop. Previous candidate access is retired; face sign-in and upload processing stay separate."
-                            else "Allow your face profile to produce future matches. Previously revoked access stays retired.",if(meta.matchingEnabled)"Pause" else "Resume",meta.version)
+                    SettingRow(if(meta.matchingEnabled)uiContext.getString(R.string.copy_pause_photo_matching_d65803d4) else uiContext.getString(R.string.copy_resume_photo_matching_44bcce85),icon=Glyph.PEOPLE,modifier=Modifier.padding(top=10.dp)) {
+                        live.confirmFaceProfile(if(meta.matchingEnabled)"pause" else "resume",if(meta.matchingEnabled)uiContext.getString(R.string.copy_pause_photo_matching_22865fb1) else uiContext.getString(R.string.copy_resume_photo_matching_6a9f7dce),
+                            if(meta.matchingEnabled)uiContext.getString(R.string.copy_future_matching_and_receiving_stop_p_da4194ed)
+                            else uiContext.getString(R.string.copy_allow_your_face_profile_to_produce_f_1621c5c5),if(meta.matchingEnabled)uiContext.getString(R.string.copy_pause_781961bc) else uiContext.getString(R.string.copy_resume_454d1d8a),meta.version)
                     }
                     if(meta.authenticationEnabled) {
                         SettingRow(stringResource(R.string.copy_replace_face_profile_2fd80a65),icon=Glyph.FACE,modifier=Modifier.padding(top=9.dp)) {
-                            live.confirmFaceProfile("replace","Replace your face profile?","Take three fresh selfies to update this registered reference. Face sign-in uses the new reference; previous matching access is retired.","Continue",meta.version)
+                            live.confirmFaceProfile("replace",uiContext.getString(R.string.copy_replace_your_face_profile_4724deff),uiContext.getString(R.string.copy_take_three_fresh_selfies_to_update_t_8a245ba4),uiContext.getString(R.string.copy_continue_2e026239),meta.version)
                         }
                         SettingRow(stringResource(R.string.copy_withdraw_face_sign_in_consent_b5af30ef),icon=Glyph.LOCK,modifier=Modifier.padding(top=9.dp)) {
-                            live.confirmFaceProfile("withdraw_authentication","Turn off face sign-in?","Face sign-in will stop. If photo matching is off, the unused face reference will also be removed. Upload processing stays separate.","Withdraw",meta.version)
+                            live.confirmFaceProfile("withdraw_authentication",uiContext.getString(R.string.copy_turn_off_face_sign_in_1a3cd0e4),uiContext.getString(R.string.copy_face_sign_in_will_stop_if_photo_matc_2d06845a),uiContext.getString(R.string.copy_withdraw_1dba6cb7),meta.version)
                         }
                     } else SettingRow(stringResource(R.string.copy_restore_face_sign_in_5364a734),icon=Glyph.LOCK,modifier=Modifier.padding(top=9.dp)) {
-                        live.confirmFaceProfile("restore_authentication","Restore face sign-in?","Consent to use your retained registered reference for authentication, then take one fresh selfie. Photo matching and processing are separate choices.","Continue",meta.version)
+                        live.confirmFaceProfile("restore_authentication",uiContext.getString(R.string.copy_restore_face_sign_in_25b662b6),uiContext.getString(R.string.copy_consent_to_use_your_retained_registe_86abc950),uiContext.getString(R.string.copy_continue_2e026239),meta.version)
                     }
                     SettingRow(stringResource(R.string.copy_remove_face_profile_1d28e692),icon=Glyph.SHIELD,modifier=Modifier.padding(top=9.dp)) {
-                        live.confirmFaceProfile("remove","Remove your face profile?","Face sign-in and matching stop. Your account and uploads remain. Removal status stays visible until the server verifies cleanup.","Remove",meta.version)
+                        live.confirmFaceProfile("remove",uiContext.getString(R.string.copy_remove_your_face_profile_3f840835),uiContext.getString(R.string.copy_face_sign_in_and_matching_stop_your__9ab01cf1),uiContext.getString(R.string.copy_remove_21a5901d),meta.version)
                     }
                 }
                 if(meta.removal=="completed" && meta.profile==null)SettingRow(stringResource(R.string.copy_set_up_a_new_face_profile_017b2a6f),icon=Glyph.FACE,modifier=Modifier.padding(top=9.dp)) {
-                    live.confirmFaceProfile("enroll","Set up your face again?","Consent to face sign-in using a new profile and take three selfies. Photo matching stays off until you choose it.","Continue",meta.version)
+                    live.confirmFaceProfile("enroll",uiContext.getString(R.string.copy_set_up_your_face_again_19ccbf4d),uiContext.getString(R.string.copy_consent_to_face_sign_in_using_a_new__e8a100e8),uiContext.getString(R.string.copy_continue_2e026239),meta.version)
                 }
                 OutlineButton(stringResource(R.string.copy_refresh_status_28a0e95a),Modifier.padding(top=16.dp),enabled=!live.busy) { live.checkFaceProfile() }
                 if(meta.authenticationEnabled && record?.blocksPrivate==false)OutlineButton(stringResource(R.string.copy_verify_my_face_7d81b5df),Modifier.padding(top=10.dp),enabled=!live.busy) { live.verifyFaceProfile() }
@@ -899,51 +921,52 @@ private fun LiveFaceProfile(state: PreviewState) {
 
 @Composable
 private fun LiveGuestDeletion(state: PreviewState) {
+    val uiContext = androidx.compose.ui.platform.LocalContext.current
     val live=state.live
     val record=live.guestDeletion
     val receipt=record?.receipt
-    LivePage(state,"Guest account deletion",back=record==null) {
+    LivePage(state,uiContext.getString(R.string.copy_guest_account_deletion_16fa4c92),back=record==null) {
         Column(Modifier.weight(1f).verticalScroll(rememberScrollState())) {
-            SectionTitle(if(record==null)"Your guest account" else "Deletion status")
+            SectionTitle(if(record==null)uiContext.getString(R.string.copy_your_guest_account_38fc0d51) else uiContext.getString(R.string.copy_deletion_status_0d9813b7))
             val label=when {
-                receipt?.completed==true -> receipt.label
-                record?.statusUnavailable==true -> if(receipt!=null && receipt.expiresAt<=System.currentTimeMillis())"Status receipt expired" else "Status unavailable"
-                receipt!=null -> receipt.label
-                record!=null -> "Request not confirmed"
-                else -> "Before face setup"
+                receipt?.completed==true -> deletionLabel(receipt, uiContext)
+                record?.statusUnavailable==true -> if(receipt!=null && receipt.expiresAt<=System.currentTimeMillis())uiContext.getString(R.string.copy_status_receipt_expired_4ece7d9e) else uiContext.getString(R.string.copy_status_unavailable_a88256f1)
+                receipt!=null -> deletionLabel(receipt, uiContext)
+                record!=null -> uiContext.getString(R.string.copy_request_not_confirmed_67a30b5a)
+                else -> uiContext.getString(R.string.copy_before_face_setup_8229d88a)
             }
             Text(label,color=Pink,fontSize=20.sp,fontWeight=FontWeight.SemiBold,
                 modifier=Modifier.fillMaxWidth().padding(top=22.dp,bottom=14.dp).semantics {
-                    contentDescription="Deletion status: $label";liveRegion=LiveRegionMode.Polite
+                    contentDescription=uiContext.getString(R.string.copy_deletion_status_1_s_6f48fb52, label);liveRegion=LiveRegionMode.Polite
                 })
             val explanation=when {
-                receipt?.completed==true -> "The server has confirmed that this guest account was deleted. You can start again when you’re ready."
-                record?.statusUnavailable==true -> "We can’t retrieve this request’s status. This does not confirm deletion. Your saved receipt remains on this device."
-                receipt?.requestExpired==true -> "The approval window has ended. This does not confirm deletion. Resume setup only after the same guest account is verified again."
-                receipt?.status=="rejected" -> "The deletion request was rejected. You can resume setup after the same guest account is verified again."
-                receipt?.status=="cancelled" -> "The deletion request was cancelled. You can resume setup after the same guest account is verified again."
-                receipt?.status=="failed" -> "Deletion could not finish. Check the status again for an update. Your account is not confirmed deleted."
-                receipt?.status=="processing" -> "Deletion is in progress. Completion will appear here after the server confirms cleanup."
-                receipt!=null -> "Your deletion request is saved for review. Face setup is paused while this request is unresolved."
-                record!=null -> "We couldn’t confirm whether the request reached the server. Check status to reconcile your saved request."
-                else -> "Request deletion of this guest account before registering your face. The request requires review; submitting it does not mean deletion is complete."
+                receipt?.completed==true -> uiContext.getString(R.string.copy_the_server_has_confirmed_that_this_g_4cf99951)
+                record?.statusUnavailable==true -> uiContext.getString(R.string.copy_we_can_t_retrieve_this_request_s_sta_771de513)
+                receipt?.requestExpired==true -> uiContext.getString(R.string.copy_the_approval_window_has_ended_this_d_4f9e978d)
+                receipt?.status=="rejected" -> uiContext.getString(R.string.copy_the_deletion_request_was_rejected_yo_bbc1ea13)
+                receipt?.status=="cancelled" -> uiContext.getString(R.string.copy_the_deletion_request_was_cancelled_y_c140e516)
+                receipt?.status=="failed" -> uiContext.getString(R.string.copy_deletion_could_not_finish_check_the__4d983adb)
+                receipt?.status=="processing" -> uiContext.getString(R.string.copy_deletion_is_in_progress_completion_w_14c02189)
+                receipt!=null -> uiContext.getString(R.string.copy_your_deletion_request_is_saved_for_r_de7a1f60)
+                record!=null -> uiContext.getString(R.string.copy_we_couldn_t_confirm_whether_the_requ_62716374)
+                else -> uiContext.getString(R.string.copy_request_deletion_of_this_guest_accou_e9092bdc)
             }
             BodyText(explanation,center=false)
             receipt?.let {
                 val dateFormat=java.text.DateFormat.getDateTimeInstance(java.text.DateFormat.MEDIUM,java.text.DateFormat.SHORT)
-                BodyText("Requested ${dateFormat.format(java.util.Date(it.createdAt))}",Modifier.padding(top=20.dp),center=false,size=12)
-                if(!it.completed)BodyText("Approval window ends ${dateFormat.format(java.util.Date(it.requestExpiresAt))}",Modifier.padding(top=10.dp),center=false,size=12)
+                BodyText(uiContext.getString(R.string.copy_requested_1_s_fb8b4eb6, dateFormat.format(java.util.Date(it.createdAt))),Modifier.padding(top=20.dp),center=false,size=12)
+                if(!it.completed)BodyText(uiContext.getString(R.string.copy_approval_window_ends_1_s_614af83f, dateFormat.format(java.util.Date(it.requestExpiresAt))),Modifier.padding(top=10.dp),center=false,size=12)
             }
             live.error?.let { BodyText(when {
-                it.code=="deletion_storage_unavailable" -> "We couldn’t save this change on your device. Your previous account state has been kept. Try again when device storage is available."
-                it.code.startsWith("deletion_") -> "We couldn’t verify this account or its deletion status. Check status again; no new guest account has been created."
-                else -> readableError(it.code)
+                it.code=="deletion_storage_unavailable" -> uiContext.getString(R.string.copy_we_couldn_t_save_this_change_on_your_4333fb07)
+                it.code.startsWith("deletion_") -> uiContext.getString(R.string.copy_we_couldn_t_verify_this_account_or_i_7b66c80f)
+                else -> readableError(it.code, uiContext)
             },Modifier.padding(top=20.dp),center=false,size=13) }
         }
         when {
             receipt?.completed==true -> PinkButton(stringResource(R.string.copy_start_again_b6fffc5a),enabled=!live.busy) { live.startAgainAfterDeletion() }
             record!=null -> {
-                PinkButton(if(live.busy)"Checking status…" else "Check deletion status",enabled=!live.busy) { live.checkGuestDeletion() }
+                PinkButton(if(live.busy)uiContext.getString(R.string.copy_checking_status_0a0cf7c9) else uiContext.getString(R.string.copy_check_deletion_status_8ebabe97),enabled=!live.busy) { live.checkGuestDeletion() }
                 if(!record.statusUnavailable && receipt!=null && (receipt.requestExpired || receipt.status in listOf("rejected","cancelled")))
                     OutlineButton(stringResource(R.string.copy_resume_setup_e799297d),Modifier.padding(top=12.dp),enabled=!live.busy) { live.resumeGuestSetup() }
             }
@@ -956,28 +979,29 @@ private fun LiveGuestDeletion(state: PreviewState) {
 
 @Composable
 private fun LivePeopleSettings(state: PreviewState) {
+    val uiContext = androidx.compose.ui.platform.LocalContext.current
     val live=state.live
     val blockedIds=live.blocked.map { NativeProtocol.id(it["blocked_id"] ?: it["account_id"] ?: it["id"]) }.toSet()
     val candidates=live.snapshot?.people?.filter { it.id !in blockedIds }?.distinctBy { it.id } ?: emptyList()
-    LivePage(state,"Manage People") {
+    LivePage(state,uiContext.getString(R.string.copy_manage_people_a3539654)) {
         Column(Modifier.weight(1f).verticalScroll(rememberScrollState())) {
             BodyText(stringResource(R.string.copy_matched_people_are_allowed_by_defau_1cb367d3),
                 Modifier.padding(top=8.dp,bottom=16.dp),center=false,size=12)
-            SectionTitle("Blocked (${blockedIds.size})")
+            SectionTitle(uiContext.getString(R.string.copy_blocked_1_s_1ca562ff, blockedIds.size))
             if(live.blocked.isEmpty())BodyText(stringResource(R.string.copy_no_blocked_people_dd602f71),Modifier.padding(vertical=22.dp))
             live.blocked.distinctBy { NativeProtocol.id(it["blocked_id"] ?: it["account_id"] ?: it["id"]) }.forEach { row ->
-                val name=row["name"] as? String ?: "Blocked person"
-                SettingRow(name,trailing="Unblock",icon=Glyph.PERSON,modifier=Modifier.padding(bottom=9.dp)) {
-                    state.confirm("Unblock $name?","This allows future matching and sharing. Previous access and excluded photos are not restored.","Unblock") {
+                val name=row["name"] as? String ?: uiContext.getString(R.string.copy_blocked_person_5a9da67c)
+                SettingRow(name,trailing=uiContext.getString(R.string.copy_unblock_987c7d5f),icon=Glyph.PERSON,modifier=Modifier.padding(bottom=9.dp)) {
+                    state.confirm(uiContext.getString(R.string.copy_unblock_1_s_c3b505af, name),uiContext.getString(R.string.copy_this_allows_future_matching_and_shar_c3e02010),uiContext.getString(R.string.copy_unblock_987c7d5f)) {
                         live.block(NativeProtocol.id(row["blocked_id"] ?: row["account_id"] ?: row["id"]),false)
                     }
                 }
             }
-            SectionTitle("Matched in current review (${candidates.size})")
+            SectionTitle(uiContext.getString(R.string.copy_matched_in_current_review_1_s_9b0006f9, candidates.size))
             if(live.snapshot==null)BodyText(stringResource(R.string.copy_open_a_photo_review_to_see_its_matc_18b4a6ae),
                 Modifier.padding(vertical=12.dp),center=false,size=12)
-            candidates.forEach { person -> SettingRow(person.name,subtitle="Can share with",trailing="Block",icon=Glyph.PERSON,modifier=Modifier.padding(bottom=9.dp)) {
-                state.confirm("Block ${person.name}?","This blocks sharing between your accounts.","Block") { live.block(person.id,true) }
+            candidates.forEach { person -> SettingRow(person.name,subtitle=uiContext.getString(R.string.copy_can_share_with_09eae50e),trailing=uiContext.getString(R.string.copy_block_bd074002),icon=Glyph.PERSON,modifier=Modifier.padding(bottom=9.dp)) {
+                state.confirm(uiContext.getString(R.string.copy_block_1_s_b717d02e, person.name),uiContext.getString(R.string.copy_this_blocks_sharing_between_your_acc_40a49682),uiContext.getString(R.string.copy_block_bd074002)) { live.block(person.id,true) }
             } }
         }
     }
@@ -985,10 +1009,11 @@ private fun LivePeopleSettings(state: PreviewState) {
 
 @Composable
 private fun LiveEmpty(state: PreviewState) {
+    val uiContext = androidx.compose.ui.platform.LocalContext.current
     LivePage(state,"",back=false,bottom=10) {
         Spacer(Modifier.weight(1f));SourceHero("empty-hero.png",.598f,152f/144f)
-        Text(if(state.live.photos.isEmpty())"Your memories start here" else "No matches yet",color=Color.White,fontSize=23.sp,modifier=Modifier.align(Alignment.CenterHorizontally).padding(top=25.dp))
-        BodyText(if(state.live.photos.isEmpty())"Add photos to find the people in your memories." else "Only currently eligible matches appear in a review.",Modifier.padding(top=12.dp))
+        Text(if(state.live.photos.isEmpty())uiContext.getString(R.string.copy_your_memories_start_here_8fe02f19) else uiContext.getString(R.string.copy_no_matches_yet_f0a5aa4d),color=Color.White,fontSize=23.sp,modifier=Modifier.align(Alignment.CenterHorizontally).padding(top=25.dp))
+        BodyText(if(state.live.photos.isEmpty())uiContext.getString(R.string.copy_add_photos_to_find_the_people_in_you_3a83dc90) else uiContext.getString(R.string.copy_only_currently_eligible_matches_appe_4ffd75fa),Modifier.padding(top=12.dp))
         Spacer(Modifier.weight(1f));PinkButton(stringResource(R.string.copy_add_photos_be917560)) { state.navigate(19) }
         OutlineButton(stringResource(R.string.copy_photo_preferences_d1ccbb74),Modifier.padding(top=12.dp)) { state.navigate(40) };Spacer(Modifier.height(18.dp))
     }
@@ -996,11 +1021,12 @@ private fun LiveEmpty(state: PreviewState) {
 
 @Composable
 private fun LiveError(state: PreviewState) {
+    val uiContext = androidx.compose.ui.platform.LocalContext.current
     val live=state.live;val problem=live.error
-    LivePage(state,"Something went wrong") {
+    LivePage(state,uiContext.getString(R.string.copy_something_went_wrong_76fc465e)) {
         Spacer(Modifier.weight(1f));SourceHero("offline-hero.png",.504f,128f/93f)
         Text(stringResource(R.string.copy_let_s_try_again_c201e419),color=Color.White,fontSize=24.sp,modifier=Modifier.align(Alignment.CenterHorizontally).padding(top=25.dp))
-        BodyText(readableError(problem?.code ?: "connection_unavailable"),Modifier.padding(top=15.dp))
+        BodyText(readableError(problem?.code ?: "connection_unavailable", uiContext),Modifier.padding(top=15.dp))
         if(live.repository.pending!=null)BodyText(stringResource(R.string.copy_a_saved_operation_needs_reconciliat_f323e585),Modifier.padding(top=15.dp),size=12)
         Spacer(Modifier.weight(1f))
         if(live.repository.pending?.action=="sharing.commit") {
@@ -1008,13 +1034,14 @@ private fun LiveError(state: PreviewState) {
             OutlineButton(stringResource(R.string.copy_retry_original_share_b4d52f73),Modifier.padding(top=12.dp),enabled=!live.busy) { live.retryPending() }
         } else PinkButton(stringResource(R.string.copy_try_again_cef2fe09),enabled=!live.busy) { live.retryPending() }
         if(problem?.code?.contains("consent")==true)OutlineButton(stringResource(R.string.copy_photo_preferences_d1ccbb74),Modifier.padding(top=12.dp)) { state.navigate(40) }
-        else OutlineButton(if(live.registered)"Back to Photos" else "Back to Setup",Modifier.padding(top=12.dp)) { state.navigate(if(live.registered)13 else 5) }
+        else OutlineButton(if(live.registered)uiContext.getString(R.string.copy_back_to_photos_b080279d) else uiContext.getString(R.string.copy_back_to_setup_a1564152),Modifier.padding(top=12.dp)) { state.navigate(if(live.registered)13 else 5) }
         Spacer(Modifier.height(18.dp))
     }
 }
 
 @Composable
 private fun LivePhotoGrid(live: LiveController,photos: List<LivePhoto>,modifier: Modifier,columns: Int=3,selections: Set<String>?=null,route: Int?=null,onClick: (LivePhoto)->Unit) {
+    val fallbackTitle=stringResource(R.string.copy_photo_53219983)
     val position=route?.let { live.galleryPositions[it] } ?: GalleryPosition()
     val grid=rememberLazyStaggeredGridState(initialFirstVisibleItemIndex=position.item.coerceAtMost((photos.size-1).coerceAtLeast(0)),initialFirstVisibleItemScrollOffset=position.offset)
     LaunchedEffect(grid,route) { if(route!=null)snapshotFlow { GalleryPosition(grid.firstVisibleItemIndex,grid.firstVisibleItemScrollOffset) }.distinctUntilChanged().collect { live.updateGalleryPosition(route,it.item,it.offset) } }
@@ -1025,7 +1052,7 @@ private fun LivePhotoGrid(live: LiveController,photos: List<LivePhoto>,modifier:
         items(photos,key={it.id}) { photo ->
             val action=if(selections!=null)Modifier.toggleable(photo.id in selections,role=Role.Checkbox,onValueChange={onClick(photo)}) else Modifier.clickable(role=Role.Button){onClick(photo)}
             Box(Modifier.fillMaxWidth().aspectRatio(photo.ratio).clip(RoundedCornerShape(9.dp)).then(action)
-                .semantics { contentDescription=photo.title }) {
+                .semantics { contentDescription=displayedPhotoTitle(photo,fallbackTitle) }) {
                 LivePhotoImage(live,photo,Modifier.fillMaxSize())
                 if(selections!=null)SelectionMark(photo.id in selections,Modifier.align(Alignment.TopEnd).padding(5.dp))
                 else if(photo.id in live.favorites)SelectionMark(true,Modifier.align(Alignment.TopEnd).padding(5.dp),favorite=true)
@@ -1109,6 +1136,9 @@ private fun LiveToggle(title: String,subtitle: String?,checked: Boolean,onChange
     DividerLine()
 }
 
+/** Localize only parser-generated labels; provided titles remain user/provider text. */
+internal fun displayedPhotoTitle(photo: LivePhoto,fallback: String): String = if(photo.titleDefaulted)fallback else photo.title
+
 @Composable private fun photoCount(raw: Any?): String { val count=(raw as? Number)?.toInt()?.coerceAtLeast(0) ?: 0;return pluralStringResource(R.plurals.photo_count,count,count) }
 @Composable private fun personCount(raw: Any?): String { val count=(raw as? Number)?.toInt()?.coerceAtLeast(0) ?: 0;return pluralStringResource(R.plurals.person_count,count,count) }
 
@@ -1124,60 +1154,61 @@ private fun LiveToggle(title: String,subtitle: String?,checked: Boolean,onChange
 }
 
 @Composable private fun ScopeNotice() { BodyText(stringResource(R.string.copy_this_review_is_limited_to_the_photo_cdbe75a2),Modifier.padding(vertical=10.dp),center=false,size=12) }
-private fun receiptLabel(status: String?)=when(status){"open"->"Open";"under_review"->"Under review";"resolved"->"Resolved";"closed"->"Closed";"requested"->"Awaiting acceptance";"accepted"->"Accepted";"declined"->"Declined";"withdrawn"->"Withdrawn";"revoked"->"Revoked";"expired"->"Expired";"failed"->"Failed";else->"Unavailable"}
-internal fun readableError(code: String)=when(code) {
+private fun receiptLabel(status: String?, context: android.content.Context)=when(status){"open"->context.getString(R.string.copy_open_538b10e9);"under_review"->context.getString(R.string.copy_under_review_07000a6f);"resolved"->context.getString(R.string.copy_resolved_503b5525);"closed"->context.getString(R.string.copy_closed_3201cae5);"requested"->context.getString(R.string.copy_awaiting_acceptance_383a8dc6);"accepted"->context.getString(R.string.copy_accepted_41d09a60);"declined"->context.getString(R.string.copy_declined_56d6cf67);"withdrawn"->context.getString(R.string.copy_withdrawn_a579599b);"revoked"->context.getString(R.string.copy_revoked_e58fe295);"expired"->context.getString(R.string.copy_expired_bca9f3d2);"failed"->context.getString(R.string.copy_failed_5579c3d4);else->context.getString(R.string.copy_unavailable_da4baaa9)}
+internal fun readableError(code: String, context: android.content.Context)=when(code) {
     "face_capture_no_face","face_capture_multiple_faces","face_capture_quality_low","face_capture_invalid_image",
     "camera_permission_required","camera_initialization_timeout","camera_disconnected","camera_surface_replaced","camera_unavailable",
-    "capture_failed","capture_timeout","camera_review_expired","capture_context_changed","camera_image_invalid","capture_too_large","capture_format_invalid"->cameraRecoveryMessage(code)
-    "face_login_in_flight"->"Your previous sign-in photo may still be processing. Wait for its saved challenge to expire before taking a fresh selfie."
-    "face_login_requires_status","face_login_scope_changed","face_login_response_changed"->"The saved sign-in must be recovered on this original account and device. No new account was created."
-    "face_profile_in_flight"->"A capture or verification is still in progress. Check its status before retaking."
-    "face_profile_requires_status","face_profile_cancel_pending"->"Check the saved profile change before continuing. Your original account and device key are retained."
-    "face_profile_control_requires_login"->"Verify your registered face to finish establishing private profile management."
-    "face_profile_control_unavailable"->"Profile management is unavailable. If face sign-in is still authorized, verify your face on this original device and explicitly renew an expired control."
-    "face_profile_control_not_expired"->"This private control is still current. It does not need renewal."
-    "face_profile_login_pending"->"Continue the saved fresh face sign-in. Status alone cannot authenticate your account."
-    "face_profile_cleanup_pending"->"Reference removal has not been verified. Check its status before enrolling another profile."
-    "face_profile_reference_unavailable"->"There is no retained active reference for this action. Check the removal status."
-    "face_profile_version_changed","face_profile_response_changed","face_profile_scope_changed","face_profile_capture_changed"->"The saved profile authority changed. No new access was granted. Check the current status."
-    "face_profile_storage_unavailable"->"The saved profile change could not be written safely. Keep this installation and retry its status."
-    "api_endpoint_unconfigured"->"Configure the API endpoint for this build before continuing."
-    "connection_unavailable","server_unavailable"->"The service could not be reached. Check your connection and try again."
-    "account_recovery_account_changed"->"This device holds setup or identity for another account. It has been preserved; use the backup for that same account."
-    "account_recovery_sign_out_required"->"Sign out of the current account before recovering an account with a backup key."
-    "account_recovery_history_full"->"Saved recovery history is full. No previous request or device key was removed."
-    "account_recovery_in_flight"->"Your recovery photo is still being checked. Check status before taking another photo."
-    "recovery_backup_invalid"->"Enter the full saved recovery backup, beginning with LVR1."
-    "recovery_backup_unavailable"->"This device does not have that private backup. Create a new recovery key while signed in and save it."
-    "account_recovery_unavailable","recovery_key_unavailable"->"That recovery key is unavailable. Your saved request has been kept; no replacement account was created."
-    "account_recovery_storage_unavailable"->"We couldn’t save recovery on this device. Your previous account and keys have been kept. Free device storage, then try again."
-    "account_recovery_requires_status"->"Check the saved account recovery request before continuing."
-    "account_recovery_response_changed","account_recovery_scope_changed","account_recovery_capture_changed","recovery_key_response_changed"->"The recovery response did not match your saved account and device. Your original request has been kept."
-    "enrollment_in_flight"->"Your previous photo is still being checked. Check again before taking another photo."
-    "enrollment_storage_unavailable"->"We couldn’t save your setup on this device. Your original account and device key have been kept. Free device storage, then try again."
-    "device_key_unavailable"->"The original device key is unavailable. Setup cannot continue on a replacement key."
-    "enrollment_recovery_unavailable","enrollment_account_unavailable"->"We couldn’t recover this account’s setup. No new account has been created. Check your connection and try again."
-    "enrollment_response_changed","enrollment_capture_changed","enrollment_scope_changed","capture_acknowledgement_changed"->"Your saved setup no longer matches the server. Check your original account before continuing."
-    "enrollment_requires_recovery"->"Recover your existing face setup before continuing."
-    "face_verifier_unavailable","face_authentication_unavailable"->"Face verification is unavailable. Try again when the service is ready."
-    "processing_consent_required"->"Enable photo processing in Photo Preferences before uploading."
-    "session_changed","registered_face_required","authentication_required"->"Your session changed. Verify your face again to continue."
-    "face_comparison_failed","face_registration_mismatch"->"The face could not be verified. Retake a clear camera photo and try again."
-    "review_changed","review_expired","eligibility_changed_review_required"->"Matches or permissions changed. Open a fresh review before sharing."
-    "upload_storage_full","upload_storage_unavailable"->"Your upload is saved. Free device storage, then resume."
-    "upload_source_changed","upload_source_unavailable"->"The saved photo is unavailable or changed. Cancel unfinished uploads and select it again."
-    "upload_account_changed","upload_scope_changed","upload_progress_changed"->"This upload does not match your current account or saved photo. Its original details have been kept."
-    "upload_expired"->"This unfinished upload expired. Cancel it before choosing the photo again."
-    "upload_finalizing"->"Your photo bytes are saved. Resume to check finalization."
-    "upload_paused"->"Upload paused. Resume when you are ready."
-    "image_too_large"->"Choose a photo smaller than 20 MB."
-    "processing_pending"->"Processing is still pending. Check your photos again shortly."
+    "capture_failed","capture_timeout","camera_review_expired","capture_context_changed","camera_image_invalid","capture_too_large","capture_format_invalid"->cameraRecoveryMessage(code, context)
+    "face_login_in_flight"->context.getString(R.string.copy_your_previous_sign_in_photo_may_stil_33f6b717)
+    "face_login_requires_status","face_login_scope_changed","face_login_response_changed"->context.getString(R.string.copy_the_saved_sign_in_must_be_recovered__afb5a08a)
+    "face_profile_in_flight"->context.getString(R.string.copy_a_capture_or_verification_is_still_i_50b0c48e)
+    "face_profile_requires_status","face_profile_cancel_pending"->context.getString(R.string.copy_check_the_saved_profile_change_befor_c61cf3ee)
+    "face_profile_control_requires_login"->context.getString(R.string.copy_verify_your_registered_face_to_finis_b36dcc32)
+    "face_profile_control_unavailable"->context.getString(R.string.copy_profile_management_is_unavailable_if_1533cd6e)
+    "face_profile_control_not_expired"->context.getString(R.string.copy_this_private_control_is_still_curren_39f6c865)
+    "face_profile_login_pending"->context.getString(R.string.copy_continue_the_saved_fresh_face_sign_i_8d6d27e3)
+    "face_profile_cleanup_pending"->context.getString(R.string.copy_reference_removal_has_not_been_verif_714074ee)
+    "face_profile_reference_unavailable"->context.getString(R.string.copy_there_is_no_retained_active_referenc_c6c128a9)
+    "face_profile_version_changed","face_profile_response_changed","face_profile_scope_changed","face_profile_capture_changed"->context.getString(R.string.copy_the_saved_profile_authority_changed__dddac648)
+    "face_profile_storage_unavailable"->context.getString(R.string.copy_the_saved_profile_change_could_not_b_f00ca8a0)
+    "api_endpoint_unconfigured"->context.getString(R.string.copy_configure_the_api_endpoint_for_this__4dab19dd)
+    "connection_unavailable","server_unavailable"->context.getString(R.string.copy_the_service_could_not_be_reached_che_c5ec8359)
+    "account_recovery_account_changed"->context.getString(R.string.copy_this_device_holds_setup_or_identity__847362bb)
+    "account_recovery_sign_out_required"->context.getString(R.string.copy_sign_out_of_the_current_account_befo_76ba54b7)
+    "account_recovery_history_full"->context.getString(R.string.copy_saved_recovery_history_is_full_no_pr_27b01244)
+    "account_recovery_in_flight"->context.getString(R.string.copy_your_recovery_photo_is_still_being_c_4148bae5)
+    "recovery_backup_invalid"->context.getString(R.string.copy_enter_the_full_saved_recovery_backup_74202c35)
+    "recovery_backup_unavailable"->context.getString(R.string.copy_this_device_does_not_have_that_priva_e6e12835)
+    "account_recovery_unavailable","recovery_key_unavailable"->context.getString(R.string.copy_that_recovery_key_is_unavailable_you_89655f7d)
+    "account_recovery_storage_unavailable"->context.getString(R.string.copy_we_couldn_t_save_recovery_on_this_de_691c435b)
+    "account_recovery_requires_status"->context.getString(R.string.copy_check_the_saved_account_recovery_req_4fb7039d)
+    "account_recovery_response_changed","account_recovery_scope_changed","account_recovery_capture_changed","recovery_key_response_changed"->context.getString(R.string.copy_the_recovery_response_did_not_match__abd1becc)
+    "enrollment_in_flight"->context.getString(R.string.copy_your_previous_photo_is_still_being_c_91d76a07)
+    "enrollment_storage_unavailable"->context.getString(R.string.copy_we_couldn_t_save_your_setup_on_this__1353ab13)
+    "device_key_unavailable"->context.getString(R.string.copy_the_original_device_key_is_unavailab_1cfb970c)
+    "enrollment_recovery_unavailable","enrollment_account_unavailable"->context.getString(R.string.copy_we_couldn_t_recover_this_account_s_s_defba5a8)
+    "enrollment_response_changed","enrollment_capture_changed","enrollment_scope_changed","capture_acknowledgement_changed"->context.getString(R.string.copy_your_saved_setup_no_longer_matches_t_e2db2d73)
+    "enrollment_requires_recovery"->context.getString(R.string.copy_recover_your_existing_face_setup_bef_7327a774)
+    "face_verifier_unavailable","face_authentication_unavailable"->context.getString(R.string.copy_face_verification_is_unavailable_try_9c586f7d)
+    "processing_consent_required"->context.getString(R.string.copy_enable_photo_processing_in_photo_pre_92d160cc)
+    "session_changed","registered_face_required","authentication_required"->context.getString(R.string.copy_your_session_changed_verify_your_fac_f11c472f)
+    "face_comparison_failed","face_registration_mismatch"->context.getString(R.string.copy_the_face_could_not_be_verified_retak_b10f4fff)
+    "review_changed","review_expired","eligibility_changed_review_required"->context.getString(R.string.copy_matches_or_permissions_changed_open__6586ed5d)
+    "upload_storage_full","upload_storage_unavailable"->context.getString(R.string.copy_your_upload_is_saved_free_device_sto_0bcbaa85)
+    "upload_source_changed","upload_source_unavailable"->context.getString(R.string.copy_the_saved_photo_is_unavailable_or_ch_c66a0797)
+    "upload_account_changed","upload_scope_changed","upload_progress_changed"->context.getString(R.string.copy_this_upload_does_not_match_your_curr_4e4a5549)
+    "upload_expired"->context.getString(R.string.copy_this_unfinished_upload_expired_cance_4c696053)
+    "upload_finalizing"->context.getString(R.string.copy_your_photo_bytes_are_saved_resume_to_5977ef4c)
+    "upload_paused"->context.getString(R.string.copy_upload_paused_resume_when_you_are_re_40f62dd7)
+    "image_too_large"->context.getString(R.string.copy_choose_a_photo_smaller_than_20_mb_2ab694a3)
+    "processing_pending"->context.getString(R.string.copy_processing_is_still_pending_check_yo_fbeccb6c)
     else->code.replace('_',' ').replaceFirstChar { it.uppercase() }
 }
 
 @Composable private fun liveFieldColors()=TextFieldDefaults.outlinedTextFieldColors(textColor=Color.White,focusedBorderColor=Pink,unfocusedBorderColor=Hairline,cursorColor=Pink)
 
 @Composable private fun PurchaseDialog(state: PreviewState) {
+    val uiContext = androidx.compose.ui.platform.LocalContext.current
     val live=state.live
     if(!live.purchaseVisible)return
     val context=LocalContext.current
@@ -1186,23 +1217,35 @@ internal fun readableError(code: String)=when(code) {
     AlertDialog(onDismissRequest=live::dismissPurchases,backgroundColor=Panel,shape=RoundedCornerShape(24.dp),
         title={Text(stringResource(R.string.copy_original_photo_access_fe8275e8),color=Color.White)},text={Column(Modifier.verticalScroll(rememberScrollState())) {
             BodyText(stringResource(R.string.copy_a_verified_subscription_is_required_6773aca5),center=false,size=13)
-            billing.plans.forEach { plan->OutlineButton("${plan.title} · ${plan.terms}",Modifier.padding(top=12.dp),enabled=!billing.busy && activity!=null) { activity?.let { billing.purchase(it,plan.token) } } }
+            billing.plans.forEach { plan->OutlineButton(uiContext.getString(R.string.photo_status, plan.title, plan.terms),Modifier.padding(top=12.dp),enabled=!billing.busy && activity!=null) { activity?.let { billing.purchase(it,plan.token) } } }
             if(billing.status.isNotBlank())BodyText(billing.status,Modifier.padding(top=14.dp).semantics { liveRegion=LiveRegionMode.Polite },center=false,size=12)
         }},confirmButton={TextButton(enabled=!billing.busy,onClick=billing::restore) { Text(stringResource(R.string.copy_restore_purchases_2d557413),color=Pink) }},dismissButton={TextButton(onClick=live::dismissPurchases) { Text(stringResource(R.string.copy_close_bbfa773e),color=Muted) }})
 }
 
 @Composable private fun LiveAccountDeletion(state: PreviewState) {
+    val uiContext = androidx.compose.ui.platform.LocalContext.current
     val live=state.live;val record=live.accountDeletion ?: live.repository.accountDeletion;val receipt=record?.receipt
-    LivePage(state,"Account deletion",back=false) {
-        Text(receipt?.label ?: "Checking your original deletion request",color=Pink,fontSize=22.sp,modifier=Modifier.padding(vertical=22.dp).semantics { liveRegion=LiveRegionMode.Polite })
-        BodyText(if(receipt?.completed==true)"The server confirmed account cleanup. You can start again with a new guest account."
-            else "Your original deletion request is saved privately on this device. Keep this installation to check its status. Completion is shown only after the server confirms cleanup.",center=false)
-        receipt?.failureCode?.let { BodyText(readableError(it),Modifier.padding(top=12.dp),center=false) }
-        live.error?.let { BodyText(readableError(it.code),Modifier.padding(top=12.dp),center=false) }
+    LivePage(state,uiContext.getString(R.string.copy_account_deletion_060c2086),back=false) {
+        Text(receipt?.let { deletionLabel(it, uiContext) } ?: uiContext.getString(R.string.copy_checking_your_original_deletion_requ_640a6e02),color=Pink,fontSize=22.sp,modifier=Modifier.padding(vertical=22.dp).semantics { liveRegion=LiveRegionMode.Polite })
+        BodyText(if(receipt?.completed==true)uiContext.getString(R.string.copy_the_server_confirmed_account_cleanup_3edcd640)
+            else uiContext.getString(R.string.copy_your_original_deletion_request_is_sa_c2bdda20),center=false)
+        receipt?.failureCode?.let { BodyText(readableError(it, uiContext),Modifier.padding(top=12.dp),center=false) }
+        live.error?.let { BodyText(readableError(it.code, uiContext),Modifier.padding(top=12.dp),center=false) }
         Spacer(Modifier.weight(1f))
         PinkButton(stringResource(R.string.copy_check_status_99f3765b),enabled=!live.busy) { live.checkAccountDeletion() }
         if(receipt?.completed==true)OutlineButton(stringResource(R.string.copy_start_again_1721c828),Modifier.padding(top=12.dp),enabled=!live.busy) { live.restartAfterAccountDeletion() }
         else if(receipt?.requestExpired==true || receipt?.status in setOf("rejected","cancelled"))OutlineButton(stringResource(R.string.copy_return_to_my_account_1e0b386e),Modifier.padding(top=12.dp),enabled=!live.busy) { live.resumeAfterAccountDeletion() }
         Spacer(Modifier.height(18.dp))
     }
+}
+
+private fun deletionLabel(receipt: GuestDeletionReceipt, context: android.content.Context): String = if(receipt.requestExpired) context.getString(R.string.copy_request_expired_ffac6bd7) else when(receipt.status) {
+    "pending_approval" -> context.getString(R.string.copy_awaiting_review_631e79b5)
+    "approved" -> context.getString(R.string.copy_approved_c699109a)
+    "queued" -> context.getString(R.string.copy_deletion_queued_33b2465c)
+    "processing" -> context.getString(R.string.copy_deleting_account_6750fcb2)
+    "completed" -> context.getString(R.string.copy_account_deleted_9c9a92a1)
+    "rejected" -> context.getString(R.string.copy_request_rejected_8ccc55ac)
+    "failed" -> context.getString(R.string.copy_deletion_could_not_finish_1435333a)
+    else -> context.getString(R.string.copy_request_cancelled_166d7001)
 }

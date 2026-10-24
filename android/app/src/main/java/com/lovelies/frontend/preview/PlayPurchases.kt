@@ -12,14 +12,15 @@ import kotlin.coroutines.resumeWithException
 
 /** Play supplies purchase state; only the backend supplies entitlement and acknowledgement. */
 class PlayPurchases(context: Context,private val repository: CloudflareRepository,private val verified: suspend ()->Unit) {
+    private val context=context.applicationContext
     private val scope=CoroutineScope(SupervisorJob()+Dispatchers.Main.immediate)
     private val verification=Mutex()
     private val client=BillingClient.newBuilder(context.applicationContext)
         .setListener { result,purchases ->
             when(result.responseCode) {
                 BillingClient.BillingResponseCode.OK -> scope.launch { verify(purchases.orEmpty()) }
-                BillingClient.BillingResponseCode.USER_CANCELED -> status="Purchase cancelled. You have not been charged by this action."
-                else -> status=billingMessage(result.responseCode)
+                BillingClient.BillingResponseCode.USER_CANCELED -> status=context.getString(R.string.controller_bb1d294c8d56)
+                else -> status=billingMessage(result.responseCode,context)
             }
         }.enablePendingPurchases(PendingPurchasesParams.newBuilder().enableOneTimeProducts().enablePrepaidPlans().build())
         .enableAutoServiceReconnection().build()
@@ -33,7 +34,7 @@ class PlayPurchases(context: Context,private val repository: CloudflareRepositor
         return suspendCancellableCoroutine { continuation ->
             client.startConnection(object: BillingClientStateListener {
                 override fun onBillingSetupFinished(result: BillingResult) { if(continuation.isActive)continuation.resume(result.responseCode==BillingClient.BillingResponseCode.OK) }
-                override fun onBillingServiceDisconnected() { status="Google Play disconnected. Retry when it is available." }
+                override fun onBillingServiceDisconnected() { status=context.getString(R.string.controller_311651867b2f) }
             })
         }
     }
@@ -52,15 +53,15 @@ class PlayPurchases(context: Context,private val repository: CloudflareRepositor
     fun load() {
         if(busy)return
         val account=repository.credentials?.takeIf { it.method=="registered_face" }?.account ?: return
-        owner=account;busy=true;status="Loading Google Play…"
+        owner=account;busy=true;status=context.getString(R.string.controller_b7dd6131b8f4)
         scope.launch {
             try {
                 val product=product() ?: throw LiveFailure("store_product_unavailable")
                 if(owner!=account || repository.credentials?.account!=account)return@launch
                 plans.clear();plans.addAll(product.subscriptionOfferDetails.orEmpty().map { offer -> Plan(offer.offerToken,product.name,
-                    offer.pricingPhases.pricingPhaseList.joinToString("; then ") { phase -> "${phase.formattedPrice} / ${phase.billingPeriod}"+(if(phase.billingCycleCount>0)" × ${phase.billingCycleCount}" else "") }) })
-                status=if(plans.isEmpty())"No eligible subscription plan is available from Google Play." else "Choose a plan. Google Play shows its complete terms before you confirm."
-            } catch(problem: LiveFailure) { status=readableError(problem.code) }
+                    offer.pricingPhases.pricingPhaseList.joinToString(context.getString(R.string.controller_43a45b864afc)) { phase -> "${phase.formattedPrice} / ${phase.billingPeriod}"+(if(phase.billingCycleCount>0)" × ${phase.billingCycleCount}" else "") }) })
+                status=if(plans.isEmpty())context.getString(R.string.controller_2d3b500866f8) else context.getString(R.string.controller_c5dd9ec980ef)
+            } catch(problem: LiveFailure) { status=readableError(problem.code,context) }
             finally { busy=false }
         }
     }
@@ -76,15 +77,15 @@ class PlayPurchases(context: Context,private val repository: CloudflareRepositor
                 val flow=BillingFlowParams.newBuilder().setProductDetailsParamsList(listOf(BillingFlowParams.ProductDetailsParams.newBuilder()
                     .setProductDetails(product).setOfferToken(token).build())).setObfuscatedAccountId(NativeProtocol.sha256(account.toByteArray())).build()
                 val result=client.launchBillingFlow(activity,flow)
-                status=if(result.responseCode==BillingClient.BillingResponseCode.OK)"Complete your purchase in Google Play." else billingMessage(result.responseCode)
-            } catch(problem: LiveFailure) { status=readableError(problem.code) }
+                status=if(result.responseCode==BillingClient.BillingResponseCode.OK)context.getString(R.string.controller_0d9613931369) else billingMessage(result.responseCode,context)
+            } catch(problem: LiveFailure) { status=readableError(problem.code,context) }
             finally { busy=false }
         }
     }
     fun restore() {
         if(busy)return
         val account=repository.credentials?.takeIf { it.method=="registered_face" }?.account ?: return
-        owner=account;busy=true;status="Checking Google Play purchases…"
+        owner=account;busy=true;status=context.getString(R.string.controller_ca350dda4dc7)
         scope.launch {
             try {
                 if(!connection())throw LiveFailure("store_unavailable")
@@ -92,37 +93,37 @@ class PlayPurchases(context: Context,private val repository: CloudflareRepositor
                     if(continuation.isActive) { if(result.responseCode==BillingClient.BillingResponseCode.OK)continuation.resume(rows) else continuation.resumeWithException(LiveFailure("store_unavailable")) }
                 } }
                 if(account!=repository.credentials?.account || owner!=account)throw LiveFailure("session_changed")
-                if(purchases.isEmpty()) { verified();status="No active Google Play subscription was found for this Play account." }
+                if(purchases.isEmpty()) { verified();status=context.getString(R.string.controller_7bc8522e0cb4) }
                 else verify(purchases)
-            } catch(problem: LiveFailure) { status=readableError(problem.code) }
+            } catch(problem: LiveFailure) { status=readableError(problem.code,context) }
             finally { busy=false }
         }
     }
     private suspend fun verify(rows: List<Purchase>)=verification.withLock {
         val account=owner ?: return@withLock
         for(purchase in rows) {
-            if(repository.credentials?.account!=account || repository.credentials?.method!="registered_face") { status="Sign in to the account used for this purchase, then restore.";return@withLock }
+            if(repository.credentials?.account!=account || repository.credentials?.method!="registered_face") { status=context.getString(R.string.controller_4f6eed6a9fe6);return@withLock }
             if(BuildConfig.PLAY_SUBSCRIPTION_PRODUCT !in purchase.products)continue
-            if(purchase.purchaseState==Purchase.PurchaseState.PENDING) { status="Payment is pending in Google Play. Photo access will update after verified payment.";continue }
+            if(purchase.purchaseState==Purchase.PurchaseState.PENDING) { status=context.getString(R.string.controller_04a714d06d40);continue }
             if(purchase.purchaseState!=Purchase.PurchaseState.PURCHASED)continue
-            if(purchase.accountIdentifiers?.obfuscatedAccountId!=NativeProtocol.sha256(account.toByteArray())) { status="This purchase belongs to another Lovelies account.";continue }
-            status="Verifying your purchase…"
+            if(purchase.accountIdentifiers?.obfuscatedAccountId!=NativeProtocol.sha256(account.toByteArray())) { status=context.getString(R.string.controller_04cb36080a3e);continue }
+            status=context.getString(R.string.controller_e5581cbfef39)
             try {
                 val result=repository.mutate("store.google",mapOf("product_id" to BuildConfig.PLAY_SUBSCRIPTION_PRODUCT,"purchase_token" to purchase.purchaseToken),"store",path="/subscriptions/google/transactions")
                 if(repository.credentials?.account!=account)throw LiveFailure("session_changed")
                 verified()
-                status=if(result["billing_environment"]=="sandbox")"Test purchase verified. Production original access remains restricted." else "Purchase verified. Your current access is confirmed by the server."
-            } catch(problem: LiveFailure) { status=readableError(problem.code)+" Restore to retry verification." }
+                status=if(result["billing_environment"]=="sandbox")context.getString(R.string.controller_7baa8299b4a7) else context.getString(R.string.controller_846e2c78f9fc)
+            } catch(problem: LiveFailure) { status=readableError(problem.code,context)+context.getString(R.string.controller_d5bc59f2366c) }
         }
     }
     fun clearAccount() { owner=null;plans.clear();status="" }
     fun dispose() { owner=null;scope.cancel();client.endConnection() }
 }
-internal fun billingMessage(code: Int)=when(code) {
-    BillingClient.BillingResponseCode.USER_CANCELED->"Purchase cancelled."
-    BillingClient.BillingResponseCode.ITEM_ALREADY_OWNED->"You already own this subscription. Restore purchases to verify it."
-    BillingClient.BillingResponseCode.ITEM_UNAVAILABLE->"This subscription is unavailable for your Play account or region."
-    BillingClient.BillingResponseCode.BILLING_UNAVAILABLE->"Google Play purchases are unavailable on this device."
-    BillingClient.BillingResponseCode.NETWORK_ERROR,BillingClient.BillingResponseCode.SERVICE_UNAVAILABLE,BillingClient.BillingResponseCode.SERVICE_DISCONNECTED->"Google Play could not be reached. Check your connection and retry."
-    else->"Google Play could not complete this action. Retry or restore purchases."
+internal fun billingMessage(code: Int,context: Context)=when(code) {
+    BillingClient.BillingResponseCode.USER_CANCELED->context.getString(R.string.controller_acc527e9244f)
+    BillingClient.BillingResponseCode.ITEM_ALREADY_OWNED->context.getString(R.string.controller_ec3bb17ddb0a)
+    BillingClient.BillingResponseCode.ITEM_UNAVAILABLE->context.getString(R.string.controller_4161e060779d)
+    BillingClient.BillingResponseCode.BILLING_UNAVAILABLE->context.getString(R.string.controller_0f2a4fcc93e6)
+    BillingClient.BillingResponseCode.NETWORK_ERROR,BillingClient.BillingResponseCode.SERVICE_UNAVAILABLE,BillingClient.BillingResponseCode.SERVICE_DISCONNECTED->context.getString(R.string.controller_f81e04a747c2)
+    else->context.getString(R.string.controller_47fb027a47f9)
 }
