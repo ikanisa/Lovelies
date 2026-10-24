@@ -23,3 +23,25 @@ test('private transport preserves caller cancellation and rejects credential-bea
  const redirect=new AuthenticatedService('https://private.example',secret,async()=>new Response(null,{status:307,headers:{Location:'https://elsewhere.invalid'}}));
  await assert.rejects(()=>redirect.fetch('http://internal/send'),/private_service_redirect_denied/);
 });
+test('private transport bounds actual request and response bytes even without trustworthy content lengths',async()=>{
+ const limits={requestBytes:10,responseBytes:10};let calls=0;
+ const service=new AuthenticatedService('http://127.0.0.1',secret,async request=>{calls++;await request.arrayBuffer();return new Response('ok');},1000,limits);
+ await assert.rejects(()=>service.fetch('http://internal/send',{method:'POST',body:'x'.repeat(11)}),/private_service_request_too_large/);
+ assert.equal(calls,1);
+ await assert.rejects(()=>service.fetch('http://internal/send',{method:'POST',headers:{'Content-Length':'11'},body:'x'.repeat(11)}),/private_service_request_too_large/);
+ assert.equal(calls,1,'known oversized body must not reach the network');
+ let cancelled=false;
+ const stream=new AuthenticatedService('http://127.0.0.1',secret,async()=>new Response(new ReadableStream({
+   start(output){output.enqueue(new Uint8Array(6));output.enqueue(new Uint8Array(5));},cancel(){cancelled=true;},
+ })),1000,limits);
+ const response=await stream.fetch('http://internal/send');await assert.rejects(()=>response.arrayBuffer(),/private_service_response_too_large/);assert.equal(cancelled,true);
+ const claimed=new AuthenticatedService('http://127.0.0.1',secret,async()=>new Response('x'.repeat(11),{headers:{'Content-Length':'11'}}),1000,limits);
+ await assert.rejects(()=>claimed.fetch('http://internal/send'),/private_service_response_too_large/);
+});
+test('a response arriving after timeout is cancelled instead of being silently retained',async()=>{
+ let finish,cancelled=false;
+ const service=new AuthenticatedService('http://127.0.0.1',secret,async()=>new Promise(resolve=>finish=resolve),20);
+ await assert.rejects(()=>service.fetch('http://internal/send'),/private_service_timeout/);
+ finish(new Response(new ReadableStream({cancel(){cancelled=true;}})));
+ await new Promise(resolve=>setImmediate(resolve));assert.equal(cancelled,true);
+});

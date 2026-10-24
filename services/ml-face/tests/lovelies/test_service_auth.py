@@ -1,6 +1,16 @@
 import asyncio
 import pytest
-from lovelies_ml_face.service_auth import ServiceAuthentication
+from lovelies_ml_face.service_auth import ServiceAuthentication, authenticated_transport
+
+
+def test_new_consumer_defaults_to_service_authentication_and_never_private_binding(monkeypatch):
+    monkeypatch.delenv('ML_DEPLOYMENT_TRANSPORT', raising=False)
+    monkeypatch.delenv('ML_INFERENCE_SECRET', raising=False)
+    with pytest.raises(RuntimeError, match='independent service secret'):
+        authenticated_transport(None, require_service_auth=True)
+    monkeypatch.setenv('ML_DEPLOYMENT_TRANSPORT', 'private_binding')
+    with pytest.raises(RuntimeError, match='requires service authentication'):
+        authenticated_transport(None, require_service_auth=True)
 
 @pytest.mark.parametrize("secret", [None,"short", "a"*32+"\n"])
 def test_external_transport_requires_secret(secret):

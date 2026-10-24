@@ -26,7 +26,8 @@ const env={...process.env,APP_ENV:'local',PUBLIC_API_BASE_URL:`http://127.0.0.1:
 for(const key of ['FACE_AUTH_POLICY_VERSION','PHOTO_MODEL_VERSION','PHOTO_CONSENT_POLICY_VERSION'])required(key);
 if(process.env.ML_INFERENCE_URL&&process.env.ML_INFERENCE_SECRET){
  const services=createModelServices({PHOTOS:env.PHOTOS,QUARANTINE:env.QUARANTINE,MODEL_VERSION:env.PHOTO_MODEL_VERSION,FACE_AUTH_POLICY_VERSION:env.FACE_AUTH_POLICY_VERSION,
- INFERENCE:new AuthenticatedService(process.env.ML_INFERENCE_URL,process.env.ML_INFERENCE_SECRET)});env.FACE_AUTH_VERIFIER=services.face;env.PHOTO_PROCESSOR=services.photo;
+ ENGINE_ARTIFACT_SHA256:process.env.ML_INFERENCE_ARTIFACT_SHA256,PROCESSING_FINGERPRINT:process.env.ML_INFERENCE_PROCESSING_SHA256,
+ INFERENCE:new AuthenticatedService(process.env.ML_INFERENCE_URL,process.env.ML_INFERENCE_SECRET)});env.FACE_AUTH_VERIFIER=services.face;env.PHOTO_PROCESSOR=services.photo;env.MODEL_SERVICE_READINESS=services.ready;
 }
 if(process.env.PUSH_SERVICE_URL&&process.env.PUSH_SERVICE_SECRET)env.PUSH_SERVICE=new AuthenticatedService(process.env.PUSH_SERVICE_URL,process.env.PUSH_SERVICE_SECRET);
 const handler=createHandler(createApp(db,env));

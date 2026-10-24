@@ -23,13 +23,13 @@ from starlette.concurrency import run_in_threadpool
 from pictured_ml_face.http_boundary import MlHttpBoundary
 from .service_auth import authenticated_transport
 from pictured_ml_face.models import CandidateEmbedding, FaceEmbedding, MatchDecision, MatchRequest, PhotoProcessRequest
-from pictured_ml_face.pipeline import FacePipeline
 from pictured_ml_face.image_contract import ImageValidationError
+from pictured_ml_face.model_integrity import ModelPolicyError, parse_json_object
+from .engine import OpenFacePipeline, MODEL, ENGINE_SPACE
 
 MAX_IMAGE = 20 * 1024 * 1024
-MODEL = 'opencv-yunet-sface-2021dec-v1'
-TEMPLATE_PROTOCOL = 'lovelies-face-template-v1'
-pipeline = FacePipeline(os.environ.get('MODEL_MANIFEST_PATH', str(Path(__file__).parents[2] / 'models/model-manifest.json')))
+TEMPLATE_PROTOCOL = 'lovelies-face-template-v2'
+pipeline = OpenFacePipeline(os.environ.get('MODEL_MANIFEST_PATH', str(Path(__file__).parents[2] / 'models/model-manifest.json')))
 if pipeline.using_deterministic_simulator or pipeline.manifest.active_model_version != MODEL:
     raise RuntimeError('Lovelies requires the real registered YuNet/SFace model')
 AUTH_DISTANCE = float(os.environ.get('FACE_AUTH_MAX_COSINE_DISTANCE', '0.35'))
@@ -45,8 +45,11 @@ class Capture(Strict):
     sha256: str = Field(pattern=r'^[0-9a-f]{64}$')
 
 class Template(Strict):
-    protocol: Literal['lovelies-face-template-v1']
+    protocol: Literal['lovelies-face-template-v2']
     model_id: Literal['opencv-yunet-sface-2021dec-v1']
+    engine_space: Literal['lovelies-sface-openface-still-v1']
+    engine_artifact_sha256: str = Field(pattern=r'^[0-9a-f]{64}$')
+    processing_fingerprint: str = Field(pattern=r'^[0-9a-f]{64}$')
     embeddings: list[FaceEmbedding] = Field(min_length=3, max_length=3)
 
 class Profile(Strict):
@@ -69,6 +72,38 @@ class FaceJob(Strict):
     reference_digest: str | None = Field(default=None, pattern=r'^[0-9a-f]{64}$')
 
 
+class Binding(Strict):
+    engine_space: Literal['lovelies-sface-openface-still-v1']
+    engine_artifact_sha256: str = Field(pattern=r'^[0-9a-f]{64}$')
+    processing_fingerprint: str = Field(pattern=r'^[0-9a-f]{64}$')
+    request_id: str = Field(pattern=r'^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$')
+    request_sha256: str = Field(pattern=r'^[0-9a-f]{64}$')
+
+
+class BoundFaceJob(FaceJob, Binding):
+    pass
+
+
+class BoundPhotoJob(PhotoJob, Binding):
+    pass
+
+
+def bound_result(job, handler) -> dict:
+    payload = job.model_dump(exclude_unset=True)
+    expected = hashlib.sha256(json.dumps(
+        {key: value for key, value in payload.items() if key != 'request_sha256'},
+        sort_keys=True, separators=(',', ':'), ensure_ascii=False, allow_nan=False,
+    ).encode()).hexdigest()
+    if job.request_sha256 != expected or job.engine_artifact_sha256 != pipeline.identity['engine_artifact_sha256'] or \
+            job.processing_fingerprint != pipeline.identity['processing_fingerprint']:
+        raise HTTPException(409, 'inference_binding_invalid')
+    # Defaults absent from the original JSON must not change its hash. Bound
+    # models therefore hash only fields explicitly present in the wire payload.
+    binding = {name: payload.pop(name) for name in Binding.model_fields}
+    model = FaceJob if isinstance(job, BoundFaceJob) else PhotoJob
+    return {**handler(model.model_validate(payload)), **binding}
+
+
 def bytes_for(capture: Capture) -> bytearray:
     try:
         data = bytearray(base64.b64decode(capture.bytes_base64, validate=True))
@@ -86,8 +121,13 @@ def template_for(encoded: str, expected: str) -> Template:
         data = bytearray(base64.b64decode(encoded, validate=True))
         if not data or len(data) > 65536 or hashlib.sha256(data).hexdigest() != expected:
             raise ValueError()
-        return Template.model_validate_json(bytes(data))
-    except (ValueError, TypeError):
+        value = parse_json_object(bytes(data), 'Registered reference')
+        if value.get('protocol') != TEMPLATE_PROTOCOL or value.get('engine_space') != ENGINE_SPACE or \
+                value.get('engine_artifact_sha256') != pipeline.identity['engine_artifact_sha256'] or \
+                value.get('processing_fingerprint') != pipeline.identity['processing_fingerprint']:
+            raise HTTPException(409, 'registered_reference_space_incompatible')
+        return Template.model_validate(value)
+    except (ValueError, TypeError, ModelPolicyError):
         raise HTTPException(409, 'registered_reference_invalid') from None
     finally:
         data[:] = bytes(len(data))
@@ -101,7 +141,8 @@ def photo_result(job: PhotoJob) -> dict:
             object_key='private-source', content_type=job.source.mime), bytes(raw))
         candidates = []
         by_profile = {}
-        if len({p.account_id for p in job.profiles}) != len(job.profiles):
+        if len({p.account_id for p in job.profiles}) != len(job.profiles) or \
+                len({p.profile_id for p in job.profiles}) != len(job.profiles):
             raise HTTPException(400, 'duplicate_profile')
         for profile in job.profiles:
             reference = template_for(profile.template_base64, profile.template_digest)
@@ -144,10 +185,14 @@ def face_result(job: FaceJob) -> dict:
     if len(job.captures) != expected or len({c.sha256 for c in job.captures}) != expected:
         raise HTTPException(400, 'capture_count_invalid')
     vectors = []
+    total_bytes = 0
     try:
         for index, capture in enumerate(job.captures):
             raw = bytes_for(capture)
             try:
+                total_bytes += len(raw)
+                if total_bytes > 8 * 1024 * 1024:
+                    raise HTTPException(413, 'capture_bytes_exceeded')
                 try:
                     result = pipeline.process_photo_bytes(PhotoProcessRequest(event_id='private-face',
                         asset_id='private-capture', object_key='private-capture', content_type=capture.mime), bytes(raw))
@@ -180,7 +225,9 @@ def face_result(job: FaceJob) -> dict:
                     for v in reference.embeddings) <= AUTH_DISTANCE for a in vectors)
                 if not matched:
                     return {'identity_verified':False, 'reference_match':False, 'model_id':MODEL}
-            template = Template(protocol=TEMPLATE_PROTOCOL, model_id=MODEL,
+            template = Template(protocol=TEMPLATE_PROTOCOL, model_id=MODEL, engine_space=ENGINE_SPACE,
+                engine_artifact_sha256=pipeline.identity['engine_artifact_sha256'],
+                processing_fingerprint=pipeline.identity['processing_fingerprint'],
                 embeddings=[v.tolist() for v in vectors])
             encoded = json.dumps(template.model_dump(), sort_keys=True, separators=(',',':')).encode()
             return {'identity_verified':True, 'enrollment_verified':True, 'model_id':MODEL,
@@ -207,16 +254,26 @@ async def failed_request(_request: Request, _error: Exception):
     return JSONResponse({'error':{'code':'inference_failed'}},status_code=503)
 @http_app.get('/ready')
 def ready():
-    return {'service':'lovelies-ml-face','model_version':MODEL,'model_artifacts':pipeline.artifact_integrity,
-        'matching_evaluation':pipeline.evaluation_status,'authentication':'registered_face_comparison','liveness_required':False}
+    if not pipeline.ready():
+        raise HTTPException(503, 'inference_unavailable')
+    return {'service':'lovelies-ml-face','available':True,'model_id':MODEL,
+        'model_version':MODEL,'engine_space':ENGINE_SPACE,
+        'engine_artifact_sha256':pipeline.identity['engine_artifact_sha256'],
+        'processing_fingerprint':pipeline.identity['processing_fingerprint'],
+        'model_hashes':pipeline.identity['model_sha256'],
+        'capabilities':['face_registration','face_comparison','face_replacement','photo_processing'],
+        'limits':{'image_bytes':MAX_IMAGE,'image_pixels':40_000_000,'faces':100,'profiles':1000,
+            'face_body_bytes':12*1024*1024,'photo_body_bytes':40*1024*1024},
+        'model_artifacts':pipeline.artifact_integrity,'matching_evaluation':pipeline.evaluation_status,
+        'authentication':'registered_face_comparison','liveness_required':False}
 @http_app.post('/internal/photo')
-async def process(job: PhotoJob):
-    return await run_in_threadpool(photo_result, job)
+async def process(job: BoundPhotoJob):
+    return await run_in_threadpool(bound_result, job, photo_result)
 @http_app.post('/internal/face')
-async def verify(job: FaceJob):
-    return await run_in_threadpool(face_result, job)
+async def verify(job: BoundFaceJob):
+    return await run_in_threadpool(bound_result, job, face_result)
 
 app = MlHttpBoundary(http_app, max_requests=2, body_timeout_seconds=30)
 app.limits.update({'/internal/photo':40*1024*1024, '/internal/face':12*1024*1024})
 
-app = authenticated_transport(app)
+app = authenticated_transport(app, require_service_auth=True)

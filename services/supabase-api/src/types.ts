@@ -24,6 +24,7 @@ export interface SupabaseEnv {
     PHOTOS: PrivateBucket; QUARANTINE: PrivateBucket; PRIVACY_EXPORTS: PrivateBucket;
     PHOTO_JOBS: {send(body:unknown):Promise<void>};
     FACE_AUTH_VERIFIER?: ServiceFetcher; PHOTO_PROCESSOR?: ServiceFetcher;
+    MODEL_SERVICE_READINESS?: (signal?:AbortSignal)=>Promise<boolean>;
     APP_ENV: string; AUTH_SIGNING_SECRET?:string; MEDIA_SIGNING_SECRET?:string;
     FACE_AUTH_POLICY_VERSION?:string; PHOTO_MODEL_VERSION?:string; PHOTO_CONSENT_POLICY_VERSION?:string;
     STORE_VERIFIER?:ServiceFetcher; PUSH_SERVICE?:ServiceFetcher;

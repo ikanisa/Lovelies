@@ -61,11 +61,15 @@ endpoint regularly from an authenticated scheduler to drain jobs and run cleanup
 retention and outbox recovery. A missing scheduler is a deployment blocker.
 Job failure is reported without logging SQL, captures, tokens or provider bodies.
 
-The copied private ML boundary now reads source/reference bytes from Supabase
-and calls the existing `/internal/face` and `/internal/photo` inference contract
-through a pinned authenticated HTTPS service. Existing model artifacts and real
-ML qualification remain necessary. Supabase Edge does not run the heavy face
-model itself. No Cloudflare runtime binding is needed by this API.
+The private ML boundary reads source/reference bytes from Supabase and calls
+`/internal/face` and `/internal/photo` through pinned authenticated HTTPS.
+The [OpenFace integration](openface-integration.md) adds an account-free still
+worker and explicit v2 references. Readiness queries the loaded worker; requests
+and results bind package/model/processing identities and exact request hashes.
+Unknown legacy reference spaces fail closed, with existing data preserved.
+Real recognition evaluation and the exact target image qualification remain
+necessary. Supabase Edge does not run the heavy face model itself. No Cloudflare
+runtime binding is needed by this API.
 
 ## Native API
 

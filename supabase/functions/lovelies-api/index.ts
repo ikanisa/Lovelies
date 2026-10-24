@@ -28,8 +28,10 @@ for(const name of ['AUTH_SIGNING_SECRET','MEDIA_SIGNING_SECRET','FACE_AUTH_POLIC
 }
 const inferenceUrl=value('ML_INFERENCE_URL'),inferenceSecret=value('ML_INFERENCE_SECRET');
 if(inferenceUrl&&inferenceSecret){
-  const model=createModelServices({PHOTOS:env.PHOTOS,QUARANTINE:env.QUARANTINE,MODEL_VERSION:env.PHOTO_MODEL_VERSION??'',FACE_AUTH_POLICY_VERSION:env.FACE_AUTH_POLICY_VERSION??'',INFERENCE:new AuthenticatedService(inferenceUrl,inferenceSecret)});
-  env.FACE_AUTH_VERIFIER=model.face;env.PHOTO_PROCESSOR=model.photo;
+  const model=createModelServices({PHOTOS:env.PHOTOS,QUARANTINE:env.QUARANTINE,MODEL_VERSION:env.PHOTO_MODEL_VERSION??'',FACE_AUTH_POLICY_VERSION:env.FACE_AUTH_POLICY_VERSION??'',
+    ENGINE_ARTIFACT_SHA256:value('ML_INFERENCE_ARTIFACT_SHA256'),PROCESSING_FINGERPRINT:value('ML_INFERENCE_PROCESSING_SHA256'),
+    INFERENCE:new AuthenticatedService(inferenceUrl,inferenceSecret)});
+  env.FACE_AUTH_VERIFIER=model.face;env.PHOTO_PROCESSOR=model.photo;env.MODEL_SERVICE_READINESS=model.ready;
 }
 for(const [urlName,secretName,binding] of [['STORE_VERIFIER_URL','STORE_VERIFIER_SECRET','STORE_VERIFIER'],['PUSH_SERVICE_URL','PUSH_SERVICE_SECRET','PUSH_SERVICE']] as const){
   const url=value(urlName),secret=value(secretName);if(url&&secret)env[binding]=new AuthenticatedService(url,secret);

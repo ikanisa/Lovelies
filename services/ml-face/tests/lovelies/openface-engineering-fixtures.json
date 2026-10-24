@@ -1,0 +1,74 @@
+{
+  "scope": "Existing supplied screen-reference engineering assets and deterministic encoded derivatives. No optical camera, representative recognition, civil identity, hosted, device or release acceptance. No image/vector/template/credential payload.",
+  "baseline_source_commit": "9b9fda2ae918b73881fe7d1b318f570f0a97d2d8",
+  "source_bindings": [
+    {
+      "path": "services/ml-face/src/pictured_ml_face/components.py",
+      "bytes": 13380,
+      "sha256": "1e4967c585f1c5b105f58666a0f9f1a4752d1a38ce745bea3898322f98dc9e0c"
+    },
+    {
+      "path": "services/ml-face/src/pictured_ml_face/pipeline.py",
+      "bytes": 23015,
+      "sha256": "77bb3c46f73d62b7f5cbdb57cb6549857918b04b2c5dbfdb6bf7107de0f8df03"
+    },
+    {
+      "path": "services/ml-face/src/pictured_ml_face/detection_strategy.py",
+      "bytes": 8712,
+      "sha256": "e292501a82e5ce913195cb5e2b0d77e33875ff94bec848e1d6f5b9c745d2c221"
+    },
+    {
+      "path": "services/ml-face/src/pictured_ml_face/vector_matching.py",
+      "bytes": 9539,
+      "sha256": "71442771700c372db38af66edc3b86479f165e7030ca71330b96bf5253c5fe5b"
+    },
+    {
+      "path": "services/ml-face/models/face_detection_yunet_2023mar.onnx",
+      "bytes": 232589,
+      "sha256": "8f2383e4dd3cfbb4553ea8718107fc0423210dc964f9f4280604804ed2552fa4"
+    },
+    {
+      "path": "services/ml-face/models/face_recognition_sface_2021dec.onnx",
+      "bytes": 38696353,
+      "sha256": "0ba9fbfa01b5270c96627c4ef784da859931e02f04419c829e83484087c34e79"
+    }
+  ],
+  "canonical_assets": {
+    "A": {
+      "path": "shared/assets/person02.jpg",
+      "sha256": "741a2116814f551e535b0fbcf916f8c28278685de45163663d803ef2c035925d"
+    },
+    "B": {
+      "path": "shared/assets/portrait.jpg",
+      "sha256": "a11bc440ccf87045e06644cc296cf0ece4bc21ec13e9bd9eddeb563fa295109c"
+    }
+  },
+  "encodings": {
+    "A-0..2/B-0..2": "RGB source; brightness factor1+index*.025; JPEG quality93-index",
+    "returning": "RGB source A-0/B-0; brightness factor1.035; JPEG quality89",
+    "replacement": "RGB source corresponding A-index/B-index; brightness factor1.015; JPEG quality91-index",
+    "P1": "A-0 bytes",
+    "P3": "B-0 bytes",
+    "P2/P4": "white RGB1200x700 canvas; A/B each resized within330x330 maintaining aspect; offsets(150,180)/(800,180), P4 swaps positions; JPEG quality93"
+  },
+  "expected_face_counts": {
+    "A-0": 1,
+    "A-1": 1,
+    "A-2": 1,
+    "B-0": 1,
+    "B-1": 1,
+    "B-2": 1,
+    "P1": 1,
+    "P2": 2,
+    "P3": 1,
+    "P4": 2,
+    "no-face": 0,
+    "png": 1,
+    "webp": 1,
+    "exif-right": 1,
+    "mirror": 1,
+    "large-2400": 0,
+    "small-face-2400": 1
+  },
+  "large_image_scope": "large-2400 is a high upscale of the low-resolution source and neither original nor consumer detects a face; it checks consistent bounded decode/no-match behavior. small-face-2400 is a 2400x1600 canvas containing one detected small source face."
+}

@@ -182,6 +182,7 @@ RUN apt-get update \
 COPY --from=libde265-builder /native/out/libde265-0.deb /tmp/libde265-0.deb
 RUN dpkg -i /tmp/libde265-0.deb && rm /tmp/libde265-0.deb
 COPY pyproject.toml uv.lock* ./
+COPY vendor ./vendor
 RUN uv sync --frozen --no-dev --no-install-project \
     --no-install-package opencv-python-headless --no-binary-package pillow-heif
 
@@ -289,6 +290,11 @@ PYINSTALL
 COPY src /app/src
 COPY models /app/models
 COPY licenses /app/licenses
+COPY vendor /app/vendor
+# Reused unminimized runtimes must receive the exact locked, pure-Python still
+# consumer too. Never replace the patched native OpenCV/NumPy/Pillow libraries.
+COPY --from=builder /app/.venv/lib/python3.13/site-packages/openface_still /app/.venv/lib/python3.13/site-packages/openface_still
+COPY --from=builder /app/.venv/lib/python3.13/site-packages/openface_still-0.1.0.dist-info /app/.venv/lib/python3.13/site-packages/openface_still-0.1.0.dist-info
 COPY pyproject.toml uv.lock /app/
 COPY Dockerfile /usr/local/share/doc/lovelies-build/Dockerfile
 RUN chmod -R a+rX,go-w /app /usr/local/share/doc/lovelies-pydantic /usr/local/share/doc/lovelies-security-native /usr/local/share/doc/lovelies-minimization \

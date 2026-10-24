@@ -9,22 +9,24 @@ pinned: false
 
 # Lovelies private face and photo service
 
-This directory contains the copied MEMORIES detector, recognizer, pipeline,
-tests, license notices and model artifacts, plus the Lovelies private adapter.
-The Cloudflare Container image is built from `Dockerfile` and is called only
-through the private `FaceVerifier` and `PhotoProcessor` service entrypoints in
-`services/ml-container-worker`.
+This directory contains Lovelies' private still-image consumer, the pinned
+account-free `openface-still` wheel, model artifacts, and retained MEMORIES
+pipeline/tests/notices for compatibility evidence. Supabase is the application
+authority. Its `model-services.ts` adapter calls this service over authenticated
+private HTTP; native apps never receive the inference credential.
 
 ## Active Lovelies adapter
 
-`src/lovelies_ml_face` loads the real OpenCV Zoo YuNet and SFace ONNX artifacts
-identified by `models/model-manifest.json` (`opencv-yunet-sface-2021dec-v1`).
+`src/lovelies_ml_face` uses the isolated OpenFace still worker to load the real
+OpenCV Zoo YuNet and SFace artifacts, identified by `models/manifest.json` and
+the retained `models/model-manifest.json` (`opencv-yunet-sface-2021dec-v1`).
 `POST /internal/face` compares the three initial registration selfies or one
 fresh sign-in selfie against the account's existing private reference.
 `POST /internal/photo` returns reduced private previews and matching proposals;
 it never issues media grants. Account/session authorization, consent, challenge
-consumption, reference ownership and recipient approval stay in the Cloudflare
-Worker and SQLite-backed Durable Object.
+consumption, reference ownership and recipient approval stay in Lovelies' custom
+Supabase API and private PostgreSQL/Storage transactions. These are custom app
+accounts, not Supabase managed Auth accounts.
 
 Face comparison runs entirely in this backend service. The mobile apps capture
 and send signed selfie bytes but do not compute face embeddings or decide an
@@ -32,25 +34,41 @@ identity match. There is no OTP, liveness/PAD, blink, movement challenge,
 head-turn verification or camera-injection qualification in this flow.
 Registration pose labels are capture guidance only.
 
-The private adapter exposes `GET /ready` for its Worker and the two
+The private adapter exposes authenticated `GET /ready` and the two
 `/internal/*` routes. It disables OpenAPI and public face-directory routes.
-The original `pictured_ml_face` package remains as imported source and retains
-its existing compatibility behavior; Cloudflare does not route public requests
-to it.
+Readiness probes the loaded resident worker and reports exact package/model and
+consumer processing identities, permitted operations and limits. Every request
+and result binds these identities plus a request UUID and canonical payload hash.
+The original `pictured_ml_face` implementation remains preserved as the comparison
+baseline and supplies the unchanged distance/margin matcher and strict vector
+validation. No original account application, broker, registry, video or PAD engine
+is initialized by the new consumer.
+
+Templates use `lovelies-face-template-v2`, explicitly binding
+`lovelies-sface-openface-still-v1`, the package hash and the complete processing
+fingerprint. Legacy v1 or differently fingerprinted references return
+`registered_reference_space_incompatible`; they are never relabelled or compared
+across spaces. Existing account/profile rows and stored references are preserved.
+The existing authenticated profile-removal/cleanup and re-enrollment path is the
+explicit transition for this slice. Traffic must remain on the preserved old
+engine until that transition and exact new runtime are qualified for rollout.
 
 ## Model provenance and status
 
 The model manifest records OpenCV Zoo's YuNet MIT and SFace Apache-2.0 notices.
 Both model files and their SHA-256 values are included in the manifest and are
-verified against the MEMORIES checkout. Runtime internet access is disabled for
-the Container. No external inference endpoint or donor credential is used.
+verified by the still worker before loading. The private worker receives only
+admitted still bytes and owns no account/storage/service credentials. Runtime
+internet access remains disabled by the image recipe. No donor credential is used.
 
-The model's representative evaluation and operating approvals are still marked
-`monitored_pilot` / blocked in the copied evaluation evidence. Passing local
+The preserved implementation's representative evaluation remains historical.
+The new engine reports `not_evaluated` (or explicitly configured `monitored_pilot`)
+and cannot reuse the old report as new-space production approval. Passing local
 model tests proves that these artifacts load and run against the tested sample;
 it does not qualify matching thresholds for general use, establish identity,
-or authorize deployment. Hosted bindings, model evaluation, completion of the
-full Container build and deployment remain separate gates.
+or authorize deployment. Hosted integration, purpose-specific evaluation,
+completion of the exact target image build/scan and deployment remain separate
+gates. See [the integration record](../../docs/openface-integration.md).
 
 ## Local checks
 

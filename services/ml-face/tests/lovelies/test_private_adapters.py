@@ -3,6 +3,7 @@ import base64
 import hashlib
 import io
 import json
+import os
 from pathlib import Path
 import uuid
 
@@ -66,7 +67,7 @@ def test_actual_photo_matching_proposes_only_bound_profiles_and_returns_normaliz
     assert not any(k in photo for k in ['grants','access_token','embeddings','faces'])
 
 def test_boundaries_hide_raw_validation_input_and_public_face_directory_is_absent():
-    with TestClient(app,raise_server_exceptions=False) as client:
+    with TestClient(app,raise_server_exceptions=False,headers={'Authorization':'Bearer '+os.environ['ML_INFERENCE_SECRET']}) as client:
         ready=client.get('/ready');assert ready.status_code==200 and ready.json()['liveness_required'] is False
         response=client.post('/internal/face',json={'raw_vector':'SECRET-TEST-VECTOR'})
         assert response.status_code==400 and 'SECRET-TEST-VECTOR' not in response.text

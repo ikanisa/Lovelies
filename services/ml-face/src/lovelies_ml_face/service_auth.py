@@ -34,5 +34,8 @@ class ServiceAuthentication:
         await self.app(current, receive, send)
 
 
-def authenticated_transport(app):
-    return ServiceAuthentication(app, mode=os.environ.get("ML_DEPLOYMENT_TRANSPORT", "private_binding"), secret=os.environ.get("ML_INFERENCE_SECRET"))
+def authenticated_transport(app, *, require_service_auth=False):
+    mode = os.environ.get("ML_DEPLOYMENT_TRANSPORT", "https_service")
+    if require_service_auth and mode != "https_service":
+        raise RuntimeError("The Supabase inference consumer requires service authentication")
+    return ServiceAuthentication(app, mode=mode, secret=os.environ.get("ML_INFERENCE_SECRET"))

@@ -33,7 +33,7 @@ type Attempt = {
     lease_until: number | null;
 };
 function imageType(type: unknown): string {
-    if (typeof type !== 'string' || !/^image\/(jpeg|png|webp|gif)$/.test(type))
+    if (typeof type !== 'string' || !/^image\/(jpeg|png|webp)$/.test(type))
         throw new ApiError(415, 'image_required');
     return type;
 }
@@ -42,8 +42,6 @@ function imageMagic(bytes: Uint8Array, type: string): boolean {
         return bytes.length >= 3 && bytes[0] === 255 && bytes[1] === 216 && bytes[2] === 255;
     if (type === 'image/png')
         return bytes.length >= 8 && [137, 80, 78, 71, 13, 10, 26, 10].every((byte, index) => bytes[index] === byte);
-    if (type === 'image/gif')
-        return bytes.length >= 6 && ['GIF87a', 'GIF89a'].includes(new TextDecoder().decode(bytes.subarray(0, 6)));
     return bytes.length >= 12 && new TextDecoder().decode(bytes.subarray(0, 4)) === 'RIFF' && new TextDecoder().decode(bytes.subarray(8, 12)) === 'WEBP';
 }
 function positive(value: unknown, maximum: number): number {

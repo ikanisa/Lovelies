@@ -6,3 +6,6 @@ import os
 # Unit fixtures intentionally use deterministic, non-image byte strings. This flag
 # is rejected by FacePipeline whenever the process declares a production runtime.
 os.environ.setdefault("ML_USE_DETERMINISTIC_SIMULATOR", "true")
+# Ephemeral test-only transport credential. Production has no default secret.
+os.environ.setdefault("ML_DEPLOYMENT_TRANSPORT", "https_service")
+os.environ.setdefault("ML_INFERENCE_SECRET", "test-only-service-secret-no-external-access-32")

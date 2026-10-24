@@ -22,6 +22,24 @@ async function put(h,owner,id,bytes,offset=0,expected=200,hash){
 }
 const status=(h,owner,id)=>h.json(`/uploads/${id}/status`,{token:owner.token});
 
+test('unsupported GIF admission creates no asset, transfer or processing job on either upload path',async t=>{
+  const {h,owner}=await setup(t),bytes=new TextEncoder().encode('GIF89a-synthetic-unsupported-image');
+  const counts=async()=>Object.fromEntries(await Promise.all(['assets','upload_transfers','processing_attempts','photo_job_outbox','job_queue'].map(async table=>
+    [table,(await h.storage.exec(`SELECT count(*) n FROM ${table}`))[0].n])));
+  const before=await counts();
+  for(const path of ['/uploads/session','/community/upload-session'])for(const resumable of [false,true]){
+    const response=await h.json(path,{token:owner.token,body:{source:'personal',content_type:'image/gif',byte_size:bytes.length,
+      operation_key:key(),...(resumable?{resumable:true,checksum_sha256:await sha256(bytes)}:{})}},415);
+    assert.equal(response.error.code,'image_required');assert.deepEqual(await counts(),before);
+  }
+  // Keep the existing 20 MiB reservation contract for every supported encoding.
+  for(const content_type of ['image/jpeg','image/png','image/webp']){
+    const result=await h.json('/uploads/session',{token:owner.token,body:{source:'personal',content_type,
+      byte_size:20*1024*1024,operation_key:key()}},201);
+    assert.equal(result.maximum_bytes,20*1024*1024);
+  }
+});
+
 test('durable partial progress and original reserve key survive response loss; exact chunks replay without duplicates',async t=>{
   const {h,owner}=await setup(t),bytes=image(),{receipt:r,payload}=await reserve(h,owner,bytes);
   assert.equal(r.bytes_received,0);assert.equal(r.maximum_chunk_bytes,CHUNK);assert.equal(r.processing_creates_access,false);

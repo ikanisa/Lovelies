@@ -1,0 +1,14 @@
+{
+  "distribution": "openface-still",
+  "version": "0.1.0",
+  "wheel": "openface_still-0.1.0-py3-none-any.whl",
+  "wheel_sha256": "6d1c65ce23679009b8f7531f8d1ca94e33e96167179724c3bae841c628799a50",
+  "wheel_bytes": 29877,
+  "engine_artifact_sha256": "173b43d8f5d259f022f4fd83b7c658fc7ade3070e36321965436cd59f2da909f",
+  "source_repository": "OpenFace/platform",
+  "source_baseline": "af25134370c94d577a825e1a8632171b17f13bd6",
+  "reference_space": "lovelies-sface-openface-still-v1",
+  "models_bundled": false,
+  "stock_opencv_dependency": false,
+  "source_commit": "bf898c4425247be287530c670cef041c6dc6b289"
+}

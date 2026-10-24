@@ -1,7 +1,11 @@
 // Adapted from the active private ML boundary. Storage stays in Supabase;
 // inference is an authenticated private HTTP service, never a Cloudflare binding.
 import type {PrivateBucket,PrivateObject,ServiceFetcher} from './types.ts';
-interface Env { PHOTOS:PrivateBucket; QUARANTINE:PrivateBucket; MODEL_VERSION:string; FACE_AUTH_POLICY_VERSION:string; INFERENCE:ServiceFetcher; }
+import {stable} from './types.ts';
+import {INFERENCE_ENGINE_SPACE,INFERENCE_MODEL_ID,INFERENCE_LIMITS,INFERENCE_REPLY_BYTES,INFERENCE_READY_BYTES,
+  exactBinding,exactReadiness,sha256Identity,type InferenceBinding} from './inference-contract.ts';
+interface Env { PHOTOS:PrivateBucket; QUARANTINE:PrivateBucket; MODEL_VERSION:string; FACE_AUTH_POLICY_VERSION:string;
+  ENGINE_ARTIFACT_SHA256?:string; PROCESSING_FINGERPRINT?:string; INFERENCE:ServiceFetcher; }
 class BoundaryError extends Error { constructor(readonly status:number, readonly code:string) { super(code); } }
 const json=(value:unknown,status=200)=>Response.json(value,{status,headers:{'Cache-Control':'no-store','X-Content-Type-Options':'nosniff'}});
 const record=(value:unknown):Record<string,any>=>{
@@ -23,36 +27,76 @@ const base64=(bytes:Uint8Array):string=>{
   let value=''; for(let start=0; start<bytes.length; start+=32768) value+=String.fromCharCode(...bytes.subarray(start,start+32768));
   return btoa(value);
 };
-async function bounded(stream:ReadableStream<Uint8Array>|null,limit:number):Promise<Uint8Array> {
+async function bounded(stream:ReadableStream<Uint8Array>|null,limit:number,signal?:AbortSignal):Promise<Uint8Array> {
   if (!stream) throw new BoundaryError(400,'body_required');
   const reader=stream.getReader(),chunks:Uint8Array[]=[];let length=0;
+  const stop=()=>{void reader.cancel(signal?.reason).catch(()=>{});};
+  signal?.addEventListener('abort',stop,{once:true});
   try {
-    for(;;){const n=await reader.read();if(n.done) break; length+=n.value.length;
+    if(signal?.aborted)throw new BoundaryError(503,'inference_cancelled');
+    for(;;){const n=await reader.read();if(signal?.aborted)throw new BoundaryError(503,'inference_cancelled');if(n.done) break; length+=n.value.length;
       if(length>limit){n.value.fill(0);throw new BoundaryError(413,'body_too_large');}chunks.push(n.value);}
     const bytes=new Uint8Array(length); let cursor=0;for(const c of chunks){bytes.set(c,cursor);cursor+=c.length;}return bytes;
-  } finally {for(const c of chunks)c.fill(0);void reader.cancel().catch(()=>{});reader.releaseLock();}
+  } finally {signal?.removeEventListener('abort',stop);for(const c of chunks)c.fill(0);void reader.cancel().catch(()=>{});reader.releaseLock();}
 }
-async function body(request:Request,limit:number):Promise<Record<string,any>> {
+async function body(request:Request,limit:number,signal?:AbortSignal):Promise<Record<string,any>> {
   if(!/^application\/json(?:;|$)/i.test(request.headers.get('content-type')??''))throw new BoundaryError(415,'json_required');
-  const bytes=await bounded(request.body,limit);
+  const bytes=await bounded(request.body,limit,signal);
   try{return record(JSON.parse(new TextDecoder('utf-8',{fatal:true}).decode(bytes)));}
   catch(error){if(error instanceof BoundaryError)throw error;throw new BoundaryError(400,'invalid_json');}
   finally{bytes.fill(0);}
 }
 function configured(env:Env):void {
-  if(env.MODEL_VERSION!=='opencv-yunet-sface-2021dec-v1' || !env.PHOTOS || !env.QUARANTINE ||
+  if(env.MODEL_VERSION!==INFERENCE_MODEL_ID || !sha256Identity(env.ENGINE_ARTIFACT_SHA256) ||
+    !sha256Identity(env.PROCESSING_FINGERPRINT) || !env.PHOTOS || !env.QUARANTINE ||
     !env.INFERENCE)throw new BoundaryError(503,'face_model_unavailable');
 }
-async function inference(env:Env,path:string,payload:Record<string,unknown>,shard:string):Promise<Record<string,any>> {
+async function serviceReply(env:Env,path:string,payload?:Uint8Array,limit=INFERENCE_REPLY_BYTES,signal?:AbortSignal):Promise<Record<string,any>> {
   configured(env); const controller=new AbortController();let timer:ReturnType<typeof setTimeout>;
-  const timeout=new Promise<never>((_,reject)=>{timer=setTimeout(()=>{controller.abort();reject(new BoundaryError(503,'inference_timeout'));},55_000);});
+  const timeout=new Promise<never>((_,reject)=>{timer=setTimeout(()=>{reject(new BoundaryError(503,'inference_timeout'));controller.abort();},55_000);});
+  const stop=()=>controller.abort(signal?.reason);
+  signal?.addEventListener('abort',stop,{once:true});
+  const aborted=new Promise<never>((_,reject)=>{
+    const rejectAbort=()=>reject(new BoundaryError(503,'inference_cancelled'));
+    controller.signal.addEventListener('abort',rejectAbort,{once:true});
+  });
+  void aborted.catch(()=>{});
+  let response:Response|undefined;
   try {
-    const request=new Request(`http://container${path}`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload),redirect:'manual',signal:controller.signal});
+    if(signal?.aborted)throw new BoundaryError(503,'inference_cancelled');
+    const request=new Request(`http://container${path}`,{method:payload?'POST':'GET',headers:{'Content-Type':'application/json'},
+      ...(payload?{body:new Uint8Array(payload).buffer}:{}),redirect:'manual',signal:controller.signal});
     const service=env.INFERENCE;
-    const response=await Promise.race([service.fetch(request),timeout]);
+    const pending=service.fetch(request);
+    void pending.then(late=>{if(controller.signal.aborted)void late.body?.cancel().catch(()=>{});},()=>{});
+    response=await Promise.race([pending,timeout,aborted]);
     if(!response.ok||response.redirected)throw new BoundaryError(response.status===401?401:503,'inference_unavailable');
-    return await Promise.race([body(response as unknown as Request,6*1024*1024),timeout]);
-  }finally{clearTimeout(timer!);controller.abort();}
+    try{return await Promise.race([body(response as unknown as Request,limit,controller.signal),timeout,aborted]);}
+    catch(error){if(error instanceof BoundaryError&&error.code==='inference_timeout')throw error;throw new BoundaryError(503,'inference_result_invalid');}
+  }finally{clearTimeout(timer!);signal?.removeEventListener('abort',stop);controller.abort();if(response?.body&&!response.body.locked)void response.body.cancel().catch(()=>{});}
+}
+async function inference(env:Env,path:string,payload:Record<string,unknown>,signal?:AbortSignal):Promise<Record<string,any>> {
+  configured(env);
+  const identity={...payload,engine_space:INFERENCE_ENGINE_SPACE,engine_artifact_sha256:env.ENGINE_ARTIFACT_SHA256!,
+    processing_fingerprint:env.PROCESSING_FINGERPRINT!,request_id:crypto.randomUUID()};
+  // Canonical JSON sorts object keys recursively, preserves array order, and uses
+  // only the wire contract's strings/integers. The digest includes the fresh ID.
+  const request_sha256=await digest(new TextEncoder().encode(stable(identity)));
+  const binding:InferenceBinding={engine_space:identity.engine_space,engine_artifact_sha256:identity.engine_artifact_sha256,
+    processing_fingerprint:identity.processing_fingerprint,request_id:identity.request_id,request_sha256};
+  const encoded=new TextEncoder().encode(stable({...identity,request_sha256}));
+  const limit=path==='/internal/face'?INFERENCE_LIMITS.face_body_bytes:INFERENCE_LIMITS.photo_body_bytes;
+  try {
+    if(encoded.length>limit)throw new BoundaryError(413,'inference_body_too_large');
+    const result=await serviceReply(env,path,encoded,INFERENCE_REPLY_BYTES,signal);
+    if(!exactBinding(result,binding))throw new BoundaryError(503,'inference_result_invalid');
+    return result;
+  }finally{encoded.fill(0);}
+}
+async function readiness(env:Env,signal?:AbortSignal):Promise<Record<string,any>> {
+  const result=await serviceReply(env,'/ready',undefined,INFERENCE_READY_BYTES,signal);
+  if(!exactReadiness(result,env.ENGINE_ARTIFACT_SHA256!,env.PROCESSING_FINGERPRINT!))throw new BoundaryError(503,'inference_not_ready');
+  return result;
 }
 async function privateObject(bucket:PrivateBucket,key:string,limit:number,expected:string,owned:Uint8Array[]):Promise<{bytes:Uint8Array,object:PrivateObject}> {
   const object=await bucket.get(key);
@@ -77,26 +121,39 @@ async function handlePhoto(request:Request,env:Env):Promise<Response> {
     const mime=source.object.httpMetadata?.contentType;
     if(!['image/jpeg','image/png','image/webp'].includes(mime??''))throw new BoundaryError(415,'image_required');
     const profiles=[];const seen=new Set<string>();
+    const sourcePayload={mime,sha256:p.source_checksum_sha256,bytes_base64:base64(source.bytes)};
+    // Count the complete wire form incrementally before retaining a large
+    // snapshot. Base64 is ASCII; the other fields use their actual UTF-8 size.
+    // UUID/digest placeholders have exactly the lengths of the final binding.
+    let serializedBytes=new TextEncoder().encode(stable({asset_id:p.asset_id,
+      source:{...sourcePayload,bytes_base64:''},profiles:[],engine_space:INFERENCE_ENGINE_SPACE,
+      engine_artifact_sha256:env.ENGINE_ARTIFACT_SHA256,processing_fingerprint:env.PROCESSING_FINGERPRINT,
+      request_id:'0'.repeat(36),request_sha256:'0'.repeat(64)})).length+sourcePayload.bytes_base64.length;
     for(const v of p.profiles){const profile=record(v);identifier(profile.account_id);identifier(profile.profile_id);hash(profile.template_digest);
       if(seen.has(profile.account_id)||profile.model_id!==env.MODEL_VERSION||typeof profile.revision!=='string'||!profile.revision||profile.revision.length>128||
         typeof profile.template_key!=='string'||!profile.template_key.startsWith(`registered-face/${profile.account_id}/${profile.profile_id}/`))
         throw new BoundaryError(409,'matching_profile_invalid');
       seen.add(profile.account_id);
       const template=await privateObject(env.PHOTOS,profile.template_key,64*1024,profile.template_digest,owned);
-      profiles.push({account_id:profile.account_id,profile_id:profile.profile_id,revision:profile.revision,model_id:profile.model_id,
-        template_digest:profile.template_digest,template_base64:base64(template.bytes)});
+      try {
+        const admitted={account_id:profile.account_id,profile_id:profile.profile_id,revision:profile.revision,model_id:profile.model_id,
+          template_digest:profile.template_digest,template_base64:base64(template.bytes)};
+        serializedBytes+=new TextEncoder().encode(stable(admitted)).length+(profiles.length?1:0);
+        if(serializedBytes>INFERENCE_LIMITS.photo_body_bytes)throw new BoundaryError(413,'inference_body_too_large');
+        profiles.push(admitted);
+      }finally{template.bytes.fill(0);owned.pop();}
     }
-    const result=await inference(env,'/internal/photo',{asset_id:p.asset_id,source:{mime,sha256:p.source_checksum_sha256,bytes_base64:base64(source.bytes)},profiles},'photo-primary');
+    const result=await inference(env,'/internal/photo',{asset_id:p.asset_id,source:sourcePayload,profiles},request.signal);
     if(result.model_version!==env.MODEL_VERSION||!Array.isArray(result.matches)||result.matches.length>p.profiles.length)throw new BoundaryError(503,'processor_result_invalid');
     return json({attempt_id:p.attempt_id,nonce:p.nonce,asset_id:p.asset_id,source_version:p.source_version,
       source_checksum_sha256:p.source_checksum_sha256,model_version:p.model_version,preview:result.preview,matches:result.matches});
   }finally{for(const b of owned)b.fill(0);}
 }
 async function handleFace(request:Request,env:Env):Promise<Response> {
-  if(request.method==='GET'&&new URL(request.url).pathname==='/ready'){configured(env);return json({available:true,model_version:env.MODEL_VERSION,liveness_required:false});}
+  if(request.method==='GET'&&new URL(request.url).pathname==='/ready')return json(await readiness(env,request.signal));
   if(request.method!=='POST'||new URL(request.url).pathname!=='/v1/face-auth/verify')throw new BoundaryError(404,'route_not_found');
   configured(env); if(!env.FACE_AUTH_POLICY_VERSION)throw new BoundaryError(503,'face_policy_unavailable');
-  const raw=await bounded(request.body,12*1024*1024),owned:Uint8Array[]=[raw];
+  const raw=await bounded(request.body,INFERENCE_LIMITS.face_body_bytes,request.signal),owned:Uint8Array[]=[raw];
   try {
     const form=await new Request('http://private/face',{method:'POST',headers:{'Content-Type':request.headers.get('content-type')??''},body:new Uint8Array(raw).buffer}).formData();
     const encoded=form.get('envelope');if(typeof encoded!=='string'||encoded.length>65536)throw new BoundaryError(400,'invalid_envelope');
@@ -122,7 +179,7 @@ async function handleFace(request:Request,env:Env):Promise<Response> {
       const reference=new Uint8Array(await file.arrayBuffer());owned.push(reference);
       if(await digest(reference)!==e.reference_digest)throw new BoundaryError(409,'reference_changed');reference_base64=base64(reference);}
     const result=await inference(env,'/internal/face',{reference_mode:e.reference_mode,captures,
-      ...(reference_base64?{reference_base64,reference_digest:e.reference_digest}:{})},'face-primary');
+      ...(reference_base64?{reference_base64,reference_digest:e.reference_digest}:{})},request.signal);
     if(Date.now()>=e.expires_at||result.model_id!==env.MODEL_VERSION)throw new BoundaryError(409,'face_challenge_changed');
     if(typeof result.identity_verified!=='boolean')throw new BoundaryError(503,'face_result_invalid');
     const verdict={...e,verified_at:Date.now(),expires_at:e.expires_at,receipt_id:crypto.randomUUID().replaceAll('-',''),identity_verified:result.identity_verified};
@@ -140,7 +197,10 @@ async function handleFace(request:Request,env:Env):Promise<Response> {
       return json({...verdict,capture_rejection:{code:rejection.code,capture_index:rejection.capture_index},
         ...(required===1||replacing?{reference_match:false}:{}),...(required===3?{enrollment_verified:false}:{})});
     }
-    if(required===1)return json({...verdict,reference_match:result.reference_match===true});
+    if(required===1){
+      if(typeof result.reference_match!=='boolean'||result.reference_match!==result.identity_verified)throw new BoundaryError(503,'face_result_invalid');
+      return json({...verdict,reference_match:result.reference_match});
+    }
     if(result.identity_verified!==true)return json({...verdict,enrollment_verified:false,...(replacing?{reference_match:false}:{})});
     if(replacing&&result.reference_match!==true)return json({...verdict,identity_verified:false,reference_match:false,enrollment_verified:false});
     if(result.enrollment_verified!==true||typeof result.template_base64!=='string'||result.template_base64.length>87384)throw new BoundaryError(503,'face_result_invalid');
@@ -155,8 +215,9 @@ async function boundary(request:Request,handler:()=>Promise<Response>):Promise<R
   finally{if(request.body&&!request.body.locked)await request.body.cancel().catch(()=>{});}
 }
 
-export function createModelServices(env:Env):{face:ServiceFetcher;photo:ServiceFetcher}{
+export function createModelServices(env:Env):{face:ServiceFetcher;photo:ServiceFetcher;ready:(signal?:AbortSignal)=>Promise<boolean>}{
   return {
+    ready:async signal=>{try{await readiness(env,signal);return true;}catch{return false;}},
     face:{fetch:async(input,init)=>{const request=input instanceof Request?input:new Request(input,init);return boundary(request,()=>handleFace(request,env));}},
     photo:{fetch:async(input,init)=>{const request=input instanceof Request?input:new Request(input,init);return boundary(request,()=>handlePhoto(request,env));}},
   };

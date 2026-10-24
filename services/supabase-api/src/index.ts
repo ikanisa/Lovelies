@@ -25,7 +25,7 @@ function failure(error:unknown):Response {
 }
 function missingConfiguration(env:SupabaseEnv):string[]{
   const missing:string[]=[];
-  for(const key of ['PHOTOS','QUARANTINE','PRIVACY_EXPORTS','PHOTO_JOBS','FACE_AUTH_VERIFIER','PHOTO_PROCESSOR'] as const)if(!env[key])missing.push(key);
+  for(const key of ['PHOTOS','QUARANTINE','PRIVACY_EXPORTS','PHOTO_JOBS','FACE_AUTH_VERIFIER','PHOTO_PROCESSOR','MODEL_SERVICE_READINESS'] as const)if(!env[key])missing.push(key);
   for(const key of ['AUTH_SIGNING_SECRET','MEDIA_SIGNING_SECRET','INTERNAL_MAINTENANCE_SECRET'] as const)if((env[key]?.length??0)<32)missing.push(key);
   for(const key of ['FACE_AUTH_POLICY_VERSION','PHOTO_MODEL_VERSION','PUBLIC_API_BASE_URL'] as const)if(!env[key]?.trim())missing.push(key);
   return missing;
@@ -70,7 +70,13 @@ export function createHandler(ctx:AppContext):(request:Request)=>Promise<Respons
       }else if(request.method==='GET'&&(path==='/health'||path==='/ready')){
         const row=await ctx.db.one<{version:number}>('SELECT MAX(version) version FROM schema_versions'),ready=row?.version===currentSchemaVersion;
         const missing=path==='/ready'?missingConfiguration(ctx.env):[];
-        response=ok({status:ready&&!missing.length?'ok':'unavailable',service:'lovelies-supabase-api',database:'supabase_postgresql',database_ready:ready,schema_version:row?.version,missing,verification:'registered_face_comparison',liveness_required:false,hosted_provider_acceptance:false},ready&&!missing.length?200:503);
+        let inferenceReady:boolean|undefined;
+        if(path==='/ready'){
+          try{inferenceReady=!!ctx.env.MODEL_SERVICE_READINESS&&await ctx.env.MODEL_SERVICE_READINESS(request.signal)===true;}catch{inferenceReady=false;}
+        }
+        const available=ready&&!missing.length&&inferenceReady!==false;
+        response=ok({status:available?'ok':'unavailable',service:'lovelies-supabase-api',database:'supabase_postgresql',database_ready:ready,schema_version:row?.version,missing,
+          ...(path==='/ready'?{inference_ready:inferenceReady}:{}),verification:'registered_face_comparison',liveness_required:false,hosted_provider_acceptance:false},available?200:503);
       }else if(path==='/_internal/maintenance'&&request.method==='POST'){
         if(!await maintenanceAuthorized(request,ctx.env))throw new ApiError(404,'route_not_found');
         const result=await maintain(ctx);response=ok(result,result.maintenance_errors||result.failed?503:200);
