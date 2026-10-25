@@ -191,6 +191,10 @@ export async function reviewPrivacyRequest(ctx: AppContext, actor: Actor, id: st
             throw new ApiError(403, 'independent_privacy_review_required');
         const now = ctx.now(), status = decision === 'approve' ? 'queued' : 'rejected';
         (await ctx.db.run('UPDATE privacy_requests SET status=?,reviewed_by=?,reviewed_at=?,review_reason=? WHERE id=?', status, actor.accountId, now, rationale, id));
+        // The terminal outcome and its read-only status window share one commit;
+        // best-effort dispatch/maintenance cannot be required to preserve access.
+        if (decision === 'reject' && request.request_type === 'delete')
+            await ctx.db.run('UPDATE privacy_deletion_status_receipts SET expires_at=? WHERE request_id=? AND revoked_at IS NULL', now + deletionReceiptTtl, id);
         if (decision === 'approve')
             (await ctx.db.run('INSERT INTO outbox(id,account_id,category,entity_id,event_key,payload_json,created_at) VALUES(?,?,?,?,?,?,?)', crypto.randomUUID(), request.subject_id, 'privacy', id, 'privacy:' + id + ':approved', stable({ request_id: id }), now));
         (await audit(ctx, actor, request.subject_id, 'privacy.review.' + decision, id));
@@ -604,7 +608,9 @@ export async function processPrivacyRequest(ctx: AppContext, actor: ExecutionAut
                     (await failLease(ctx, id, token, writers ? 'privacy_writer_unresolved' : 'privacy_cleanup_remaining'));
                     return { privacy_request: summary((await currentRequest(ctx, id)), ctx.now()), cleanup_remaining: remaining, writers_remaining: writers };
                 }
-                (await ctx.db.run("UPDATE privacy_requests SET status='completed',completed_at=?,failure_code=NULL,execution_token=NULL,lease_until=NULL WHERE id=?", ctx.now(), id));
+                const completedAt = ctx.now();
+                (await ctx.db.run("UPDATE privacy_requests SET status='completed',completed_at=?,failure_code=NULL,execution_token=NULL,lease_until=NULL WHERE id=?", completedAt, id));
+                await ctx.db.run('UPDATE privacy_deletion_status_receipts SET expires_at=? WHERE request_id=? AND revoked_at IS NULL', completedAt + deletionReceiptTtl, id);
                 (await ctx.db.run("DELETE FROM media_write_intents WHERE account_id=? AND status='settled'", current.subject_id));
                 (await audit(ctx, actor, current.subject_id, 'privacy.erasure.completed', id));
                 return { privacy_request: summary((await currentRequest(ctx, id)), ctx.now()), inventory_version: 'cloudflare-account-erasure-v1' };

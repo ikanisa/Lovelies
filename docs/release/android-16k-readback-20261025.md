@@ -44,6 +44,17 @@ protection. It does not waive the final artifact's checks, qualify x86 execution
 or establish a Play submission verdict. An upstream version change is not made
 solely to remove this formula flag.
 
+The later deletion-receipt correction produces Debug APK
+`fdbf644bfc4c833d39e91454aa2a0876bdb9811d73b3b7ae1f1744f91c2159af`.
+All eight native-library payloads are byte-identical to the qualified package.
+Fresh inspection of this APK passes LOAD alignment/congruence, all eight stored-ZIP
+offsets and the same Build Tools 37 alignment command. The selected ARM64 native
+operation evidence therefore retains its exact library-byte scope. No current
+whole-app runtime or signed release acceptance is inferred from that comparison.
+Its receipt is
+`deletion-receipt-native-contract-20261025/android-current-package-attempt1/native-packaging-readback.json`,
+SHA-256 `1e7569b97141c0c3db38713fde015e2e1299d6363e0b12d88227bb84f9347168`.
+
 ## Preserved receipts and remaining gate
 
 External evidence root:

@@ -19,7 +19,7 @@
     "apple_paid_agreement": "Reviewedv127 accepted; Active effective2026-10-24 to2027-06-21. Separate billing/provider qualification remains.",
     "intended_audience": {
       "minimum_age": 13,
-      "guardian_consent_required_for": "13–17",
+      "guardian_consent_required_for": "13\u201317",
       "under13": "excluded",
       "implementation_status": "new_age_and_guardian_gate_required_not_yet_qualified",
       "retention_decision": "Ownerdelegated proportionate schedule and implementation to coordinator; currentdefaults are not policyacceptance."
@@ -387,7 +387,7 @@
         "debug_build_for_testing": "passed",
         "simulator_app_and_V4_runner": "passed",
         "source_inputs_unchanged": true,
-        "runtime": "Preserved35ca/c6 normal1–18 diagnostic checkpoint: all custom checks/exits pass; native failures retained, including shared banner later addressed. No newdc3 whole-matrix pass inferred.",
+        "runtime": "Preserved35ca/c6 normal1\u201318 diagnostic checkpoint: all custom checks/exits pass; native failures retained, including shared banner later addressed. No newdc3 whole-matrix pass inferred.",
         "runner_sha256": "c6e8536a13514b282cc2cd16b5fedfe0d9b7d34b6f180e58722a0aeac7da2711",
         "simulator_build_receipt": "verification/supabase-release-20261023/post-localization-ui/simulator-build.json"
       },
@@ -2151,18 +2151,16 @@
     "status": "in_progress_not_release_accepted",
     "current_checkpoint": "docs/release/audience-readiness-20261024.md",
     "api_aggregate": {
-      "receipt": "verification/supabase-release-20261023/audience-implementation/backend-aggregate-attempt8/result.json",
-      "receipt_sha256": "666a953392dc0215db3eea20cf5b9837cef2393ecd8ce0bf02a398ae625ad228",
-      "tests": 291,
-      "passed": 290,
+      "receipt": "/Volumes/PRO-G40/Projects/Lovelies/verification/deletion-receipt-terminal-fix-20261025/full-api-attempt1/result.json",
+      "receipt_sha256": "c97a4c3f91b8d521618d54d1ae942553461c9ea354db5a67e20e0b556a798b69",
+      "tests": 293,
+      "passed": 292,
       "failed": 0,
       "skipped": 1,
+      "source_inputs": 86,
       "source_unchanged": true,
-      "source_inputs": 85,
-      "typescript_passed": true,
-      "actual_deno_check_passed": true,
-      "actual_postgres_and_deno_ran": true,
-      "scope": "Final current serial API regression and types with actual loopback PostgreSQL and Deno, plus six affected PGlite cases, after negative writer-clock preservation guard. Controlled inference; no hosted/device/store acceptance."
+      "canonical_adoption": "/Volumes/PRO-G40/Projects/Lovelies/verification/deletion-receipt-terminal-fix-20261025/canonical-adoption.json",
+      "scope": "ActualPostgreSQL/currentcachedDeno/TypeScript regression in isolatedsourcecopy, adoptedbyexact86inputequality. No hosted/store or post-fix private-model integration acceptance."
     },
     "android_prior_collection_fix_snapshot": {
       "tests": 171,
@@ -2373,9 +2371,14 @@
       "scope": "Actual test-scoped Keychain/SecureEnclave, same-account three-declared-still enrollment, logout/retained-key return login, replay denial and owned namespace cleanup; isolated stack only.",
       "post_test_existing_app_data_equality_verified": false,
       "limits": [
-        "Phone disconnected after test; exact post-test persistent-file readback pending.",
+        "Original9filebaseline andcomplete10fileposttestcopy preserved; encryptedprofile/fourcommonpathsbyte-identical, StoreKit timestamp and OSscene/snapshot differences accounted.",
+        "DefaultKeychain equality not inventoried; test-owned namespace cleanup is separate.",
         "No optical camera, representative recognition, Apple authentication-policy or store-installed update acceptance."
-      ]
+      ],
+      "post_test_preservation_readback_resolved": true,
+      "preservation_receipt": "/Volumes/PRO-G40/Projects/Lovelies/verification/isolated-supabase-connected-20261025-attempt1/ios-installed-data-posttest-20261025-attempt2/reconciliation.json",
+      "preservation_receipt_sha256": "4c1a540ed3d829090c5a8c6626eab9a588e0f876a5591a59a27deb969d1c483f",
+      "existing_encrypted_profile_byte_identical": true
     },
     "android_16k_native_snapshot": {
       "receipt": "/Volumes/PRO-G40/Projects/Lovelies/verification/android-16k-runtime-20261025-attempt3/result.json",
@@ -2400,6 +2403,88 @@
       "scope": "Grouped Simulator app/c8r5runner and unsignedRelease compile. Separate smoke/normal40-42 pass, largest40/42 pass; largest41 retains two unwaived native contrast flags. Full current-source matrix incomplete.",
       "later_settings_candidate_sha256": "08840043df514c878b9987ca6a4e3b44ccd220076bd919b4f41effdff0fc5f02",
       "later_settings_candidate_runtime_verified": false
+    },
+    "api_aggregate_before_terminal_receipt_fix": {
+      "receipt": "verification/supabase-release-20261023/audience-implementation/backend-aggregate-attempt8/result.json",
+      "receipt_sha256": "666a953392dc0215db3eea20cf5b9837cef2393ecd8ce0bf02a398ae625ad228",
+      "tests": 291,
+      "passed": 290,
+      "failed": 0,
+      "skipped": 1,
+      "source_unchanged": true,
+      "source_inputs": 85,
+      "typescript_passed": true,
+      "actual_deno_check_passed": true,
+      "actual_postgres_and_deno_ran": true,
+      "scope": "Final current serial API regression and types with actual loopback PostgreSQL and Deno, plus six affected PGlite cases, after negative writer-clock preservation guard. Controlled inference; no hosted/device/store acceptance."
+    },
+    "terminal_receipt_contract": {
+      "document": "docs/release/deletion-receipt-contract-20261025.md",
+      "producer_vector_sha256": "4b4e831057cee2ec419dabb9d6c78f90bdaeb914e0c910eb954ae807bbc50fc1",
+      "android": {
+        "receipt": "/Volumes/PRO-G40/Projects/Lovelies/verification/deletion-receipt-native-contract-20261025/android-corrected-full-attempt1/result.json",
+        "receipt_sha256": "5c82512af40a6c7f1b90a4e86a86e6fa3fa0f86b6657564e46421e8567ec05cb",
+        "tests": 194,
+        "failed": 0,
+        "skipped": 0
+      },
+      "ios_original_hosts": {
+        "receipt": "/Volumes/PRO-G40/Projects/Lovelies/verification/deletion-receipt-native-contract-20261025/ios-original-hosts-current-attempt1/result.json",
+        "receipt_sha256": "f225b632b8c03eb9387945d9e08967be3ca53c5ac1a59aee0b540dc99030a24a",
+        "controlled_checks": 1020
+      },
+      "ios_guest": {
+        "receipt": "/Volumes/PRO-G40/Projects/Lovelies/verification/deletion-receipt-native-contract-20261025/ios-candidate-guest-attempt2/result.json",
+        "receipt_sha256": "cf11a6a53bb9dd7f0e51bac4e6323a7921e1299378216d3d79853df307a68194",
+        "controlled_checks": 101,
+        "canonical_adoption": "/Volumes/PRO-G40/Projects/Lovelies/verification/deletion-receipt-native-contract-20261025/ios-canonical-adoption.json"
+      },
+      "ios_private_media": {
+        "receipt": "/Volumes/PRO-G40/Projects/Lovelies/verification/deletion-receipt-native-contract-20261025/ios-private-media-current-attempt1/result.json",
+        "receipt_sha256": "0a7d0652ac4a72fd60477278f097f1d65cd6d7c612806cd537233d35fc207ba4",
+        "controlled_checks": 35
+      },
+      "limits": "Separate controlled scopes; not a combined unique test count, hosted runtime, physical camera, provider or store acceptance.",
+      "canonical_api_typechecks": {
+        "receipt": "/Volumes/PRO-G40/Projects/Lovelies/verification/deletion-receipt-terminal-fix-20261025/canonical-checks/result.json",
+        "receipt_sha256": "725923a045b8df9488599864a0d241c0d1eb0e24fabdd9ed7d92a92df345e69a",
+        "source_inputs": 86,
+        "source_unchanged": true,
+        "typescript_passed": true,
+        "cached_deno_passed": true
+      },
+      "android_current_packages": {
+        "receipt": "/Volumes/PRO-G40/Projects/Lovelies/verification/deletion-receipt-native-contract-20261025/android-current-package-attempt1/result.json",
+        "receipt_sha256": "34b94d4d94a23aa7d76f3b8d3fdd5b5297a647cdea5a9440d36a5ccf555db157",
+        "source_inputs": 102,
+        "source_unchanged": true,
+        "app_sha256": "fdbf644bfc4c833d39e91454aa2a0876bdb9811d73b3b7ae1f1744f91c2159af",
+        "test_app_sha256": "6084079169bd3ec02850fc4ea942543fbd8bb42f36fae26c998dc945889c43ba",
+        "native_packaging_receipt": "/Volumes/PRO-G40/Projects/Lovelies/verification/deletion-receipt-native-contract-20261025/android-current-package-attempt1/native-packaging-readback.json",
+        "native_packaging_receipt_sha256": "1e7569b97141c0c3db38713fde015e2e1299d6363e0b12d88227bb84f9347168",
+        "eight_library_payloads_identical_previous_runtime": true,
+        "whole_app_runtime_or_signed_release_accepted": false
+      }
+    },
+    "ios_grouped_ui_round3": {
+      "receipt": "/Volumes/PRO-G40/Projects/Lovelies/verification/ios-grouped-ui-round3-20261025-attempt2/build-result.json",
+      "receipt_sha256": "1b73e37c8b7154ae6b1a3690216880fd504370f5387a2bc4e694e2bec1572ef6",
+      "runtime_handoff": "/Volumes/PRO-G40/Projects/Lovelies/verification/ios-grouped-ui-round3-20261025-attempt2/runtime-handoff.json",
+      "runtime_handoff_sha256": "10b14579738e888c74d089d09cf1253043471af5806191ea2fa92091992fee7c",
+      "source_inputs": 205,
+      "app_files": 181,
+      "runner_files": 13,
+      "simulator_dylib_sha256": "9cd73e51b78d68bca67661e9e56cb8970eec767a229f697e9157ea4955eafbc8",
+      "unsigned_release_executable_sha256": "55b3e746bc05d67cec8a45e763c06f3df7151c72f2014133ac94c9ea353739bd",
+      "runner_source_sha256": "9314b6eb71efd115e7afd5501e7b47b73178846ca799e668c8302c7e87a22682",
+      "scope": "Simulatorapp/onefilerunner/unsignedRelease compile andad-hocQAstagingpassed; runtimequalification pending. Sixknownpreflightgates retained. AppadditionalfileisCodeResources; noimageassetbyteschanged."
+    },
+    "connected_source_checkpoint": {
+      "commit": "96fc61b4ccfc510b222344539c05d9326a1a33e6",
+      "pushed": true,
+      "files": 20,
+      "document": "docs/openface-integration-continuation.md",
+      "scope": "FiveAndroid/fourSwiftHTTP namedpasses andonephysicaliPhonetest inexactprefixed85/API/runtime/poolscopes; subsequentTTL/nativeconsumerchanges notsilentlyincluded."
     }
   }
 }

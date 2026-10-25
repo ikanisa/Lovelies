@@ -178,10 +178,23 @@ data class GuestDeletionReceipt(
                 requestExpired && status in setOf("completed","rejected","cancelled") ||
                 receipt.expiresAt<=created || receipt.requestExpiresAt<=created || receipt.requestExpiresAt>receipt.expiresAt ||
                 reviewed!=null && reviewed<created || finished!=null && finished<created)throw LiveFailure("deletion_receipt_invalid")
+            val terminalStatuses=setOf("completed","rejected","cancelled")
+            val terminalAt=if(status=="completed")finished else if(status in terminalStatuses)reviewed else null
+            val day=86400000L
+            val finalDeadline=try { Math.addExact(terminalAt ?: created,30L*day) }
+                catch(problem: ArithmeticException) { throw LiveFailure("deletion_receipt_invalid") }
             intent.receipt?.let { previous ->
-                if(previous.requestId!=receipt.requestId || previous.createdAt!=created || previous.expiresAt!=receipt.expiresAt ||
+                val finalRebase=previous.status !in terminalStatuses && terminalAt!=null &&
+                    receipt.expiresAt==finalDeadline && receipt.expiresAt>=previous.expiresAt
+                if(previous.requestId!=receipt.requestId || previous.createdAt!=created ||
+                    previous.expiresAt!=receipt.expiresAt && !finalRebase ||
                     previous.requestExpiresAt!=receipt.requestExpiresAt || previous.completed && !completed)throw LiveFailure("deletion_receipt_scope_changed")
             }
+            val maximumRequest=try { Math.addExact(created,30L*day+120000L) }
+                catch(problem: ArithmeticException) { throw LiveFailure("deletion_receipt_invalid") }
+            val maximumReceipt=try { Math.addExact(finalDeadline,120000L) }
+                catch(problem: ArithmeticException) { throw LiveFailure("deletion_receipt_invalid") }
+            if(receipt.requestExpiresAt>maximumRequest || receipt.expiresAt>maximumReceipt)throw LiveFailure("deletion_receipt_invalid")
             return receipt
         }
     }

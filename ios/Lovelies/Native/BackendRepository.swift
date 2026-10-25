@@ -1197,7 +1197,7 @@ actor BackendRepository {
         let original = record.originalCredentials != nil
         let canRetry = record.status == nil && original && Date() < record.preparedAt.addingTimeInterval(30 * 86400)
         let receiptCurrent = record.status.map { $0.receiptExpiresAt > Date() } ?? false
-        let unavailable = record.statusUnavailable || (record.status.map { $0.receiptExpiresAt <= Date() } ?? !canRetry)
+        let unavailable = record.statusUnavailable || (record.status.map { $0.isTerminal && $0.receiptExpiresAt <= Date() } ?? false)
         let canResume = original && receiptCurrent && !unavailable && record.status?.completed != true &&
             (record.status?.requestExpired == true || [.rejected, .cancelled].contains(record.status?.phase ?? .pendingApproval))
         return NativeGuestDeletionSummary(status: record.status, statusUnavailable: unavailable, canRetryOriginal: canRetry, canResumeSetup: canResume)

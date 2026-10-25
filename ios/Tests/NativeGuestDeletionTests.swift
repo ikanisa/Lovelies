@@ -169,7 +169,48 @@ private actor GuestFixture: NativeTransport {
     private static func restart(_ values: (BackendRepository, GuestFixture, GuestSecrets, GuestSigner)) -> BackendRepository {
         BackendRepository(origin: origin, transport: values.1, secrets: values.2, signer: values.3)
     }
+    private static func verifyCurrentProducerReceipts() async throws {
+        let file=URL(fileURLWithPath: #filePath).deletingLastPathComponent().appendingPathComponent("Fixtures/guest-deletion-producer-vectors.json")
+        let document=try WireValue.decoded(Data(contentsOf: file))
+        func input(_ name: String) throws -> (NativeGuestDeletionRecord, WireValue) {
+            let value=document["cases"][name]
+            let record=NativeGuestDeletionRecord(accountID: try value.uuid("account_id"), operationKey: try value.uuid("operation_key"), statusToken: "lvd_" + String(repeating: "a", count: 64), apiOrigin: origin.absoluteString, reason: nil, preparedAt: Date(), originalCredentials: nil)
+            return (record,value["wire"])
+        }
+        let (newRecord,newWire)=try input("initial")
+        let initial=try NativeGuestDeletionStatus(newWire,record:newRecord)
+        try require(initial.requestExpiresAt == initial.receiptExpiresAt && abs(initial.requestExpiresAt.timeIntervalSince(initial.createdAt)-30*86400)<0.01,"actual producer uses equal thirty-day creation deadlines")
+        var savedNew=newRecord;savedNew.status=initial;try savedNew.validate(origin:origin)
+        for outcome in ["completed","rejected"] {
+            let (record,pendingWire)=try input("pending_before_"+outcome)
+            let pending=try NativeGuestDeletionStatus(pendingWire,record:record)
+            try require(pending.receiptExpiresAt<Date() && !pending.requestExpired,"overdue nonterminal producer receipt stays trackable")
+            var before=record;before.status=pending;try before.validate(origin:origin)
+            let (_,finalWire)=try input(outcome)
+            let final=try NativeGuestDeletionStatus(finalWire,record:before)
+            let terminalAt=outcome == "completed" ? final.completedAt! : final.reviewedAt!
+            try require(abs(final.receiptExpiresAt.timeIntervalSince(terminalAt)-30*86400)<0.01 && final.receiptExpiresAt>pending.receiptExpiresAt,"actual final outcome establishes bounded thirty-day status window")
+            var saved=before;saved.status=final;try saved.validate(origin:origin)
+            try require(try NativeGuestDeletionStatus(finalWire,record:saved)==final,"same final reply is stable")
+            var renewal=finalWire.object!
+            let formatter=ISO8601DateFormatter();formatter.formatOptions=[.withInternetDateTime,.withFractionalSeconds]
+            renewal["deletion_status"] = .object(["expires_at":.string(formatter.string(from:final.receiptExpiresAt.addingTimeInterval(86400)))])
+            try await rejects("polling cannot renew final receipt") { _ = try NativeGuestDeletionStatus(.object(renewal),record:saved) }
+            try await rejects("final transition cannot invent a longer receipt") { _ = try NativeGuestDeletionStatus(.object(renewal),record:before) }
+            var switched=finalWire.object!,row=finalWire["privacy_request"].object!;row["id"] = .string(UUID().uuidString);switched["privacy_request"] = .object(row)
+            try await rejects("producer receipt cannot switch request") { _ = try NativeGuestDeletionStatus(.object(switched),record:before) }
+            if outcome == "completed" { try await rejects("confirmed completion cannot regress") { _ = try NativeGuestDeletionStatus(pendingWire,record:saved) } }
+        }
+        let (record,pendingWire)=try input("pending_before_completed")
+        var held=record;held.status=try NativeGuestDeletionStatus(pendingWire,record:record)
+        let secrets=GuestSecrets();try secrets.write("guest-deletion-receipt",data:JSONEncoder().encode(held))
+        let fixture=GuestFixture(secrets:secrets),repository=BackendRepository(origin:origin,transport:fixture,secrets:secrets,signer:GuestSigner())
+        let bootstrap=try await repository.bootstrap(),summary=await repository.guestDeletionSummary(),anonymous=await fixture.anonymousCount
+        try require(bootstrap==nil && summary?.statusUnavailable==false && summary?.status?.phase == .pendingApproval,"retained overdue pending receipt remains available for a server status check")
+        try require(anonymous==0,"restoring overdue pending status never creates a replacement guest")
+    }
     static func main() async throws {
+        try await verifyCurrentProducerReceipts()
         let fence = NativePublicationFence(generation: 4)
         try require(fence.permits(currentGeneration: 4, cancelled: false), "current UI generation may publish")
         try require(!fence.permits(currentGeneration: 5, cancelled: false), "already-returned old UI response cannot publish after logout generation")

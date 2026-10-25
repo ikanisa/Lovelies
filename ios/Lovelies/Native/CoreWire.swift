@@ -232,21 +232,35 @@ struct NativeGuestDeletionStatus: Codable, Sendable, Equatable {
         completedAt = request["completed_at"] == .null ? nil : try Self.date(request["completed_at"])
         requestExpiresAt = try Self.date(value["request_expires_at"])
         receiptExpiresAt = try Self.date(value["deletion_status"]["expires_at"])
-        if let previous = record.status {
-            guard previous.createdAt == createdAt, previous.requestExpiresAt == requestExpiresAt,
-                  previous.receiptExpiresAt == receiptExpiresAt else { throw NativeAPIError.invalidResponse }
-        }
         self.requestExpired = requestExpired
         failureCode = request["failure_code"].string
-        guard request["failure_code"] == .null || (failureCode != nil && failureCode!.count <= 128),
-              createdAt <= now.addingTimeInterval(120), requestExpiresAt > createdAt,
-              requestExpiresAt <= createdAt.addingTimeInterval(7 * 86400 + 120),
-              receiptExpiresAt > requestExpiresAt, receiptExpiresAt > now,
-              receiptExpiresAt <= createdAt.addingTimeInterval(30 * 86400 + 120),
-              reviewedAt == nil || (reviewedAt! >= createdAt && reviewedAt! <= now.addingTimeInterval(120)),
-              completedAt == nil || (completedAt! >= createdAt && completedAt! <= now.addingTimeInterval(120)),
+        guard request["failure_code"] == .null || failureCode != nil,
               completed == (phase == .completed), completed == (completedAt != nil),
-              !requestExpired || (![.completed, .rejected, .cancelled].contains(phase) && requestExpiresAt <= now.addingTimeInterval(120)) else { throw NativeAPIError.invalidResponse }
+              validDeletionTimes(now: now, requireUnexpiredFinalReceipt: true) else { throw NativeAPIError.invalidResponse }
+        if let previous = record.status {
+            // Only the first confirmed final outcome may establish its own
+            // thirty-day window; polling cannot renew that window.
+            let finalRebase = !previous.isTerminal && isTerminal && finalOutcomeAt.map {
+                abs(receiptExpiresAt.timeIntervalSince($0.addingTimeInterval(30 * 86400))) < 0.01 && receiptExpiresAt >= previous.receiptExpiresAt
+            } == true
+            guard previous.createdAt == createdAt, previous.requestExpiresAt == requestExpiresAt,
+                  previous.receiptExpiresAt == receiptExpiresAt || finalRebase,
+                  !previous.completed || completed else { throw NativeAPIError.invalidResponse }
+        }
+    }
+    var isTerminal: Bool { [.completed, .rejected, .cancelled].contains(phase) }
+    private var finalOutcomeAt: Date? { phase == .completed ? completedAt : ([.rejected, .cancelled].contains(phase) ? reviewedAt : nil) }
+    func validDeletionTimes(now: Date, requireUnexpiredFinalReceipt: Bool) -> Bool {
+        createdAt <= now.addingTimeInterval(120) && requestExpiresAt > createdAt &&
+        requestExpiresAt <= createdAt.addingTimeInterval(30 * 86400 + 120) &&
+        receiptExpiresAt >= requestExpiresAt && receiptExpiresAt > createdAt &&
+        receiptExpiresAt <= (finalOutcomeAt ?? createdAt).addingTimeInterval(30 * 86400 + 120) &&
+        (!requireUnexpiredFinalReceipt || !isTerminal || receiptExpiresAt > now) &&
+        (reviewedAt == nil || (reviewedAt! >= createdAt && reviewedAt! <= now.addingTimeInterval(120))) &&
+        (completedAt == nil || (completedAt! >= createdAt && completedAt! <= now.addingTimeInterval(120))) &&
+        ((completedAt != nil) == (phase == .completed)) &&
+        (failureCode == nil || failureCode!.count <= 128) &&
+        (!requestExpired || (!isTerminal && requestExpiresAt <= now.addingTimeInterval(120)))
     }
     private static func date(_ value: WireValue) throws -> Date {
         guard let text = value.string, text.count <= 40 else { throw NativeAPIError.invalidResponse }
@@ -273,12 +287,7 @@ struct NativeGuestDeletionRecord: Codable, Sendable {
               preparedAt <= now.addingTimeInterval(120),
               reason == nil || (reason!.count <= 1000 && !reason!.unicodeScalars.contains { $0.value < 32 && ![9, 10, 13].contains($0.value) }),
               status == nil || (status!.operationKey == operationKey && UUID(uuidString: status!.requestID) != nil &&
-                status!.createdAt <= now.addingTimeInterval(120) &&
-                status!.receiptExpiresAt > status!.requestExpiresAt && status!.requestExpiresAt > status!.createdAt &&
-                status!.requestExpiresAt <= status!.createdAt.addingTimeInterval(7 * 86400 + 120) && status!.receiptExpiresAt <= status!.createdAt.addingTimeInterval(30 * 86400 + 120) &&
-                (status!.reviewedAt == nil || (status!.reviewedAt! >= status!.createdAt && status!.reviewedAt! <= now.addingTimeInterval(120))) &&
-                (status!.completedAt == nil || (status!.completedAt! >= status!.createdAt && status!.completedAt! <= now.addingTimeInterval(120))) &&
-                (status!.completedAt != nil) == (status!.phase == .completed) && (!status!.requestExpired || ![.completed, .rejected, .cancelled].contains(status!.phase))),
+                status!.validDeletionTimes(now: now, requireUnexpiredFinalReceipt: false)),
               status?.completed != true || originalCredentials == nil else { throw NativeAPIError.invalidResponse }
         try originalCredentials?.validateAnonymousRecovery(accountID: accountID)
     }

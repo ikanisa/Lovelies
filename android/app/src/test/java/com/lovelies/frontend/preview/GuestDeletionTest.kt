@@ -27,6 +27,45 @@ class GuestDeletionTest {
         try { block();fail("Expected a bound, fail-closed rejection") }
         catch(problem: LiveFailure) { if(code!=null)assertEquals(code,problem.code) }
     }
+    private fun producerRecord(name: String): Pair<GuestDeletionRecord, WireObject> {
+        val value=GuestDeletionProducerVectors.values.getValue(name)
+        return GuestDeletionRecord(origin,NativeProtocol.id(value["account_id"]),NativeProtocol.text(value["operation_key"]),"lvd_"+"a".repeat(64)) to NativeProtocol.obj(value["wire"])
+    }
+    @Test fun currentProducerThirtyDayReceiptAndOverduePendingStateRemainRestorable() {
+        val bytes=requireNotNull(javaClass.classLoader!!.getResourceAsStream("guest-deletion-producer-vectors.json")).use { it.readBytes() }
+        val hash=java.security.MessageDigest.getInstance("SHA-256").digest(bytes).joinToString("") { "%02x".format(it.toInt() and 255) }
+        assertEquals(GuestDeletionProducerVectors.sourceSha256,hash)
+        val (initial,wire)=producerRecord("initial")
+        val receipt=GuestDeletionReceipt.parse(wire,initial)
+        assertEquals(receipt.createdAt+30L*86400000,receipt.requestExpiresAt)
+        assertEquals(receipt.requestExpiresAt,receipt.expiresAt)
+        GuestDeletionRecord.restore(initial.copy(receipt=receipt).wire(),origin,null,null)
+        val (old,pending)=producerRecord("pending_before_completed")
+        val oldReceipt=GuestDeletionReceipt.parse(pending,old)
+        assertFalse(oldReceipt.requestExpired);assertTrue(oldReceipt.expiresAt<System.currentTimeMillis())
+        assertFalse(old.copy(receipt=oldReceipt).statusUnavailable)
+        GuestDeletionRecord.restore(old.copy(receipt=oldReceipt).wire(),origin,null,null)
+    }
+    @Test fun currentProducerFinalOutcomeRebasesOnceAndCannotRenewOrChangeRequestScope() {
+        for(outcome in listOf("completed","rejected")) {
+            val (intent,pending)=producerRecord("pending_before_"+outcome)
+            val before=intent.copy(receipt=GuestDeletionReceipt.parse(pending,intent))
+            val finalWire=producerRecord(outcome).second
+            val final=GuestDeletionReceipt.parse(finalWire,before)
+            val end=if(outcome=="completed")requireNotNull(final.completedAt) else requireNotNull(final.reviewedAt)
+            assertEquals(end+30L*86400000,final.expiresAt);assertTrue(final.expiresAt>before.receipt!!.expiresAt)
+            val saved=before.copy(receipt=final)
+            GuestDeletionRecord.restore(saved.wire(),origin,null,null)
+            assertEquals(final,GuestDeletionReceipt.parse(finalWire,saved))
+            val renewed=finalWire+mapOf("deletion_status" to mapOf("expires_at" to date(final.expiresAt+86400000)))
+            failed("deletion_receipt_scope_changed") { GuestDeletionReceipt.parse(renewed,saved) }
+            failed("deletion_receipt_scope_changed") { GuestDeletionReceipt.parse(renewed,before) }
+            val row=NativeProtocol.obj(finalWire["privacy_request"])
+            failed("deletion_receipt_scope_changed") { GuestDeletionReceipt.parse(finalWire+mapOf("privacy_request" to row+mapOf("id" to other)),before) }
+            if(outcome=="completed")failed("deletion_receipt_scope_changed") { GuestDeletionReceipt.parse(pending,saved) }
+            else failed("deletion_not_completed") { saved.assertRestartAllowed() }
+        }
+    }
     @Test fun statusProofHasFullSecureTokenAndExactOriginalBodySurvivesRestoration() {
         val intent=record();val second=record()
         assertTrue(Regex("^lvd_[0-9a-f]{64}$").matches(intent.statusToken));assertNotEquals(intent.statusToken,second.statusToken)
