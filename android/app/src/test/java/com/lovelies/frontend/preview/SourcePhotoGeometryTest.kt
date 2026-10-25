@@ -23,6 +23,7 @@ class SourcePhotoGeometryTest {
             result.forEachIndexed { index,placed ->
                 assertTrue(placed.width*width>=96f-.01f)
                 assertTrue(placed.height*height>=96f-.01f)
+                assertTrue("Screenshot fragments cannot create unbounded columns",placed.height*height<=maxOf(96f,placed.width*width*2)+.01f)
                 assertTrue(placed.x>=0f && placed.x+placed.width<=1.001f)
                 assertEquals(input[index],placed.copy(x=input[index].x,y=input[index].y,width=input[index].width,height=input[index].height))
             }
@@ -34,5 +35,36 @@ class SourcePhotoGeometryTest {
             }
         }
         assertSame(input,accessibleSourceTiles(input,720f,828f))
+    }
+
+    @Test fun narrowChurchFragmentKeepsOriginalPhotoCenterAndExcludesItsBakedPeopleMarker() {
+        val church=SourcePhotoTile(6,"ref26_09.jpg",.379f,.597f,.10045662f,.39344262f,null,true,null,null,
+            listOf(.09090909f,.7666667f,.9090909f,.18333334f),false)
+        val crop=sourceReflowCrop(church,22,120)
+        assertEquals(0f,crop.left,0f);assertEquals(0f,crop.top,0f);assertEquals(1f,crop.right,0f)
+        assertEquals(.75f,crop.bottom,.00001f)
+        assertTrue(crop.left<=.5f && crop.right>=.5f && crop.top<=.5f && crop.bottom>=.5f)
+        assertTrue(crop.bottom<=church.peopleBounds!![1]-2f/120+.00001f)
+    }
+
+    @Test fun unmarkedPhotoKeepsEntireSourceAndEdgeMarkerCropRetainsMostPhotography() {
+        val original=tile(3,0f,0f,.1f,.5f).copy(controlBounds=null,peopleBounds=null)
+        assertEquals(SourcePhotoCrop(),sourceReflowCrop(original,220,120))
+        val marked=tile(3,0f,0f,.1f,.5f)
+        val crop=sourceReflowCrop(marked,220,120)
+        assertTrue(crop.width>0 && crop.height>0 && crop.width*crop.height>=.5f)
+        val marker=marked.peopleBounds!!
+        assertFalse(crop.left<marker[0]+marker[2] && crop.right>marker[0] &&
+            crop.top<marker[1]+marker[3] && crop.bottom>marker[1])
+    }
+
+    @Test fun latentAliasSharesOnlyMarkerGeometryOfExactImageBytes() {
+        val known=tile(9,0f,0f,.23f,.27f).copy(asset="ref21_10.jpg")
+        val latent=known.copy(id=15,asset="ref21_16.jpg",y=1f,height=.087f,sourceSelected=true,controlBounds=null,peopleBounds=null)
+        val unrelated=latent.copy(id=16,asset="different-photo.jpg")
+        val aliases=sourceMarkerAliases(listOf(known,latent,unrelated),mapOf(known.asset to "a".repeat(64),latent.asset to "a".repeat(64),unrelated.asset to "b".repeat(64)))
+        assertEquals(sourceReflowCrop(known,55,65),sourceReflowCrop(latent,55,65,aliases[latent.asset].orEmpty()))
+        assertEquals(SourcePhotoCrop(),sourceReflowCrop(unrelated,55,65,aliases[unrelated.asset].orEmpty()))
+        assertEquals(15,latent.id);assertEquals("ref21_16.jpg",latent.asset);assertEquals(true,latent.sourceSelected)
     }
 }

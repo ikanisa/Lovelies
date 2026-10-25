@@ -7,10 +7,17 @@ Current audience integration: [24 October checkpoint](release/audience-readiness
 ## Current bounded update — 25 October 2026
 
 The [current integration checkpoint](release/audience-readiness-20261024.md)
-supersedes older current-source descriptions below. Final API291 tests/290pass/
-zero failures/one optional model-HTTP skip, current operator94, Android192 JVM,
-and iOS1,020 original+35 private-media host checks pass in their separate scopes.
-Private source0ebb8bb and bdeb7b4 is pushed/read back. GitHub billing is parked by
+supersedes older current-source descriptions below. Final API293 tests/292pass/
+zero failures/one optional model-HTTP skip, current operator94, Android197 JVM,
+and iOS1,020 original+101 guest-deletion+35 private-media host checks pass in their
+separate scopes. The current6603 Android Debug app passes18 affected grid cases
+and12 controlled Supabase HTTP deletion checks; see the
+[source-grid qualification](release/android-source-grids-20261025.md). Round4
+iOS app/test/unsignedRelease compilation passes; its in-place runtime qualification
+is underway. Encrypted database backup tooling passes13 operator tests and nine
+actual PostgreSQL reconstruction checks; hosted custody, expiry operation and
+independent restore suppression remain open. Source through33a5d39 is pushed/read
+back; current Android/iOS UI work is outside that delivery. GitHub billing is parked by
 the owner; no payment/limit change or CI retry is requested and remote CI is not
 qualified. UI fixes and the isolated pinned-image/actual-Deno/native-device run
 are ongoing. Hosted schema remains8/63, with the tested v9–v11 transaction staged;

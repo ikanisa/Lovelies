@@ -19,7 +19,7 @@
     "apple_paid_agreement": "Reviewedv127 accepted; Active effective2026-10-24 to2027-06-21. Separate billing/provider qualification remains.",
     "intended_audience": {
       "minimum_age": 13,
-      "guardian_consent_required_for": "13\u201317",
+      "guardian_consent_required_for": "13–17",
       "under13": "excluded",
       "implementation_status": "new_age_and_guardian_gate_required_not_yet_qualified",
       "retention_decision": "Ownerdelegated proportionate schedule and implementation to coordinator; currentdefaults are not policyacceptance."
@@ -387,7 +387,7 @@
         "debug_build_for_testing": "passed",
         "simulator_app_and_V4_runner": "passed",
         "source_inputs_unchanged": true,
-        "runtime": "Preserved35ca/c6 normal1\u201318 diagnostic checkpoint: all custom checks/exits pass; native failures retained, including shared banner later addressed. No newdc3 whole-matrix pass inferred.",
+        "runtime": "Preserved35ca/c6 normal1–18 diagnostic checkpoint: all custom checks/exits pass; native failures retained, including shared banner later addressed. No newdc3 whole-matrix pass inferred.",
         "runner_sha256": "c6e8536a13514b282cc2cd16b5fedfe0d9b7d34b6f180e58722a0aeac7da2711",
         "simulator_build_receipt": "verification/supabase-release-20261023/post-localization-ui/simulator-build.json"
       },
@@ -2176,7 +2176,7 @@
     },
     "new_migration_applied_hosted": false,
     "whole_workspace_current_green": false,
-    "limits": "Current API290/291 (one optional real-model HTTPskip), Android192 JVM, iOS1020+35 host and operator94 scopes pass independently. Current UI, isolated real-model/physical-device integration, hosted deployment/providers, backup operation and stores remain unqualified; never sum overlapping snapshots.",
+    "limits": "Current API293/292-pass+one optional model skip, Android197 JVM, iOS1020+101 guest+35 media host and operator94 scopes pass independently. Current6603 Debug has18 affected grid and12 controlled Supabase HTTP deletion checks; iOSround4 compile passes with runtime qualification ongoing. Hosted/providers, backup operation, independent restore suppression, signed stores and whole-workspace acceptance remain open. Do not sum overlapping snapshots.",
     "affected_api_operator": {
       "tests": 39,
       "passed": 36,
@@ -2527,6 +2527,87 @@
       "actual_separate_process_recovery": false,
       "final_terminal_outcome_or_operator_workflow_qualified": false,
       "hosted_or_signed_store_acceptance": false
+    },
+    "android_source_grid_snapshot": {
+      "receipt": "/Volumes/PRO-G40/Projects/Lovelies/verification/android-source-grid-reflow-20261025/build-attempt2/result.json",
+      "receipt_sha256": "38c8d583f27bd1024777ff4744abd74c34ad30bf0fc31a2dc829099e7bd6e8fa",
+      "document": "docs/release/android-source-grids-20261025.md",
+      "tests": 197,
+      "passed": 197,
+      "failed": 0,
+      "skipped": 0,
+      "source_inputs": 256,
+      "source_unchanged": true,
+      "app_sha256": "6603feadedb9307d7cde916d9af0bc3869332eb5207ee02dd171524bf88397a5",
+      "native_test_apk_sha256": "aa74ebd5b1e2d7623b7444030f6fa06cdc0b51122ccdc31362895b89cdda91d3",
+      "accessibility_test_apk_sha256": "0a26bf2820057034a899da1666388ce9acf3e9ee512bc3afcb66ec9d069c8fc3",
+      "runtime": {
+        "receipt": "/Volumes/PRO-G40/Projects/Lovelies/verification/android-source-grid-reflow-20261025/runtime-attempt2/reconciliation.json",
+        "receipt_sha256": "4a4bc26928d718cde7b76795af50b92a54ca9d85a5e8f8c8d861d1dc74425f71",
+        "passed_cases": 18,
+        "routes": [
+          11,
+          14,
+          15,
+          21,
+          26,
+          28,
+          29,
+          30,
+          33
+        ],
+        "font_scales": [
+          1.0,
+          2.0
+        ],
+        "original_pngs_viewed": 29,
+        "combined_api_android_source_inputs": 342,
+        "kernel_page_size": 16384,
+        "compatibility_disabled": true,
+        "app_reset_or_uninstall": false,
+        "full_existing_data_byte_equality_claimed": false,
+        "owned_avd_stopped_preserved": true
+      },
+      "native_packaging": {
+        "receipt": "/Volumes/PRO-G40/Projects/Lovelies/verification/android-source-grid-reflow-20261025/native-packaging-readback.json",
+        "receipt_sha256": "fed17cf12815c15a44cdfce8f8a52b963b78a95d0a24f95fad8b99823711b26e"
+      },
+      "spoken_talkback_verified": false,
+      "signed_store_acceptance": false,
+      "scope": "Affected Debug reference-grid consumers; retains original assets/identities/selections/actions. Prior build freeze and unregistered-runner failures remain failed, not silently superseded passes."
+    },
+    "android_deletion_connected_current_grid_snapshot": {
+      "receipt": "/Volumes/PRO-G40/Projects/Lovelies/verification/android-source-grid-reflow-20261025/runtime-attempt1/native-deletion-reconciliation.json",
+      "receipt_sha256": "43ebb10d73520797c8dfb8c54d866379e9b0e199460a4cce0f0ae303be6bc632",
+      "checks": 12,
+      "scenarios": 2,
+      "app_sha256": "6603feadedb9307d7cde916d9af0bc3869332eb5207ee02dd171524bf88397a5",
+      "test_apk_sha256": "aa74ebd5b1e2d7623b7444030f6fa06cdc0b51122ccdc31362895b89cdda91d3",
+      "source_inputs": 342,
+      "source_unchanged": true,
+      "fixture_schema": 11,
+      "retained_pending_requests": 2,
+      "actual_supabase_handler_http": true,
+      "actual_separate_process_recovery": false,
+      "final_operator_outcome_qualified": false,
+      "hosted_or_signed_store_acceptance": false,
+      "scope": "Production repository/Keystore rehydration within one instrumentation process, embedded PostgreSQL. Wrapper failed later at AX registration; this bounded native result is separately reconciled."
+    },
+    "ios_grouped_ui_round4": {
+      "receipt": "/Volumes/PRO-G40/Projects/Lovelies/verification/ios-grouped-ui-round4-20261025/build-result.json",
+      "receipt_sha256": "de149ed62028f7053ed5b24156f03a703029e16e5382cb015f9698ca4ed997d3",
+      "runtime_handoff": "/Volumes/PRO-G40/Projects/Lovelies/verification/ios-grouped-ui-round4-20261025/runtime-handoff.json",
+      "runtime_handoff_sha256": "a40d88eb7aeacc02026fe9cc887b0b2384c6c88d2f8c340b577af3806a234ff0",
+      "source_inputs": 205,
+      "source_unchanged": true,
+      "app_files": 181,
+      "runner_files": 13,
+      "simulator_dylib_sha256": "b80d8726370d6cb2b5e4b671f43e14483bc742854e9c4d1bd2a6ee80d36b80d2",
+      "unsigned_release_executable_sha256": "519267c13c4e4d2d7ede4d7b5fd4fdd489c5567da6c2e1544e067d6e3f397c73",
+      "runner_source_sha256": "cef012a6a4a9d373ec6e91e27dfc50c8c8dcf967de437eb9dc4ec64c6e3979da",
+      "runtime_qualification": "in_progress_under_ios_owner",
+      "signed_store_acceptance": false,
+      "scope": "Frozen four-View numeric labels/marker aliases/upload23 fixes; compile and strict ad-hoc Simulator staging only. Six public-URL/link/distribution-signature gates remain; older flags retain their source scope."
     }
   }
 }
