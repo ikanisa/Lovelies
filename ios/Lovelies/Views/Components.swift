@@ -666,7 +666,7 @@ struct SourcePhotoGrid: View {
                     let size = reflow ? min(31, max(23, sourceSize)) : sourceSize
                     let x = imageX + (reflow ? imageWidth - size / 2 - 5 : tile.badgeX.map { imageWidth * $0 } ?? (imageWidth - size / 2 - 5))
                     let y = imageY + (reflow ? size / 2 + 5 : tile.badgeY.map { imageHeight * $0 } ?? (size / 2 + 5))
-                    let heart = tile.badgeKind.map { $0 == "heart" || $0 == "favorite" } ?? (badge == .heart)
+                    let heart = badge == .heart || (tile.badgeKind.map { $0 == "heart" || $0 == "favorite" } ?? false)
                     if let badgeAction {
                         Button { badgeAction(photo) } label: {
                             SourceNativePhotoBadge(selected: chosen, heart: heart, outlined: tile.badgeOutlined == true, size: size)

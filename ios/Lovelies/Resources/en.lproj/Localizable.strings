@@ -979,3 +979,5 @@
 "This account already has an active guardian request. Refresh its status." = "This account already has an active guardian request. Refresh its status.";
 "This guardian request is unavailable to your account. Check the reference and current status." = "This guardian request is unavailable to your account. Check the reference and current status.";
 "Your original age request is held privately for recovery. Resolve it before starting another account or face setup." = "Your original age request is held privately for recovery. Resolve it before starting another account or face setup.";
+
+"Lovelies is temporarily unavailable. Please try again later." = "Lovelies is temporarily unavailable. Please try again later.";

@@ -19,11 +19,14 @@ and12 controlled Supabase HTTP deletion checks; see the
 [source-grid qualification](release/android-source-grids-20261025.md). Five
 [connected teen UI checks](release/android-connected-audience-20261025.md) now
 qualify pending guardian gating, withdrawal and privacy access on that same app;
-actual independent guardian approval and hosted operation remain open. Round5
-iOS app/test/unsignedRelease compilation passes; its in-place runtime qualification
-is underway; [the source-bound UI checkpoint](release/ios-reference-ui-20261025.md)
-now verifies normal/maximum viewer12 and actual people/Back navigation, while
-retaining raw audit findings and a later Favorites glyph correction. Encrypted database backup tooling passes15 operator tests and nine
+actual independent guardian approval and hosted operation remain open. Round6
+iOS app/revision7runner/unsignedRelease compilation passes205 inputs, including
+Favorites/read-contrast corrections and EN/RW availability copy; independent
+in-place/affected runtime qualification is pending. The
+[UI checkpoint](release/ios-reference-ui-20261025.md) preserves the prior48/48
+normal/largest coverage, raw native findings and verified viewer navigation.
+The staged native branch passes1020 host assertions and exact16-input adoption;
+actual Swift HTTP6/26 is refreshed after application. Encrypted database backup tooling passes15 operator tests and nine
 actual PostgreSQL reconstruction checks; hosted custody, expiry operation and
 independent restore suppression remain open. Source through33a5d39 is pushed/read
 back; current Android/iOS UI work is outside that delivery. GitHub billing is parked by

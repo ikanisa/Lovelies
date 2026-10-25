@@ -979,3 +979,5 @@
 "This account already has an active guardian request. Refresh its status." = "Iyi konti isanzwe ifite icyifuzo cy’umubyeyi kigikora. Vugurura imimerere yacyo.";
 "This guardian request is unavailable to your account. Check the reference and current status." = "Iki cyifuzo cy’umubyeyi ntikiboneka kuri konti yawe. Reba nimero n’imimerere yacyo.";
 "Your original age request is held privately for recovery. Resolve it before starting another account or face setup." = "Icyifuzo cyawe cy’umwimerere cy’imyaka kibitswe mu ibanga kugira ngo kigaruzwe. Banza ugisuzume mbere yo gutangira indi konti cyangwa kwandikisha isura.";
+
+"Lovelies is temporarily unavailable. Please try again later." = "Lovelies ntiboneka by'agateganyo. Nyamuneka ongera ugerageze nyuma.";

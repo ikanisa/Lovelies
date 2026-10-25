@@ -36,7 +36,9 @@ fixture control listener is separate from the API and accepts only a fresh
 random test secret. It is not deployed or included in the application.
 
 Receipts are in
-`/Volumes/PRO-G40/Projects/Lovelies/verification/api-schema-request-gate-20261025/ios-audience-http-attempt2/`.
+`/Volumes/PRO-G40/Projects/Lovelies/verification/api-schema-request-gate-20261025/ios-audience-http-after-copy/`.
+This refresh passes again after applying the native availability-message branch;
+the earlier attempt2 keeps its prior49-input source scope.
 Attempt1's Swift type-checking failure remains preserved; no SQL fixture was
 created during that failed compilation. The controlled compound URL validation
 was split into equivalent guards before the successful run. Existing

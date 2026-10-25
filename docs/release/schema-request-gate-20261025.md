@@ -34,9 +34,12 @@ now exercise the actual API/PostgreSQL, including503 credential/journal retentio
 and original-key retry. A plain availability message has been added to Android
 in English/Kinyarwanda; full non-incremental compilation,197 JVM tests and fresh
 Debug packaging checks pass with257 unchanged inputs. The
-same iOS candidate remains outside canonical source until the current reference
-runtime finishes, so it can join one grouped native build without changing the
-inputs under those tests. The new Android APK is99edd663…e6e49; its eight JNI
+same iOS change is now applied after the prior reference runtime became terminal.
+All1,020 original host assertions passed against its staged CoreWire bytes, then
+the exact16-input map was adopted after canonical equality. The current actual
+Swift HTTP6/26/49-input run passed again after application. The round6 Simulator
+and unsigned Release compile/package both translations; independent runtime is
+pending. The new Android APK is99edd663…e6e49; its eight JNI
 payloads match the previous6603 APK and fresh16KB ZIP alignment/signature checks
 pass. No new Android runtime acceptance is attributed to that package; prior
 grid/connected receipts retain their6603 binary scope.

@@ -1,8 +1,38 @@
 # iOS reference UI checkpoint — 25 October 2026
 
-The five frozen View files compile in the round5 Simulator app, exact one-file
-UI test runner and unsigned device Release build. Current runtime qualification
-is still in progress; this checkpoint does not accept the replacement release.
+The current round6 Simulator app, exact revision7 UI runner and unsigned device
+Release compile with205 unchanged inputs. Strict ad-hoc Simulator signing passes;
+181 app files and13 runner products are staged. Dylib `6ec5cd2f…bb1e2d` includes the
+two confirmed visual corrections below and the native English/Kinyarwanda
+availability message. Both translations were read back from the Simulator and
+unsigned Release bundles. Independent source/app/runner qualification and one
+in-place install now pass: all nine data payloads138,795bytes are retained and25
+common selected nodes are exact. An identical2,172byte OSsnapshot was renamed;
+native identity/timestamp/dataUUID changes remain recorded. Full pathname/native
+metadata equality is false. No reset, uninstall, Keychain clear or retry occurred.
+Affected runtime qualification is ongoing;
+this checkpoint does not accept the replacement release.
+
+The Favorites14 caller now retains its heart glyph when fixture metadata says
+check. Only its explicit heart context changes; all default/checkbox metadata
+cases retain the old result, with the same actions, geometry and image assets.
+The complete caller inventory identifies14 as the sole explicit heart caller.
+Check consumers11/21/29 have a separate unchanged-consumer source readback.
+
+The other correction raises read-notification opacity from0.6 to0.8. Actual
+normal12pt timestamp ink109/109/110 against9/9/11 measured3.849:1, below4.5:1;
+the unread state measured9.181:1. The coordinator independently viewed the original
+read image and recomputed the ratio. Read/unread distinction and all row/filter/
+navigation bindings remain. The new rendered colour still needs runtime readback.
+
+Current build receipts/source archive are in
+`/Volumes/PRO-G40/Projects/Lovelies/verification/ios-grouped-ui-round6-20261025/`.
+`build-result.json` SHA256 is
+`4c393ca6712bd850238eefc8612f3996f3ca0d3803fa4379c9a94122fb0fe853`;
+`runtime-handoff.json` is
+`42e3b70ea122f473cbdfb380525987f9c281ba7956841e157667a6e69c835975`.
+The single QA source is `c9-candidate/revision7-bounded-followup/LoveliesFrontendAudit.swift`,
+SHA256 `fd37ced7289a03e2ba99dcd1f69972cc5397e451cb5c1d8005ab83253bd1da87`.
 
 The changes retain Lovelies imagery, branding, existing actions and source-photo
 identities. Reflow uses an unobscured rectangle of the same supplied image,
@@ -37,10 +67,20 @@ examining paired source/raster evidence. Fresh and reused results are not a
 passing full48-screen matrix. Spoken VoiceOver and connected/device/provider
 journeys remain separate requirements.
 
-One demonstrated Favorites14 glyph/callback mismatch is approved for a later
-grouped correction: the caller requests a heart/favorite action but one fixture
-marker draws a check. That proposal is not applied to the frozen round5 source.
-The remaining current screen checks continue; older warnings remain retained.
+The preserved round5 evidence now covers48/48 normal and48/48 largest screens:
+25/26 fresh cases and23/22 qualified reuse respectively. Custom findings are zero,
+while11 normal and10 largest raw native failed rows remain. This is coverage,
+not a passing aggregate. Actual maximum31 recipient toggles/restore and33/Back31,
+normal39 block/prune/unblock without automatic reselection, and18→24→18 have
+separate checkpointed/manual evidence.
+
+The first bounded QA run failed because a semantic container was selected instead
+of the outer recipient button. Revision6 completed the main phases but failed its
+last reselection because an artificial1pt viewport inset excluded the top edge.
+Both complete runs remain failed. Original captures/checkpoints and direct manual
+completion retain only their stated scope. Revision7 corrects those test selectors
+and the artificial inset, retaining actual44pt frame/intersection assertions;
+its current-app runtime is pending. No audit category or raw finding is waived.
 
 The exact frozen Swift QA source is retained at
 `verification/accessibility-navigation-20261023/ios-isolated-simulator/c9-candidate/revision4/LoveliesFrontendAudit.swift`

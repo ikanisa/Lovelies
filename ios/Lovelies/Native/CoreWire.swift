@@ -55,6 +55,7 @@ enum NativeAPIError: Error, LocalizedError, Equatable {
         switch self {
         case .unavailable(let code): return String.localizedStringWithFormat(NSLocalizedString("Connection unavailable (%@). Try again.", comment: ""), code)
         case .denied(_, let code):
+            if code == "database_schema_not_ready" { return String(localized: "Lovelies is temporarily unavailable. Please try again later.") }
             if code == "age_not_supported" { return String(localized: "Lovelies is for ages 13 and over. You can still manage privacy and account deletion.") }
             if code == "audience_required" { return String(localized: "Confirm your age range before face setup or photos.") }
             if code == "guardian_approval_required" { return String(localized: "Current guardian approval and independent review are required before face setup or photos.") }

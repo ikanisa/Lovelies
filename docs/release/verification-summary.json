@@ -2722,7 +2722,7 @@
       "runner_source_sha256": "cef012a6a4a9d373ec6e91e27dfc50c8c8dcf967de437eb9dc4ec64c6e3979da",
       "frozen_views": 5,
       "viewer_count_visual_counterexample": "Maximum12 b80d actualPNG64cd337f shows+3 as ellipsis despite passing automated audit; exact one-expression correction is included in4dede.",
-      "runtime_qualification": "count12_verified_normal_largest_actual_people_back_navigation; wider_reference_scope_in_progress",
+      "runtime_qualification": "historical_full_effective_48_normal_48_largest_coverage_raw_native_findings_retained; replaced_by_round6_current_build",
       "six_preflight_gates_open": true,
       "highest_uploaded_build_14_is_23Oct_history": true,
       "signed_store_acceptance": false,
@@ -2764,7 +2764,7 @@
         "proposal": "/Users/jeanbosco/Documents/Lovelies/verification/accessibility-navigation-20261023/ios-isolated-simulator/grouped-ui-fix-20261025/round5/remaining-candidates/favorite-marker/proposal.json",
         "proposed_source_sha256": "5d4513df2ec2b742a300b6f05441d35939c0223c955ebd30f55907cbd06a219b",
         "patch_sha256": "75d32a3e9d2ff0c5d5f386ec61c4fc0c4321a1961784d3e98a7c7e6169cf5274",
-        "status": "reviewed_approved_unapplied_pending_grouped_fix",
+        "status": "applied_and_compiled_in_round6_runtime_pending",
         "existing_five_views_and_qa_frozen": true
       }
     },
@@ -2887,6 +2887,96 @@
     },
     "ios_audience_http_snapshot": {
       "document": "docs/release/ios-connected-audience-20261025.md",
+      "receipt": "/Volumes/PRO-G40/Projects/Lovelies/verification/api-schema-request-gate-20261025/ios-audience-http-after-copy/result.json",
+      "receipt_sha256": "3bde60f810ead19544ba7c451ed4c35f8ed87bb91187a9fcf4b7ad2750eb28d5",
+      "checks": 6,
+      "assertions": 26,
+      "source_inputs": 49,
+      "source_unchanged": true,
+      "database": "actual_isolated_PostgreSQL17",
+      "transport": "production_NativeURLTransport_URLSession",
+      "protected_storage": "host_memory_substitute",
+      "source_actor_reconstruction_is_process_death": false,
+      "database_readback": {
+        "accounts": 3,
+        "declared_accounts": 3,
+        "active_sessions": 0,
+        "consents": 0,
+        "guardian_approvals": 0,
+        "media_grants": 0,
+        "face_profiles": 0,
+        "auth_devices": 0,
+        "auth_challenges": 0,
+        "withdrawn_guardian_requests": 1
+      },
+      "cleanup": {
+        "listeners_closed": true,
+        "isolated_database_closed": true,
+        "failures": []
+      },
+      "owned_container_stopped_preserved": true,
+      "physical_hosted_guardian_approval_store_accepted": false,
+      "refresh_after_native_copy": true
+    },
+    "native_schema_copy": {
+      "proposal": "/Volumes/PRO-G40/Projects/Lovelies/verification/api-schema-request-gate-20261025/native-copy-candidate/proposal.json",
+      "proposal_sha256": "28388afd64be817184287483aeca9b66f3ee17b179ff3ff738829e30e62d8079",
+      "android": "applied_compiled197_JVM_passed_runtime_unqualified",
+      "ios": "applied_exact3files_host1020_exact_byte_adoption_HTTP6_26_refreshed_grouped_compile_and_packaged_en_rw_runtime_pending",
+      "languages": [
+        "en",
+        "rw"
+      ],
+      "message": "Lovelies is temporarily unavailable. Please try again later.",
+      "ios_adoption": "/Volumes/PRO-G40/Projects/Lovelies/verification/api-schema-request-gate-20261025/native-copy-candidate/ios-adoption.json"
+    },
+    "ios_grouped_ui_round6": {
+      "document": "docs/release/ios-reference-ui-20261025.md",
+      "receipt": "/Volumes/PRO-G40/Projects/Lovelies/verification/ios-grouped-ui-round6-20261025/build-result.json",
+      "receipt_sha256": "4c393ca6712bd850238eefc8612f3996f3ca0d3803fa4379c9a94122fb0fe853",
+      "handoff": "/Volumes/PRO-G40/Projects/Lovelies/verification/ios-grouped-ui-round6-20261025/runtime-handoff.json",
+      "handoff_sha256": "42e3b70ea122f473cbdfb380525987f9c281ba7956841e157667a6e69c835975",
+      "source_inputs": 205,
+      "source_unchanged": true,
+      "app_files": 181,
+      "runner_products": 13,
+      "simulator_dylib_sha256": "6ec5cd2f6fcf9575181e3f86f4f9b427faa7958feb7bd3eca5f0bbc913bb1e2d",
+      "unsigned_release_executable_sha256": "34ff2885a2b27163b6148b60e042c59a449835b6c6d1db1630f77a535af2653a",
+      "runner_source_sha256": "fd37ced7289a03e2ba99dcd1f69972cc5397e451cb5c1d8005ab83253bd1da87",
+      "root_bundle_readback": "/Volumes/PRO-G40/Projects/Lovelies/verification/ios-grouped-ui-round6-20261025/root-artifact-readback.json",
+      "root_bundle_readback_sha256": "96c6e88a5a283588750f225d5e081a05ca3e0da78d75a396d8d9e01a9a3662ed",
+      "native_copy_packaged_en_rw": true,
+      "runtime_qualification": "independently_qualified_and_installed_with_preservation; affected_cases_in_progress",
+      "host_assertions_adopted_by_exact_16_input_bytes": 1020,
+      "native_host_adoption": "/Volumes/PRO-G40/Projects/Lovelies/verification/ios-schema-copy-hosts-20261025/hosts/result.json",
+      "favorite_explicit_heart_context_fixed": true,
+      "notification_read_opacity": 0.8,
+      "prior_normal_12pt_read_contrast": 3.8491410991446666,
+      "new_read_contrast_runtime_pending": true,
+      "badge_consumer_readback": "/Volumes/PRO-G40/Projects/Lovelies/verification/ios-grouped-ui-round6-20261025/badge-consumer-readback.json",
+      "same_six_release_preflight_gaps": true,
+      "distribution_or_store_accepted": false,
+      "independent_qualification": {
+        "receipt": "/Users/jeanbosco/Documents/Lovelies/verification/accessibility-navigation-20261023/ios-isolated-simulator/grouped-ui-fix-20261025/round6/qualified-build/qualification.json",
+        "receipt_sha256": "26ba29f577619a6f0c6b54f40a74bf35653e5463d32e1d3de14616b555cc35bc",
+        "archive_manifest_sha256": "7c30b99d82433c3ab617cc7b1e9d7e0da15c641ee82ab1ca787800da066e6986"
+      },
+      "qualified_install": {
+        "receipt": "/Users/jeanbosco/Documents/Lovelies/verification/accessibility-navigation-20261023/ios-isolated-simulator/grouped-ui-fix-20261025/round6/qualified-install.json",
+        "receipt_sha256": "7f8d3054b453d15c20139761b04946f43b293ffa7789e2cc84be8228f2e7dc66",
+        "app_only_installs": 1,
+        "regular_payload_files_retained": 9,
+        "regular_payload_bytes_retained": 138795,
+        "common_selected_nodes_exact": 25,
+        "identical_2172B_os_snapshot_renamed": true,
+        "native_identity_timestamp_and_dataUUID_changes_recorded": true,
+        "full_pathname_or_native_metadata_equality": false,
+        "reset_uninstall_keychain_or_retry": false,
+        "original_pending_reconciliation_receipt_retained": true
+      }
+    },
+    "ios_audience_http_before_native_copy": {
+      "document": "docs/release/ios-connected-audience-20261025.md",
       "receipt": "/Volumes/PRO-G40/Projects/Lovelies/verification/api-schema-request-gate-20261025/ios-audience-http-attempt2/result.json",
       "receipt_sha256": "f6c65cd4cff67f0fe738088b473051c54815325e25b0bdb074a458f6be85eb71",
       "checks": 6,
@@ -2917,16 +3007,20 @@
       "owned_container_stopped_preserved": true,
       "physical_hosted_guardian_approval_store_accepted": false
     },
-    "native_schema_copy": {
-      "proposal": "/Volumes/PRO-G40/Projects/Lovelies/verification/api-schema-request-gate-20261025/native-copy-candidate/proposal.json",
-      "proposal_sha256": "28388afd64be817184287483aeca9b66f3ee17b179ff3ff738829e30e62d8079",
-      "android": "applied_compiled197_JVM_passed_runtime_unqualified",
-      "ios": "unapplied_until_R5_runtime_terminal_then_grouped_root_build",
-      "languages": [
-        "en",
-        "rw"
-      ],
-      "message": "Lovelies is temporarily unavailable. Please try again later."
+    "ios_round5_effective_matrix": {
+      "normal_coverage": 48,
+      "largest_coverage": 48,
+      "fresh_normal": 25,
+      "fresh_largest": 26,
+      "qualified_reuse_normal": 23,
+      "qualified_reuse_largest": 22,
+      "custom_findings": 0,
+      "raw_native_failed_normal": 11,
+      "raw_native_failed_largest": 10,
+      "whole_matrix_passed": false,
+      "bounded_r5_selector_run": "failed",
+      "bounded_r6_artificial_inset_run": "failed_with_checkpointed_phases_and_separate_manual_completion",
+      "r7_current_runtime": "pending"
     }
   }
 }

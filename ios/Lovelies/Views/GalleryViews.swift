@@ -329,7 +329,7 @@ struct GalleryViews: View {
                                 VStack(alignment: .leading, spacing: 6) { Text(item.text).loveliesFont(size: 15).multilineTextAlignment(.leading); Text(item.time).loveliesFont(size: 12).foregroundStyle(LoveliesTheme.secondary) }
                                 Spacer(minLength: 0)
                                 Image(systemName: "chevron.right").font(.system(size: 14)).foregroundStyle(LoveliesTheme.secondary)
-                            }.opacity(store.unreadNotifications.contains(index) ? 1 : 0.6).padding(.vertical, 21).contentShape(Rectangle())
+                            }.opacity(store.unreadNotifications.contains(index) ? 1 : 0.8).padding(.vertical, 21).contentShape(Rectangle())
                         }.buttonStyle(LoveliesPressStyle())
                         Divider().overlay(.white.opacity(0.04))
                     }
