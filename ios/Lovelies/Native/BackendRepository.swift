@@ -60,6 +60,107 @@ enum NativeConfiguration {
     }
 }
 
+/// App-owned media is bounded by both elapsed process time and wall time. A
+/// clock rollback cannot extend a retained preview or a temporary share lease.
+struct NativePrivateMediaInstant: Sendable {
+    let wall: Date, uptime: TimeInterval
+}
+struct NativePrivateMediaClock: Sendable {
+    let read: @Sendable () -> NativePrivateMediaInstant
+    static let live = Self { .init(wall: Date(), uptime: ProcessInfo.processInfo.systemUptime) }
+}
+struct NativePrivateMediaDeadline: Sendable {
+    static let maximumAge: TimeInterval = 2 * 24 * 60 * 60
+    let created: NativePrivateMediaInstant
+    private let lifetime: TimeInterval
+    init(created: NativePrivateMediaInstant, authorityExpiresAt: Date? = nil) {
+        self.created = created
+        lifetime = min(Self.maximumAge, authorityExpiresAt.map { max(0, $0.timeIntervalSince(created.wall)) } ?? Self.maximumAge)
+    }
+    func remaining(at now: NativePrivateMediaInstant) -> TimeInterval {
+        guard created.wall.timeIntervalSince1970.isFinite, created.uptime.isFinite, lifetime.isFinite,
+              now.wall.timeIntervalSince1970.isFinite, now.uptime.isFinite,
+              now.wall >= created.wall, now.uptime >= created.uptime else { return 0 }
+        return max(0, min(lifetime - now.wall.timeIntervalSince(created.wall), lifetime - (now.uptime - created.uptime)))
+    }
+}
+struct NativePrivateMediaCache: Sendable {
+    struct Key: Hashable, Sendable { let assetID: String, version: String }
+    private struct Entry: Sendable { let bytes: Data, deadline: NativePrivateMediaDeadline }
+    private var entries: [Key: Entry] = [:], order: [Key] = []
+    private let maximumBytes = 16 * 1024 * 1024
+    var retainedByteCount: Int { entries.values.reduce(0) { $0 + $1.bytes.count } }
+    mutating func removeAll() { entries.removeAll(); order.removeAll() }
+    mutating func remove(assetID: String) {
+        entries = entries.filter { $0.key.assetID != assetID }; order.removeAll { $0.assetID == assetID }
+    }
+    mutating func expire(at now: NativePrivateMediaInstant) {
+        entries = entries.filter { $0.value.deadline.remaining(at: now) > 0 }
+        order.removeAll { entries[$0] == nil }
+    }
+    mutating func value(for key: Key, at now: NativePrivateMediaInstant) -> Data? {
+        expire(at: now); return entries[key]?.bytes
+    }
+    mutating func insert(_ bytes: Data, for key: Key, deadline: NativePrivateMediaDeadline, at now: NativePrivateMediaInstant) {
+        expire(at: now)
+        guard !bytes.isEmpty, bytes.count <= maximumBytes, deadline.remaining(at: now) > 0 else { return }
+        order.removeAll { $0 == key }; entries[key] = Entry(bytes: bytes, deadline: deadline); order.append(key)
+        while retainedByteCount > maximumBytes, let first = order.first { order.removeFirst(); entries.removeValue(forKey: first) }
+    }
+    func nextExpiryDelay(at now: NativePrivateMediaInstant) -> TimeInterval? {
+        entries.values.map { $0.deadline.remaining(at: now) }.min()
+    }
+}
+
+/// The only managed disk copies here are UUID-named files directly inside the
+/// private share directory. Upload recovery and the user's Photos/Files are not
+/// children of this directory and never participate in this cleanup.
+struct NativeAuthorizedShareFiles: Sendable {
+    let directory: URL
+    static let extensions: Set<String> = ["json", "jpg", "png", "webp", "heic"]
+    init(directory: URL = FileManager.default.temporaryDirectory.appendingPathComponent("lovelies-authorized-share", isDirectory: true)) {
+        self.directory = directory.standardizedFileURL
+    }
+    private func verifiedDirectory(create: Bool) throws -> Bool {
+        guard (try? FileManager.default.destinationOfSymbolicLink(atPath: directory.path)) == nil else { throw NativeAPIError.invalidResponse }
+        if !FileManager.default.fileExists(atPath: directory.path) {
+            guard create else { return false }
+            try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true, attributes: [.protectionKey: FileProtectionType.complete])
+        }
+        let values = try directory.resourceValues(forKeys: [.isDirectoryKey, .isSymbolicLinkKey])
+        guard values.isDirectory == true, values.isSymbolicLink != true else { throw NativeAPIError.invalidResponse }
+        return true
+    }
+    private func ownedRegularFile(_ url: URL) throws -> Bool {
+        guard url.standardizedFileURL.deletingLastPathComponent() == directory,
+              UUID(uuidString: url.deletingPathExtension().lastPathComponent) != nil,
+              Self.extensions.contains(url.pathExtension) else { return false }
+        let values = try url.resourceValues(forKeys: [.isRegularFileKey, .isSymbolicLinkKey])
+        return values.isRegularFile == true && values.isSymbolicLink != true
+    }
+    func create(_ data: Data, extension ext: String) throws -> URL {
+        guard Self.extensions.contains(ext), try verifiedDirectory(create: true) else { throw NativeAPIError.invalidResponse }
+        let url = directory.appendingPathComponent(UUID().uuidString.lowercased()).appendingPathExtension(ext)
+        try data.write(to: url, options: [.atomic, .completeFileProtection]); return url
+    }
+    /// Keep only a live, known presentation. Missing timestamps and files dated
+    /// in the future fail closed; rewriting a file does not renew its birth time.
+    func prune(keeping: URL? = nil, now: Date = Date()) throws {
+        guard try verifiedDirectory(create: false) else { return }
+        var firstFailure: (any Error)?
+        for url in try FileManager.default.contentsOfDirectory(at: directory, includingPropertiesForKeys: [.creationDateKey, .isRegularFileKey, .isSymbolicLinkKey]) {
+            do {
+                guard try ownedRegularFile(url) else { continue }
+                let created = try url.resourceValues(forKeys: [.creationDateKey]).creationDate
+                let age = created.map { now.timeIntervalSince($0) }
+                let live = age.map { $0 >= 0 && $0 < NativePrivateMediaDeadline.maximumAge } ?? false
+                if url.standardizedFileURL != keeping?.standardizedFileURL || !live { try FileManager.default.removeItem(at: url) }
+            } catch { if firstFailure == nil { firstFailure = error } }
+        }
+        if let firstFailure { throw firstFailure }
+    }
+}
+
 actor BackendRepository {
     private let origin: URL, transport: any NativeTransport, secrets: any NativeSecretStore, signer: any NativeDeviceSigner
     private var credentials: NativeCredentials?
@@ -84,14 +185,22 @@ actor BackendRepository {
     private var lifecycleArchives: [NativeFaceLifecycleRecord] = []
     private var lifecycleSerial = 0, lifecycleBusy = false
     private var ordinaryLogin: NativeOrdinaryLoginRecord?
+    private var audienceProjection: NativeAudienceProjection?
+    private var audienceProjectionEpoch: Int?
+    private var audienceMutationBusy = false
+    private var audienceSuspension: NativeAudienceSuspensionRecord?
     private var mediaEpoch = 0
-    private var media: [String: Data] = [:], mediaOrder: [String] = []
-    init(origin: URL, transport: any NativeTransport = NativeURLTransport(), secrets: any NativeSecretStore = KeychainSecretStore(), signer: any NativeDeviceSigner = KeychainDeviceSigner(), uploadFiles: NativeUploadPrivateFiles = NativeUploadPrivateFiles(), uploadTransport: (any NativeUploadFileTransport)? = nil) {
+    private var media = NativePrivateMediaCache()
+    private var mediaExpiryTask: Task<Void, Never>?
+    private let privateMediaClock: NativePrivateMediaClock
+    init(origin: URL, transport: any NativeTransport = NativeURLTransport(), secrets: any NativeSecretStore = KeychainSecretStore(), signer: any NativeDeviceSigner = KeychainDeviceSigner(), uploadFiles: NativeUploadPrivateFiles = NativeUploadPrivateFiles(), uploadTransport: (any NativeUploadFileTransport)? = nil, privateMediaClock: NativePrivateMediaClock = .live) {
         self.origin = origin; self.transport = transport; self.secrets = secrets; self.signer = signer; self.uploadFiles = uploadFiles
         self.uploadTransport = uploadTransport ?? NativeFileURLUploadTransport.shared
+        self.privateMediaClock = privateMediaClock
     }
     struct Scope: Sendable { let epoch: Int, account: String?, token: String? }
     func summary() -> NativeSessionSummary? {
+        if audienceSuspension != nil { return nil }
         if guestDeletion != nil || ordinaryLogin != nil || faceLifecycle?.activeHold == true || accountRecovery != nil || (enrollment != nil && credentials?.authenticated == true) || enrollment?.state == .registered || enrollment?.state == .promoting || (enrollment?.loginChallengeWire != nil && [.capturePending, .completionPending].contains(enrollment!.state)) { return nil }
         return credentials.map { NativeSessionSummary(accountID: $0.account_id, roles: $0.roles, authenticated: $0.authenticated, expiresAt: $0.expiresAt, epoch: epoch) }
     }
@@ -104,7 +213,7 @@ actor BackendRepository {
     }
     func pending() -> [NativeOperationIntent] { intents.filter { $0.accountID == credentials?.account_id } }
     private func scope(anonymous: Bool = false, expired: Bool = false) throws -> Scope {
-        guard anonymous || (ordinaryLogin == nil && enrollment == nil && accountRecovery == nil && faceLifecycle?.activeHold != true) else { throw NativeAPIError.authenticationRequired }
+        guard anonymous || (audienceSuspension == nil && ordinaryLogin == nil && enrollment == nil && accountRecovery == nil && faceLifecycle?.activeHold != true) else { throw NativeAPIError.authenticationRequired }
         guard let credentials, anonymous || credentials.authenticated else { throw NativeAPIError.authenticationRequired }
         guard expired || credentials.expiresAt > Date() else { throw NativeAPIError.authenticationRequired }
         return Scope(epoch: epoch, account: credentials.account_id, token: credentials.access_token)
@@ -136,7 +245,10 @@ actor BackendRepository {
     }
     private func adoptCredentials(_ next: NativeCredentials, expected: String? = nil, method: String? = nil) throws {
         guard expected == nil || expected == next.account_id, method == nil || method == next.auth_method else { throw NativeAPIError.sessionChanged }
-        if var record = faceLifecycle, accountRecovery == nil {
+        if var held = audienceSuspension {
+            guard next.account_id == held.operation.accountID, next.auth_method == "anonymous" else { throw NativeAPIError.sessionChanged }
+            held.credentials = next; try saveAudienceSuspension(held)
+        } else if var record = faceLifecycle, accountRecovery == nil {
             guard next.account_id == record.accountID, next.authenticated else { throw NativeAPIError.sessionChanged }
             if record.promotionCredentials != nil { record.promotionCredentials = next } else { record.credentials = next }
             try saveFaceLifecycle(record)
@@ -152,14 +264,35 @@ actor BackendRepository {
             guard next.account_id == record.originalDevice.accountID, next.authenticated else { throw NativeAPIError.sessionChanged }
             record.promotionCredentials = next; try saveOrdinaryLogin(record)
         }
-        try secrets.write("credentials", data: JSONEncoder().encode(next)); epoch += 1; credentials = next; retireMedia()
+        try secrets.write("credentials", data: JSONEncoder().encode(next)); epoch += 1; credentials = next; audienceProjection = nil; audienceProjectionEpoch = nil; retireMedia()
     }
-    func retireMedia() { mediaEpoch += 1; media.removeAll(); mediaOrder.removeAll() }
+    func retireMedia() { mediaEpoch += 1; mediaExpiryTask?.cancel(); mediaExpiryTask = nil; media.removeAll() }
+    func expirePrivateMedia() {
+        media.expire(at: privateMediaClock.read()); scheduleMediaExpiry()
+    }
+    func retainedPrivateMediaBytes() -> Int { media.retainedByteCount }
+    private func scheduleMediaExpiry() {
+        mediaExpiryTask?.cancel(); mediaExpiryTask = nil
+        guard let delay = media.nextExpiryDelay(at: privateMediaClock.read()) else { return }
+        let capturedEpoch = mediaEpoch
+        mediaExpiryTask = Task { [weak self] in
+            do {
+                try await Task.sleep(for: .seconds(delay))
+                guard !Task.isCancelled, let self else { return }
+                await self.expirePrivateMedia(expectedEpoch: capturedEpoch)
+            } catch {}
+        }
+    }
+    private func expirePrivateMedia(expectedEpoch: Int) {
+        guard expectedEpoch == mediaEpoch else { return }; expirePrivateMedia()
+    }
     private func request(_ path: String, method: String = "GET", body: WireValue? = nil, raw: Data? = nil,
                          headers: [String: String] = [:], scope captured: Scope? = nil, binary: Bool = false, preserveRefreshAuthority: Bool = false) async throws -> NativeHTTPReply {
         let captured = captured ?? Scope(epoch: epoch, account: nil, token: nil); try check(captured)
         guard path.hasPrefix("/"), !path.hasPrefix("//"), !path.contains(".."), let url = URL(string: origin.path.trimmingCharacters(in: CharacterSet(charactersIn: "/")).isEmpty ? path : origin.path + path, relativeTo: origin)?.absoluteURL,
               url.scheme == origin.scheme, url.host == origin.host, url.port == origin.port else { throw NativeAPIError.invalidResponse }
+        let audienceFence = try await audienceRequestFence(path, method: method, body: body, captured: captured)
+        try check(captured)
         var request = URLRequest(url: url); request.httpMethod = method; request.timeoutInterval = 20; request.cachePolicy = .reloadIgnoringLocalAndRemoteCacheData
         request.setValue(binary ? "application/octet-stream,image/*" : "application/json", forHTTPHeaderField: "Accept")
         request.setValue("no-store", forHTTPHeaderField: "Cache-Control")
@@ -179,6 +312,7 @@ actor BackendRepository {
             throw NativeAPIError.denied(response.status, code)
         }
         if !binary, !(response.headers["content-type"] ?? "").lowercased().hasPrefix("application/json") { throw NativeAPIError.invalidResponse }
+        if let audienceFence { try await recheckAudienceFence(audienceFence, captured: captured) }
         return response
     }
     private func json(_ path: String, method: String = "GET", body: WireValue? = nil, scope: Scope? = nil, preserveRefreshAuthority: Bool = false) async throws -> WireValue {
@@ -218,6 +352,7 @@ actor BackendRepository {
             if restored.status?.completed == true { try clearGuestDeviceReferences(account: restored.accountID, completed: true) }
             return nil
         }
+        if try restoreAudienceSuspension() { return nil }
         try await restorePendingRefreshDelivery()
         if let lifecycle = faceLifecycle, lifecycle.blocksAlternateRecovery || accountRecovery == nil {
             // D04 precedes all lifecycle work. Signed lifecycle metadata never
@@ -262,6 +397,7 @@ actor BackendRepository {
             do { if credentials!.expiresAt <= Date() { try await refresh() }; _ = try await current(); return summary() }
             catch NativeAPIError.denied(let status, let code) where status == 401 { if try readRefreshDelivery() != nil { throw NativeAPIError.denied(status, code) }; clearSession() }
         }
+        if let held = try pendingAudienceMutation() { throw NativeAPIError.operationUnconfirmed(held.operationKey) }
         if try device() != nil { return nil } // Fresh verification, never a new anonymous account, recovers this retained handle.
         if !recoveryArchives.isEmpty || !lifecycleArchives.isEmpty { return nil } // Retired attempts are known holds, never a reason to bootstrap another account.
         guard try !signer.hasRetainedKey() else { throw NativeAPIError.unsupported(String(localized: "This device has a retained face-verification key but its recovery record is unavailable. A replacement account cannot be created automatically.")) }
@@ -435,7 +571,7 @@ actor BackendRepository {
         guestDeletionSerial += 1; guestDeletionBusy = false
         enrollmentSerial += 1; enrollmentBusy = false
         recoverySerial += 1; recoveryBusy = false
-        epoch += 1; credentials = nil; intents = []; uploads = []; transport.cancelPending(); retireMedia()
+        epoch += 1; credentials = nil; audienceProjection = nil; audienceProjectionEpoch = nil; intents = []; uploads = []; transport.cancelPending(); retireMedia()
         if removeCredentialSlot { try? secrets.write("credentials", data: nil) }; try? secrets.write("operation-intents", data: nil)
         try? secrets.write("upload-stages", data: nil)
         if identity {
@@ -445,6 +581,13 @@ actor BackendRepository {
         }
     }
     func logout() async throws {
+        if let operation = try pendingAudienceMutation(), let original = credentials, original.auth_method == "anonymous", operation.accountID == original.account_id {
+            // Preserve the sole anonymous authority before retiring UI/session
+            // publication. Revoking it would make the exact uncertain operation
+            // unrecoverable and must not create a different anonymous account.
+            let held = try NativeAudienceSuspensionRecord(origin: origin, operation: operation, credentials: original)
+            try saveAudienceSuspension(held); clearSession(); return
+        }
         // Persist suspension BEFORE changing any local authority. Cancellation
         // runs independently; logout never waits on provider/network recovery.
         let suspendedRefresh = try suspendRefreshForLogout()
@@ -707,6 +850,7 @@ actor BackendRepository {
         return summary()!
     }
     func startFace(consentPolicy: String, publicKey: WireValue) async throws -> NativeFaceChallenge {
+        if let held = audienceSuspension { throw NativeAPIError.operationUnconfirmed(held.operation.operationKey) }
         if faceLifecycle != nil, accountRecovery == nil {
             let recovered = try await freshFaceProfileLogin()
             guard let challenge = recovered.challenge else { throw NativeAPIError.authenticationRequired }; return challenge
@@ -758,6 +902,7 @@ actor BackendRepository {
             try saveOrdinaryLogin(record); return challenge
         }
         let captured = try await readyScope(anonymous: true)
+        _ = try await requireAudience(.faceAuthentication, captured: captured)
         guard credentials?.authenticated == false, let original = credentials, enrollmentSerial == serial else { throw NativeAPIError.authenticationRequired }
         var random = [UInt8](repeating: 0, count: 32)
         guard SecRandomCopyBytes(kSecRandomDefault, random.count, &random) == errSecSuccess else { throw NativeAPIError.unavailable("secure_random") }
@@ -773,6 +918,7 @@ actor BackendRepository {
         return try acceptEnrollmentChallenge(value, record: record)
     }
     func capture(_ bytes: Data, index: Int, challenge: NativeFaceChallenge) async throws -> WireValue {
+        try await requireFaceAudience(challenge)
         if faceLifecycle != nil, accountRecovery == nil { return try await captureFaceLifecycle(bytes, index: index, challenge: challenge) }
         if accountRecovery != nil { return try await captureAccountRecovery(bytes, index: index, challenge: challenge) }
         guard enrollment != nil || ordinaryLogin != nil else { throw NativeAPIError.operationUnconfirmed(challenge.id) }
@@ -818,6 +964,7 @@ actor BackendRepository {
         return .object(["index": .integer(index), "sha256": .string(hash), "mime": .string(mime), "byte_size": .integer(bytes.count)])
     }
     func completeFace(_ challenge: NativeFaceChallenge, captures: [WireValue]) async throws -> NativeSessionSummary {
+        try await requireFaceAudience(challenge)
         if faceLifecycle != nil, accountRecovery == nil { return try await completeFaceLifecycle(challenge, captures: captures) }
         if accountRecovery != nil { return try await completeAccountRecovery(challenge, captures: captures) }
         guard enrollment != nil || ordinaryLogin != nil else { throw NativeAPIError.operationUnconfirmed(challenge.id) }
@@ -1163,7 +1310,7 @@ actor BackendRepository {
         if status.completed { try saveGuestDeletion(acknowledged) }
     }
     private func clearGuestDeviceReferences(account: String, completed: Bool = false) throws {
-        if completed { try retireFaceLifecycleAfterDeletion(account: account) }
+        if completed { try retireFaceLifecycleAfterDeletion(account: account); try retireAudienceAfterDeletion(account: account) }
         var removedOwnReference = false, anotherReference = false, canClearKey = true
         if let data = try secrets.read("face-enrollment-journal") {
             let held = try JSONDecoder().decode(NativeEnrollmentRecord.self, from: data); try held.validate(origin: origin)
@@ -1216,7 +1363,7 @@ actor BackendRepository {
     func community(_ action: String, payload: WireValue) async throws -> WireValue {
         try await json("/community/action", method: "POST", body: .object(["action": .string(action), "payload": payload]), scope: readyScope())
     }
-    func protectedJSON(_ path: String, method: String = "GET", body: WireValue? = nil) async throws -> WireValue { try await json(path, method: method, body: body, scope: readyScope()) }
+    func protectedJSON(_ path: String, method: String = "GET", body: WireValue? = nil) async throws -> WireValue { try await json(path, method: method, body: body, scope: readyScope(anonymous: Self.audienceWeakerPath(path, method: method))) }
     func photos(source: String = "all", cursor: WireValue? = nil, query: String = "", category: String = "all") async throws -> WireValue {
         guard ["all", "received", "contributions"].contains(source) else { throw NativeAPIError.invalidResponse }
         var payload: [String: WireValue] = ["source": .string(source), "limit": .integer(60)]
@@ -1235,16 +1382,37 @@ actor BackendRepository {
     func preview(_ photo: NativePhoto) async throws -> Data {
         guard photo.source == "personal" else { throw NativeAPIError.invalidResponse }
         let captured = try await readyScope(), capturedMediaEpoch = mediaEpoch
-        let permission = try await community("photos.validate", payload: .object(["asset_ids": .strings([photo.id])]))
+        let deadline = NativePrivateMediaDeadline(created: privateMediaClock.read(), authorityExpiresAt: credentials?.expiresAt)
+        expirePrivateMedia()
+        let permission: WireValue
+        do { permission = try await community("photos.validate", payload: .object(["asset_ids": .strings([photo.id])])) }
+        catch {
+            if case NativeAPIError.denied(let status, _) = error, [401, 403, 404, 410].contains(status) {
+                media.remove(assetID: photo.id); scheduleMediaExpiry()
+            }
+            throw error
+        }
         try check(captured)
         guard capturedMediaEpoch == mediaEpoch else { throw NativeAPIError.sessionChanged }
-        guard permission["authorized_ids"].array?.compactMap(\.string) == [photo.id] else { media.removeValue(forKey: photo.id); throw NativeAPIError.denied(403, "preview_access_unverified") }
-        let cacheKey = photo.id + ":" + photo.version
-        if let cached = media[cacheKey] { return cached }
-        let reply = try await request("/community/media/\(photo.id)/preview", scope: captured, binary: true)
-        guard reply.data.count <= 8 * 1024 * 1024, (reply.headers["content-type"] ?? "").hasPrefix("image/") else { throw NativeAPIError.invalidResponse }
-        try check(captured); guard capturedMediaEpoch == mediaEpoch else { throw NativeAPIError.sessionChanged }; media[cacheKey] = reply.data; mediaOrder.append(cacheKey)
-        while media.values.reduce(0, { $0 + $1.count }) > 16 * 1024 * 1024, let first = mediaOrder.first { mediaOrder.removeFirst(); media.removeValue(forKey: first) }
+        guard permission["authorized_ids"].array?.compactMap(\.string) == [photo.id] else { media.remove(assetID: photo.id); scheduleMediaExpiry(); throw NativeAPIError.denied(403, "preview_access_unverified") }
+        expirePrivateMedia()
+        guard deadline.remaining(at: privateMediaClock.read()) > 0 else { throw NativeAPIError.sessionChanged }
+        let cacheKey = NativePrivateMediaCache.Key(assetID: photo.id, version: photo.version)
+        if let cached = media.value(for: cacheKey, at: privateMediaClock.read()) { scheduleMediaExpiry(); return cached }
+        let reply: NativeHTTPReply
+        do { reply = try await request("/community/media/\(photo.id)/preview", scope: captured, binary: true) }
+        catch {
+            if case NativeAPIError.denied(let status, _) = error, [401, 403, 404, 410].contains(status) {
+                media.remove(assetID: photo.id); scheduleMediaExpiry()
+            }
+            throw error
+        }
+        guard !reply.data.isEmpty, reply.data.count <= 8 * 1024 * 1024, (reply.headers["content-type"] ?? "").hasPrefix("image/") else { throw NativeAPIError.invalidResponse }
+        try check(captured)
+        let now = privateMediaClock.read()
+        media.expire(at: now); scheduleMediaExpiry()
+        guard capturedMediaEpoch == mediaEpoch, deadline.remaining(at: now) > 0 else { throw NativeAPIError.sessionChanged }
+        media.insert(reply.data, for: cacheKey, deadline: deadline, at: now); scheduleMediaExpiry()
         return reply.data
     }
     private func mutation(_ action: String, payload: WireValue, source: String = "personal", approved: Set<NativePair>? = nil) async throws -> (String, WireValue) {
@@ -1302,10 +1470,19 @@ actor BackendRepository {
     }
     func reconcile(retryUnknown: Bool = false) async throws -> WireValue {
         guard let intent = pending().first else { throw NativeAPIError.invalidResponse }
+        return try await reconcileIntent(intent, retryUnknown: retryUnknown)
+    }
+    func reconcilePrivacy(retryUnknown: Bool = false) async throws -> WireValue {
+        guard let intent = pending().first(where: { $0.path.map(Self.privacyIntentPath) == true }) else { throw NativeAPIError.invalidResponse }
+        return try await reconcileIntent(intent, retryUnknown: retryUnknown)
+    }
+    private static func privacyIntentPath(_ path: String) -> Bool { path.hasPrefix("/privacy/") || path.hasPrefix("/privacy-exports/") }
+    private func reconcileIntent(_ intent: NativeOperationIntent, retryUnknown: Bool) async throws -> WireValue {
         guard intent.source == "personal", intent.payload["source"] == .null || intent.payload["source"].string == "personal" else { throw NativeAPIError.invalidResponse }
-        var result = try await community("operation", payload: .object(["operation_key": .string(intent.key)]))
+        let weakerPrivacy = intent.path.map { Self.audienceWeakerPath($0, method: intent.method ?? "POST") && ($0.hasPrefix("/privacy/") || $0.hasPrefix("/privacy-exports/")) } == true
+        var result = weakerPrivacy ? try await json("/privacy/operations/" + intent.key, scope: readyScope(anonymous: true)) : try await community("operation", payload: .object(["operation_key": .string(intent.key)]))
         if result["status"].string == "unknown", retryUnknown {
-            if let path = intent.path { result = try await json(path, method: intent.method ?? "POST", body: intent.payload, scope: readyScope()) }
+            if let path = intent.path { result = try await json(path, method: intent.method ?? "POST", body: intent.payload, scope: readyScope(anonymous: Self.audienceWeakerPath(path, method: intent.method ?? "POST"))) }
             else { result = try await community(intent.action, payload: intent.payload) }
         }
         if result["status"].string == "unknown" { return result }
@@ -1327,9 +1504,11 @@ actor BackendRepository {
         try validateDecision(value, requestID: requestID); try confirmed(key); return value
     }
     func post(_ path: String, payload: WireValue, operation: String, method: String = "POST") async throws -> WireValue {
-        let captured = try await readyScope(), key = UUID().uuidString.lowercased(); var body = payload.object ?? [:]; body["operation_key"] = .string(key)
+        let captured = try await readyScope(anonymous: Self.audienceWeakerPath(path, method: method)), key = UUID().uuidString.lowercased(); var body = payload.object ?? [:]; body["operation_key"] = .string(key)
         // The same token-free private intent fences an ambiguous non-community write.
-        if let intent = pending().first { throw NativeAPIError.operationUnconfirmed(intent.key) }
+        if let intent = pending().first(where: { existing in
+            !Self.privacyIntentPath(path) || existing.path.map(Self.privacyIntentPath) == true
+        }) { throw NativeAPIError.operationUnconfirmed(intent.key) }
         let intent = NativeOperationIntent(key: key, accountID: captured.account!, source: "personal", action: operation, payload: .object(body), approvedPairs: nil, path: path, method: method)
         intents.append(intent); try saveIntents()
         do { let value = try await json(path, method: method, body: intent.payload, scope: captured); try confirmed(key); return value }
@@ -2278,6 +2457,7 @@ extension BackendRepository {
     func stagePhotoUpload(_ sources: [NativeUploadSource], caption: String = "", expectedOwner: NativeMediaCaptureContext? = nil) async throws -> NativeUploadSummary {
         if let expectedOwner, !expectedOwner.ownsSession(summary()) { throw NativeAPIError.sessionChanged }
         let captured = try await readyScope()
+        _ = try await requirePhotoCollection(captured: captured, expectedOwner: expectedOwner)
         try Task.checkCancellation()
         if let expectedOwner, !expectedOwner.ownsSession(summary()) { throw NativeAPIError.sessionChanged }
         guard !uploadBusy, let device = try device(), device.accountID == captured.account, (1...30).contains(sources.count), caption.utf16.count <= 500,
@@ -2301,7 +2481,13 @@ extension BackendRepository {
         guard nextBatches.count < 10 else { throw NativeAPIError.unsupported(String(localized: "Check the saved uploads before adding another batch.")) }
         let id = UUID().uuidString.lowercased()
         do {
-            let files = try sources.map { try uploadFiles.stage($0, batch: id) }
+            var files: [NativeResumableUploadFile] = []
+            for (index, source) in sources.enumerated() {
+                if index > 0 { _ = try await requirePhotoCollection(captured: captured, expectedOwner: expectedOwner) }
+                try Task.checkCancellation(); try check(captured)
+                files.append(try uploadFiles.stage(source, batch: id))
+            }
+            _ = try await requirePhotoCollection(captured: captured, expectedOwner: expectedOwner)
             try Task.checkCancellation(); try check(captured)
             if let expectedOwner, !expectedOwner.ownsSession(summary()) { throw NativeAPIError.sessionChanged }
             let batch = NativeResumableUploadBatch(id: id, origin: origin, account: captured.account!, device: device.deviceID, caption: caption, files: files)
@@ -2417,6 +2603,8 @@ extension BackendRepository {
         guard let asset = file.assetID, let version = file.version, let token = captured.token,
               let url = URL(string: (origin.path == "/" ? "" : origin.path) + "/uploads/\(asset)/chunks?offset=\(offset)", relativeTo: origin)?.absoluteURL,
               url.scheme == origin.scheme, url.host == origin.host, url.port == origin.port else { throw NativeAPIError.invalidResponse }
+        let audienceFence = try await requireAudience(.photoProcessing, captured: captured)
+        _ = try uploadCheck(batchID, serial: serial, captured: captured)
         let (chunk, hash) = try uploadFiles.chunk(file, batch: batchID, offset: offset, count: count)
         var request = URLRequest(url: url); request.httpMethod = "PUT"; request.timeoutInterval = 60; request.cachePolicy = .reloadIgnoringLocalAndRemoteCacheData
         request.setValue("Bearer " + token, forHTTPHeaderField: "Authorization"); request.setValue(file.mime, forHTTPHeaderField: "Content-Type")
@@ -2438,6 +2626,7 @@ extension BackendRepository {
         guard value["asset_id"].string == asset, value["version"].string == version, value["byte_size"].integer == file.byteSize,
               let received = value["bytes_received"].integer, received >= offset + count, received <= file.byteSize,
               ["uploading", "uploaded"].contains(value["status"].string ?? "") else { throw NativeAPIError.invalidResponse }
+        try await recheckAudienceFence(audienceFence, captured: captured, purpose: .photoProcessing)
         let current = try uploadCheck(batchID, serial: serial, captured: captured), slot = uploadBatches[current].files.firstIndex(where: { $0.id == fileID })!
         uploadBatches[current].files[slot].acknowledgedBytes = received; uploadBatches[current].revise(); try saveUploadBatches()
         uploadFiles.removeChunk(chunk, batch: batchID)
@@ -2637,7 +2826,7 @@ extension BackendRepository {
     }
     func exportBytes(requestID: String) async throws -> Data {
         guard UUID(uuidString: requestID) != nil else { throw NativeAPIError.invalidResponse }
-        let captured = try await readyScope()
+        let captured = try await readyScope(anonymous: true)
         let grant = try await post("/privacy-exports/\(requestID)/grant", payload: .object([:]), operation: "privacy.export.grant")
         try check(captured)
         guard grant["request_id"].string == requestID, let path = grant["grant_path"].string,
@@ -2660,7 +2849,8 @@ extension BackendRepository {
         try record.validate(origin: origin); return record
     }
     func requestRegisteredDeletion(retry: Bool = false) async throws -> NativeRegisteredDeletionRecord {
-        let captured = try await readyScope()
+        let captured = try await readyScope(anonymous: true)
+        guard credentials?.authenticated == true else { throw NativeAPIError.authenticationRequired }
         var record: NativeRegisteredDeletionRecord
         if let existing = try registeredDeletionReceipt() {
             guard existing.accountID == captured.account else { throw NativeAPIError.sessionChanged }
@@ -2689,5 +2879,262 @@ extension BackendRepository {
     func continueRegisteredAccount() throws {
         guard let record = try registeredDeletionReceipt(), ["rejected", "cancelled"].contains(record.response?["privacy_request"]["status"].string ?? "") else { throw NativeAPIError.unsupported(String(localized: "Keep this receipt until the deletion request is resolved.")) }
         try secrets.write("registered-deletion-receipt", data: nil)
+    }
+}
+
+
+extension BackendRepository {
+    // This allow-list permits safety/privacy work under a current durable session
+    // even when an audience hold blocks all product work. It grants no backend authority.
+    private static func audienceWeakerPath(_ path: String, method: String = "GET") -> Bool {
+        path == "/me" || path == "/me/audience" || path.hasPrefix("/me/guardian-requests") || path.hasPrefix("/guardian-requests/") ||
+        path == "/me/devices" || path == "/me/sessions" || path == "/me/photo-preferences" || path == "/auth/session/revoke" || path == "/auth/device/revoke" ||
+        path.hasPrefix("/privacy/") || path.hasPrefix("/privacy-requests/") || path.hasPrefix("/privacy-exports/") ||
+        path == "/auth/logout" || (path.hasPrefix("/uploads/") && path.hasSuffix("/cancel"))
+    }
+    private func fetchAudience(_ captured: Scope) async throws -> NativeAudienceProjection {
+        guard let account = captured.account, captured.token != nil else { throw NativeAPIError.authenticationRequired }
+        let value = try await json("/me/audience", scope: captured)
+        try check(captured)
+        let parsed = try NativeAudienceProjection(value, account: account)
+        if let previous = audienceProjection, audienceProjectionEpoch == captured.epoch, previous.accountID == account {
+            guard parsed.version >= previous.version else { throw NativeAPIError.denied(409, "audience_version_changed") }
+        }
+        audienceProjection = parsed; audienceProjectionEpoch = captured.epoch
+        return parsed
+    }
+    func audienceSessionBinding() -> NativeAudienceSessionBinding? {
+        credentials.map { NativeAudienceSessionBinding(accountID: $0.account_id, epoch: epoch, registeredIdentity: $0.authenticated) }
+    }
+    func audiencePresentation(_ value: NativeAudienceProjection) throws -> NativeAudienceSessionBinding {
+        guard audienceProjection == value, audienceProjectionEpoch == epoch, value.accountID == credentials?.account_id, let binding = audienceSessionBinding() else { throw NativeAPIError.sessionChanged }
+        return binding
+    }
+    func audience() async throws -> NativeAudienceProjection {
+        try await fetchAudience(readyScope(anonymous: true))
+    }
+    private func requireAudience(_ purpose: NativeAudiencePurpose, captured: Scope) async throws -> NativeAudienceProjection {
+        let value = try await fetchAudience(captured); try value.require(purpose); return value
+    }
+    func requireAudience(_ purpose: NativeAudiencePurpose) async throws -> NativeAudienceProjection {
+        try await requireAudience(purpose, captured: readyScope(anonymous: true))
+    }
+    /// Fresh own product authority before local personal-photo collection.
+    /// An eligible audience and registered credential method alone do not mean
+    /// the registered reference/subject consent is still usable. Strong denial
+    /// retires collection, while the same durable session may still use privacy.
+    func requirePhotoCollection(expectedOwner: NativeMediaCaptureContext? = nil) async throws -> NativeAudienceProjection {
+        try await requirePhotoCollection(captured: readyScope(), expectedOwner: expectedOwner)
+    }
+    private func requirePhotoCollection(captured: Scope, expectedOwner: NativeMediaCaptureContext?) async throws -> NativeAudienceProjection {
+        try check(captured); try Task.checkCancellation()
+        if let expectedOwner, !expectedOwner.ownsSession(summary()) { throw NativeAPIError.sessionChanged }
+        let approval = try await requireAudience(.photoProcessing, captured: captured)
+        // assertActor on this existing backend route checks the current
+        // registered reference before and after its private profile read.
+        // A privacy-only durable credential is deliberately retained on 401;
+        // this response grants no local product/collection authority.
+        let reply: NativeHTTPReply
+        do { reply = try await request("/me/profile", scope: captured, preserveRefreshAuthority: true) }
+        catch { retireMedia(); throw error }
+        guard reply.status == 200 else { throw NativeAPIError.invalidResponse }
+        let value = try WireValue.decoded(reply.data)
+        try NativeAudienceProjection.keys(value, ["user_id", "profile_scope", "name"])
+        guard try value.uuid("user_id") == captured.account, value["profile_scope"].string == "registered_face_profile",
+              let name = value["name"].string, name.utf8.count <= 480 else { throw NativeAPIError.invalidResponse }
+        try await recheckAudienceFence(approval, captured: captured, purpose: .photoProcessing)
+        try check(captured); try Task.checkCancellation()
+        if let expectedOwner, !expectedOwner.ownsSession(summary()) { throw NativeAPIError.sessionChanged }
+        return approval
+    }
+    private func audienceRequestFence(_ path: String, method: String, body: WireValue?, captured: Scope) async throws -> NativeAudienceProjection? {
+        let preferenceEnable = path == "/me/photo-preferences" && method != "GET" && ["photo_matching_consent", "processing_consent", "receive_matches"].contains(where: { body?[$0].bool == true })
+        guard captured.account != nil, !path.hasPrefix("/auth/"), preferenceEnable || !Self.audienceWeakerPath(path, method: method) else { return nil }
+        let purpose: NativeAudiencePurpose = path.hasPrefix("/uploads") ? .photoProcessing : .faceAuthentication
+        let value = try await requireAudience(purpose, captured: captured)
+        if path == "/community/action", let action = body?["action"].string,
+           !["photos", "photos.validate", "inbox", "history", "operation"].contains(action) { try value.require(.photoMatching) }
+        return value
+    }
+    private func recheckAudienceFence(_ previous: NativeAudienceProjection, captured: Scope, purpose: NativeAudiencePurpose = .faceAuthentication) async throws {
+        let current = try await requireAudience(purpose, captured: captured)
+        guard current == previous else { retireMedia(); throw NativeAPIError.denied(409, "audience_version_changed") }
+    }
+    private func faceAudienceRetains(_ challenge: NativeFaceChallenge) -> Bool {
+        guard guestDeletion == nil else { return false }
+        if let record = faceLifecycle, accountRecovery == nil { return record.loginChallengeWire == challenge.wire || record.pending?.challengeWire == challenge.wire }
+        if let record = accountRecovery {
+            if record.challengeWire == challenge.wire { return true }
+            // Recovery start/resume adds request metadata; signed readonly
+            // status returns the same plain challenge. Normalize only that
+            // known wrapper for its exact authoritative predecessor. Every
+            // remaining field, including audience authority, must still match.
+            guard let retained = record.challengeWire, retained["recovery_request_id"] == .null,
+                  retained["recovery_generation"] == .null, challenge.accountID == record.accountID,
+                  challenge.deviceID == record.deviceID, challenge.id == record.predecessorID,
+                  challenge.wire["recovery_request_id"].string == record.requestID,
+                  challenge.wire["recovery_generation"].integer == record.generation,
+                  var plain = challenge.wire.object else { return false }
+            plain.removeValue(forKey: "recovery_request_id"); plain.removeValue(forKey: "recovery_generation")
+            return retained == .object(plain)
+        }
+        if let record = enrollment { return record.challengeWire == challenge.wire || record.loginChallengeWire == challenge.wire }
+        return ordinaryLogin?.challengeWire == challenge.wire
+    }
+    func requireFaceAudience(_ challenge: NativeFaceChallenge) async throws {
+        if let held = audienceSuspension { throw NativeAPIError.operationUnconfirmed(held.operation.operationKey) }
+        guard challenge.expiresAt > Date() else { throw NativeAPIError.reviewChanged }
+        guard faceAudienceRetains(challenge) else { throw NativeAPIError.sessionChanged }
+        let authority = try NativeAudienceChallengeAuthority(challenge.wire["audience_authority"], challenge: challenge)
+        try authority.requireCurrent()
+        if challenge.purpose == "registration", credentials?.account_id == challenge.accountID {
+            let captured = try await readyScope(anonymous: true)
+            guard captured.account == challenge.accountID else { throw NativeAPIError.sessionChanged }
+            let current = try await requireAudience(.faceAuthentication, captured: captured)
+            guard current.version == authority.audienceVersion else { throw NativeAPIError.denied(409, "audience_version_changed") }
+            guard faceAudienceRetains(challenge) else { throw NativeAPIError.sessionChanged }
+        } else {
+            // A known signed login/recovery challenge is issued by the server
+            // only after its target account's audience check. Never ask a new
+            // anonymous account to declare an age for that different target.
+            try NativeAudienceChallengeAuthority(challenge.wire["audience_authority"], challenge: challenge).requireCurrent()
+            if credentials?.account_id == challenge.accountID, (credentials?.expiresAt ?? .distantPast) > Date() {
+                let current = try await requireAudience(.faceAuthentication, captured: readyScope(anonymous: true))
+                guard current.version == authority.audienceVersion else { throw NativeAPIError.denied(409, "audience_version_changed") }
+            }
+        }
+    }
+    private func retireAudienceAfterDeletion(account: String) throws {
+        if let operation = try pendingAudienceMutation(), operation.accountID == account {
+            let slot = "audience-operations-retired-after-deletion"
+            var archive = try secrets.read(slot).map { try JSONDecoder().decode([NativeAudienceMutationRecord].self, from: $0) } ?? []
+            if !archive.contains(operation) { guard archive.count < 32 else { throw NativeAPIError.invalidResponse }; archive.append(operation); try secrets.write(slot, data: JSONEncoder().encode(archive)) }
+            guard let data = try secrets.read("audience-mutation-journal"), try JSONDecoder().decode(NativeAudienceMutationRecord.self, from: data) == operation,
+                  try secrets.compareAndSwap("audience-mutation-journal", expected: data, replacement: nil) else { throw NativeAPIError.sessionChanged }
+        }
+        if let data = try secrets.read("audience-suspended-authority") {
+            let held = try JSONDecoder().decode(NativeAudienceSuspensionRecord.self, from: data); try held.validate(origin: origin)
+            if held.operation.accountID == account { try secrets.write("audience-suspended-authority", data: nil); audienceSuspension = nil }
+        }
+    }
+    private func saveAudienceSuspension(_ held: NativeAudienceSuspensionRecord) throws {
+        try held.validate(origin: origin)
+        try secrets.write("audience-suspended-authority", data: JSONEncoder().encode(held)); audienceSuspension = held
+    }
+    private func restoreAudienceSuspension() throws -> Bool {
+        guard let bytes = try secrets.read("audience-suspended-authority") else { return false }
+        guard bytes.count <= 32768 else { throw NativeAPIError.invalidResponse }
+        let held = try JSONDecoder().decode(NativeAudienceSuspensionRecord.self, from: bytes); try held.validate(origin: origin)
+        guard enrollment == nil, accountRecovery == nil, ordinaryLogin == nil, faceLifecycle == nil else { throw NativeAPIError.sessionChanged }
+        if let saved = try secrets.read("credentials") {
+            let current = try JSONDecoder().decode(NativeCredentials.self, from: saved)
+            guard current.account_id == held.operation.accountID, current.auth_method == "anonymous" else { throw NativeAPIError.sessionChanged }
+        }
+        let pending = try pendingAudienceMutation()
+        guard pending == held.operation || pending == nil && held.resolved else { throw NativeAPIError.sessionChanged }
+        credentials = held.credentials; audienceSuspension = held; epoch += 1; retireMedia()
+        if held.resolved && pending == nil {
+            try secrets.write("credentials", data: JSONEncoder().encode(held.credentials))
+            try secrets.write("audience-suspended-authority", data: nil); audienceSuspension = nil; return false
+        }
+        return true
+    }
+    func pendingAudienceMutation() throws -> NativeAudienceMutationRecord? {
+        guard let bytes = try secrets.read("audience-mutation-journal") else { return nil }
+        guard bytes.count <= 8192 else { throw NativeAPIError.invalidResponse }
+        let record = try JSONDecoder().decode(NativeAudienceMutationRecord.self, from: bytes)
+        try record.validate(origin: origin); return record
+    }
+    private func audienceMutation(path: String, method: String = "POST", body: WireValue, retryOriginal: Bool = false) async throws -> WireValue {
+        guard !audienceMutationBusy else { throw NativeAPIError.operationUnconfirmed("audience_mutation_busy") }
+        audienceMutationBusy = true; defer { audienceMutationBusy = false }
+        let captured = try await readyScope(anonymous: true)
+        let record: NativeAudienceMutationRecord
+        if let existing = try pendingAudienceMutation() {
+            guard existing.accountID == captured.account else { throw NativeAPIError.sessionChanged }
+            guard retryOriginal else { throw NativeAPIError.operationUnconfirmed(existing.operationKey) }
+            record = existing
+        } else {
+            guard !retryOriginal, let account = captured.account else { throw NativeAPIError.invalidResponse }
+            record = try NativeAudienceMutationRecord(origin: origin, accountID: account, path: path, method: method, body: body)
+            guard try secrets.compareAndSwap("audience-mutation-journal", expected: nil, replacement: JSONEncoder().encode(record)) else { throw NativeAPIError.operationUnconfirmed("audience_mutation_busy") }
+        }
+        do {
+            let value = try await json(record.path, method: record.method, body: record.body, scope: captured)
+            try check(captured)
+            if record.path == "/me/audience" { _ = try NativeAudienceProjection(value, account: record.accountID) }
+            else if record.path == "/me/guardian-requests" {
+                let full = try NativeAudienceProjection(value["audience"], account: record.accountID)
+                let request = try NativeGuardianRequest(value["guardian_request"], child: record.accountID)
+                guard full.guardianRequest == request else { throw NativeAPIError.invalidResponse }
+            } else {
+                let id = String(record.path.split(separator: "/")[1])
+                let request = try NativeGuardianRequest(value["guardian_request"], id: id)
+                guard request.revision > (record.body["expected_revision"].integer ?? Int.max) else { throw NativeAPIError.invalidResponse }
+                if record.path.hasSuffix("/claim") {
+                    guard request.childAccountID != record.accountID, request.state != .pending else { throw NativeAPIError.invalidResponse }
+                    try secrets.write("guardian-bound-reference", data: WireValue.object(["account_id": .string(record.accountID), "request_id": .string(request.id)]).encoded())
+                }
+            }
+            // A response whose binding cannot be checked never retires the key.
+            try retireAudienceMutation(record)
+            audienceProjection = nil; audienceProjectionEpoch = nil; retireMedia()
+            return value
+        } catch NativeAPIError.denied(let status, let code) where (400..<500).contains(status) && ![408, 429].contains(status) && code != "operation_key_conflict" {
+            try check(captured)
+            try retireAudienceMutation(record)
+            throw NativeAPIError.denied(status, code)
+        } catch { throw NativeAPIError.operationUnconfirmed(record.operationKey) }
+    }
+    private func retireAudienceMutation(_ record: NativeAudienceMutationRecord) throws {
+        if var held = audienceSuspension {
+            guard held.operation == record, let current = credentials, current.account_id == record.accountID else { throw NativeAPIError.sessionChanged }
+            held.credentials = current; held.resolved = true; try saveAudienceSuspension(held)
+            try secrets.write("credentials", data: JSONEncoder().encode(current))
+        }
+        guard let data = try secrets.read("audience-mutation-journal"),
+              try JSONDecoder().decode(NativeAudienceMutationRecord.self, from: data) == record,
+              try secrets.compareAndSwap("audience-mutation-journal", expected: data, replacement: nil) else { throw NativeAPIError.sessionChanged }
+        if audienceSuspension != nil { try secrets.write("audience-suspended-authority", data: nil); audienceSuspension = nil }
+    }
+    func retryAudienceMutation() async throws -> NativeAudienceProjection {
+        _ = try await audienceMutation(path: "", body: .null, retryOriginal: true)
+        return try await audience()
+    }
+    func declareAudience(_ band: NativeAgeBand, expectedVersion: Int) async throws -> NativeAudienceProjection {
+        guard band != .unknown else { throw NativeAPIError.invalidResponse }
+        _ = try await audienceMutation(path: "/me/audience", method: "PUT", body: .object(["age_band": .string(band.rawValue), "policy_version": .string(NativeAudienceProjection.policy), "expected_version": .integer(expectedVersion)]))
+        return try await audience()
+    }
+    func createGuardianRequest(expectedVersion: Int) async throws -> NativeAudienceProjection {
+        _ = try await audienceMutation(path: "/me/guardian-requests", body: .object(["expected_version": .integer(expectedVersion), "policy_version": .string(NativeAudienceProjection.policy)]))
+        return try await audience()
+    }
+    func guardianRequest(_ id: String) async throws -> NativeGuardianRequest {
+        guard UUID(uuidString: id) != nil else { throw NativeAPIError.invalidResponse }
+        let captured = try await readyScope(anonymous: true)
+        let value = try await json("/me/guardian-requests/" + id, scope: captured)
+        return try NativeGuardianRequest(value["guardian_request"], id: id)
+    }
+    func claimGuardianRequest(id: String, revision: Int, purposes: Set<NativeAudiencePurpose>, relationshipAttested: Bool) async throws -> NativeGuardianRequest {
+        let captured = try await readyScope(), own = try await fetchAudience(captured)
+        guard own.ageBand == .adult, own.status == .eligible, relationshipAttested, !purposes.isEmpty, UUID(uuidString: id) != nil else { throw NativeAPIError.denied(403, "guardian_adult_required") }
+        let value = try await audienceMutation(path: "/guardian-requests/" + id + "/claim", body: .object(["expected_revision": .integer(revision), "policy_version": .string(NativeAudienceProjection.policy), "relationship_attested": .bool(true), "purposes": .strings(purposes.map(\.rawValue).sorted())]))
+        let request = try NativeGuardianRequest(value["guardian_request"], id: id)
+        guard request.childAccountID != captured.account, request.state != .pending else { throw NativeAPIError.invalidResponse }
+        return request
+    }
+    func retainedGuardianClaim() async throws -> NativeGuardianRequest? {
+        guard let data = try secrets.read("guardian-bound-reference") else { return nil }
+        guard data.count <= 1024 else { throw NativeAPIError.invalidResponse }
+        let value = try WireValue.decoded(data)
+        try NativeAudienceProjection.keys(value, ["account_id", "request_id"])
+        let captured = try await readyScope(anonymous: true)
+        guard try value.uuid("account_id") == captured.account else { return nil }
+        return try await guardianRequest(value.uuid("request_id"))
+    }
+    func withdrawGuardianRequest(_ request: NativeGuardianRequest) async throws -> NativeGuardianRequest {
+        let value = try await audienceMutation(path: "/guardian-requests/" + request.id + "/withdraw", body: .object(["expected_revision": .integer(request.revision)]))
+        return try NativeGuardianRequest(value["guardian_request"], id: request.id)
     }
 }

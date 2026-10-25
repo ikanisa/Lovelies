@@ -4,10 +4,18 @@ import AVFoundation
 
 @MainActor final class LiveAppStore: ObservableObject {
     @Published var session: NativeSessionSummary?
+    @Published private(set) var audience: NativeAudienceProjection?
+    @Published private(set) var audiencePendingMutation = false
+    @Published private(set) var guardianClaim: NativeGuardianRequest?
+    private var audienceCaptureGeneration = 0
+    private var audienceSessionEpoch: Int?
+    @Published private(set) var audienceBinding: NativeAudienceSessionBinding?
+    var hasRegisteredPrivacyIdentity: Bool { audienceBinding?.registeredIdentity == true }
     @Published var connected = false
     @Published var busy = false
     @Published var error: String?
     @Published var hasPendingOperation = false
+    @Published private(set) var hasPendingPrivacyOperation = false
     @Published var photos: [NativePhoto] = []
     @Published var currentPhoto: NativePhoto?
     @Published var currentPerson: NativePerson?
@@ -63,6 +71,10 @@ import AVFoundation
     @Published var supportSubject = ""
     @Published var supportDetails = ""
     @Published var sharedFile: NativeShareFile?
+    private let sharedFiles: NativeAuthorizedShareFiles
+    private let privateMediaClock: NativePrivateMediaClock
+    private var sharedFileDeadline: NativePrivateMediaDeadline?
+    private var sharedFileExpiryTask: Task<Void, Never>?
     private var libraryAccount: String?
     private var savedReview: NativeShareDraft?
     private var savedReviewAssetIDs: [String] = []
@@ -87,9 +99,22 @@ import AVFoundation
     private var workGeneration = 0
     private var cameraReviewGeneration = 0
     private var retakeChallenge: NativeFaceChallenge?
-    private var photoCameraContext: NativeMediaCaptureContext?
-    var canEdit: Bool { !busy && !hasPendingOperation && !uploadRunning }
-    var canDeleteGuest: Bool { connected && session?.authenticated == false && guestDeletion == nil && accountRecovery == nil && faceLifecycle == nil && !busy }
+    private(set) var photoCameraContext: NativeMediaCaptureContext?
+    init(sharedFiles: NativeAuthorizedShareFiles = NativeAuthorizedShareFiles(), privateMediaClock: NativePrivateMediaClock = .live) {
+        self.sharedFiles = sharedFiles; self.privateMediaClock = privateMediaClock
+        // A restarted presentation has no surviving authority. Only recognized
+        // private share files participate; durable upload staging is separate.
+        do { try sharedFiles.prune(now: privateMediaClock.read().wall) }
+        catch { scheduleSharedFileCleanupRetry() }
+    }
+    var audienceEligible: Bool {
+        guard let audience, audience.accountID == audienceBinding?.accountID, audienceSessionEpoch == audienceBinding?.epoch,
+              session == nil || session?.accountID == audience.accountID && session?.epoch == audienceSessionEpoch else { return false }
+        return (try? audience.require(.faceAuthentication)) != nil
+    }
+    var canManagePrivacy: Bool { !busy }
+    var canEdit: Bool { audienceEligible && !hasPendingOperation && !uploadRunning && canManagePrivacy }
+    var canDeleteGuest: Bool { connected && !hasRegisteredPrivacyIdentity && (session?.authenticated == false || audienceBinding != nil) && guestDeletion == nil && accountRecovery == nil && faceLifecycle == nil && !busy }
     var blockedPersonIDs: Set<String> { Set(blockedPeople.compactMap { $0["blocked_id"].string }) }
     var effective: Set<NativePair> { guard let snapshot, let draft else { return [] }; return draft.effective(snapshot).filter { !blockedPersonIDs.contains($0.recipient_id) } }
     var subsets: [String: [String]] { Dictionary(grouping: effective, by: \.recipient_id).mapValues { $0.map(\.asset_id).sorted() } }
@@ -113,7 +138,15 @@ import AVFoundation
                     if let quality = NativeFaceQualityFailure.from(error), retakeChallenge != nil {
                         faceQualityFailure = quality; retireSelfieReview(); stopFaceCameraPresentation()
                         navigation?.go(.faceQualityRetry, replace: true, simulateProgress: false)
-                    } else { self.error = error.localizedDescription }
+                    } else {
+                        if Self.isAudienceError(error) {
+                            let currentWeakBinding = await repository?.audienceSessionBinding()
+                            guard fence.permits(currentGeneration: workGeneration, cancelled: Task.isCancelled) else { return }
+                            audience = nil; stopFaceCameraPresentation(); photoCamera = false; photoCameraContext = nil
+                            retireAccountPresentation(preservingWeakState: canPreserveWeakPresentation(currentWeakBinding))
+                        }
+                        self.error = error.localizedDescription
+                    }
                 }
             }
             if fence.permits(currentGeneration: workGeneration, cancelled: Task.isCancelled), let repository {
@@ -124,16 +157,34 @@ import AVFoundation
                 let nextRecovery = try? await repository.accountRecoverySummary()
                 let nextLifecycle = try? await repository.faceLifecycleSummary()
                 let nextOrdinary = try? await repository.ordinaryLoginSummary()
+                let nextAudienceBinding = await repository.audienceSessionBinding()
+                let pendingAudience = (try? await repository.pendingAudienceMutation()) != nil
                 let retainedCapture = try? await repository.retainedFaceCaptureContext()
+                let finalAudienceBinding = await repository.audienceSessionBinding()
                 guard fence.permits(currentGeneration: workGeneration, cancelled: Task.isCancelled) else { return }
-                if session != nil && (nextSession == nil || nextSession?.accountID != session?.accountID) { retireSelfieReview(); retireAccountPresentation() }
-                hasPendingOperation = !nextPending.isEmpty; session = nextSession; guestDeletion = nextGuest; enrollment = nextEnrollment; accountRecovery = nextRecovery; faceLifecycle = nextLifecycle; ordinaryLogin = nextOrdinary
+                guard finalAudienceBinding == nextAudienceBinding,
+                      nextSession == nil || nextSession?.accountID == nextAudienceBinding?.accountID && nextSession?.epoch == nextAudienceBinding?.epoch else {
+                    retireSelfieReview(); retireAccountPresentation()
+                    audience = nil; audienceSessionEpoch = nil; audienceBinding = nil; session = nil
+                    return
+                }
+                let preserveWeakPresentation = canPreserveWeakPresentation(nextAudienceBinding)
+                let weakBindingChanged = audienceBinding != nextAudienceBinding
+                if weakBindingChanged || session != nil && (nextSession == nil || nextSession?.accountID != session?.accountID) {
+                    retireSelfieReview(); retireAccountPresentation(preservingWeakState: preserveWeakPresentation)
+                }
+                audiencePendingMutation = pendingAudience
+                if nextAudienceBinding?.accountID != audience?.accountID || nextAudienceBinding?.epoch != audienceSessionEpoch { audience = nil; audienceSessionEpoch = nil }
+                audienceBinding = nextAudienceBinding
+                hasPendingOperation = !nextPending.isEmpty; hasPendingPrivacyOperation = nextPending.contains { $0.path?.hasPrefix("/privacy/") == true || $0.path?.hasPrefix("/privacy-exports/") == true }; session = nextSession; guestDeletion = nextGuest; enrollment = nextEnrollment; accountRecovery = nextRecovery; faceLifecycle = nextLifecycle; ordinaryLogin = nextOrdinary
                 if captureNeedsStatus && retakeChallenge == nil { retakeChallenge = retainedCapture }
                 if nextGuest == nil, nextRecovery == nil, let nextLifecycle {
                     challenge = nextLifecycle.challenge; captureReceipts = nextLifecycle.receipts
                     if !nextLifecycle.authenticated {
-                        retireAccountPresentation()
-                        if navigation?.screen != .faceEnrollment && navigation?.screen != .processing && navigation?.screen != .faceQualityRetry { navigation?.go(.faceManagement, replace: true, simulateProgress: false) }
+                        retireAccountPresentation(preservingWeakState: preserveWeakPresentation)
+                        if let currentScreen = navigation?.screen, ![.faceEnrollment, .processing, .faceQualityRetry, .privacy, .exportData, .security].contains(currentScreen) {
+                            navigation?.go(.faceManagement, replace: true, simulateProgress: false)
+                        }
                     }
                 } else if nextGuest == nil, let nextRecovery {
                     challenge = nextRecovery.awaitingServer ? nil : nextRecovery.challenge; captureReceipts = nextRecovery.receipts
@@ -153,13 +204,17 @@ import AVFoundation
         }
     }
     func connect() {
+        retireSharedFile()
         performGuarded { [self] fence in
             await NativeBackgroundUploads.shared.stop()
+            try checkPublication(fence)
             if repository == nil { repository = try NativeBackgroundUploads.shared.repository() }
-            NativeImport.removeAll(); retireSharedFile()
+            NativeImport.removeAll()
             if let retained = try await repository!.registeredDeletionReceipt() {
+                try checkPublication(fence)
                 registeredDeletion = retained; connected = true; navigation?.go(.privacy, replace: true, simulateProgress: false)
-                registeredDeletion = try await repository!.checkRegisteredDeletion(); return
+                let checked = try await repository!.checkRegisteredDeletion()
+                try checkPublication(fence); registeredDeletion = checked; return
             }
             _ = try await repository!.bootstrap()
             let restoredGuest = await repository!.guestDeletionSummary()
@@ -171,11 +226,27 @@ import AVFoundation
             let retainedCapture = try await repository!.retainedFaceCaptureContext()
             try checkPublication(fence)
             session = restoredSession; guestDeletion = restoredGuest; enrollment = restoredEnrollment; accountRecovery = restoredRecovery; faceLifecycle = restoredLifecycle; ordinaryLogin = restoredOrdinary; connected = true
+            let restoredAudienceBinding = await repository!.audienceSessionBinding()
+            try checkPublication(fence)
+            if audienceBinding != restoredAudienceBinding {
+                retireSelfieReview(); retireAccountPresentation(); audience = nil; audienceSessionEpoch = nil
+            }
+            audienceBinding = restoredAudienceBinding
+            if restoredAudienceBinding != nil { let currentAudience = try await repository!.audience(); try checkPublication(fence); try await installAudience(currentAudience, fence: fence) }
+            let restoredAudiencePending = (try await repository!.pendingAudienceMutation()) != nil
+            try checkPublication(fence); audiencePendingMutation = restoredAudiencePending
+            if hasRegisteredPrivacyIdentity {
+                let restoredClaim = try? await repository!.retainedGuardianClaim()
+                try checkPublication(fence); guardianClaim = restoredClaim
+            }
             if retainedCapture != nil { retakeChallenge = retainedCapture; captureNeedsStatus = restoredLifecycle?.challenge == nil && restoredLifecycle != nil || restoredEnrollment?.awaitingServer == true || restoredRecovery?.awaitingServer == true || restoredOrdinary?.awaitingServer == true }
             if guestDeletion != nil {
                 retireGuestPresentation(); navigation?.go(.privacy, replace: true, simulateProgress: false)
                 let checked = try await repository!.checkGuestDeletion()
                 try checkPublication(fence); guestDeletion = checked
+            }
+            else if audiencePendingMutation || audienceBinding != nil && !audienceEligible {
+                stopFaceCameraPresentation(); retireAccountPresentation(); navigation?.go(.introduction, replace: true, simulateProgress: false)
             }
             else if let restoredLifecycle, restoredRecovery == nil {
                 challenge = restoredLifecycle.challenge; captureReceipts = restoredLifecycle.receipts
@@ -203,14 +274,23 @@ import AVFoundation
             }
         }
     }
-    private func retireAccountPresentation() {
+    private var isWeakPrivacyScreen: Bool {
+        guard let screen = navigation?.screen else { return false }
+        return [.privacy, .exportData, .security].contains(screen)
+    }
+    private func canPreserveWeakPresentation(_ nextBinding: NativeAudienceSessionBinding?) -> Bool {
+        guard let nextBinding, nextBinding == audienceBinding else { return false }
+        return isWeakPrivacyScreen
+    }
+    private func retireAccountPresentation(preservingWeakState: Bool = false) {
+        if !preservingWeakState { guardianClaim = nil; preferences = .object([:]); privacy = .object([:]); devices = []; sessions = []; recoveryKey = nil }
         uploadTask?.cancel(); uploadPresentation += 1; uploadRunning = false; uploadRecovery = nil; uploadCaption = ""; uploadedIDs = []; processingStatuses = [:]
         photoImportContext = nil
         photoCamera = false; photoCameraContext = nil
         photos = []; currentPhoto = nil; currentPerson = nil; snapshot = nil; draft = nil; preview = nil; outcome = nil
-        inbox = []; receipt = nil; name = ""; preferences = .object([:]); privacy = .object([:]); devices = []; sessions = []
+        inbox = []; receipt = nil; name = ""
         notificationSettings = .object([:]); notifications = []; blockedPeople = []; favoriteIDs = []; outgoing = []; supportRequests = []; supportSubject = ""; supportDetails = ""; query = ""; libraryAccount = nil; savedReview = nil; savedReviewAssetIDs = []; lastLibraryScreen = nil; restoredDestination = nil; galleryAnchor = nil; nextCursor = nil; retireSharedFile(); NativePurchasesRetirement(); mediaRevision += 1
-        recoveryBackup = nil; recoveryKey = nil; recoveryBackupSheet = false
+        recoveryBackup = nil; recoveryBackupSheet = false
     }
     private func retireGuestPresentation() {
         retireSelfieReview(); retireAccountPresentation(); stopFaceCameraPresentation(); challenge = nil; captureReceipts = []; lastSelfie = nil
@@ -262,11 +342,17 @@ import AVFoundation
             guard let repository, let challenge else { throw NativeAPIError.unsupported(String(localized: "Accept face registration consent and start a current capture session first.")) }
             let shutter = NativeFaceShutterContext(challenge), captureIndex = captureReceipts.count
             let cameraGeneration = camera.currentState.generation, presentationGeneration = cameraReviewGeneration, sessionEpoch = session?.epoch
+            try await repository.requireFaceAudience(challenge)
+            try checkPublication(fence)
             var bytes = try await camera.capture(); defer { bytes.resetBytes(in: 0..<bytes.count) }
             try checkPublication(fence)
             guard isForeground, camera.currentState.generation == cameraGeneration,
                   cameraReviewGeneration == presentationGeneration, session?.epoch == sessionEpoch,
                   shutter.permits(self.challenge), captureReceipts.count == captureIndex else { throw NativeAPIError.sessionChanged }
+            try await repository.requireFaceAudience(challenge)
+            try checkPublication(fence)
+            guard isForeground, camera.currentState.generation == cameraGeneration, cameraReviewGeneration == presentationGeneration,
+                  session?.epoch == sessionEpoch, shutter.permits(self.challenge), captureReceipts.count == captureIndex else { throw NativeAPIError.sessionChanged }
             guard captureReceipts.reduce(0, { $0 + ($1["byte_size"].integer ?? 0) }) + bytes.count <= 8 * 1024 * 1024 else { throw NativeAPIError.unsupported(String(localized: "These captures exceed the 8 MiB enrollment limit. Start again with smaller camera captures.")) }
             guard let decoded = UIImage(data: bytes) else { throw NativeCameraIssue.invalidImage }
             selfieReview = try NativeSelfieCandidate(bytes: bytes, challenge: challenge, index: captureIndex,
@@ -311,7 +397,7 @@ import AVFoundation
     }
     func retakeReviewedSelfie() {
         guard !busy else { return }; retireSelfieReview()
-        if !camera.ready { Task { await camera.start() } }
+        if !camera.ready { openFaceCamera() }
     }
     func cameraAuthorityChanged() {
         if let candidate = selfieReview, candidate.cameraGeneration != camera.currentState.generation || !camera.currentState.foreground || camera.currentState.permission != .authorized { retireSelfieReview() }
@@ -320,8 +406,28 @@ import AVFoundation
         retireSelfieReview(); stopFaceCameraPresentation(); workTask?.cancel(); workGeneration += 1; busy = false
         navigation?.back()
     }
-    func stopFaceCameraPresentation() { retireSelfieReview(); camera.stop() }
-    func recoverCamera() { retireSelfieReview(); Task { await camera.start() } }
+    func stopFaceCameraPresentation() { audienceCaptureGeneration += 1; retireSelfieReview(); camera.stop() }
+    func openFaceCamera() {
+        guard !busy, isForeground, guestDeletion == nil, navigation?.screen == .faceEnrollment, selfieReview == nil else { return }
+        guard let challenge else { prepareFace(); return }
+        audienceCaptureGeneration += 1; let generation = audienceCaptureGeneration
+        Task { [self] in
+            do {
+                guard let repository else { throw NativeAPIError.authenticationRequired }
+                try await repository.requireFaceAudience(challenge)
+                guard generation == audienceCaptureGeneration, self.challenge?.wire == challenge.wire, isForeground else { return }
+                await camera.start(expiresAt: challenge.expiresAt) { [self] in
+                    guard generation == audienceCaptureGeneration, self.challenge?.wire == challenge.wire, isForeground, navigation?.screen == .faceEnrollment else { throw NativeAPIError.sessionChanged }
+                    try await repository.requireFaceAudience(challenge)
+                    guard generation == audienceCaptureGeneration, self.challenge?.wire == challenge.wire, isForeground, navigation?.screen == .faceEnrollment else { throw NativeAPIError.sessionChanged }
+                }
+                guard generation == audienceCaptureGeneration, self.challenge?.wire == challenge.wire, isForeground else { camera.stop(); return }
+                try await repository.requireFaceAudience(challenge)
+                guard generation == audienceCaptureGeneration, self.challenge?.wire == challenge.wire, isForeground else { camera.stop(); return }
+            } catch { if generation == audienceCaptureGeneration { stopFaceCameraPresentation(); self.error = error.localizedDescription } }
+        }
+    }
+    func recoverCamera() { retireSelfieReview(); openFaceCamera() }
     func retakeRejectedSequence() {
         guard let previous = retakeChallenge else { checkCurrentFaceCapture(); return }
         let terminal = faceQualityFailure != nil
@@ -475,20 +581,50 @@ import AVFoundation
             else { outcome = value; transferText = String(localized: "Original request confirmed.") }
         }
     }
-    func beginPhotoImport() -> NativeMediaCaptureContext? {
-        guard canEdit, isForeground, guestDeletion == nil, let session, session.authenticated, session.expiresAt > Date() else { return nil }
-        // An older picker may still be decoding after its surface dismissed.
-        // Opening a new request retires that older publication ownership.
+    private func photoCollectionFailed(_ error: Error, account: String, epoch: Int, generation: Int) async {
+        let currentBinding = await repository?.audienceSessionBinding()
+        guard !Task.isCancelled, generation == workGeneration, session?.accountID == account, session?.epoch == epoch else { return }
+        let preserveWeak = canPreserveWeakPresentation(currentBinding)
+        audience = nil; audienceSessionEpoch = nil
+        retireAccountPresentation(preservingWeakState: preserveWeak)
+        if currentBinding?.accountID == account, currentBinding?.epoch == epoch { audienceBinding = currentBinding }
+        else { audienceBinding = nil; session = nil }
+        self.error = error.localizedDescription
+    }
+    func beginPhotoImport() async -> NativeMediaCaptureContext? {
+        guard canEdit, isForeground, guestDeletion == nil, let repository, let session, session.authenticated, session.expiresAt > Date() else { return nil }
         workTask?.cancel(); workGeneration += 1
-        return NativeMediaCaptureContext(accountID: session.accountID, sessionEpoch: session.epoch, publicationGeneration: workGeneration, expiresAt: session.expiresAt)
+        let generation = workGeneration
+        do {
+            let current = try await repository.requirePhotoCollection()
+            guard !busy, isForeground, generation == workGeneration, self.session?.epoch == session.epoch,
+                  self.session?.accountID == session.accountID, current.accountID == session.accountID else { return nil }
+            let binding = await repository.audienceSessionBinding()
+            guard !Task.isCancelled, generation == workGeneration, self.session?.epoch == session.epoch, binding?.epoch == session.epoch, binding?.accountID == session.accountID, isForeground else { return nil }
+            audience = current; audienceSessionEpoch = session.epoch; audienceBinding = binding
+            return NativeMediaCaptureContext(accountID: session.accountID, sessionEpoch: session.epoch, publicationGeneration: generation, expiresAt: session.expiresAt)
+        } catch { await photoCollectionFailed(error, account: session.accountID, epoch: session.epoch, generation: generation); return nil }
     }
     func photoImportIsCurrent(_ request: NativeMediaCaptureContext) -> Bool {
-        guestDeletion == nil && !Task.isCancelled && request.permits(session, generation: workGeneration, foreground: isForeground)
+        guestDeletion == nil && audienceEligible && !Task.isCancelled && request.permits(session, generation: workGeneration, foreground: isForeground)
+    }
+    func verifyPhotoImport(_ request: NativeMediaCaptureContext) async -> Bool {
+        do { try await requirePhotoImport(request); return true } catch { return false }
     }
     private func requirePhotoImport(_ request: NativeMediaCaptureContext) async throws {
-        guard photoImportIsCurrent(request), let repository else { throw NativeAPIError.sessionChanged }
-        let backendSession = await repository.summary()
-        guard photoImportIsCurrent(request), request.ownsSession(backendSession) else { throw NativeAPIError.sessionChanged }
+        do {
+            guard photoImportIsCurrent(request), let repository else { throw NativeAPIError.sessionChanged }
+            let currentAudience = try await repository.requirePhotoCollection(expectedOwner: request)
+            let backendSession = await repository.summary()
+            guard currentAudience.accountID == request.accountID else { throw NativeAPIError.sessionChanged }
+            let binding = await repository.audienceSessionBinding()
+            guard !Task.isCancelled, request.ownsSession(backendSession), request.ownsSession(session), binding?.epoch == request.sessionEpoch, binding?.accountID == request.accountID, request.permits(session, generation: workGeneration, foreground: isForeground) else { throw NativeAPIError.sessionChanged }
+            audience = currentAudience; audienceSessionEpoch = backendSession?.epoch; audienceBinding = binding
+            guard photoImportIsCurrent(request), request.ownsSession(backendSession) else { throw NativeAPIError.sessionChanged }
+        } catch {
+            await photoCollectionFailed(error, account: request.accountID, epoch: request.sessionEpoch, generation: request.publicationGeneration)
+            throw error
+        }
     }
     private func acceptedPhotoImport(_ request: NativeMediaCaptureContext, fence: NativePublicationFence) -> NativeMediaCaptureContext {
         NativeMediaCaptureContext(accountID: request.accountID, sessionEpoch: request.sessionEpoch, publicationGeneration: fence.generation, expiresAt: request.expiresAt)
@@ -527,7 +663,9 @@ import AVFoundation
         defer { for item in items { NativeImport.removeCameraItem(item) } }
         try await requirePhotoImport(request)
         guard !items.isEmpty, let repository else { error = failure; return }
-        let next = try await repository.stagePhotoUpload(items.map { NativeUploadSource(id: $0.id, file: $0.file, title: $0.title, width: $0.width, height: $0.height) }, expectedOwner: request)
+        let next: NativeUploadSummary
+        do { next = try await repository.stagePhotoUpload(items.map { NativeUploadSource(id: $0.id, file: $0.file, title: $0.title, width: $0.width, height: $0.height) }, expectedOwner: request) }
+        catch { await photoCollectionFailed(error, account: request.accountID, epoch: request.sessionEpoch, generation: request.publicationGeneration); throw error }
         try await requirePhotoImport(request)
         guard next.batch.accountID == request.accountID else { throw NativeAPIError.sessionChanged }
         installPhotoUploads(next); photoImportContext = pickerContext; error = failure
@@ -665,15 +803,31 @@ import AVFoundation
         }
     }
     func saveCurrentPhoto() {
-        perform { [self] in
+        performGuarded { [self] fence in
             guard let repository, let photo = currentPhoto else { throw NativeAPIError.invalidResponse }
-            let bytes = try await repository.authorizedSaveBytes(photo); try await NativePhotoLibrary.save(bytes)
-            transferText = String(localized: "Saved to Photos.")
+            let account = session?.accountID, epoch = session?.epoch
+            let approval = try await repository.requireAudience(.faceAuthentication)
+            let bytes = try await repository.authorizedSaveBytes(photo)
+            try await NativePhotoLibrary.save(bytes) { [self] in
+                let current = try await repository.requireAudience(.faceAuthentication)
+                try checkPublication(fence)
+                guard current == approval, account == session?.accountID, epoch == session?.epoch, isForeground else { throw NativeAPIError.sessionChanged }
+            }
+            try checkPublication(fence); transferText = String(localized: "Saved to Photos.")
         }
     }
     func loadPrivacy() {
-        guard session?.authenticated == true, guestDeletion == nil else { return }
+        guard (session?.authenticated == true || hasRegisteredPrivacyIdentity), guestDeletion == nil else { return }
         perform { [self] in guard let repository else { return }; privacy = try await repository.protectedJSON("/privacy/center") }
+    }
+    func reconcilePrivacy(retry: Bool = false) {
+        performGuarded { [self] fence in
+            guard let repository else { throw NativeAPIError.authenticationRequired }
+            let result = try await repository.reconcilePrivacy(retryUnknown: retry)
+            let current = try await repository.protectedJSON("/privacy/center")
+            try checkPublication(fence); privacy = current
+            transferText = result["status"].string == "unknown" ? String(localized: "The result is not confirmed. Check the original request before trying again.") : String(localized: "Original request confirmed.")
+        }
     }
     func requestGuestDeletion() {
         guard canDeleteGuest else { return }
@@ -771,16 +925,27 @@ import AVFoundation
             retireAccountPresentation()
             challenge = nil; captureReceipts = []; lastSelfie = nil; imports = []; NativeImport.removeAll(); mediaRevision += 1; stopFaceCameraPresentation()
             await NativePush.shared.unregister()
-            try await repository?.logout(); try checkPublication(fence); session = nil; navigation?.go(.faceEnrollment, replace: true, simulateProgress: false)
+            try await repository?.logout(); try checkPublication(fence); audience = nil; audienceBinding = nil; guardianClaim = nil; session = nil
+            if let repository, try await repository.pendingAudienceMutation() != nil {
+                _ = try await repository.bootstrap()
+                let binding = await repository.audienceSessionBinding()
+                try checkPublication(fence); audienceBinding = binding; audiencePendingMutation = true
+                transferText = String(localized: "Your original age request is held privately for recovery. Resolve it before starting another account or face setup.")
+                navigation?.go(.introduction, replace: true, simulateProgress: false)
+            } else { navigation?.go(.faceEnrollment, replace: true, simulateProgress: false) }
         }
     }
     func pauseWork() { if uploadRecovery != nil { pausePhotoUploads(); return }; workTask?.cancel(); transferText = String(localized: "Paused. Resume keeps the original upload stage and pending request keys.") }
     func clearPreviewCache() { mediaRevision += 1; if let repository { Task { await repository.retireMedia() } } }
     func background(scheduleRetry: Bool = false) { persistLibraryState(); if uploadRunning || scheduleRetry && uploadRecovery?.batch.started == true { pausePhotoUploads(userInitiated: false, scheduleRetry: scheduleRetry) }; isForeground = false; photoCamera = false; photoCameraContext = nil; retireSelfieReview(); camera.setForeground(false); recoveryBackup = nil; recoveryBackupSheet = false; mediaRevision += 1; workTask?.cancel(); workGeneration += 1; busy = false; if let repository { Task { await repository.retireMedia() } } }
     func foreground() {
+        expireSharedFiles()
+        if let repository { Task { await repository.expirePrivateMedia() } }
+        audience = nil
         isForeground = true
         camera.setForeground(true)
         if !connected, !busy { connect() }
+        else if session != nil || audienceBinding != nil, !busy { refreshAudience() }
         if session?.authenticated == true, !uploadRunning { Task { await NativeBackgroundUploads.shared.stop(); try? await restorePhotoUploads() } }
         if guestDeletion != nil, !busy { checkGuestDeletion() }
         else if faceLifecycle != nil, !busy { checkFaceProfile() }
@@ -792,33 +957,64 @@ extension LiveAppStore {
     func requestPhotoCamera() {
         guard canEdit, isForeground, let session, session.authenticated else { error = NativeAPIError.authenticationRequired.localizedDescription; return }
         guard UIImagePickerController.isSourceTypeAvailable(.camera) else { error = String(localized: "A camera is unavailable on this device. Choose a photo using Photos or Files."); return }
+        // Each camera presentation owns a distinct generation, including a reopen
+        // under the same account and session. Old delegate work cannot adopt it.
+        workTask?.cancel(); workGeneration += 1
         let context = NativeMediaCaptureContext(accountID: session.accountID, sessionEpoch: session.epoch, publicationGeneration: workGeneration, expiresAt: session.expiresAt)
         photoCameraPermissionDenied = false
         Task { [self] in
+          do {
+            guard let repository else { throw NativeAPIError.authenticationRequired }
+            let before = try await repository.requirePhotoCollection(expectedOwner: context)
+            guard context.permits(self.session, generation: workGeneration, foreground: isForeground), before.accountID == session.accountID else { throw NativeAPIError.sessionChanged }
+            let binding = await repository.audienceSessionBinding()
+            guard !Task.isCancelled, context.permits(self.session, generation: workGeneration, foreground: isForeground), binding?.epoch == session.epoch, binding?.accountID == session.accountID else { throw NativeAPIError.sessionChanged }
+            audience = before; audienceSessionEpoch = session.epoch; audienceBinding = binding
             let permission = AVCaptureDevice.authorizationStatus(for: .video)
             let allowed: Bool
             if permission == .authorized { allowed = true }
             else if permission == .notDetermined { allowed = await AVCaptureDevice.requestAccess(for: .video) }
             else { allowed = false }
-            guard context.permits(self.session, generation: workGeneration, foreground: isForeground), let repository,
-                  context.permits(await repository.summary(), generation: workGeneration, foreground: isForeground) else { return }
+            let after = try await repository.requirePhotoCollection(expectedOwner: context)
+            let backendSession = await repository.summary()
+            guard !Task.isCancelled, after == before,
+                  context.permits(self.session, generation: workGeneration, foreground: isForeground),
+                  context.permits(backendSession, generation: workGeneration, foreground: isForeground) else { return }
             if allowed { photoCameraContext = context; photoCamera = true }
             else {
                 photoCameraPermissionDenied = AVCaptureDevice.authorizationStatus(for: .video) == .denied
                 error = photoCameraPermissionDenied ? String(localized: "Allow camera access in Settings, then return and open the camera again.") : String(localized: "Camera access is restricted on this device.")
             }
+          } catch { await photoCollectionFailed(error, account: context.accountID, epoch: context.sessionEpoch, generation: context.publicationGeneration) }
         }
     }
-    func acceptCameraImports(_ items: [NativeImport], failure: String?) {
-        let context = photoCameraContext; photoCamera = false; photoCameraContext = nil
+    private func ownsPhotoCameraPresentation(_ request: NativeMediaCaptureContext) -> Bool {
+        guard photoCamera, let presented = photoCameraContext else { return false }
+        return presented.accountID == request.accountID && presented.sessionEpoch == request.sessionEpoch &&
+            presented.publicationGeneration == request.publicationGeneration && presented.expiresAt == request.expiresAt
+    }
+    private func photoCameraImportIsCurrent(_ request: NativeMediaCaptureContext) -> Bool {
+        ownsPhotoCameraPresentation(request) && AVCaptureDevice.authorizationStatus(for: .video) == .authorized && photoImportIsCurrent(request)
+    }
+    func verifyPhotoCameraImport(_ request: NativeMediaCaptureContext) async -> Bool {
+        guard photoCameraImportIsCurrent(request), await verifyPhotoImport(request) else { return false }
+        return photoCameraImportIsCurrent(request)
+    }
+    func acceptCameraImports(_ items: [NativeImport], failure: String?, request: NativeMediaCaptureContext) {
+        // A stale delegate must neither stage its image nor dismiss a newer sheet.
+        guard ownsPhotoCameraPresentation(request) else {
+            for item in items { NativeImport.removeCameraItem(item) }; return
+        }
+        let authorized = photoCameraImportIsCurrent(request)
+        photoCamera = false; photoCameraContext = nil
+        guard authorized else { for item in items { NativeImport.removeCameraItem(item) }; return }
         Task { [self] in
-            guard let context, let repository,
-                  context.permits(await repository.summary(), generation: workGeneration, foreground: isForeground),
-                  context.permits(session, generation: workGeneration, foreground: isForeground),
-                  AVCaptureDevice.authorizationStatus(for: .video) == .authorized else {
-                for item in items { NativeImport.removeCameraItem(item) }; return
+            do { try await requirePhotoImport(request) }
+            catch {
+                for item in items { NativeImport.removeCameraItem(item) }
+                await photoCollectionFailed(error, account: request.accountID, epoch: request.sessionEpoch, generation: request.publicationGeneration); return
             }
-            acceptImports(items, failure: failure, request: context)
+            acceptImports(items, failure: failure, request: request)
         }
     }
 }
@@ -934,12 +1130,14 @@ extension LiveAppStore {
     }
     private func presentFaceLifecycle(_ value: NativeFaceLifecycleSummary, fence: NativePublicationFence) async throws {
         guard let repository else { throw NativeAPIError.authenticationRequired }
-        let current = await repository.summary(); try checkPublication(fence)
-        if current?.authenticated != true { retireAccountPresentation(); imports = []; selectedImports = []; NativeImport.removeAll(); photoCamera = false }
+        let current = await repository.summary()
+        let currentWeakBinding = await repository.audienceSessionBinding()
+        try checkPublication(fence)
+        if current?.authenticated != true { retireAccountPresentation(preservingWeakState: canPreserveWeakPresentation(currentWeakBinding)); imports = []; selectedImports = []; NativeImport.removeAll(); photoCamera = false }
         faceLifecycle = value; session = current; challenge = value.challenge; captureReceipts = value.receipts; lastSelfie = nil
         policy = value.metadata.authPolicy; enrollment = nil
         if value.awaitingServer || value.authorityUnavailable { stopFaceCameraPresentation(); transferText = String(localized: "The face-profile result is not confirmed. Check its saved status before continuing.") }
-        if challenge == nil { navigation?.go(.faceManagement, replace: true, simulateProgress: false) }
+        if challenge == nil && !isWeakPrivacyScreen { navigation?.go(.faceManagement, replace: true, simulateProgress: false) }
     }
     private func finishManagedFace(_ challenge: NativeFaceChallenge, receipts: [WireValue], fence: NativePublicationFence) async throws {
         guard let repository else { throw NativeAPIError.authenticationRequired }; try checkPublication(fence)
@@ -1043,33 +1241,61 @@ extension LiveAppStore {
         }
     }
     func exportPrivacy(_ id: String) {
-        perform { [self] in
+        performGuarded { [self] fence in
             guard let repository else { throw NativeAPIError.authenticationRequired }
-            let account = session?.accountID, bytes = try await repository.exportBytes(requestID: id)
-            guard session?.accountID == account else { throw NativeAPIError.sessionChanged }
+            let account = session?.accountID, epoch = session?.epoch, bytes = try await repository.exportBytes(requestID: id)
+            try checkPublication(fence)
+            guard session?.accountID == account, session?.epoch == epoch, isForeground else { throw NativeAPIError.sessionChanged }
             try presentSharedBytes(bytes, extension: "json")
         }
     }
     func shareCurrentPhoto() {
-        perform { [self] in
+        performGuarded { [self] fence in
             guard let repository, let photo = currentPhoto else { throw NativeAPIError.invalidResponse }
-            let account = session?.accountID, bytes = try await repository.authorizedSaveBytes(photo)
-            guard session?.accountID == account else { throw NativeAPIError.sessionChanged }
+            let account = session?.accountID, epoch = session?.epoch, approval = try await repository.requireAudience(.faceAuthentication)
+            let bytes = try await repository.authorizedSaveBytes(photo), current = try await repository.requireAudience(.faceAuthentication)
+            try checkPublication(fence)
+            guard session?.accountID == account, session?.epoch == epoch, approval == current, isForeground else { throw NativeAPIError.sessionChanged }
             let ext = bytes.starts(with: [0xff, 0xd8]) ? "jpg" : bytes.starts(with: [0x89, 0x50, 0x4e, 0x47]) ? "png" : bytes.starts(with: [0x52, 0x49, 0x46, 0x46]) ? "webp" : "heic"
             try presentSharedBytes(bytes, extension: ext)
         }
     }
     private func presentSharedBytes(_ data: Data, extension ext: String) throws {
         retireSharedFile()
-        let directory = FileManager.default.temporaryDirectory.appendingPathComponent("lovelies-authorized-share", isDirectory: true)
-        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true, attributes: [.protectionKey: FileProtectionType.complete])
-        let url = directory.appendingPathComponent(UUID().uuidString).appendingPathExtension(ext)
-        try data.write(to: url, options: [.atomic, .completeFileProtection]); sharedFile = NativeShareFile(url: url)
+        // A failed older cleanup cannot accumulate another private disk copy.
+        try sharedFiles.prune(now: privateMediaClock.read().wall)
+        let deadline = NativePrivateMediaDeadline(created: privateMediaClock.read(), authorityExpiresAt: session?.expiresAt)
+        let url = try sharedFiles.create(data, extension: ext)
+        guard deadline.remaining(at: privateMediaClock.read()) > 0 else { try? sharedFiles.prune(); throw NativeAPIError.sessionChanged }
+        let file = NativeShareFile(url: url); sharedFile = file; sharedFileDeadline = deadline
+        sharedFileExpiryTask?.cancel()
+        sharedFileExpiryTask = Task { [weak self] in
+            do {
+                try await Task.sleep(for: .seconds(deadline.remaining(at: self?.privateMediaClock.read() ?? deadline.created)))
+                guard !Task.isCancelled, let self, self.sharedFile?.id == file.id else { return }
+                self.expireSharedFiles()
+            } catch {}
+        }
     }
     func retireSharedFile() {
-        if let file = sharedFile { try? FileManager.default.removeItem(at: file.url) }; sharedFile = nil
-        let directory = FileManager.default.temporaryDirectory.appendingPathComponent("lovelies-authorized-share", isDirectory: true)
-        try? FileManager.default.removeItem(at: directory)
+        sharedFileExpiryTask?.cancel(); sharedFileExpiryTask = nil
+        sharedFile = nil; sharedFileDeadline = nil
+        do { try sharedFiles.prune(now: privateMediaClock.read().wall) }
+        catch { scheduleSharedFileCleanupRetry() }
+    }
+    private func scheduleSharedFileCleanupRetry() {
+        sharedFileExpiryTask?.cancel()
+        sharedFileExpiryTask = Task { [weak self] in
+            do {
+                try await Task.sleep(for: .seconds(60))
+                guard !Task.isCancelled, let self, self.sharedFile == nil else { return }
+                self.retireSharedFile()
+            } catch {}
+        }
+    }
+    private func expireSharedFiles() {
+        if sharedFile != nil, (sharedFileDeadline?.remaining(at: privateMediaClock.read()) ?? 0) <= 0 { retireSharedFile(); return }
+        try? sharedFiles.prune(keeping: sharedFile?.url, now: privateMediaClock.read().wall)
     }
     func openAuthorizedDestination(kind: String, id: String) {
         guard session?.authenticated == true, ["match", "support", "payment"].contains(kind),
@@ -1114,6 +1340,90 @@ extension LiveAppStore {
         perform { [self] in
             guard let repository else { throw NativeAPIError.unavailable("configuration") }
             try await repository.continueRegisteredAccount(); session = try await repository.bootstrap(); registeredDeletion = nil; connected = true; navigation?.go(session?.authenticated == true ? .home : .faceEnrollment, replace: true, simulateProgress: false)
+        }
+    }
+}
+
+
+extension LiveAppStore {
+    func handleAudienceFailure(_ error: Error) {
+        guard Self.isAudienceError(error) else { return }
+        audience = nil; audienceSessionEpoch = nil; stopFaceCameraPresentation(); retireAccountPresentation(); self.error = error.localizedDescription
+    }
+    private static func isAudienceError(_ error: Error) -> Bool {
+        guard case NativeAPIError.denied(_, let code) = error else { return false }
+        return code.hasPrefix("audience_") || code.hasPrefix("guardian_") || code == "age_not_supported"
+    }
+    func audienceGateNeeded(_ screen: Screen) -> Bool {
+        guard session != nil || audienceBinding != nil else { return false }
+        guard connected, guestDeletion == nil, registeredDeletion == nil else { return false }
+        guard ![.privacy, .exportData, .security, .faceManagement].contains(screen) else { return false }
+        return audiencePendingMutation || !audienceEligible
+    }
+    func refreshAudience(retryOriginal: Bool = false) {
+        performGuarded { [self] fence in
+            guard let repository else { throw NativeAPIError.authenticationRequired }
+            let value = retryOriginal ? try await repository.retryAudienceMutation() : try await repository.audience()
+            try checkPublication(fence); try await installAudience(value, fence: fence)
+            if hasRegisteredPrivacyIdentity {
+                let claim = try await repository.retainedGuardianClaim(); try checkPublication(fence); guardianClaim = claim
+            }
+        }
+    }
+    private func installAudience(_ value: NativeAudienceProjection, fence: NativePublicationFence) async throws {
+        guard let repository else { throw NativeAPIError.authenticationRequired }
+        let current = try await repository.audiencePresentation(value)
+        let productSession = await repository.summary()
+        let finalBinding = await repository.audienceSessionBinding()
+        try checkPublication(fence)
+        guard current == finalBinding, value.accountID == current.accountID, productSession == nil || productSession?.accountID == current.accountID && productSession?.epoch == current.epoch else { throw NativeAPIError.sessionChanged }
+        let preserveWeakPresentation = canPreserveWeakPresentation(current)
+        if audienceBinding != current { retireSelfieReview(); retireAccountPresentation() }
+        session = productSession; audienceBinding = current; audienceSessionEpoch = current.epoch; audience = value
+        if !audienceEligible { stopFaceCameraPresentation(); retireAccountPresentation(preservingWeakState: preserveWeakPresentation); photoCamera = false }
+    }
+    func declareAge(_ band: NativeAgeBand) {
+        guard let current = audience, current.accountID == audienceBinding?.accountID, current.ageBand == .unknown else { return }
+        performGuarded { [self] fence in
+            guard let repository else { throw NativeAPIError.authenticationRequired }
+            let value = try await repository.declareAudience(band, expectedVersion: current.version)
+            try checkPublication(fence); try await installAudience(value, fence: fence)
+        }
+    }
+    func requestGuardianReview() {
+        guard let current = audience, current.ageBand == .teen else { return }
+        performGuarded { [self] fence in
+            guard let repository else { throw NativeAPIError.authenticationRequired }
+            let value = try await repository.createGuardianRequest(expectedVersion: current.version)
+            try checkPublication(fence); try await installAudience(value, fence: fence)
+        }
+    }
+    func withdrawGuardian(_ request: NativeGuardianRequest) {
+        performGuarded { [self] fence in
+            guard let repository else { throw NativeAPIError.authenticationRequired }
+            let value = try await repository.withdrawGuardianRequest(request)
+            let current = try await repository.audience()
+            try checkPublication(fence)
+            let ownClaim = guardianClaim?.id == request.id
+            try await installAudience(current, fence: fence)
+            if ownClaim { guardianClaim = value }
+        }
+    }
+    func claimGuardian(reference: String, purposes: Set<NativeAudiencePurpose>, attested: Bool) {
+        let parts = reference.trimmingCharacters(in: .whitespacesAndNewlines).split(separator: ":")
+        guard parts.count == 2, UUID(uuidString: String(parts[0])) != nil, let revision = Int(parts[1]), revision > 0 else { error = String(localized: "Enter the complete guardian request reference, including its revision."); return }
+        performGuarded { [self] fence in
+            guard let repository else { throw NativeAPIError.authenticationRequired }
+            let value = try await repository.claimGuardianRequest(id: String(parts[0]).lowercased(), revision: revision, purposes: purposes, relationshipAttested: attested)
+            try checkPublication(fence); guardianClaim = value
+        }
+    }
+    func checkGuardianClaim(_ reference: String) {
+        let id = String(reference.split(separator: ":").first ?? "").lowercased()
+        performGuarded { [self] fence in
+            guard let repository else { throw NativeAPIError.authenticationRequired }
+            let value = try await repository.guardianRequest(id)
+            try checkPublication(fence); guardianClaim = value
         }
     }
 }

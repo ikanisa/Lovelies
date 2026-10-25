@@ -12,7 +12,8 @@ struct LiveRouteView: View {
             Group {
                 if live.registeredDeletion != nil { NativeRegisteredDeletionView() }
                 else if live.guestDeletion != nil { LiveGuestDeletionView() }
-                else if live.faceLifecycle != nil, live.accountRecovery == nil, live.session?.authenticated != true, ![.faceEnrollment, .processing, .faceQualityRetry].contains(screen) { LiveFaceProfileManagementView() }
+                else if live.audienceGateNeeded(screen) { LiveAudienceGateView() }
+                else if live.faceLifecycle != nil, live.accountRecovery == nil, live.session?.authenticated != true, ![.faceEnrollment, .processing, .faceQualityRetry, .privacy, .exportData, .security].contains(screen) { LiveFaceProfileManagementView() }
                 else { switch screen.rawValue {
                 case 1...9: LiveOnboardingView(screen: screen)
                 case 10...18: LiveGalleryView(screen: screen)
@@ -65,7 +66,13 @@ struct LiveRouteView: View {
                     .padding(12).zIndex(10)
             }
         }
-        .sheet(isPresented: $live.photoCamera) { NativeOrdinaryPhotoCamera { items, error in live.acceptCameraImports(items, failure: error) } }
+        .sheet(isPresented: $live.photoCamera) {
+            if let request = live.photoCameraContext {
+                NativeOrdinaryPhotoCamera(request: request, isCurrent: { request in await live.verifyPhotoCameraImport(request) }) { request, items, error in
+                    live.acceptCameraImports(items, failure: error, request: request)
+                }
+            }
+        }
         .sheet(isPresented: $live.accountRecoverySheet) { LiveAccountRecoveryView() }
         .sheet(isPresented: $live.recoveryBackupSheet) { LiveRecoveryBackupView() }
         .onChange(of: live.error) { _, error in errorFocused = error != nil }
@@ -224,7 +231,8 @@ struct LiveCameraEnrollment: View {
             }.frame(maxWidth: .infinity) }
                 .overlay(alignment: .topLeading) { Button { live.leaveFaceCamera() } label: { Image(systemName: "chevron.left").font(.system(size: 19)).frame(width: 48, height: 48).background(.black.opacity(0.3), in: Circle()) }.padding(12).accessibilityLabel("Back") }
         }
-        .task { await live.camera.start(); if live.challenge == nil { live.prepareFace() } }
+        .task(id: live.challenge?.id) { live.openFaceCamera() }
+        .onChange(of: live.busy) { _, busy in if !busy && !camera.ready { live.openFaceCamera() } }
         .onChange(of: camera.state.generation) { _, _ in live.cameraAuthorityChanged() }
         .onDisappear { live.stopFaceCameraPresentation() }
     }
@@ -259,13 +267,15 @@ struct ProtectedNativePhoto: View {
                 guard !Task.isCancelled, revision == live.mediaRevision, epoch == live.session?.epoch else { return }
                 let currentSession = await repository.summary()
                 guard !Task.isCancelled, live.synchronizeMediaSession(currentSession, expectedEpoch: epoch) else { return }
+                let approval = try await repository.requireAudience(.faceAuthentication)
                 let decoded = await Task.detached(priority: .userInitiated) { () -> Data? in
                     guard let source = CGImageSourceCreateWithData(bytes as CFData, nil),
                           let cg = CGImageSourceCreateThumbnailAtIndex(source, 0, [kCGImageSourceCreateThumbnailFromImageAlways: true,
                             kCGImageSourceCreateThumbnailWithTransform: true, kCGImageSourceThumbnailMaxPixelSize: pixels] as CFDictionary) else { return nil }
                     return UIImage(cgImage: cg).pngData()
                 }.value
-                guard !Task.isCancelled, revision == live.mediaRevision, epoch == live.session?.epoch else { return }
+                let currentApproval = try await repository.requireAudience(.faceAuthentication)
+                guard approval == currentApproval, !Task.isCancelled, revision == live.mediaRevision, epoch == live.session?.epoch else { return }
                 image = decoded.flatMap(UIImage.init(data:)); failure = image == nil
                 expiresAt = live.session?.expiresAt
             } catch {
@@ -273,6 +283,7 @@ struct ProtectedNativePhoto: View {
                     let currentSession = await repository.summary()
                     guard !Task.isCancelled else { return }
                     _ = live.synchronizeMediaSession(currentSession, expectedEpoch: epoch)
+                    live.handleAudienceFailure(error)
                     image = nil; failure = true
                 }
             }
@@ -441,5 +452,86 @@ struct LiveGalleryView: View {
     private func movePhoto(_ direction: Int) {
         guard let id = live.currentPhoto?.id, let index = live.photos.firstIndex(where: { $0.id == id }), live.photos.indices.contains(index + direction) else { return }
         live.currentPhoto = live.photos[index + direction]; live.galleryAnchor = live.currentPhoto?.id; live.persistLibraryState(); zoom = 1; offset = .zero
+    }
+}
+
+
+struct LiveAudienceGateView: View {
+    @EnvironmentObject private var store: DemoStore
+    @EnvironmentObject private var live: LiveAppStore
+    @State private var selected: NativeAgeBand?
+    var body: some View {
+        VStack(spacing: 12) {
+            PageHeader(title: String(localized: "Your age and privacy"), trailing: false, back: false)
+            ScrollView { VStack(alignment: .leading, spacing: 18) {
+                Image(systemName: "person.crop.circle.badge.checkmark").font(.system(size: 42)).foregroundStyle(LoveliesTheme.pink).accessibilityHidden(true)
+                if let audience = live.audience {
+                    if audience.ageBand == .unknown {
+                        Text("Choose your age range").loveliesFont(size: 24, weight: .medium).accessibilityAddTraits(.isHeader)
+                        Text("Lovelies is for ages 13 and over. Ages 13–17 need a parent or legal guardian’s approval and independent review before face setup or photos. We do not ask for your date of birth.").font(.body).foregroundStyle(LoveliesTheme.secondary)
+                        ForEach([NativeAgeBand.under13, .teen, .adult], id: \.rawValue) { band in
+                            Button { selected = band } label: { HStack(spacing: 14) { Image(systemName: selected == band ? "largecircle.fill.circle" : "circle"); Text(band == .under13 ? String(localized: "Under 13") : band == .teen ? String(localized: "13–17") : String(localized: "18 or over")); Spacer() }.padding(16).frame(maxWidth: .infinity, alignment: .leading).background(LoveliesTheme.surface, in: RoundedRectangle(cornerRadius: 16)) }
+                                .buttonStyle(LoveliesPressStyle()).accessibilityAddTraits(selected == band ? .isSelected : []).disabled(live.busy || live.audiencePendingMutation)
+                        }
+                        Text("Choose accurately. A minor account cannot change itself to an older age range.").font(.footnote).foregroundStyle(LoveliesTheme.secondary)
+                        PinkButton(title: String(localized: "Confirm age range"), enabled: selected != nil && !live.busy && !live.audiencePendingMutation) { if let selected { live.declareAge(selected) } }
+                    } else if audience.ageBand == .under13 {
+                        Text("Lovelies is for ages 13 and over").loveliesFont(size: 24, weight: .medium).accessibilityAddTraits(.isHeader)
+                        Text("Face setup, photo import and matching are unavailable for this account. You can still manage privacy or request account deletion.").font(.body).foregroundStyle(LoveliesTheme.secondary)
+                    } else {
+                        NativeAudienceStatusPanel()
+                    }
+                } else {
+                    Text("Check your audience status").loveliesFont(size: 24, weight: .medium).accessibilityAddTraits(.isHeader)
+                    Text("The service must confirm your current age and approval status before camera or photo access.").font(.body).foregroundStyle(LoveliesTheme.secondary)
+                }
+                QuietButton(title: String(localized: "Refresh age and approval status"), enabled: !live.busy) { live.refreshAudience() }
+                if live.audiencePendingMutation {
+                    if !live.transferText.isEmpty { Text(live.transferText).font(.footnote).foregroundStyle(LoveliesTheme.secondary) }
+                    Text("An age or guardian request is not confirmed. Retry its original saved request before starting a different action.").font(.footnote).foregroundStyle(LoveliesTheme.secondary)
+                    PinkButton(title: String(localized: "Retry original age or guardian request"), enabled: !live.busy) { live.refreshAudience(retryOriginal: true) }
+                }
+                QuietButton(title: String(localized: "Privacy center"), enabled: !live.busy) { store.go(.privacy, simulateProgress: false); live.loadPrivacy() }
+                if live.hasRegisteredPrivacyIdentity { QuietButton(title: String(localized: "Account & security"), enabled: !live.busy) { store.go(.security, simulateProgress: false); live.loadDevices() } }
+                QuietButton(title: String(localized: "Sign out"), enabled: !live.busy) { live.logout() }
+                NativePolicyPanel(includeSupport: true)
+                if live.busy { ProgressView().tint(LoveliesTheme.pink) }
+            }.padding(22).frame(maxWidth: .infinity, alignment: .leading) }.scrollDismissesKeyboard(.interactively)
+        }.foregroundStyle(.white)
+    }
+}
+struct NativeAudienceStatusPanel: View {
+    @EnvironmentObject private var live: LiveAppStore
+    var body: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            Text("Age and guardian approval").font(.title3.weight(.semibold)).accessibilityAddTraits(.isHeader)
+            if let audience = live.audience {
+                Text(live.audienceEligible ? String(localized: "Audience approval is current. Your own purpose consent and photo sharing approval are still required.") : String(localized: "Face setup and photos are paused until the required approval is current.")).font(.body).foregroundStyle(LoveliesTheme.secondary)
+                if let request = audience.guardianRequest {
+                    Text(NativeGuardianCopy.state(request.state)).font(.headline).foregroundStyle(LoveliesTheme.pink)
+                    Text("Guardian request reference").font(.footnote)
+                    Text(request.id + ":" + String(request.revision)).font(.footnote.monospaced()).textSelection(.enabled).fixedSize(horizontal: false, vertical: true)
+                    Text("Share this reference privately with your parent or legal guardian. They need their own registered adult Lovelies account. A reference never gives access to your photos.").font(.footnote).foregroundStyle(LoveliesTheme.secondary)
+                    Text(request.expiresAt, format: .dateTime.year().month().day()).font(.footnote).accessibilityLabel("Approval or request expiry")
+                    if request.live { QuietButton(title: String(localized: "Withdraw guardian request or approval"), enabled: !live.busy && !live.audiencePendingMutation) { live.withdrawGuardian(request) } }
+                }
+                if audience.ageBand == .teen, audience.guardianRequest?.live != true {
+                    PinkButton(title: String(localized: "Create guardian review request"), enabled: !live.busy && !live.audiencePendingMutation) { live.requestGuardianReview() }
+                }
+            }
+            Text("Guardian approval requires independent review. Sending or claiming a request does not activate face processing or give anyone photo access.").font(.footnote).foregroundStyle(LoveliesTheme.secondary)
+        }.padding(16).background(LoveliesTheme.surface, in: RoundedRectangle(cornerRadius: 16))
+    }
+}
+enum NativeGuardianCopy {
+    static func state(_ state: NativeGuardianRequest.State) -> String {
+        switch state {
+        case .pending: return String(localized: "Waiting for a guardian")
+        case .underReview: return String(localized: "Guardian claim awaiting independent review")
+        case .approved: return String(localized: "Guardian review approved")
+        case .rejected: return String(localized: "Guardian review rejected")
+        case .withdrawn: return String(localized: "Guardian approval withdrawn")
+        case .expired: return String(localized: "Guardian request or approval expired")
+        }
     }
 }

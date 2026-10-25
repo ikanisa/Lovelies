@@ -78,7 +78,11 @@ struct NativePrivacyPanel: View {
     private var requests: [WireValue] { live.privacy["requests"].array ?? live.privacy["privacy_requests"].array ?? [] }
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
-            PinkButton(title: String(localized: "Request data export"), enabled: live.canEdit) { live.requestPrivacy(false) }
+            if live.hasPendingPrivacyOperation {
+                QuietButton(title: String(localized: "Check request status"), enabled: !live.busy) { live.reconcilePrivacy() }
+                QuietButton(title: String(localized: "Retry original request"), enabled: !live.busy) { live.reconcilePrivacy(retry: true) }
+            }
+            PinkButton(title: String(localized: "Request data export"), enabled: live.canManagePrivacy) { live.requestPrivacy(false) }
             Text("Export and deletion requests show their actual review, processing and delivery status. A submitted request does not confirm erasure.").font(.footnote).foregroundStyle(LoveliesTheme.secondary)
             ForEach(Array(requests.enumerated()), id: \.offset) { _, item in
                 VStack(alignment: .leading, spacing: 8) {
@@ -87,18 +91,18 @@ struct NativePrivacyPanel: View {
                     if let failure = item["failure_code"].string { Text(failure).font(.footnote).foregroundStyle(LoveliesTheme.secondary) }
                     if let id = item["id"].string {
                         if item["download_state"].string == "ready" {
-                            PinkButton(title: String(localized: "Save or share data export"), enabled: live.canEdit) { live.exportPrivacy(id) }
+                            PinkButton(title: String(localized: "Save or share data export"), enabled: live.canManagePrivacy) { live.exportPrivacy(id) }
                             Text("This retrieves an account-bound, one-time export. Choose Save to Files in the system share sheet. Keep the saved copy private.").font(.footnote).foregroundStyle(LoveliesTheme.secondary)
                         } else if item["request_type"].string == "export", item["status"].string == "completed" {
                             Text("The export download is unavailable or expired. Request a fresh export.").font(.footnote).foregroundStyle(LoveliesTheme.secondary)
                         }
-                        QuietButton(title: String(localized: "Check request status"), enabled: live.canEdit) { live.checkPrivacyRequest(id) }
+                        QuietButton(title: String(localized: "Check request status"), enabled: live.canManagePrivacy) { live.checkPrivacyRequest(id) }
                     }
                 }.padding(14).background(LoveliesTheme.surface, in: RoundedRectangle(cornerRadius: 16))
             }
-            QuietButton(title: String(localized: "Refresh privacy status"), enabled: live.canEdit) { live.loadPrivacy() }
+            QuietButton(title: String(localized: "Refresh privacy status"), enabled: live.canManagePrivacy) { live.loadPrivacy() }
             NativePolicyPanel(includeSupport: true)
-            Button("Request account deletion", role: .destructive) { deleting = true }.frame(minHeight: 48).disabled(!live.canEdit)
+            Button("Request account deletion", role: .destructive) { deleting = true }.frame(minHeight: 48).disabled(!live.canManagePrivacy)
         }.onAppear { live.loadPrivacy() }
         .confirmationDialog("Delete your Lovelies account?", isPresented: $deleting, titleVisibility: .visible) {
             Button("Request account deletion", role: .destructive) { live.requestPrivacy(true) }
@@ -120,7 +124,7 @@ struct NativeRegisteredDeletionView: View {
                     if receipt.completed { PinkButton(title: String(localized: "Start again"), enabled: !live.busy) { live.startAfterRegisteredDeletion() } }
                     else {
                         PinkButton(title: String(localized: "Check deletion status"), enabled: !live.busy) { live.checkRegisteredDeletion() }
-                        if receipt.response == nil, live.session?.authenticated == true { QuietButton(title: String(localized: "Retry original request"), enabled: !live.busy) { live.checkRegisteredDeletion(retry: true) } }
+                        if receipt.response == nil, live.session?.authenticated == true || live.hasRegisteredPrivacyIdentity { QuietButton(title: String(localized: "Retry original request"), enabled: !live.busy) { live.checkRegisteredDeletion(retry: true) } }
                         if ["rejected", "cancelled"].contains(receipt.response?["privacy_request"]["status"].string ?? "") { QuietButton(title: String(localized: "Continue account"), enabled: !live.busy) { live.continueRegisteredAccount() } }
                     }
                     Link("Manage or cancel App Store subscriptions", destination: URL(string: "https://apps.apple.com/account/subscriptions")!).font(.body).frame(minHeight: 44)
@@ -140,5 +144,44 @@ struct NativeNotificationPermissionPanel: View {
             Button("Open notification settings") { if let url = URL(string: UIApplication.openSettingsURLString) { UIApplication.shared.open(url) } }.frame(minHeight: 44)
             if let failure = push.failure { Text(failure).font(.footnote).foregroundStyle(LoveliesTheme.secondary) }
         }.task { await push.foreground() }
+    }
+}
+
+
+struct NativeGuardianClaimPanel: View {
+    @EnvironmentObject private var live: LiveAppStore
+    @State private var reference = ""
+    @State private var purposes: Set<NativeAudiencePurpose> = []
+    @State private var attested = false
+    @FocusState private var editing: Bool
+    var body: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            Text("Parent or legal guardian").font(.title3.weight(.semibold)).accessibilityAddTraits(.isHeader)
+            Text("Use a request reference shared privately by your child. Your own registered account must be adult and eligible. Each selected purpose is a request for independent review, not immediate approval.").font(.body).foregroundStyle(LoveliesTheme.secondary)
+            TextField("Guardian request reference", text: $reference).textInputAutocapitalization(.never).autocorrectionDisabled().keyboardType(.asciiCapable).focused($editing)
+                .padding(12).background(LoveliesTheme.surface, in: RoundedRectangle(cornerRadius: 12)).accessibilityLabel("Guardian request reference")
+                .onChange(of: reference) { _, value in reference = String(value.prefix(64)) }
+            Toggle("I am this child’s parent or legal guardian and have parental responsibility", isOn: $attested).tint(LoveliesTheme.pink)
+            ForEach(NativeAudiencePurpose.allCases, id: \.rawValue) { purpose in
+                Toggle(purposeLabel(purpose), isOn: Binding(get: { purposes.contains(purpose) }, set: { enabled in if enabled { purposes.insert(purpose) } else { purposes.remove(purpose) } })).tint(LoveliesTheme.pink)
+            }
+            Text("Do not enter identity documents, dates of birth, contact details or face images here. Lovelies support arranges the separate review. Guardian approval never gives you access to the child’s photos.").font(.footnote).foregroundStyle(LoveliesTheme.secondary)
+            PinkButton(title: String(localized: "Request independent guardian review"), enabled: live.canEdit && live.audience?.ageBand == .adult && !live.audiencePendingMutation && attested && !purposes.isEmpty && !reference.isEmpty) { editing = false; live.claimGuardian(reference: reference, purposes: purposes, attested: attested) }
+            QuietButton(title: String(localized: "Check my guardian claim"), enabled: !live.busy && !reference.isEmpty) { editing = false; live.checkGuardianClaim(reference) }
+            if live.audiencePendingMutation { QuietButton(title: String(localized: "Retry original age or guardian request"), enabled: !live.busy) { live.refreshAudience(retryOriginal: true) } }
+            if let claim = live.guardianClaim {
+                Text(NativeGuardianCopy.state(claim.state)).font(.headline).foregroundStyle(LoveliesTheme.pink)
+                if claim.live { QuietButton(title: String(localized: "Withdraw guardian request or approval"), enabled: !live.busy && !live.audiencePendingMutation) { live.withdrawGuardian(claim) } }
+            }
+        }.padding(16).background(LoveliesTheme.surface, in: RoundedRectangle(cornerRadius: 16))
+        .disabled(live.busy)
+        .toolbar { ToolbarItemGroup(placement: .keyboard) { Spacer(); Button("Done") { editing = false } } }
+    }
+    private func purposeLabel(_ purpose: NativeAudiencePurpose) -> String {
+        switch purpose {
+        case .faceAuthentication: return String(localized: "Face registration and sign-in")
+        case .photoMatching: return String(localized: "Finding the child’s face in photos")
+        case .photoProcessing: return String(localized: "Processing photos the child adds")
+        }
     }
 }

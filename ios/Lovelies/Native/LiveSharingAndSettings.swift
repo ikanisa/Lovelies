@@ -87,7 +87,7 @@ struct LiveUploadView: View {
                 }
             }
             .sheet(item: $photoRequest) { request in
-                NativePhotoPicker(isCurrent: { live.photoImportIsCurrent(request.owner) }) { items, error in
+                NativePhotoPicker(isCurrent: { await live.verifyPhotoImport(request.owner) }) { items, error in
                     if photoRequest?.id == request.id { photoRequest = nil }
                     live.acceptImports(items, failure: error, request: request.owner, pickerContext: request.source.title)
                 }
@@ -180,10 +180,12 @@ struct LiveUploadView: View {
     }
     private func openPicker(_ source: LoveliesUploadSource) {
         if source == .camera { live.requestPhotoCamera(); return }
-        guard let owner = live.beginPhotoImport() else { return }
-        let request = ImportRequest(source: source, owner: owner)
-        if source.usesFiles { fileRequest = request; files = true }
-        else { photoRequest = request }
+        Task { @MainActor in
+            guard let owner = await live.beginPhotoImport(), live.photoImportIsCurrent(owner) else { return }
+            let request = ImportRequest(source: source, owner: owner)
+            if source.usesFiles { fileRequest = request; files = true }
+            else { photoRequest = request }
+        }
     }
     private var uploadRows: some View {
         ScrollView {
@@ -403,8 +405,8 @@ struct LiveSettingsView: View {
     @EnvironmentObject private var live: LiveAppStore
     let screen: Screen
     @ViewBuilder var body: some View {
-        if screen == .faceManagement || (live.faceLifecycle != nil && live.accountRecovery == nil && live.session?.authenticated != true) { LiveFaceProfileManagementView() }
-        else if screen == .privacy && live.session?.authenticated != true { LiveGuestDeletionView() }
+        if screen == .faceManagement || (live.faceLifecycle != nil && live.accountRecovery == nil && live.session?.authenticated != true && ![.privacy, .exportData, .security].contains(screen)) { LiveFaceProfileManagementView() }
+        else if screen == .privacy && live.session?.authenticated != true && !live.hasRegisteredPrivacyIdentity { LiveGuestDeletionView() }
         else { VStack(spacing: 12) {
             PageHeader(title: screen == .profile ? String(localized: "Profile") : screen.title, trailing: true)
             ScrollView {
@@ -414,6 +416,11 @@ struct LiveSettingsView: View {
                         TextField("Your name", text: $live.name).padding(14).background(LoveliesTheme.surface, in: RoundedRectangle(cornerRadius: 15))
                         PinkButton(title: String(localized: "Save profile"), enabled: live.canEdit) { live.saveProfile() }
                     }
+                    if [.privacy, .profile, .security].contains(screen) {
+                        NativeAudienceStatusPanel()
+                        QuietButton(title: String(localized: "Refresh age and approval status"), enabled: !live.busy) { live.refreshAudience() }
+                        if live.session?.authenticated == true || live.hasRegisteredPrivacyIdentity { NativeGuardianClaimPanel() }
+                    }
                     if screen == .privacy || screen == .profile {
                         if screen == .privacy {
                             VStack(alignment: .leading, spacing: 6) {
@@ -422,9 +429,9 @@ struct LiveSettingsView: View {
                                     .loveliesFont(size: 13).foregroundStyle(LoveliesTheme.secondary)
                             }.padding(16).background(LoveliesTheme.surface, in: RoundedRectangle(cornerRadius: 16))
                         }
-                        Toggle("Find my face in matching photos", isOn: preference("photo_matching_consent", read: "matching_enabled")).tint(LoveliesTheme.pink)
-                        Toggle("Receive photo requests", isOn: preference("receive_matches", read: "receive_matches")).tint(LoveliesTheme.pink)
-                        Toggle("Process the photos I add", isOn: preference("processing_consent", read: "processing_enabled")).tint(LoveliesTheme.pink)
+                        Toggle("Find my face in matching photos", isOn: preference("photo_matching_consent", read: "matching_enabled")).tint(LoveliesTheme.pink).disabled(!live.canManagePrivacy || (!live.audienceEligible && live.preferences["matching_enabled"].bool != true))
+                        Toggle("Receive photo requests", isOn: preference("receive_matches", read: "receive_matches")).tint(LoveliesTheme.pink).disabled(!live.canManagePrivacy || (!live.audienceEligible && live.preferences["receive_matches"].bool != true))
+                        Toggle("Process the photos I add", isOn: preference("processing_consent", read: "processing_enabled")).tint(LoveliesTheme.pink).disabled(!live.canManagePrivacy || (!live.audienceEligible && live.preferences["processing_enabled"].bool != true))
                         Text("Matching and processing do not grant photo access. You review sharing and accept incoming requests separately.").loveliesFont(size: 13).foregroundStyle(LoveliesTheme.secondary)
                         QuietButton(title: String(localized: "Privacy center")) { store.go(.privacy); live.loadPrivacy() }
                     }
@@ -437,7 +444,7 @@ struct LiveSettingsView: View {
                         if let key = live.recoveryKey { Text("Recovery key expires \(key.expiresAt.formatted(date: .abbreviated, time: .omitted))").loveliesFont(size: 13).foregroundStyle(LoveliesTheme.secondary) }
                         QuietButton(title: String(localized: "Check recovery key"), enabled: live.canEdit) { live.loadRecoveryKey() }
                         PinkButton(title: String(localized: "Create or view private recovery key"), enabled: live.canEdit) { live.createRecoveryBackup() }
-                        QuietButton(title: String(localized: "Revoke recovery key"), enabled: live.canEdit) { live.revokeRecoveryBackup() }
+                        QuietButton(title: String(localized: "Revoke recovery key"), enabled: live.canManagePrivacy) { live.revokeRecoveryBackup() }
                         Text("Devices").loveliesFont(size: 18, weight: .medium)
                         ForEach(Array(live.devices.enumerated()), id: \.offset) { _, device in
                             HStack { Image(systemName: "iphone"); Text(device["current"].bool == true ? String(localized: "This device") : String(localized: "Registered device")); Spacer(); Button("Revoke") { live.revoke(device, device: true) }.foregroundStyle(LoveliesTheme.pink).frame(minHeight: 48) }.padding(12).background(LoveliesTheme.surface, in: RoundedRectangle(cornerRadius: 16))

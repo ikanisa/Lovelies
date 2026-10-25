@@ -55,6 +55,14 @@ enum NativeAPIError: Error, LocalizedError, Equatable {
         switch self {
         case .unavailable(let code): return String.localizedStringWithFormat(NSLocalizedString("Connection unavailable (%@). Try again.", comment: ""), code)
         case .denied(_, let code):
+            if code == "age_not_supported" { return String(localized: "Lovelies is for ages 13 and over. You can still manage privacy and account deletion.") }
+            if code == "audience_required" { return String(localized: "Confirm your age range before face setup or photos.") }
+            if code == "guardian_approval_required" { return String(localized: "Current guardian approval and independent review are required before face setup or photos.") }
+            if ["audience_version_changed", "guardian_revision_changed", "audience_policy_changed"].contains(code) { return String(localized: "Your age or guardian approval changed. Refresh its current status before continuing.") }
+            if code == "audience_age_review_required" { return String(localized: "A minor account cannot change itself to an older age range. Contact support for independent review.") }
+            if code == "guardian_adult_required" { return String(localized: "Use your own registered, eligible adult account to request guardian review.") }
+            if code == "guardian_request_active" { return String(localized: "This account already has an active guardian request. Refresh its status.") }
+            if code == "guardian_request_unavailable" { return String(localized: "This guardian request is unavailable to your account. Check the reference and current status.") }
             if code == "face_verification_failed" { return String(localized: "This selfie did not match your registered face. Take a fresh selfie to try again.") }
             if code == "face_capture_no_face" { return String(localized: "No face was found. Center your face in the frame and retake the selfies.") }
             if code == "face_capture_multiple_faces" { return String(localized: "More than one face was found. Make sure only your face is in the frame and retake the selfies.") }
@@ -178,6 +186,12 @@ struct NativeRefreshDeliveryRecord: Codable, Sendable {
 
 struct NativeSessionSummary: Sendable {
     let accountID: String, roles: [String], authenticated: Bool, expiresAt: Date, epoch: Int
+}
+
+/// Current durable-session binding for own audience/privacy controls only.
+/// A lifecycle-held registered identity is not a product-authenticated session.
+struct NativeAudienceSessionBinding: Sendable, Equatable {
+    let accountID: String, epoch: Int, registeredIdentity: Bool
 }
 
 /// UI publication ownership is independent of backend/session authority.
@@ -308,6 +322,170 @@ struct NativeFaceChallenge: Sendable {
     func deviceEnvelope() -> [String: WireValue] {
         var value = Dictionary(uniqueKeysWithValues: ["challenge_id", "nonce", "purpose", "account_id", "device_id", "device_revision", "profile_id", "profile_revision", "policy_version"].map { ($0, wire[$0]) })
         value["protocol"] = .string("lovelies-face-device-v1"); return value
+    }
+}
+
+// Audience eligibility is separate from a registered-face session and subject consent.
+enum NativeAudiencePurpose: String, CaseIterable, Codable, Sendable {
+    case faceAuthentication = "face_authentication", photoMatching = "photo_matching", photoProcessing = "photo_processing"
+}
+enum NativeAgeBand: String, CaseIterable, Codable, Sendable {
+    case unknown, under13, teen = "13_17", adult = "18_plus"
+}
+enum NativeAudienceStatus: String, Codable, Sendable {
+    case unknown, blocked, guardianPending = "guardian_pending", eligible, suspended
+}
+struct NativeAudienceCapabilities: Equatable, Sendable {
+    let faceAuthentication: Bool, photoMatching: Bool, photoProcessing: Bool
+    init(_ wire: WireValue) throws {
+        try NativeAudienceProjection.keys(wire, ["face_authentication", "photo_matching", "photo_processing"])
+        guard let face = wire["face_authentication"].bool, let matching = wire["photo_matching"].bool,
+              let processing = wire["photo_processing"].bool else { throw NativeAPIError.invalidResponse }
+        faceAuthentication = face; photoMatching = matching; photoProcessing = processing
+    }
+    func allows(_ purpose: NativeAudiencePurpose) -> Bool {
+        switch purpose { case .faceAuthentication: return faceAuthentication; case .photoMatching: return photoMatching; case .photoProcessing: return photoProcessing }
+    }
+    var any: Bool { faceAuthentication || photoMatching || photoProcessing }
+}
+struct NativeGuardianRequest: Equatable, Sendable {
+    enum State: String, Sendable { case pending, underReview = "under_review", approved, rejected, withdrawn, expired }
+    let id: String, childAccountID: String, state: State, revision: Int, policyVersion: String
+    let createdAt: Date, expiresAt: Date, purposes: NativeAudienceCapabilities
+    init(_ wire: WireValue, child expectedChild: String? = nil, id expectedID: String? = nil) throws {
+        try NativeAudienceProjection.keys(wire, ["id", "child_account_id", "state", "revision", "policy_version", "created_at", "expires_at", "purposes"])
+        id = try wire.uuid("id"); childAccountID = try wire.uuid("child_account_id")
+        guard expectedID == nil || expectedID == id, expectedChild == nil || expectedChild == childAccountID,
+              let state = wire["state"].string.flatMap(State.init(rawValue:)), let revision = wire["revision"].integer,
+              revision > 0, wire["policy_version"].string == NativeAudienceProjection.policy else { throw NativeAPIError.invalidResponse }
+        self.state = state; self.revision = revision; policyVersion = NativeAudienceProjection.policy
+        createdAt = try NativeRefreshDeliveryRecord.date(wire["created_at"]); expiresAt = try NativeRefreshDeliveryRecord.date(wire["expires_at"])
+        guard expiresAt > createdAt else { throw NativeAPIError.invalidResponse }
+        purposes = try NativeAudienceCapabilities(wire["purposes"])
+        guard state == .approved || !purposes.any else { throw NativeAPIError.invalidResponse }
+    }
+    var live: Bool { [.pending, .underReview, .approved].contains(state) && expiresAt > Date() }
+}
+struct NativeAudienceProjection: Equatable, Sendable {
+    static let protocolName = "lovelies-audience-v1", policy = "audience-2026-10-24-v1"
+    let accountID: String, ageBand: NativeAgeBand, status: NativeAudienceStatus, version: Int
+    let policyVersion: String?, nextReviewAt: Date?, guardianRequest: NativeGuardianRequest?, capabilities: NativeAudienceCapabilities
+    init(_ wire: WireValue, account expectedAccount: String) throws {
+        try Self.keys(wire, ["protocol", "policy_version", "account_id", "audience", "guardian_request", "capabilities"])
+        guard wire["protocol"].string == Self.protocolName, wire["policy_version"].string == Self.policy,
+              try wire.uuid("account_id") == expectedAccount else { throw NativeAPIError.invalidResponse }
+        accountID = expectedAccount
+        let audience = wire["audience"]
+        try Self.keys(audience, ["age_band", "status", "version", "policy_version", "next_review_at"])
+        guard let band = audience["age_band"].string.flatMap(NativeAgeBand.init(rawValue:)),
+              let status = audience["status"].string.flatMap(NativeAudienceStatus.init(rawValue:)),
+              let version = audience["version"].integer else { throw NativeAPIError.invalidResponse }
+        ageBand = band; self.status = status; self.version = version
+        policyVersion = audience["policy_version"] == .null ? nil : try audience.text("policy_version", maximum: 128)
+        nextReviewAt = audience["next_review_at"] == .null ? nil : try NativeRefreshDeliveryRecord.date(audience["next_review_at"])
+        guardianRequest = wire["guardian_request"] == .null ? nil : try NativeGuardianRequest(wire["guardian_request"], child: expectedAccount)
+        capabilities = try NativeAudienceCapabilities(wire["capabilities"])
+        if band == .unknown {
+            guard status == .unknown, version == 0, policyVersion == nil, nextReviewAt == nil, guardianRequest == nil, !capabilities.any else { throw NativeAPIError.invalidResponse }
+        } else {
+            guard version > 0, policyVersion == Self.policy else { throw NativeAPIError.invalidResponse }
+            if band == .under13 { guard status == .blocked, !capabilities.any else { throw NativeAPIError.invalidResponse } }
+            if band == .adult { guard status == .eligible || status == .suspended else { throw NativeAPIError.invalidResponse } }
+            if status == .suspended || status == .blocked { guard !capabilities.any else { throw NativeAPIError.invalidResponse } }
+            if band == .teen {
+                guard status == .guardianPending || status == .eligible || status == .suspended else { throw NativeAPIError.invalidResponse }
+                if status == .eligible || capabilities.any {
+                    guard let request = guardianRequest, request.state == .approved, let nextReviewAt,
+                          nextReviewAt <= request.expiresAt,
+                          (!capabilities.faceAuthentication || request.purposes.faceAuthentication),
+                          (!capabilities.photoMatching || request.purposes.photoMatching),
+                          (!capabilities.photoProcessing || request.purposes.photoProcessing) else { throw NativeAPIError.invalidResponse }
+                } else { guard !capabilities.any else { throw NativeAPIError.invalidResponse } }
+            }
+        }
+    }
+    static func keys(_ wire: WireValue, _ expected: Set<String>) throws {
+        guard let object = wire.object, Set(object.keys) == expected else { throw NativeAPIError.invalidResponse }
+    }
+    func require(_ purpose: NativeAudiencePurpose, now: Date = Date()) throws {
+        guard status == .eligible, policyVersion == Self.policy, capabilities.allows(purpose),
+              ageBand == .adult || (ageBand == .teen && guardianRequest?.state == .approved && (guardianRequest?.expiresAt ?? .distantPast) > now && (nextReviewAt ?? .distantPast) > now)
+        else { throw NativeAPIError.denied(403, ageBand == .under13 ? "age_not_supported" : ageBand == .teen ? "guardian_approval_required" : "audience_required") }
+    }
+}
+/// Server-issued HTTPS presentation authority for one exact known-account
+/// capture. This is not an age assertion, product session or photo-access grant.
+struct NativeAudienceChallengeAuthority: Equatable, Sendable {
+    let accountID: String, challengeID: String, deviceID: String, purpose: String
+    let audienceVersion: Int, expiresAt: Date
+    init(_ wire: WireValue, challenge: NativeFaceChallenge) throws {
+        try NativeAudienceProjection.keys(wire, ["protocol", "account_id", "challenge_id", "device_id", "purpose", "policy_version", "audience_version", "expires_at"])
+        guard wire["protocol"].string == "lovelies-audience-challenge-v1", wire["policy_version"].string == NativeAudienceProjection.policy,
+              try wire.uuid("account_id") == challenge.accountID, try wire.uuid("challenge_id") == challenge.id,
+              try wire.uuid("device_id") == challenge.deviceID, wire["purpose"].string == challenge.purpose,
+              let version = wire["audience_version"].integer, version > 0 else { throw NativeAPIError.invalidResponse }
+        accountID = challenge.accountID; challengeID = challenge.id; deviceID = challenge.deviceID; purpose = challenge.purpose; audienceVersion = version
+        expiresAt = try NativeRefreshDeliveryRecord.date(wire["expires_at"])
+        guard expiresAt <= challenge.expiresAt else { throw NativeAPIError.invalidResponse }
+    }
+    func requireCurrent(now: Date = Date()) throws {
+        guard expiresAt > now else { throw NativeAPIError.denied(403, "audience_required") }
+    }
+}
+/// Exact token-free mutation identity. The protected journal is written before dispatch.
+/// It survives logout/transport failure; a later action cannot replace it silently.
+struct NativeAudienceMutationRecord: Codable, Equatable, Sendable {
+    let apiOrigin: String, accountID: String, path: String, method: String, operationKey: String, body: WireValue
+    let preparedAt: Date
+    init(origin: URL, accountID: String, path: String, method: String, body: WireValue, operationKey: String = UUID().uuidString.lowercased()) throws {
+        apiOrigin = origin.absoluteString; self.accountID = accountID; self.path = path; self.method = method; self.operationKey = operationKey; preparedAt = Date()
+        var fields = body.object ?? [:]; fields["operation_key"] = .string(operationKey); self.body = .object(fields)
+        try validate(origin: origin)
+    }
+    func validate(origin: URL) throws {
+        guard apiOrigin == origin.absoluteString, UUID(uuidString: accountID) != nil, (16...128).contains(operationKey.count),
+              operationKey.allSatisfy({ $0.isASCII && ($0.isLetter || $0.isNumber || "._:-".contains($0)) }),
+              body["operation_key"].string == operationKey, method == (path == "/me/audience" ? "PUT" : "POST"),
+              try body.encoded().count <= 4096 else { throw NativeAPIError.invalidResponse }
+        let fields = Set(body.object?.keys.map { $0 } ?? [])
+        if path == "/me/audience" {
+            guard fields == ["age_band", "policy_version", "expected_version", "operation_key"],
+                  let band = body["age_band"].string.flatMap(NativeAgeBand.init(rawValue:)), band != .unknown,
+                  body["policy_version"].string == NativeAudienceProjection.policy, body["expected_version"].integer != nil else { throw NativeAPIError.invalidResponse }
+        } else if path == "/me/guardian-requests" {
+            guard fields == ["expected_version", "policy_version", "operation_key"], body["expected_version"].integer != nil,
+                  body["policy_version"].string == NativeAudienceProjection.policy else { throw NativeAPIError.invalidResponse }
+        } else {
+            let parts = path.split(separator: "/")
+            guard parts.count == 3, parts[0] == "guardian-requests", UUID(uuidString: String(parts[1])) != nil else { throw NativeAPIError.invalidResponse }
+            if parts[2] == "withdraw" {
+                guard fields == ["expected_revision", "operation_key"], let revision = body["expected_revision"].integer, revision > 0 else { throw NativeAPIError.invalidResponse }
+            } else if parts[2] == "claim" {
+                guard fields == ["expected_revision", "policy_version", "relationship_attested", "purposes", "operation_key"],
+                      let revision = body["expected_revision"].integer, revision > 0, body["policy_version"].string == NativeAudienceProjection.policy,
+                      body["relationship_attested"].bool == true, let purposes = body["purposes"].array, !purposes.isEmpty,
+                      purposes.count <= 3, Set(purposes.compactMap(\.string)).count == purposes.count,
+                      purposes.allSatisfy({ $0.string.flatMap(NativeAudiencePurpose.init(rawValue:)) != nil }) else { throw NativeAPIError.invalidResponse }
+            } else { throw NativeAPIError.invalidResponse }
+        }
+    }
+}
+
+/// Device-only authority held solely to reconcile an uncertain anonymous age
+/// operation after logout. It never grants product or capture access.
+struct NativeAudienceSuspensionRecord: Codable, Sendable {
+    let protocolName: String, apiOrigin: String, operation: NativeAudienceMutationRecord
+    var credentials: NativeCredentials
+    var resolved: Bool
+    init(origin: URL, operation: NativeAudienceMutationRecord, credentials: NativeCredentials) throws {
+        protocolName = "lovelies-audience-suspension-v1"; apiOrigin = origin.absoluteString
+        self.operation = operation; self.credentials = credentials; resolved = false
+        try validate(origin: origin)
+    }
+    func validate(origin: URL) throws {
+        guard protocolName == "lovelies-audience-suspension-v1", apiOrigin == origin.absoluteString,
+              operation.accountID == credentials.account_id else { throw NativeAPIError.invalidResponse }
+        try operation.validate(origin: origin); try credentials.validateAnonymousRecovery(accountID: operation.accountID)
     }
 }
 

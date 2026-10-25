@@ -19,6 +19,7 @@ final class NativeCamera: NSObject, ObservableObject, AVCapturePhotoCaptureDeleg
     private let authority = NativeCameraAuthority()
     private let captureLock = NSLock()
     private var pending: (request: UUID, ticket: NativeCameraTicket, completion: CheckedContinuation<Data, Error>, processed: Data?)?
+    private var scopedStart: (expiresAt: Date, check: @MainActor @Sendable () async throws -> Void)?
     private var configured = false
     private var observers: [NSObjectProtocol] = []
     private var rotation: CGFloat = 90
@@ -58,7 +59,13 @@ final class NativeCamera: NSObject, ObservableObject, AVCapturePhotoCaptureDeleg
             self.state = snapshot
         }
     }
-    func start() async {
+    private func saveScopedStart(expiresAt: Date, check: @escaping @MainActor @Sendable () async throws -> Void) {
+        captureLock.lock(); scopedStart = (expiresAt, check); captureLock.unlock()
+    }
+    func start(expiresAt: Date, requireCurrent: @escaping @MainActor @Sendable () async throws -> Void) async {
+        do { try await requireCurrent() } catch { stop(); return }
+        guard expiresAt > Date(), !Task.isCancelled else { stop(); return }
+        saveScopedStart(expiresAt: expiresAt, check: requireCurrent)
         let active = await MainActor.run { UIApplication.shared.applicationState == .active }
         let permission = Self.permission(), existing = authority.snapshot
         guard !(existing.ready && permission == .authorized && active) else { return }
@@ -69,20 +76,24 @@ final class NativeCamera: NSObject, ObservableObject, AVCapturePhotoCaptureDeleg
             DispatchQueue.global().asyncAfter(deadline: .now() + 30) { [weak self] in
                 guard let self, self.authority.fail(ticket, issue: .initializingTimeout, onlyIfPhase: .permissionPending) else { return }; self.publish()
             }
-            AVCaptureDevice.requestAccess(for: .video) { [weak self] _ in
-                guard let self else { return }
-                if self.authority.resolvePermission(ticket, permission: Self.permission()) { self.initialize(ticket) }
-                self.publish()
+            // Await the actual OS reply. Its callback cannot initialize a camera
+            // later using an expired/revoked request's earlier authorization.
+            _ = await withCheckedContinuation { (completion: CheckedContinuation<Bool, Never>) in
+                AVCaptureDevice.requestAccess(for: .video) { allowed in completion.resume(returning: allowed) }
             }
-        } else { initialize(ticket) }
+            guard authority.resolvePermission(ticket, permission: Self.permission()) else { publish(); return }
+        }
+        do { try await requireCurrent() } catch { _ = authority.fail(ticket, issue: .captureUnavailable); publish(); stopPhysical(); return }
+        guard !Task.isCancelled, expiresAt > Date(), authority.accepts(ticket) else { stopPhysical(); return }
+        initialize(ticket, expiresAt: expiresAt, requireCurrent: requireCurrent)
     }
-    private func initialize(_ ticket: NativeCameraTicket) {
+    private func initialize(_ ticket: NativeCameraTicket, expiresAt: Date, requireCurrent: @escaping @MainActor @Sendable () async throws -> Void) {
         DispatchQueue.global().asyncAfter(deadline: .now() + 12) { [weak self] in
             guard let self, self.authority.fail(ticket, issue: .initializingTimeout, onlyIfPhase: .initializing) else { return }
             self.publish(); self.stopPhysical()
         }
         queue.async { [weak self] in
-            guard let self, self.authority.accepts(ticket) else { return }
+            guard let self, expiresAt > Date(), self.authority.accepts(ticket) else { return }
             do {
                 guard Self.permission() == .authorized else { throw NativeCameraIssue.permissionChanged }
                 if !self.configured {
@@ -103,12 +114,25 @@ final class NativeCamera: NSObject, ObservableObject, AVCapturePhotoCaptureDeleg
                     }
                 }
                 self.applyRotation()
-                guard self.authority.accepts(ticket) else { return }
-                self.session.startRunning()
-                guard self.authority.didStart(ticket, running: self.session.isRunning) else {
-                    if !self.authority.snapshot.ready && self.session.isRunning { self.session.stopRunning() }; return
+                // Configuration may have waited on the serial capture queue.
+                // Recheck the same request once more before starting hardware.
+                Task { [weak self] in
+                    do {
+                        try await requireCurrent()
+                        guard let self, expiresAt > Date(), self.authority.accepts(ticket) else { return }
+                        self.queue.async { [weak self] in
+                            guard let self, expiresAt > Date(), self.authority.accepts(ticket), Self.permission() == .authorized else { return }
+                            self.session.startRunning()
+                            guard self.authority.didStart(ticket, running: self.session.isRunning) else {
+                                if !self.authority.snapshot.ready && self.session.isRunning { self.session.stopRunning() }; return
+                            }
+                            self.publish()
+                        }
+                    } catch {
+                        guard let self else { return }
+                        if self.authority.fail(ticket, issue: .captureUnavailable) { self.publish(); self.stopPhysical() }
+                    }
                 }
-                self.publish()
             } catch {
                 if self.authority.fail(ticket, issue: error as? NativeCameraIssue ?? .cameraUnavailable) { self.publish() }
             }
@@ -218,7 +242,9 @@ final class NativeCamera: NSObject, ObservableObject, AVCapturePhotoCaptureDeleg
     }
     private func resumeIfWanted() {
         guard authority.snapshot.wanted, authority.snapshot.foreground else { return }
-        Task { [weak self] in await self?.start() }
+        captureLock.lock(); let scoped = scopedStart; captureLock.unlock()
+        guard let scoped, scoped.expiresAt > Date() else { stop(); return }
+        Task { [weak self] in await self?.start(expiresAt: scoped.expiresAt, requireCurrent: scoped.check) }
     }
     func setForeground(_ active: Bool) {
         let wanted = authority.snapshot.wanted
@@ -226,7 +252,7 @@ final class NativeCamera: NSObject, ObservableObject, AVCapturePhotoCaptureDeleg
         if active && wanted { resumeIfWanted() } else { stopPhysical() }
     }
     private func stopPhysical() { queue.async { [weak self] in if let self, self.session.isRunning { self.session.stopRunning() } } }
-    func stop() { authority.suspend(foreground: authority.snapshot.foreground, stop: true); cancelPending(CancellationError()); publish(); stopPhysical() }
+    func stop() { captureLock.lock(); scopedStart = nil; captureLock.unlock(); authority.suspend(foreground: authority.snapshot.foreground, stop: true); cancelPending(CancellationError()); publish(); stopPhysical() }
     func setRotation(_ angle: CGFloat) { queue.async { [weak self] in self?.rotation = angle; self?.applyRotation() } }
     private func applyRotation() {
         if let connection = output.connection(with: .video) {
@@ -318,7 +344,7 @@ struct NativeImport: Identifiable, Codable, Sendable {
 }
 
 struct NativePhotoPicker: UIViewControllerRepresentable {
-    let isCurrent: @MainActor () -> Bool
+    let isCurrent: @MainActor () async -> Bool
     let completion: ([NativeImport], String?) -> Void
     func makeUIViewController(context: Context) -> PHPickerViewController {
         var config = PHPickerConfiguration(photoLibrary: .shared()); config.filter = .images; config.selectionLimit = 30
@@ -328,9 +354,9 @@ struct NativePhotoPicker: UIViewControllerRepresentable {
     func updateUIViewController(_ uiViewController: PHPickerViewController, context: Context) {}
     func makeCoordinator() -> Coordinator { Coordinator(isCurrent: isCurrent, completion: completion) }
     final class Coordinator: NSObject, PHPickerViewControllerDelegate {
-        let isCurrent: @MainActor () -> Bool
+        let isCurrent: @MainActor () async -> Bool
         let completion: ([NativeImport], String?) -> Void
-        init(isCurrent: @escaping @MainActor () -> Bool, completion: @escaping ([NativeImport], String?) -> Void) { self.isCurrent = isCurrent; self.completion = completion }
+        init(isCurrent: @escaping @MainActor () async -> Bool, completion: @escaping ([NativeImport], String?) -> Void) { self.isCurrent = isCurrent; self.completion = completion }
         func picker(_ picker: PHPickerViewController, didFinishPicking results: [PHPickerResult]) {
             picker.dismiss(animated: true)
             Task {
@@ -362,9 +388,11 @@ struct NativePhotoPicker: UIViewControllerRepresentable {
 }
 
 enum NativePhotoLibrary {
-    static func save(_ data: Data) async throws {
+    static func save(_ data: Data, requireCurrent: @MainActor () async throws -> Void) async throws {
+        try await requireCurrent()
         let status = await PHPhotoLibrary.requestAuthorization(for: .addOnly)
         guard status == .authorized || status == .limited else { throw NativeAPIError.unsupported(String(localized: "Allow saving to Photos in Settings.")) }
+        try await requireCurrent()
         try await PHPhotoLibrary.shared().performChanges {
             PHAssetCreationRequest.forAsset().addResource(with: .photo, data: data, options: nil)
         }
@@ -372,23 +400,48 @@ enum NativePhotoLibrary {
 }
 
 struct NativeOrdinaryPhotoCamera: UIViewControllerRepresentable {
-    let completion: ([NativeImport], String?) -> Void
+    let request: NativeMediaCaptureContext
+    let isCurrent: @MainActor (NativeMediaCaptureContext) async -> Bool
+    let completion: (NativeMediaCaptureContext, [NativeImport], String?) -> Void
     func makeUIViewController(context: Context) -> UIImagePickerController {
         let controller = UIImagePickerController(); controller.sourceType = .camera
         controller.cameraCaptureMode = .photo; controller.delegate = context.coordinator; return controller
     }
     func updateUIViewController(_ uiViewController: UIImagePickerController, context: Context) {}
-    func makeCoordinator() -> Coordinator { Coordinator(completion: completion) }
+    static func dismantleUIViewController(_ uiViewController: UIImagePickerController, coordinator: Coordinator) {
+        coordinator.invalidate(); uiViewController.delegate = nil
+    }
+    func makeCoordinator() -> Coordinator { Coordinator(request: request, isCurrent: isCurrent, completion: completion) }
     final class Coordinator: NSObject, UIImagePickerControllerDelegate, UINavigationControllerDelegate {
-        let completion: ([NativeImport], String?) -> Void
-        init(completion: @escaping ([NativeImport], String?) -> Void) { self.completion = completion }
-        func imagePickerControllerDidCancel(_ picker: UIImagePickerController) { picker.dismiss(animated: true); completion([], nil) }
+        // The delegate retains the opening owner; representable updates never replace it.
+        let request: NativeMediaCaptureContext
+        let isCurrent: @MainActor (NativeMediaCaptureContext) async -> Bool
+        let completion: (NativeMediaCaptureContext, [NativeImport], String?) -> Void
+        private var active = true, handling = false
+        private var captureTask: Task<Void, Never>?
+        init(request: NativeMediaCaptureContext, isCurrent: @escaping @MainActor (NativeMediaCaptureContext) async -> Bool, completion: @escaping (NativeMediaCaptureContext, [NativeImport], String?) -> Void) {
+            self.request = request; self.isCurrent = isCurrent; self.completion = completion
+        }
+        func invalidate() { active = false; captureTask?.cancel(); captureTask = nil }
+        private func finish(_ items: [NativeImport], failure: String?) {
+            guard active else { for item in items { NativeImport.removeCameraItem(item) }; return }
+            active = false; completion(request, items, failure)
+        }
+        func imagePickerControllerDidCancel(_ picker: UIImagePickerController) { captureTask?.cancel(); finish([], failure: nil) }
         func imagePickerController(_ picker: UIImagePickerController, didFinishPickingMediaWithInfo info: [UIImagePickerController.InfoKey: Any]) {
-            picker.dismiss(animated: true)
-            guard let image = info[.originalImage] as? UIImage, let bytes = image.jpegData(compressionQuality: 0.92) else { completion([], String(localized: "The camera image was unavailable.")); return }
-            Task {
-                do { let item = try await Task.detached { try NativeImport.store(bytes) }.value; await MainActor.run { self.completion([item], nil) } }
-                catch { await MainActor.run { self.completion([], error.localizedDescription) } }
+            guard active, !handling else { return }; handling = true
+            let image = info[.originalImage] as? UIImage
+            // Keep the sheet alive until this owner finishes; dismissal invalidates
+            // any task still awaiting authority or the private staging write.
+            captureTask = Task { @MainActor [self] in
+                guard active, !Task.isCancelled, await isCurrent(request), active, !Task.isCancelled else { finish([], failure: nil); return }
+                guard let image, let bytes = image.jpegData(compressionQuality: 0.92) else { finish([], failure: String(localized: "The camera image was unavailable.")); return }
+                do {
+                    guard active, !Task.isCancelled, await isCurrent(request), active, !Task.isCancelled else { finish([], failure: nil); return }
+                    let item = try await Task.detached(priority: .userInitiated) { try NativeImport.store(bytes) }.value
+                    guard active, !Task.isCancelled, await isCurrent(request), active, !Task.isCancelled else { NativeImport.removeCameraItem(item); finish([], failure: nil); return }
+                    finish([item], failure: nil)
+                } catch { finish([], failure: error.localizedDescription) }
             }
         }
     }

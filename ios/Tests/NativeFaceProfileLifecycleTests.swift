@@ -101,7 +101,7 @@ private actor ProfileFixture: NativeTransport {
         let formatter = ISO8601DateFormatter(); formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
         var value: [String: WireValue] = ["protocol": .string("lovelies-face-auth-v1"), "challenge_id": .string(UUID().uuidString.lowercased()), "nonce": .string("lfn_" + Data(repeating: UInt8(version), count: 32).base64URL), "account_id": .string(Self.account), "device_id": .string(Self.device), "device_revision": .string(Self.revision), "purpose": .string(purpose), "profile_id": profile.map { .string($0.id) } ?? .null, "profile_revision": profile.map { .string($0.revision) } ?? .null, "model_id": profile.map { .string($0.modelID) } ?? .null, "policy_version": .string(Self.policy), "required_captures": .integer(required), "poses": .strings(required == 3 ? ["front", "left", "right"] : ["front"]), "maximum_capture_bytes": .integer(8 * 1024 * 1024), "expires_at": .string(formatter.string(from: Date().addingTimeInterval(100)))]
         if purpose != "login" { value["lifecycle_operation_key"] = operation["operation_key"]; value["lifecycle_generation"] = operation["generation"] }
-        return .object(value)
+        return audienceBoundChallenge(.object(value))
     }
     private func verifyDevice(_ request: URLRequest, body: WireValue, complete: Bool) throws {
         let record = try store.journal(), parsed = try NativeFaceChallenge(challengeWithHandle(), accountID: Self.account, purpose: challenge["purpose"].string!)
@@ -127,10 +127,29 @@ private actor ProfileFixture: NativeTransport {
         fields["delivery_expires_at"] = .string(formatter.string(from: Date().addingTimeInterval(86400)))
         return .object(fields)
     }
+    // These named software actors are explicitly declared synthetic adults in
+    // this fixture setup. This is neither a production default nor age proof.
+    private func declaredAdultAudience(account: String) -> WireValue {
+        .object(["protocol": .string("lovelies-audience-v1"), "policy_version": .string("audience-2026-10-24-v1"), "account_id": .string(account),
+            "audience": .object(["age_band": .string("18_plus"), "status": .string("eligible"), "version": .integer(1), "policy_version": .string("audience-2026-10-24-v1"), "next_review_at": .null]),
+            "guardian_request": .null, "capabilities": .object(["face_authentication": .bool(true), "photo_matching": .bool(true), "photo_processing": .bool(true)])])
+    }
+    private func audienceBoundChallenge(_ wire: WireValue) -> WireValue {
+        var value = wire.object!
+        value["audience_authority"] = .object(["protocol": .string("lovelies-audience-challenge-v1"), "policy_version": .string("audience-2026-10-24-v1"),
+            "account_id": wire["account_id"], "challenge_id": wire["challenge_id"], "device_id": wire["device_id"], "purpose": wire["purpose"], "audience_version": .integer(1), "expires_at": wire["expires_at"]])
+        return .object(value)
+    }
     func send(_ request: URLRequest, limit: Int) async throws -> NativeHTTPReply {
         let path = request.url!.path; paths.append(path); try lost(path, after: false)
         let body = request.value(forHTTPHeaderField: "Content-Type") == "application/json" ? try request.httpBody.map(WireValue.decoded) ?? .null : .null
         switch path {
+        case "/me/audience":
+            guard let token = request.value(forHTTPHeaderField: "Authorization")?.split(separator: " ").last,
+                  let payload = token.split(separator: ".").dropFirst().first.flatMap({ Data(base64URL: String($0)) }),
+                  let claims = try? WireValue.decoded(payload), let account = claims["sub"].string,
+                  [Self.account].contains(account) else { return try failure(401, "session_invalid") }
+            return try reply(declaredAdultAudience(account: account))
         case "/auth/anonymous": anonymousCount += 1; return try failure(403, "fixture_no_anonymous")
         case "/auth/face/policy": return try reply(.object(["protocol": .string("lovelies-face-auth-v1"), "policy_version": .string(Self.policy), "available": .bool(true)]))
         case "/me":

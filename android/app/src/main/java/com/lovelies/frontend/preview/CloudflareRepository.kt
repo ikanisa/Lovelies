@@ -13,6 +13,118 @@ import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 
+/** Audience eligibility is separate from identity, subject consent and photo access. */
+internal object AudienceProtocol {
+    const val PROTOCOL="lovelies-audience-v1"
+    const val POLICY="audience-2026-10-24-v1"
+    val purposes=setOf("face_authentication","photo_matching","photo_processing")
+    val gateErrors=setOf("audience_required","age_not_supported","guardian_approval_required","audience_policy_changed","audience_age_review_required")
+    fun date(value: Any?): Long? = if(value==null)null else try { java.time.Instant.parse(NativeProtocol.text(value)).toEpochMilli() } catch(problem: Exception) { throw LiveFailure("audience_response_invalid") }
+    fun flags(value: Any?): Map<String,Boolean> {
+        val raw=NativeProtocol.obj(value)
+        if(raw.keys!=purposes || raw.values.any { it !is Boolean })throw LiveFailure("audience_response_invalid")
+        return raw.mapValues { it.value as Boolean }
+    }
+    fun captureAuthority(challenge: WireObject,now: Long=System.currentTimeMillis()) {
+        val held=NativeProtocol.obj(challenge["audience_authority"])
+        if(held["protocol"]!="lovelies-audience-challenge-v1" || held["policy_version"]!=POLICY ||
+            NativeProtocol.id(held["account_id"])!=NativeProtocol.id(challenge["account_id"]) ||
+            NativeProtocol.id(held["device_id"])!=NativeProtocol.id(challenge["device_id"]) ||
+            NativeProtocol.id(held["challenge_id"])!=NativeProtocol.id(challenge["challenge_id"]) ||
+            NativeProtocol.text(held["purpose"])!=NativeProtocol.text(challenge["purpose"]))throw LiveFailure("audience_response_invalid")
+        NativeProtocol.integer(held["audience_version"],1)
+        val expiry=date(held["expires_at"]) ?: throw LiveFailure("audience_response_invalid")
+        val challengeExpiry=date(challenge["expires_at"]) ?: throw LiveFailure("audience_response_invalid")
+        if(expiry<=now || expiry>challengeExpiry)throw LiveFailure("audience_authority_expired")
+    }
+    fun operationKey(value: Any?): String=NativeProtocol.text(value,128).takeIf { Regex("[A-Za-z0-9._:-]{16,128}").matches(it) } ?: throw LiveFailure("audience_response_invalid")
+}
+data class GuardianRequest(val id: String,val child: String,val state: String,val revision: Long,val expires: Long,val purposes: Map<String,Boolean>) {
+    companion object {
+        fun parse(value: Any?,expectedChild: String?=null): GuardianRequest {
+            val row=NativeProtocol.obj(value);val child=NativeProtocol.id(row["child_account_id"])
+            val state=NativeProtocol.text(row["state"])
+            if(expectedChild!=null && child!=expectedChild || row["policy_version"]!=AudienceProtocol.POLICY || state !in setOf("pending","under_review","approved","rejected","withdrawn","expired"))throw LiveFailure("audience_response_invalid")
+            AudienceProtocol.date(row["created_at"]) ?: throw LiveFailure("audience_response_invalid")
+            val flags=AudienceProtocol.flags(row["purposes"])
+            if(state!="approved" && flags.values.any { it })throw LiveFailure("audience_response_invalid")
+            return GuardianRequest(NativeProtocol.id(row["id"]),child,state,NativeProtocol.integer(row["revision"],1),AudienceProtocol.date(row["expires_at"]) ?: throw LiveFailure("audience_response_invalid"),flags)
+        }
+    }
+}
+data class AudienceState(val account: String,val band: String,val status: String,val version: Long,val nextReview: Long?,val capabilities: Map<String,Boolean>,val request: GuardianRequest?) {
+    fun allows(purpose: String,now: Long=System.currentTimeMillis()): Boolean {
+        if(purpose !in AudienceProtocol.purposes || status!="eligible" || band !in setOf("13_17","18_plus") || capabilities[purpose]!=true || nextReview?.let { it<=now }==true)return false
+        return band=="18_plus" || request?.let { it.state=="approved" && it.expires>now && it.purposes[purpose]==true }==true
+    }
+    companion object {
+        fun parse(value: Any?,expectedAccount: String): AudienceState {
+            val root=NativeProtocol.obj(value)
+            if(root["protocol"]!=AudienceProtocol.PROTOCOL || root["policy_version"]!=AudienceProtocol.POLICY || NativeProtocol.id(root["account_id"])!=expectedAccount)throw LiveFailure("audience_response_invalid")
+            val row=NativeProtocol.obj(root["audience"]);val band=NativeProtocol.text(row["age_band"]);val status=NativeProtocol.text(row["status"])
+            val version=NativeProtocol.integer(row["version"]);val flags=AudienceProtocol.flags(root["capabilities"])
+            if(band !in setOf("unknown","under13","13_17","18_plus") || status !in setOf("unknown","blocked","guardian_pending","eligible","suspended"))throw LiveFailure("audience_response_invalid")
+            if(band=="unknown") {
+                if(version!=0L || status!="unknown" || row["policy_version"]!=null || flags.values.any { it })throw LiveFailure("audience_response_invalid")
+            } else if(version<1 || row["policy_version"]!=AudienceProtocol.POLICY)throw LiveFailure("audience_response_invalid")
+            if(status!="eligible" && flags.values.any { it } || band=="under13" && status!="blocked")throw LiveFailure("audience_response_invalid")
+            val request=root["guardian_request"]?.let { GuardianRequest.parse(it,expectedAccount) }
+            if(band=="13_17" && status=="eligible" && request?.state!="approved")throw LiveFailure("audience_response_invalid")
+            return AudienceState(expectedAccount,band,status,version,AudienceProtocol.date(row["next_review_at"]),flags,request)
+        }
+    }
+}
+data class AudienceChange(val audience: AudienceState?,val request: GuardianRequest?)
+
+/** Narrow own-account controls remain usable while product/biometric permission is held. */
+internal object OwnAccountControls {
+    fun registeredSession(account: String?,sessionAccount: String?,method: String?): Boolean =
+        account!=null && account==sessionAccount && method=="registered_face"
+    fun weakRead(path: String): Boolean=path in setOf("/privacy/center","/me/sessions","/me/devices") || Regex("/privacy/operations/[A-Za-z0-9._:-]{16,128}").matches(path)
+    fun weakPost(path: String): Boolean=path in setOf("/auth/session/revoke","/auth/device/revoke") || Regex("/privacy-exports/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/grant").matches(path)
+    fun retainAudienceFailure(problem: LiveFailure): Boolean=problem.ambiguous || problem.status !in 400..499 || problem.code=="operation_key_conflict"
+    fun exportIntent(value: Any?,account: String): PendingIntent {
+        val row=NativeProtocol.obj(value);val payload=NativeProtocol.obj(row["payload"])
+        val key=AudienceProtocol.operationKey(row["key"])
+        if(row["account"]!=account || row["source"]!="privacy" || row["action"]!="privacy.request.export" || row["path"]!="/privacy/export" || row["method"]!="POST" || payload["operation_key"]!=key || payload.keys.any { it !in setOf("reason","operation_key") })throw LiveFailure("privacy_operation_scope_changed")
+        payload["reason"]?.let { NativeProtocol.text(it,2000) }
+        return PendingIntent(account,"privacy","privacy.request.export",key,payload,"/privacy/export","POST")
+    }
+    fun exportReceipt(value: WireObject,account: String) {
+        val row=NativeProtocol.obj(value["privacy_request"])
+        if(row["request_type"]!="export" || NativeProtocol.id(row["subject_user_id"])!=account || NativeProtocol.id(row["requested_by"])!=account)throw LiveFailure("privacy_operation_scope_changed")
+        NativeProtocol.id(row["id"])
+    }
+    fun withdrawalBlocksOwn(value: Any?,origin: String,account: String): Boolean {
+        val row=NativeProtocol.obj(value)
+        if(row["origin"]!=origin || row["account"]!=account)return false
+        // A damaged own-account safety record cannot silently reopen the camera.
+        val child=runCatching { NativeProtocol.id(row["child"]) }.getOrNull() ?: return true
+        return child==account
+    }
+    fun guardianReference(origin: String,account: String,request: String): WireObject=mapOf("origin" to origin,"account" to NativeProtocol.id(account),"request" to NativeProtocol.id(request))
+    fun referenceRequest(value: Any?,origin: String,account: String): String {
+        val row=NativeProtocol.obj(value)
+        if(row.keys!=setOf("origin","account","request") || row["origin"]!=origin || row["account"]!=account)throw LiveFailure("guardian_reference_scope_changed")
+        return NativeProtocol.id(row["request"])
+    }
+}
+
+/** A fresh strong profile read authorizes only the next bound local photo collection step. */
+internal class LocalCollectionAuthority private constructor(val scope: SessionScope,val account: String,val audience: AudienceState,private val token: String) {
+    override fun toString()="LocalCollectionAuthority(scope_bound=true)"
+    fun assertCurrent(current: SessionScope,actor: LiveCredentials?,now: Long=System.currentTimeMillis()) {
+        if(current!=scope || current.accountId!=account || actor?.account!=account || actor.method!="registered_face" || actor.token!=token || actor.expires<=now || !audience.allows("face_authentication",now) || !audience.allows("photo_processing",now))throw LiveFailure("capture_context_changed")
+    }
+    companion object {
+        fun parse(profile: WireObject,audience: AudienceState,scope: SessionScope,actor: LiveCredentials,now: Long=System.currentTimeMillis()): LocalCollectionAuthority {
+            if(profile.keys!=setOf("user_id","name","profile_scope") || profile["profile_scope"]!="registered_face_profile" || NativeProtocol.id(profile["user_id"])!=actor.account || audience.account!=actor.account)throw LiveFailure("face_profile_requires_status")
+            NativeProtocol.text(profile["name"])
+            return LocalCollectionAuthority(scope,actor.account,audience,actor.token).also { it.assertCurrent(scope,actor,now) }
+        }
+    }
+}
+
 data class LiveCredentials(val account: String,val token: String,val refresh: String,val method: String,val expires: Long,val wire: WireObject)
 data class PendingIntent(val account: String,val source: String,val action: String,val key: String,val payload: WireObject,val path: String?=null,val method: String="POST") {
     fun wire(): WireObject = mapOf("account" to account,"source" to source,"action" to action,"key" to key,"payload" to payload,"path" to path,"method" to method)
@@ -26,7 +138,7 @@ class CloudflareTransport(private val endpoint: String,private val fence: Sessio
         return try { request("/community/action",scope,token,"POST",bytes) } finally { bytes.fill(0) }
     }
     fun request(path: String,scope: SessionScope,token: String?,method: String="GET",body: ByteArray?=null,
-        type: String="application/json",headers: Map<String,String> = emptyMap(),binary: Boolean=false,binaryLimit: Int=4*1024*1024,documentLimit: Int?=null): ByteArray {
+        type: String="application/json",headers: Map<String,String> = emptyMap(),binary: Boolean=false,binaryLimit: Int=4*1024*1024,documentLimit: Int?=null,expectedStatus: Int?=null): ByteArray {
         if(!path.startsWith('/') || path.startsWith("//") || path.contains('\\'))throw LiveFailure("invalid_api_path")
         if(endpoint.isBlank())throw LiveFailure("api_endpoint_unconfigured")
         fence.assert(scope)
@@ -42,6 +154,7 @@ class CloudflareTransport(private val endpoint: String,private val fence: Sessio
                 fence.assert(scope);connection.outputStream.use { stream -> stream.write(body) }
             }
             val status=connection.responseCode;fence.assert(scope)
+            if(expectedStatus!=null && status in 200..299 && status!=expectedStatus)throw LiveFailure("response_invalid",status)
             if(status in 300..399)throw LiveFailure("unsafe_redirect",status,method!="GET")
             val input=if(status in 200..299)connection.inputStream else connection.errorStream
             val maximum=if(binary && status in 200..299)binaryLimit.coerceIn(1,25*1024*1024) else documentLimit?.coerceIn(1,20*1024*1024) ?: (2*1024*1024)
@@ -248,9 +361,9 @@ class CloudflareRepository(private val context: Context,endpoint: String = Build
         clearPrivateScope();credentials=next;val scope=fence.switch(next.account)
         storage.clear();storage.putAll(candidate);scope
     }
-    private fun json(path: String,scope: SessionScope=currentScope(),token: String?=credentials?.token,method: String="GET",body: WireObject?=null): WireObject {
+    private fun json(path: String,scope: SessionScope=currentScope(),token: String?=credentials?.token,method: String="GET",body: WireObject?=null,expectedStatus: Int?=null): WireObject {
         val bytes=body?.let { NativeProtocol.canonical(it).toByteArray(Charsets.UTF_8) }
-        val response=try { transport.request(path,scope,token,method,bytes) } finally { bytes?.fill(0) }
+        val response=try { transport.request(path,scope,token,method,bytes,expectedStatus=expectedStatus) } finally { bytes?.fill(0) }
         try { fence.assert(scope);return jsonMap(JSONObject(response.toString(Charsets.UTF_8))) }
         catch(error: LiveFailure) { throw error } catch(error: Exception) { throw LiveFailure("response_invalid") }
         finally { response.fill(0) }
@@ -322,7 +435,7 @@ class CloudflareRepository(private val context: Context,endpoint: String = Build
         if(cameraLoginHeld)return@withLock emptyMap()
         if(credentials!=null) {
             try { ensureFresh();return@withLock json("/me") }
-            catch(error: LiveFailure) { if(error.status !in listOf(401,403) || hasPendingRefresh())throw error;credentials=null;if(faceLifecycle==null)storage.remove("credentials");storage.remove("pending");pending=null;fence.switch(null);save() }
+            catch(error: LiveFailure) { if(error.status !in listOf(401,403) || error.code in AudienceProtocol.gateErrors || hasPendingRefresh())throw error;credentials=null;if(faceLifecycle==null)storage.remove("credentials");storage.remove("pending");pending=null;fence.switch(null);save() }
         }
         if(faceLifecycle!=null || identity!=null)return@withLock emptyMap()
         if(hasPendingRefresh())throw LiveFailure("refresh_delivery_requires_status")
@@ -459,10 +572,10 @@ class CloudflareRepository(private val context: Context,endpoint: String = Build
     }
     fun stagedExport(): WireObject?=(saved("staged_export") as? Map<*,*>)?.let(NativeProtocol::obj)?.takeIf { it["account"]==credentials?.account }
     suspend fun saveExport(requestId: String,destination: Uri)=withContext(Dispatchers.IO) {
-        val (scope,actor)=ready();NativeProtocol.id(requestId)
+        val (scope,actor)=readyOwnControls();NativeProtocol.id(requestId)
         var staged=stagedExport()?.takeIf { it["request"]==requestId }
         if(staged==null) {
-            val grant=post("/privacy-exports/$requestId/grant",emptyMap())
+            val grant=json("/privacy-exports/$requestId/grant",scope,actor.token,"POST",emptyMap())
             fence.assert(scope)
             if(NativeProtocol.id(grant["request_id"])!=requestId)throw LiveFailure("privacy_export_unavailable")
             NativeProtocol.expiry(grant["expires_at"],System.currentTimeMillis())
@@ -497,7 +610,7 @@ class CloudflareRepository(private val context: Context,endpoint: String = Build
     }
     suspend fun requestAccountDeletion(): GuestDeletionRecord=withContext(Dispatchers.IO) { mutex.withLock {
         if(accountDeletion!=null)return@withLock checkAccountDeletionLocked()
-        registered();if(pending!=null)throw LiveFailure("pending_operation_requires_reconciliation")
+        ownRegistered()
         val record=GuestDeletionRecord.create(baseUrl,credentials!!.account)
         saveAccountDeletion(record)
         val scope=currentScope()
@@ -601,15 +714,171 @@ class CloudflareRepository(private val context: Context,endpoint: String = Build
         refreshActor(current,currentScope()) { value,_,scope->install(value,current.account,scope) }
     }
     private fun registered() { if(accountDeletion!=null)throw LiveFailure("deletion_requires_status");if(faceLifecycle?.blocksPrivate==true)throw LiveFailure("face_profile_requires_status");if(cameraLoginHeld)throw LiveFailure("face_login_requires_status");if(accountRecovery!=null)throw LiveFailure("account_recovery_requires_status");if(enrollment!=null)throw LiveFailure("enrollment_requires_recovery");ensureFresh();if(credentials?.method!="registered_face")throw LiveFailure("registered_face_required",403) }
+    private fun ownRegistered() {
+        ensureFresh()
+        if(!OwnAccountControls.registeredSession(credentials?.account,currentScope().accountId,credentials?.method))throw LiveFailure("registered_face_required",403)
+    }
+    private suspend fun readyOwnControls(): Pair<SessionScope,LiveCredentials> = mutex.withLock {
+        ownRegistered();currentScope() to (credentials ?: throw LiveFailure("authentication_required"))
+    }
     private suspend fun ready(requireRegistered: Boolean=true): Pair<SessionScope,LiveCredentials> = mutex.withLock {
         if(requireRegistered)registered() else ensureFresh()
         currentScope() to (credentials ?: throw LiveFailure("authentication_required"))
     }
     suspend fun get(path: String,protected: Boolean=true): WireObject=withContext(Dispatchers.IO) {
-        val (scope,actor)=ready(protected);json(path,scope,actor.token)
+        val weak=OwnAccountControls.weakRead(path)
+        if(!protected && path!="/me" && !weak)throw LiveFailure("weak_route_not_allowed")
+        val (scope,actor)=if(weak)readyOwnControls() else ready(protected)
+        json(path,scope,actor.token)
     }
     suspend fun post(path: String,payload: WireObject): WireObject=withContext(Dispatchers.IO) {
-        val (scope,actor)=ready();json(path,scope,actor.token,"POST",payload)
+        val (scope,actor)=if(OwnAccountControls.weakPost(path))readyOwnControls() else ready()
+        json(path,scope,actor.token,"POST",payload)
+    }
+    internal suspend fun localCollectionAuthority(expectedScope: SessionScope): LocalCollectionAuthority=withContext(Dispatchers.IO) { mutex.withLock {
+        fence.assert(expectedScope);registered();fence.assert(expectedScope)
+        val actor=credentials ?: throw LiveFailure("authentication_required")
+        if(ownGuardianWithdrawalPending)throw LiveFailure("guardian_withdrawal_pending",403)
+        val audience=AudienceState.parse(json("/me/audience",expectedScope,actor.token,expectedStatus=200),actor.account)
+        if(!audience.allows("photo_processing"))throw LiveFailure(when(audience.band) { "under13"->"age_not_supported";"unknown"->"audience_required";else->"guardian_approval_required" },403)
+        val profile=try { json("/me/profile",expectedScope,actor.token,expectedStatus=200) }
+        catch(problem: LiveFailure) {
+            // A retired face reference can leave this credential valid for own privacy controls.
+            // Do not discard that weak session merely because strong collection was denied.
+            if(problem.code=="registered_face_session_invalid")throw LiveFailure("face_profile_requires_status").also { it.initCause(problem) }
+            throw problem
+        }
+        LocalCollectionAuthority.parse(profile,audience,expectedScope,actor).also(::assertLocalCollection)
+    } }
+    internal fun assertLocalCollection(authority: LocalCollectionAuthority) = synchronized(fence) {
+        fence.assert(authority.scope);authority.assertCurrent(currentScope(),credentials)
+        if(ownGuardianWithdrawalPending)throw LiveFailure("guardian_withdrawal_pending",403)
+        if(accountDeletion!=null || faceLifecycle?.blocksPrivate==true || cameraLoginHeld || accountRecovery!=null || enrollment!=null)throw LiveFailure("face_profile_requires_status")
+    }
+    val privacyExportOperationPending get()=saved("privacy_export_operation")!=null || pending?.let { it.action=="privacy.request.export" && it.source=="privacy" }==true
+    private fun savePrivacyExport(intent: PendingIntent?,scope: SessionScope,adoptLegacy: Boolean=false) = synchronized(fence) {
+        fence.assert(scope)
+        val candidate=storage.toMap().filterKeys { it!="privacy_export_operation" && !(adoptLegacy && it=="pending") }+(intent?.let { mapOf("privacy_export_operation" to (it.wire()+mapOf("origin" to baseUrl))) } ?: emptyMap())
+        synchronized(storage) { vault.save(candidate);storage.clear();storage.putAll(candidate);if(adoptLegacy)pending=null }
+    }
+    suspend fun requestPrivacyExport(): WireObject=withContext(Dispatchers.IO) { mutex.withLock {
+        ownRegistered();val actor=credentials ?: throw LiveFailure("authentication_required");val scope=currentScope()
+        val separate=saved("privacy_export_operation")?.let { raw ->
+            val row=NativeProtocol.obj(raw);if(row["origin"]!=baseUrl)throw LiveFailure("privacy_operation_scope_changed")
+            OwnAccountControls.exportIntent(row,actor.account)
+        }
+        val legacy=if(separate==null && pending?.action=="privacy.request.export")OwnAccountControls.exportIntent(pending!!.wire(),actor.account) else null
+        val intent=separate ?: legacy ?: "android-privacy-${UUID.randomUUID()}".let { key -> PendingIntent(actor.account,"privacy","privacy.request.export",key,mapOf("operation_key" to key),"/privacy/export","POST") }
+        savePrivacyExport(intent,scope,adoptLegacy=legacy!=null)
+        // Only this actor's privacy receipts can be reconciled under weaker authority.
+        val receipt=if(separate!=null || legacy!=null)json("/privacy/operations/${intent.key}",scope,actor.token) else null
+        val result=if(receipt!=null && receipt["status"]!="unknown")receipt else json("/privacy/export",scope,actor.token,"POST",intent.payload)
+        OwnAccountControls.exportReceipt(result,actor.account)
+        savePrivacyExport(null,scope);result
+    } }
+    fun guardianReference(): String? {
+        val account=credentials?.account ?: return null
+        val held=saved("guardian_request_reference") ?: return null
+        val row=NativeProtocol.obj(held)
+        if(row["account"]!=account || row["origin"]!=baseUrl)return null
+        return OwnAccountControls.referenceRequest(row,baseUrl,account)
+    }
+    suspend fun restoreGuardianReference(): GuardianRequest?=guardianReference()?.let { guardianStatus(it) }
+    private fun rememberGuardianReference(request: GuardianRequest,account: String,scope: SessionScope) = synchronized(fence) {
+        fence.assert(scope)
+        val reference=OwnAccountControls.guardianReference(baseUrl,account,request.id)
+        val candidate=storage.toMap()+mapOf("guardian_request_reference" to reference)
+        synchronized(storage) { vault.save(candidate);storage.clear();storage.putAll(candidate) }
+    }
+    val audienceOperationPending get()=saved("audience_operation")!=null
+    suspend fun audienceStatus(): AudienceState=withContext(Dispatchers.IO) {
+        val (scope,actor)=ready(false)
+        AudienceState.parse(json("/me/audience",scope,actor.token),actor.account).also { fence.assert(scope) }
+    }
+    suspend fun declareAudience(band: String,version: Long): AudienceChange {
+        if(band !in setOf("under13","13_17","18_plus") || version<0)throw LiveFailure("audience_choice_required")
+        return audienceMutation("declare","/me/audience","PUT",mapOf("age_band" to band,"expected_version" to version,"policy_version" to AudienceProtocol.POLICY))
+    }
+    suspend fun createGuardianRequest(version: Long): AudienceChange = audienceMutation("create","/me/guardian-requests","POST",mapOf("expected_version" to version,"policy_version" to AudienceProtocol.POLICY))
+    suspend fun guardianStatus(id: String): GuardianRequest=withContext(Dispatchers.IO) {
+        val request=NativeProtocol.id(id);val (scope,actor)=ready(false)
+        GuardianRequest.parse(json("/me/guardian-requests/$request",scope,actor.token)["guardian_request"]).also {
+            if(it.id!=request)throw LiveFailure("audience_response_invalid");fence.assert(scope)
+            if(it.child!=actor.account)rememberGuardianReference(it,actor.account,scope)
+        }
+    }
+    suspend fun claimGuardianRequest(id: String,revision: Long,purposes: Set<String>): AudienceChange {
+        if(revision<1 || purposes.isEmpty() || !AudienceProtocol.purposes.containsAll(purposes))throw LiveFailure("audience_choice_required")
+        return audienceMutation("claim","/guardian-requests/${NativeProtocol.id(id)}/claim","POST",mapOf("expected_revision" to revision,"policy_version" to AudienceProtocol.POLICY,"relationship_attested" to true,"purposes" to purposes.sorted()))
+    }
+    val guardianWithdrawalOperationPending get()=saved("guardian_withdrawal_operation")!=null
+    val ownGuardianWithdrawalPending: Boolean get() {
+        val raw=saved("guardian_withdrawal_operation") ?: return false
+        val held=runCatching { NativeProtocol.obj(raw) }.getOrNull() ?: return true
+        val account=credentials?.account ?: identity?.account ?: enrollment?.account ?: accountRecovery?.account ?: faceLifecycle?.account ?: return false
+        return OwnAccountControls.withdrawalBlocksOwn(held,baseUrl,account)
+    }
+    suspend fun withdrawGuardianRequest(request: GuardianRequest): AudienceChange=withContext(Dispatchers.IO) { mutex.withLock {
+        ensureFresh();val account=credentials?.account ?: throw LiveFailure("authentication_required")
+        val body=mapOf("expected_revision" to request.revision)
+        val held=saved("guardian_withdrawal_operation")?.let(NativeProtocol::obj) ?: mapOf("origin" to baseUrl,"account" to account,"child" to request.child,"action" to "withdraw","path" to "/guardian-requests/${request.id}/withdraw","method" to "POST","body" to (body+mapOf("operation_key" to "android-withdraw-${UUID.randomUUID()}")))
+        audienceMutationLocked("withdraw","/guardian-requests/${request.id}/withdraw","POST",body,held,"guardian_withdrawal_operation")
+    } }
+    suspend fun retryGuardianWithdrawal(): AudienceChange=withContext(Dispatchers.IO) { mutex.withLock {
+        val held=NativeProtocol.obj(saved("guardian_withdrawal_operation"))
+        audienceMutationLocked(null,null,null,null,held,"guardian_withdrawal_operation")
+    } }
+    suspend fun retryAudienceOperation(): AudienceChange=withContext(Dispatchers.IO) { mutex.withLock {
+        val held=NativeProtocol.obj(saved("audience_operation"));audienceMutationLocked(null,null,null,null,held)
+    } }
+    private suspend fun audienceMutation(action: String,path: String,method: String,payload: WireObject): AudienceChange=withContext(Dispatchers.IO) { mutex.withLock {
+        if(guardianWithdrawalOperationPending && action in setOf("create","claim"))throw LiveFailure("guardian_withdrawal_pending")
+        audienceMutationLocked(action,path,method,payload,saved("audience_operation")?.let(NativeProtocol::obj))
+    } }
+    private fun saveAudienceOperation(value: WireObject?,scope: SessionScope,guardian: WireObject?=null,journal: String="audience_operation") = synchronized(fence) {
+        fence.assert(scope)
+        if(journal !in setOf("audience_operation","guardian_withdrawal_operation"))throw LiveFailure("audience_operation_scope_changed")
+        val candidate=storage.toMap().filterKeys { it!=journal }+(value?.let { mapOf(journal to it) } ?: emptyMap())+(guardian?.let { mapOf("guardian_request_reference" to it) } ?: emptyMap())
+        synchronized(storage) { vault.save(candidate);storage.clear();storage.putAll(candidate) }
+    }
+    private fun audienceMutationLocked(action: String?,path: String?,method: String?,payload: WireObject?,previous: WireObject?,journal: String="audience_operation"): AudienceChange {
+        ensureFresh();val actor=credentials ?: throw LiveFailure("authentication_required");val scope=currentScope()
+        val held=previous ?: mapOf("origin" to baseUrl,"account" to actor.account,"action" to action,"path" to path,"method" to method,"body" to (payload!!+mapOf("operation_key" to "android-audience-${UUID.randomUUID()}")))
+        if(held["origin"]!=baseUrl || held["account"]!=actor.account)throw LiveFailure("audience_operation_scope_changed")
+        val savedAction=NativeProtocol.text(held["action"]);val savedPath=NativeProtocol.text(held["path"]);val savedMethod=NativeProtocol.text(held["method"])
+        val body=NativeProtocol.obj(held["body"]);AudienceProtocol.operationKey(body["operation_key"])
+        if(journal=="guardian_withdrawal_operation") { if(savedAction!="withdraw")throw LiveFailure("audience_operation_scope_changed");NativeProtocol.id(held["child"]) }
+        val requestId=when(savedAction) {
+            "declare" -> { if(savedPath!="/me/audience" || savedMethod!="PUT" || body.keys!=setOf("age_band","expected_version","policy_version","operation_key") || body["age_band"] !in setOf("under13","13_17","18_plus"))throw LiveFailure("audience_operation_scope_changed");NativeProtocol.integer(body["expected_version"]);null }
+            "create" -> { if(savedPath!="/me/guardian-requests" || savedMethod!="POST" || body.keys!=setOf("expected_version","policy_version","operation_key"))throw LiveFailure("audience_operation_scope_changed");NativeProtocol.integer(body["expected_version"]);null }
+            "claim","withdraw" -> {
+                val id=NativeProtocol.id(savedPath.removePrefix("/guardian-requests/").substringBefore('/'))
+                if(savedPath!="/guardian-requests/$id/$savedAction" || savedMethod!="POST")throw LiveFailure("audience_operation_scope_changed")
+                NativeProtocol.integer(body["expected_revision"],1)
+                if(savedAction=="claim") {
+                    val choices=body["purposes"] as? List<*> ?: throw LiveFailure("audience_operation_scope_changed")
+                    if(body.keys!=setOf("expected_revision","policy_version","relationship_attested","purposes","operation_key") || body["relationship_attested"]!=true || choices.isEmpty() || choices.toSet().size!=choices.size || choices.any { it !in AudienceProtocol.purposes })throw LiveFailure("audience_operation_scope_changed")
+                } else if(body.keys!=setOf("expected_revision","operation_key"))throw LiveFailure("audience_operation_scope_changed")
+                id
+            }
+            else -> throw LiveFailure("audience_operation_scope_changed")
+        }
+        if(savedAction!="withdraw" && body["policy_version"]!=AudienceProtocol.POLICY)throw LiveFailure("audience_policy_changed")
+        if(previous!=null && action!=null && (savedAction!=action || savedPath!=path || savedMethod!=method || NativeProtocol.canonical(body.filterKeys { it!="operation_key" })!=NativeProtocol.canonical(payload)))throw LiveFailure("audience_operation_pending")
+        saveAudienceOperation(held,scope,journal=journal)
+        try {
+            val result=json(savedPath,scope,actor.token,savedMethod,body)
+            val audience=when { result["protocol"]==AudienceProtocol.PROTOCOL->AudienceState.parse(result,actor.account);result["audience"] is Map<*,*>->AudienceState.parse(result["audience"],actor.account);else->null }
+            val request=result["guardian_request"]?.let { GuardianRequest.parse(it,if(savedAction=="create")actor.account else null) }
+            if(savedAction=="declare" && audience==null || savedAction!="declare" && request==null || requestId!=null && request?.id!=requestId || savedAction=="create" && audience?.request?.id!=request?.id)throw LiveFailure("audience_response_invalid")
+            if(savedAction=="claim" && request?.child==actor.account)throw LiveFailure("audience_response_invalid")
+            val guardian=if(savedAction in setOf("claim","withdraw") && request!=null && request.child!=actor.account)OwnAccountControls.guardianReference(baseUrl,actor.account,request.id) else null
+            saveAudienceOperation(null,scope,guardian,journal)
+            return AudienceChange(audience,request)
+        } catch(problem: LiveFailure) {
+            if(!OwnAccountControls.retainAudienceFailure(problem))saveAudienceOperation(null,scope,journal=journal)
+            throw problem
+        }
     }
     private class EnrollmentPhase(var scope: SessionScope)
     private fun assertEnrollment(record: EnrollmentJournal,scope: SessionScope,allowGuest: Boolean=false) {
@@ -885,6 +1154,7 @@ class CloudflareRepository(private val context: Context,endpoint: String = Build
                 current
             }
         } catch(problem: LiveFailure) { if(frame!=null)bytes.fill(0);throw problem }
+        AudienceProtocol.captureAuthority(value)
         NativeProtocol.expiry(value["expires_at"],System.currentTimeMillis())
         faceLifecycle?.let { life->
             if(life.loginKey!=null)return@withLock lifecycleLoginCapture(bytes,life,scope,frame)
@@ -1644,23 +1914,26 @@ class CloudflareRepository(private val context: Context,endpoint: String = Build
         if(file.sha256!=null && (bytes.size.toLong()!=file.byteSize || NativeProtocol.sha256(bytes)!=file.sha256)) { bytes.fill(0);throw LiveFailure("upload_source_changed") }
         return bytes
     }
-    private fun stageUploadFile(scope: SessionScope,file: PhotoUploadFile): PhotoUploadFile {
+    private suspend fun stageUploadFile(scope: SessionScope,file: PhotoUploadFile): PhotoUploadFile {
         val record=assertPhotoUpload(scope)
         if(file.sha256!=null)return file
+        val collection=localCollectionAuthority(scope)
+        assertLocalCollection(collection)
         val type=file.contentType ?: context.contentResolver.getType(Uri.parse(file.uri)) ?: throw LiveFailure("image_required")
         if(type !in PhotoUploadFile.TYPES)throw LiveFailure("image_required")
         // MIME is durable before importing. A completed encrypted import is reused if its journal acknowledgement was interrupted.
         val typed=file.copy(contentType=type);changePhotoUploads(scope) { it.replace(typed) }
+        assertLocalCollection(collection)
         val bytes=if(vault.hasStagedPhoto(file.localId))stagedUploadBytes(record,typed) else {
             val imported=try { context.contentResolver.openInputStream(Uri.parse(file.uri))?.use { stream ->
                 val out=java.io.ByteArrayOutputStream();val buffer=ByteArray(8192)
-                try { while(true) { assertPhotoUpload(scope);val n=stream.read(buffer);if(n<0)break
+                try { while(true) { assertPhotoUpload(scope);assertLocalCollection(collection);val n=stream.read(buffer);if(n<0)break
                     if(out.size().toLong()+n>PhotoUploadFile.MAX_BYTES)throw LiveFailure("image_too_large");out.write(buffer,0,n) };out.toByteArray() }
                 finally { buffer.fill(0);out.reset() }
             } ?: throw LiveFailure("upload_source_unavailable") }
             catch(problem: LiveFailure) { throw problem }
             catch(problem: Exception) { throw LiveFailure("upload_source_unavailable") }
-            try { assertPhotoUpload(scope);vault.stagePhoto(record.account,record.batch,file.localId,imported);imported }
+            try { synchronized(fence) { assertPhotoUpload(scope);assertLocalCollection(collection);vault.stagePhoto(record.account,record.batch,file.localId,imported) };imported }
             catch(problem: Exception) { imported.fill(0);throw problem }
         }
         try {
@@ -1838,7 +2111,7 @@ class CloudflareRepository(private val context: Context,endpoint: String = Build
             fence.assert(phase.scope)
             val previous=credentials ?: heldLoginActor
             val deletion=guestDeletion;val journal=enrollment;val recovery=accountRecovery;val life=faceLifecycle
-            val frozen=heldAnonymousLogoutCredentials(storage["credentials"],deletion?.receipt?.completed!=true && (deletion!=null || journal!=null || recovery!=null))
+            val frozen=heldAnonymousLogoutCredentials(storage["credentials"],deletion?.receipt?.completed!=true && (deletion!=null || journal!=null || recovery!=null || audienceOperationPending || guardianWithdrawalOperationPending))
             stagedExport()?.get("file")?.let { vault.removeStagedPhoto(NativeProtocol.id(it)) }
             val candidate=linkedMapOf<String,Any?>()
             if(!revokeIdentity || journal?.alias==identity?.alias || recovery?.alias==identity?.alias || life?.alias==identity?.alias)storage["device"]?.let { candidate["device"]=it }
@@ -1846,6 +2119,10 @@ class CloudflareRepository(private val context: Context,endpoint: String = Build
             if(deletion!=null)candidate["guest_deletion"]=deletion.wire()
             if(journal!=null)candidate["enrollment"]=journal.wire()
             if(recovery!=null)candidate["account_recovery"]=recovery.wire()
+            storage["audience_operation"]?.let { candidate["audience_operation"]=it }
+            storage["guardian_withdrawal_operation"]?.let { candidate["guardian_withdrawal_operation"]=it }
+            storage["privacy_export_operation"]?.let { candidate["privacy_export_operation"]=it }
+            storage["guardian_request_reference"]?.let { candidate["guardian_request_reference"]=it }
             if(life!=null)candidate["face_lifecycle"]=life.wire()
             if(!revokeIdentity)cameraLogin()?.let { held->candidate["camera_login"]=held.forExplicitLogout().wire() }
             storage["retired_face_lifecycles"]?.let { candidate["retired_face_lifecycles"]=it }
@@ -1871,7 +2148,7 @@ class CloudflareRepository(private val context: Context,endpoint: String = Build
             storage.clear();storage.putAll(retired)
             recoveryKeyIntent=storage["recovery_key_intent"]?.let { RecoveryKeyIntent.restore(it,baseUrl) }
             // Do not revoke the retained anonymous session needed to reconcile an unresolved enrollment/deletion.
-            listOfNotNull(heldCameraActor,previous?.takeUnless { it.method=="anonymous" && (journal!=null || deletion!=null || recovery!=null) }).distinctBy { it.token }
+            listOfNotNull(heldCameraActor,previous?.takeUnless { it.method=="anonymous" && (journal!=null || deletion!=null || recovery!=null || audienceOperationPending || guardianWithdrawalOperationPending) }).distinctBy { it.token }
         }
         withContext(Dispatchers.IO) { cancelRetiredRefresh();current.forEach { actor->runCatching {
             val body=NativeProtocol.canonical(emptyMap<String,Any?>()).toByteArray()

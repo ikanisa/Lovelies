@@ -80,7 +80,9 @@ import Foundation
         retiredPhoto.removeValue(forKey: "media_source")
         try rejects("photo metadata cannot infer missing media source") { _ = try NativePhoto(.object(retiredPhoto)) }
         let date = ISO8601DateFormatter(); date.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-        let now = Date()
+        // Protocol dates carry milliseconds; use an exactly representable base
+        // for the inclusive 125-second boundary below.
+        let now = Date(timeIntervalSince1970: Date().timeIntervalSince1970.rounded(.down))
         let claims: WireValue = .object(["sub": .string(id(50)), "auth_method": .string("registered_face"), "exp": .integer(Int(now.timeIntervalSince1970) + 900)])
         var credential: [String: WireValue] = ["access_token": .string("fixture." + (try claims.encoded()).base64URL + ".signature"), "refresh_token": .string("fixture-refresh"), "account_id": .string(id(50)), "auth_method": .string("registered_face"), "expires_in": .integer(900), "roles": .strings(["user", "admin"])]
         let registered = try NativeCredentials(.object(credential), now: now)
@@ -97,11 +99,56 @@ import Foundation
         let registration = try NativeFaceChallenge(.object(face), accountID: id(50), purpose: "registration", now: now)
         try assert(registration.poses == ["front", "left", "right"] && registration.deviceEnvelope()["profile_id"] == .null, "three ordinary initial enrollment captures")
         try rejects("capture challenge bound to another account") { _ = try NativeFaceChallenge(.object(face), accountID: id(999), purpose: "registration", now: now) }
+        let registrationWire = face
+        for (field, value) in [
+            ("protocol", WireValue.string("face_pad_device_key")),
+            ("purpose", .string("login")),
+            ("maximum_capture_bytes", .integer(8 * 1024 * 1024 - 1)),
+            ("maximum_capture_bytes", .integer(8 * 1024 * 1024 + 1)),
+            ("required_captures", .integer(1)),
+            ("poses", .strings(["front", "head_turn", "blink"])),
+            ("poses", .strings(["front", "right", "left"])),
+            ("nonce", .string("lfn_" + String(repeating: "A", count: 42))),
+            ("face_handle", .string("lfh_" + String(repeating: "B", count: 42))),
+            ("device_revision", .string("another-revision")),
+            ("expires_at", .string(date.string(from: now.addingTimeInterval(126))))
+        ] {
+            var incompatible = registrationWire; incompatible[field] = value
+            try rejects("registration rejects incompatible " + field) { _ = try NativeFaceChallenge(.object(incompatible), accountID: id(50), purpose: "registration", now: now) }
+        }
+        var latestAllowed = registrationWire
+        latestAllowed["expires_at"] = .string(date.string(from: now.addingTimeInterval(125)))
+        _ = try NativeFaceChallenge(.object(latestAllowed), accountID: id(50), purpose: "registration", now: now); checks += 1
+        latestAllowed["expires_at"] = .string(date.string(from: now.addingTimeInterval(126)))
+        try rejects("stored challenge recovery cannot accept an excessive future horizon") { _ = try NativeFaceChallenge(.object(latestAllowed), accountID: id(50), purpose: "registration", now: now, allowExpired: true) }
         face["purpose"] = .string("login"); face["profile_id"] = .string(id(63)); face["profile_revision"] = .string(id(64)); face["model_id"] = .string("yunet-sface-v1"); face["required_captures"] = .integer(1); face["poses"] = .strings(["front"]); face.removeValue(forKey: "face_handle")
         let login = try NativeFaceChallenge(.object(face), accountID: id(50), purpose: "login", now: now)
         try assert(login.poses == ["front"] && login.faceHandle == nil, "fresh login uses retained opaque device identity and one ordinary selfie")
+        let expectedEnvelope: [String: WireValue] = ["protocol": .string("lovelies-face-device-v1"), "challenge_id": .string(id(60)), "nonce": face["nonce"]!, "purpose": .string("login"), "account_id": .string(id(50)), "device_id": .string(id(61)), "device_revision": .string(id(62)), "profile_id": .string(id(63)), "profile_revision": .string(id(64)), "policy_version": .string("registered-face-opencv-v1")]
+        try assert(login.deviceEnvelope() == expectedEnvelope, "signed device envelope retains exact public challenge and registered-reference identity")
+        for field in ["profile_revision", "model_id"] {
+            var incomplete = face; incomplete.removeValue(forKey: field)
+            try rejects("returning challenge requires exact registered " + field) { _ = try NativeFaceChallenge(.object(incomplete), accountID: id(50), purpose: "login", now: now) }
+        }
+        var videoLogin = face; videoLogin["required_captures"] = .integer(3); videoLogin["poses"] = .strings(["front", "left", "right"])
+        try rejects("returning login requires exactly one ordinary still") { _ = try NativeFaceChallenge(.object(videoLogin), accountID: id(50), purpose: "login", now: now) }
+        var replacement = face; replacement["purpose"] = .string("replacement"); replacement["required_captures"] = .integer(3); replacement["poses"] = .strings(["front", "left", "right"])
+        let replacing = try NativeFaceChallenge(.object(replacement), accountID: id(50), purpose: "replacement", now: now)
+        try assert(replacing.poses.count == 3 && replacing.deviceEnvelope()["profile_id"] == login.deviceEnvelope()["profile_id"] && replacing.deviceEnvelope()["profile_revision"] == login.deviceEnvelope()["profile_revision"], "replacement retains three stills and exact old registered reference")
+        let maximumCapture = NativeEnrollmentCapture(index: 2, sha256: String(repeating: "a", count: 64), byteSize: 8 * 1024 * 1024)
+        try maximumCapture.validate(); checks += 1
+        for invalidCapture in [
+            NativeEnrollmentCapture(index: -1, sha256: String(repeating: "a", count: 64), byteSize: 1),
+            NativeEnrollmentCapture(index: 3, sha256: String(repeating: "a", count: 64), byteSize: 1),
+            NativeEnrollmentCapture(index: 0, sha256: String(repeating: "a", count: 64), mime: "image/png", byteSize: 1),
+            NativeEnrollmentCapture(index: 0, sha256: String(repeating: "A", count: 64), byteSize: 1),
+            NativeEnrollmentCapture(index: 0, sha256: String(repeating: "a", count: 63), byteSize: 1),
+            NativeEnrollmentCapture(index: 0, sha256: String(repeating: "a", count: 64), byteSize: 0),
+            NativeEnrollmentCapture(index: 0, sha256: String(repeating: "a", count: 64), byteSize: 8 * 1024 * 1024 + 1)
+        ] { try rejects("signed still capture rejects invalid index/hash/MIME/length") { try invalidCapture.validate() } }
         face["expires_at"] = .string(date.string(from: now.addingTimeInterval(-1)))
         try rejects("expired single-use face challenge") { _ = try NativeFaceChallenge(.object(face), accountID: id(50), purpose: "login", now: now) }
+        _ = try NativeFaceChallenge(.object(face), accountID: id(50), purpose: "login", now: now, allowExpired: true); checks += 1
         print("Native protocol checks passed: \(checks)")
     }
 }

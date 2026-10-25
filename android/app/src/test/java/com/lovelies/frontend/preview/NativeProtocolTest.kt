@@ -77,6 +77,38 @@ class NativeProtocolTest {
         fail("challenge_identity_changed") { NativeProtocol.bindFaceChallenge(challenge,id(99),"login",id(32)) }
         fail("challenge_identity_changed") { NativeProtocol.bindFaceChallenge(challenge,id(31),"login",id(99)) }
     }
+    @Test fun registeredFaceProofSignaturesCannotMoveAcrossCeremoniesReferencesOrCaptureManifests() {
+        val keys=KeyPairGenerator.getInstance("EC").apply { initialize(ECGenParameterSpec("secp256r1")) }.generateKeyPair()
+        fun sign(value: WireObject)=Signature.getInstance("SHA256withECDSA").run {
+            initSign(keys.private);update(NativeProtocol.canonical(value).toByteArray(Charsets.UTF_8));sign()
+        }
+        fun verifies(value: WireObject,signature: ByteArray)=Signature.getInstance("SHA256withECDSA").run {
+            initVerify(keys.public);update(NativeProtocol.canonical(value).toByteArray(Charsets.UTF_8));verify(signature)
+        }
+        val registration: WireObject=mapOf("challenge_id" to id(30),"nonce" to "single-use-nonce","purpose" to "registration",
+            "account_id" to id(31),"device_id" to id(32),"device_revision" to "device-r1","profile_id" to null,"profile_revision" to null,
+            "policy_version" to "registered-face-opencv-v1","model_id" to "opencv-yunet-sface-2021dec-v1")
+        val manifests=(0..2).map { index->EnrollmentCapture(index,NativeProtocol.sha256(byteArrayOf(1,2,index.toByte())),"image/jpeg",3).wire() }
+        val complete=NativeProtocol.faceEnvelope(registration)+mapOf("step" to "complete","capture_manifest" to manifests)
+        val signature=sign(complete);assertTrue(verifies(complete,signature))
+        val changedBindings=listOf(mapOf("challenge_id" to id(99)),mapOf("nonce" to "another-nonce"),mapOf("purpose" to "login"),
+            mapOf("account_id" to id(99)),mapOf("device_id" to id(99)),mapOf("device_revision" to "device-r2"),
+            mapOf("profile_id" to id(99)),mapOf("profile_revision" to "profile-r2"),mapOf("policy_version" to "another-policy"))
+        for(change in changedBindings)assertFalse("Changed ${change.keys.single()} reused enrollment signature",
+            verifies(NativeProtocol.faceEnvelope(registration+change)+mapOf("step" to "complete","capture_manifest" to manifests),signature))
+        val changedManifests=listOf(manifests.take(1),manifests.reversed(),listOf(manifests[0],manifests[0],manifests[2]),
+            listOf(manifests[0]+mapOf("index" to 1))+manifests.drop(1),listOf(manifests[0]+mapOf("sha256" to "f".repeat(64)))+manifests.drop(1),
+            listOf(manifests[0]+mapOf("mime" to "image/png"))+manifests.drop(1),listOf(manifests[0]+mapOf("byte_size" to 4))+manifests.drop(1))
+        for(manifest in changedManifests)assertFalse("Changed signed still manifest reused enrollment signature",verifies(complete+mapOf("capture_manifest" to manifest),signature))
+        val reference=registration+mapOf("purpose" to "replacement","profile_id" to id(33),"profile_revision" to "profile-r1")
+        val replacement=NativeProtocol.faceEnvelope(reference)+mapOf("step" to "complete","capture_manifest" to manifests)
+        val replacementSignature=sign(replacement);assertTrue(verifies(replacement,replacementSignature))
+        assertFalse(verifies(NativeProtocol.faceEnvelope(reference+mapOf("profile_revision" to "profile-r2"))+
+            mapOf("step" to "complete","capture_manifest" to manifests),replacementSignature))
+        val capture=NativeProtocol.faceEnvelope(registration)+mapOf("step" to "capture","capture_index" to 0,
+            "capture_sha256" to manifests[0]["sha256"],"mime" to "image/jpeg","byte_size" to 3)
+        assertFalse("Capture proof was accepted as a completion proof",verifies(complete,sign(capture)))
+    }
     @Test fun sparseAlineEricGraphNeverBecomesCartesianAndGlobalPhotoExclusionAffectsBoth() {
         val snap=snapshot();val all=draft(snap)
         assertEquals(5,all.effective(snap).size)

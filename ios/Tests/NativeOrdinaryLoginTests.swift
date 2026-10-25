@@ -43,15 +43,36 @@ private actor OrdinaryTransport: NativeTransport {
     func interruptCapture() { loseCapture = true }
     func rejectMismatch() { mismatch = true }
     private func reply(_ value: WireValue, _ status: Int = 200) throws -> NativeHTTPReply { NativeHTTPReply(status: status, headers: ["content-type": "application/json"], data: try value.encoded()) }
+    // These named software actors are explicitly declared synthetic adults in
+    // this fixture setup. This is neither a production default nor age proof.
+    private func declaredAdultAudience(account: String) -> WireValue {
+        .object(["protocol": .string("lovelies-audience-v1"), "policy_version": .string("audience-2026-10-24-v1"), "account_id": .string(account),
+            "audience": .object(["age_band": .string("18_plus"), "status": .string("eligible"), "version": .integer(1), "policy_version": .string("audience-2026-10-24-v1"), "next_review_at": .null]),
+            "guardian_request": .null, "capabilities": .object(["face_authentication": .bool(true), "photo_matching": .bool(true), "photo_processing": .bool(true)])])
+    }
+    private func audienceBoundChallenge(_ wire: WireValue) -> WireValue {
+        var value = wire.object!
+        value["audience_authority"] = .object(["protocol": .string("lovelies-audience-challenge-v1"), "policy_version": .string("audience-2026-10-24-v1"),
+            "account_id": wire["account_id"], "challenge_id": wire["challenge_id"], "device_id": wire["device_id"], "purpose": wire["purpose"], "audience_version": .integer(1), "expires_at": wire["expires_at"]])
+        return .object(value)
+    }
     func send(_ request: URLRequest, limit: Int) async throws -> NativeHTTPReply {
         let path = request.url!.path; paths.append(path)
         let dates = ISO8601DateFormatter(); dates.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        if path == "/me/audience" {
+            guard let token = request.value(forHTTPHeaderField: "Authorization")?.split(separator: " ").last,
+                  let payload = token.split(separator: ".").dropFirst().first.flatMap({ Data(base64URL: String($0)) }),
+                  let claims = try? WireValue.decoded(payload), let account = claims["sub"].string,
+                  [Self.account].contains(account) else { return try reply(.object(["error": .object(["code": .string("session_invalid")])]), 401) }
+            return try reply(declaredAdultAudience(account: account))
+        }
         if path == "/auth/face/challenge" {
             challenge = .object(["protocol": .string("lovelies-face-auth-v1"), "purpose": .string("login"), "challenge_id": .string(UUID().uuidString.lowercased()),
                 "account_id": .string(Self.account), "device_id": .string(Self.device), "device_revision": .string("00000000-0000-4000-8000-000000000084"),
                 "profile_id": .string(Self.profile), "profile_revision": .string(Self.revision), "model_id": .string(Self.model), "policy_version": .string(Self.policy),
                 "nonce": .string("lfn_" + Data(repeating: 5, count: 32).base64URL), "maximum_capture_bytes": .integer(8 * 1024 * 1024),
                 "required_captures": .integer(1), "poses": .strings(["front"]), "expires_at": .string(dates.string(from: Date().addingTimeInterval(100)))])
+            challenge = audienceBoundChallenge(challenge)
             return try reply(challenge)
         }
         if path.hasPrefix("/auth/face/proof/") {

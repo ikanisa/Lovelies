@@ -32,6 +32,7 @@ import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicReference
+import java.util.concurrent.ConcurrentHashMap
 
 /** Bounded decoding and EXIF orientation are transport preparation, never face-quality proof. */
 internal fun decodeCameraReview(bytes: ByteArray): android.graphics.Bitmap {
@@ -67,7 +68,8 @@ internal class NativeCamera(
     private val context: Context,private val front: Boolean,
     private val captureContext: NativeCaptureContext,private val onShutter: (NativeCaptureContext)->NativeCaptureContext?,
     private val onReady: ((()->Unit)?)->Unit,private val onPhoto: (ByteArray,NativeCaptureContext)->Unit,
-    private val onError: (String)->Unit,private val onStatus: (CameraStatus)->Unit={}
+    private val onError: (String)->Unit,private val onStatus: (CameraStatus)->Unit={},
+    private val authorizePersonal: (NativeCaptureContext,(Boolean)->Unit)->Unit={owner,reply->reply(owner.mode==CameraCaptureMode.FACE)}
 ) : TextureView.SurfaceTextureListener {
     private val thread=HandlerThread("LoveliesCamera").apply { start() }
     private val handler=Handler(thread.looper)
@@ -76,6 +78,8 @@ internal class NativeCamera(
     private val disposed=AtomicBoolean(false)
     private val producer=CameraProducer(captureContext)
     private val pendingCapture=AtomicReference<NativeCaptureContext?>(null)
+    private val heldImages=ConcurrentHashMap.newKeySet<android.media.Image>()
+    private val heldBytes=ConcurrentHashMap.newKeySet<ByteArray>()
     private var generation=0L
     private var camera: CameraDevice?=null
     private var session: CameraCaptureSession?=null
@@ -86,10 +90,13 @@ internal class NativeCamera(
     private var bufferSize=android.util.Size(640,480)
     private var displayRotation=-1
     private var opening=false
+    private var captureChecking=false
     private val initTimeout=Runnable { if(!closed.get())fail("camera_initialization_timeout") }
     private val captureTimeout=Runnable { if(pendingCapture.get()!=null)fail("capture_timeout") }
     private fun status(value: CameraStatus) { main.post { if(!disposed.get())onStatus(value) } }
     private fun releaseResources() {
+        heldImages.forEach { runCatching { it.close() } };heldImages.clear()
+        heldBytes.forEach { it.fill(0) };heldBytes.clear()
         runCatching { session?.stopRepeating() };runCatching { session?.abortCaptures() }
         runCatching { session?.close() };runCatching { camera?.close() };runCatching { reader?.close() };runCatching { preview?.release() }
         session=null;camera=null;reader=null;preview=null
@@ -130,6 +137,16 @@ internal class NativeCamera(
     private fun open(width: Int,height: Int) {
         if(closed.get() || opening || width<=0 || height<=0)return
         opening=true
+        if(captureContext.mode==CameraCaptureMode.UPLOAD) {
+            main.removeCallbacks(initTimeout)
+            authorizeCollection(captureContext) { allowed ->
+                if(!allowed)fail("face_profile_requires_status")
+                else { main.postDelayed(initTimeout,8000);openAuthorized(width,height) }
+            }
+        } else openAuthorized(width,height)
+    }
+    private fun openAuthorized(width: Int,height: Int) {
+        if(closed.get() || disposed.get())return
         try {
             if(ContextCompat.checkSelfPermission(context,Manifest.permission.CAMERA)!=PackageManager.PERMISSION_GRANTED)throw LiveFailure("camera_permission_required")
             val manager=context.getSystemService(Context.CAMERA_SERVICE) as CameraManager
@@ -149,16 +166,17 @@ internal class NativeCamera(
             reader=ImageReader.newInstance(size.width,size.height,ImageFormat.JPEG,2).apply {
                 setOnImageAvailableListener({ imageReader ->
                     val image=runCatching { imageReader.acquireNextImage() }.getOrNull() ?: return@setOnImageAvailableListener
-                    try {
-                        val bytes=ByteArray(image.planes[0].buffer.remaining());image.planes[0].buffer.get(bytes)
-                        val owner=pendingCapture.getAndSet(null)
-                        main.removeCallbacks(captureTimeout)
-                        if(closed.get() || owner==null || !producer.frame(generation,bytes))bytes.fill(0)
-                        else main.post {
-                            if(closed.get() || disposed.get())bytes.fill(0)
-                            else { onReady(null);onStatus(CameraStatus(CameraPhase.REVIEW));onPhoto(bytes,owner) }
-                        }
-                    } finally { image.close() }
+                    val owner=pendingCapture.getAndSet(null)
+                    main.removeCallbacks(captureTimeout)
+                    if(closed.get() || owner==null) { image.close();return@setOnImageAvailableListener }
+                    heldImages.add(image)
+                    if(owner.mode==CameraCaptureMode.FACE)collectImage(image,owner)
+                    else authorizeCollection(owner) { allowed ->
+                        if(!handler.post {
+                            if(allowed && !closed.get() && !disposed.get())collectImage(image,owner)
+                            else { releaseImage(image);if(!closed.get())fail("face_profile_requires_status") }
+                        })releaseImage(image)
+                    }
                 },handler)
             }
             manager.openCamera(cameraId,object: CameraDevice.StateCallback() {
@@ -191,6 +209,54 @@ internal class NativeCamera(
         if(closed.get() || disposed.get())return
         if(ContextCompat.checkSelfPermission(context,Manifest.permission.CAMERA)!=PackageManager.PERMISSION_GRANTED) { fail("camera_permission_required");return }
         val owner=onShutter(captureContext) ?: return
+        if(owner.mode==CameraCaptureMode.UPLOAD) {
+            if(captureChecking)return
+            captureChecking=true;onReady(null)
+            authorizeCollection(owner) { allowed ->
+                captureChecking=false
+                if(allowed)captureAuthorized(owner) else fail("face_profile_requires_status")
+            }
+        } else captureAuthorized(owner)
+    }
+    /** Runs a fresh strong check on Main, then rechecks immutable ownership after its await. */
+    private fun authorizeCollection(owner: NativeCaptureContext,reply: (Boolean)->Unit) {
+        main.post {
+            if(closed.get() || disposed.get()) { reply(false);return@post }
+            val delivered=AtomicBoolean(false)
+            fun complete(allowed: Boolean) {
+                if(delivered.compareAndSet(false,true))main.post {
+                    reply(allowed && !closed.get() && !disposed.get() && onShutter(owner)==owner)
+                }
+            }
+            try { authorizePersonal(owner,::complete) } catch(problem: Exception) { complete(false) }
+        }
+    }
+    private fun releaseImage(image: android.media.Image) {
+        heldImages.remove(image);runCatching { image.close() }
+    }
+    /** No app-owned JPEG bytes exist until the personal collection check has succeeded. */
+    private fun collectImage(image: android.media.Image,owner: NativeCaptureContext) {
+        try {
+            if(closed.get() || disposed.get())return
+            val buffer=image.planes[0].buffer
+            if(buffer.remaining()>CameraReviewBuffer.MAX_BYTES) { fail("capture_too_large");return }
+            val bytes=ByteArray(buffer.remaining());heldBytes.add(bytes);buffer.get(bytes)
+            if(closed.get() || !producer.frame(generation,bytes)) { heldBytes.remove(bytes);bytes.fill(0);return }
+            if(owner.mode==CameraCaptureMode.FACE)main.post { publishImage(bytes,owner,true) }
+            else authorizeCollection(owner) { allowed -> publishImage(bytes,owner,allowed) }
+        } catch(problem: Exception) { fail("camera_image_invalid") }
+        finally { releaseImage(image) }
+    }
+    private fun publishImage(bytes: ByteArray,owner: NativeCaptureContext,allowed: Boolean) {
+        heldBytes.remove(bytes)
+        if(!allowed || closed.get() || disposed.get()) {
+            bytes.fill(0);if(!closed.get())fail("face_profile_requires_status");return
+        }
+        onReady(null);onStatus(CameraStatus(CameraPhase.REVIEW));onPhoto(bytes,owner)
+    }
+    private fun captureAuthorized(owner: NativeCaptureContext) {
+        if(closed.get() || disposed.get())return
+        if(ContextCompat.checkSelfPermission(context,Manifest.permission.CAMERA)!=PackageManager.PERMISSION_GRANTED) { fail("camera_permission_required");return }
         if(!producer.shutter(generation,owner))return
         pendingCapture.set(owner);onReady(null);onStatus(CameraStatus(CameraPhase.CAPTURING))
         val orientation=cameraJpegOrientation(sensor,rotationDegrees(),front)
@@ -214,6 +280,7 @@ internal class NativeCamera(
     fun close() {
         if(!disposed.compareAndSet(false,true))return
         closed.set(true);producer.interrupt();pendingCapture.set(null)
+        heldBytes.forEach { it.fill(0) };heldBytes.clear()
         main.removeCallbacks(initTimeout);main.removeCallbacks(captureTimeout);onReady(null)
         view?.surfaceTextureListener=null;view=null
         handler.post { releaseResources();thread.quitSafely() }
@@ -230,7 +297,8 @@ internal class NativeCamera(
 fun NativeCameraPane(modifier: Modifier,front: Boolean,active: Boolean,captureContext: NativeCaptureContext,
     onShutter: (NativeCaptureContext)->NativeCaptureContext?,onReady: (NativeCaptureContext, (()->Unit)?)->Unit,
     onPhoto: (ByteArray,NativeCaptureContext)->Unit,onError: (NativeCaptureContext,String)->Unit,
-    onStatus: (NativeCaptureContext,CameraStatus)->Unit) {
+    onStatus: (NativeCaptureContext,CameraStatus)->Unit,
+    authorizePersonal: (NativeCaptureContext,(Boolean)->Unit)->Unit={owner,reply->reply(owner.mode==CameraCaptureMode.FACE)}) {
     val context=LocalContext.current
     val preferences=remember { context.getSharedPreferences("lovelies_camera_permission",Context.MODE_PRIVATE) }
     fun currentPermission(): CameraPermissionState {
@@ -247,6 +315,7 @@ fun NativeCameraPane(modifier: Modifier,front: Boolean,active: Boolean,captureCo
     val settings=rememberLauncherForActivityResult(ActivityResultContracts.StartActivityForResult()) { permission=currentPermission();attempt++ }
     val ready by rememberUpdatedState(onReady);val photo by rememberUpdatedState(onPhoto);val error by rememberUpdatedState(onError)
     val report by rememberUpdatedState(onStatus);val shutter by rememberUpdatedState(onShutter)
+    val authorize by rememberUpdatedState(authorizePersonal)
     LaunchedEffect(active,captureContext) { permission=currentPermission();if(!active) { ready(captureContext,null);report(captureContext,CameraStatus(CameraPhase.INTERRUPTED)) } }
     if(permission!=CameraPermissionState.GRANTED)Box(modifier,contentAlignment=Alignment.Center) {
         Column(horizontalAlignment=Alignment.CenterHorizontally,modifier=Modifier.padding(18.dp)) {
@@ -270,7 +339,8 @@ fun NativeCameraPane(modifier: Modifier,front: Boolean,active: Boolean,captureCo
                 {if(alive.get())ready(captureContext,it)},
                 {bytes,owner->if(alive.get())photo(bytes,owner) else bytes.fill(0)},
                 {if(alive.get()) { error(captureContext,it);permission=currentPermission() }},
-                {if(alive.get()) { status=it;report(captureContext,it) }}) }
+                {if(alive.get()) { status=it;report(captureContext,it) }},
+                {owner,reply->if(alive.get())authorize(owner,reply) else reply(false)}) }
             Box(modifier) {
                 AndroidView(factory={TextureView(it).also(camera::attach)},modifier=Modifier.fillMaxSize())
                 if(status.phase in setOf(CameraPhase.IDLE,CameraPhase.INITIALIZING))Box(Modifier.fillMaxSize(),contentAlignment=Alignment.Center) { BodyText(stringResource(R.string.camera_starting)) }

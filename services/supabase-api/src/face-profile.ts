@@ -11,6 +11,8 @@ const DEVICE_PROTOCOL = 'lovelies-face-profile-device-v1';
 const CONTROL_MS = 365 * 86400000;
 const OPERATION_MS = 30 * 86400000;
 const CHALLENGE_MS = 120000;
+export const INACTIVE_PROFILE_FACT = 'lovelies-inactive-profile-completion-v1';
+export const inactiveProfileOperationVersion = (key: string) => 'inactive-profile-operation-v1:' + key;
 type Control = {
     account_id: string;
     device_id: string;
@@ -169,6 +171,28 @@ async function cleanupState(id: string | null, account: string, ctx: AppContext)
         return 'blocked';
     return row?.status === 'failed' ? 'failed' : 'pending';
 }
+/** A compacted operation is not, by itself, evidence of object absence. The
+ * separately stored, exact minimal completion fact is required as well. */
+async function operationCleanupState(op: LifecycleOperation, ctx: AppContext): Promise<string> {
+    if (op.cleanup_id !== null)
+        return cleanupState(op.cleanup_id, op.account_id, ctx);
+    if (!(op.action === 'replace' ? op.state === 'completed' : ['pause', 'withdraw_authentication', 'remove'].includes(op.action) && op.state === 'applied'))
+        return 'none';
+    const rows = await ctx.db.all<any>("SELECT * FROM retention_jobs WHERE subject_id=? AND kind='profile' AND object_version=? LIMIT 3", op.account_id, inactiveProfileOperationVersion(op.operation_key));
+    if (!rows.length) return 'none';
+    let fact: any;
+    try { fact = JSON.parse(rows[0].binding_json); } catch { throw new ApiError(503, 'face_profile_cleanup_fact_invalid'); }
+    const row = rows[0], fields = ['protocol', 'account_id', 'operation_key', 'action', 'state', 'input_hash', 'retired_at'];
+    if (rows.length !== 1 || row.asset_id !== null || row.status !== 'verified' || row.lease_token !== null || row.lease_until !== null ||
+        !Number.isSafeInteger(row.policy_version) || row.policy_version < 1 || row.error_code !== null ||
+        !Number.isSafeInteger(row.created_at) || row.created_at < 0 || !Number.isSafeInteger(row.verified_at) || row.verified_at < row.created_at || row.verified_at > ctx.now() ||
+        !fact || typeof fact !== 'object' || Array.isArray(fact) || Object.keys(fact).length !== fields.length || fields.some(key => !Object.hasOwn(fact, key)) ||
+        fact.protocol !== INACTIVE_PROFILE_FACT || fact.account_id !== op.account_id || fact.operation_key !== op.operation_key ||
+        fact.action !== op.action || fact.state !== op.state || fact.input_hash !== op.input_hash || fact.retired_at !== row.created_at || fact.retired_at < op.created_at || fact.retired_at > ctx.now() ||
+        await ctx.db.one('SELECT id FROM retention_objects WHERE job_id=? LIMIT 1', row.id))
+        throw new ApiError(503, 'face_profile_cleanup_fact_invalid');
+    return 'completed';
+}
 async function operationMetadata(op: LifecycleOperation, ctx: AppContext): Promise<Record<string, unknown>> {
     let status = op.state, challenge: Record<string, unknown> | null = null, progress: unknown[] = [], challengeId = op.challenge_id;
     if (op.state === 'pending' && op.challenge_id) {
@@ -189,7 +213,7 @@ async function operationMetadata(op: LifecycleOperation, ctx: AppContext): Promi
         }
     }
     return { operation_key: op.operation_key, action: op.action, state: status, generation: op.generation,
-        challenge_id: challengeId, challenge, captures: progress, cleanup_state: (await cleanupState(op.cleanup_id, op.account_id, ctx)) };
+        challenge_id: challengeId, challenge, captures: progress, cleanup_state: (await operationCleanupState(op, ctx)) };
 }
 export async function lifecycleMetadata(account: string, deviceId: string, ctx: AppContext, op?: LifecycleOperation | null, requestNonce?: string): Promise<Record<string, unknown>> {
     const s = (await state(account, ctx)), profile = (await ctx.db.one<Profile>('SELECT * FROM face_profiles WHERE account_id=?', account));
@@ -206,7 +230,7 @@ export async function lifecycleMetadata(account: string, deviceId: string, ctx: 
         authentication_enabled: profile?.status === 'active' && profile.auth_enabled === 1 && await hasConsent(ctx, account, 'face_authentication'),
         matching_enabled: profile?.status === 'active' && s.matching_paused === 0 && await hasConsent(ctx, account, 'photo_matching'),
         processing_enabled: (await hasConsent(ctx, account, 'photo_processing')), receive_matches: preferences?.receive_matches === 1,
-        matching_paused: s.matching_paused === 1, removal_state: removal ? (await cleanupState(removal.cleanup_id, account, ctx)) : 'none',
+        matching_paused: s.matching_paused === 1, removal_state: removal ? (await operationCleanupState(removal, ctx)) : 'none',
         operation: op ? (await operationMetadata(op, ctx)) : null, ...(requestNonce ? { request_nonce: requestNonce } : {}) };
 }
 export async function invalidateRecipientProfile(account: string, ctx: AppContext): Promise<void> {
@@ -485,7 +509,7 @@ async function challenge(request: Request, ctx: AppContext): Promise<Response> {
         const profile = (await ctx.db.one<Profile>('SELECT * FROM face_profiles WHERE account_id=?', row.account_id)), s = (await state(row.account_id, ctx));
         if (input.action === 'enroll') {
             const removal = s.removal_operation_key ? (await operation(row.account_id, s.removal_operation_key, ctx)) : null;
-            if (profile || !removal || (await cleanupState(removal.cleanup_id, row.account_id, ctx)) !== 'completed')
+            if (profile || !removal || (await operationCleanupState(removal, ctx)) !== 'completed')
                 throw new ApiError(409, 'face_profile_cleanup_pending');
         }
         else if (!profile || profile.status !== 'active' || (input.action === 'replace' && profile.auth_enabled !== 1) ||

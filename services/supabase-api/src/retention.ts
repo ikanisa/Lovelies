@@ -4,7 +4,11 @@ import { executeOperation, prepareOperation, retiredOperationInput, retiredOpera
 import { hasConsent } from './gallery.ts';
 import { mediaHeld, requireOperator } from './operators.ts';
 import { AUDIENCE_POLICY } from './audience.ts';
+import { INACTIVE_PROFILE_FACT, inactiveProfileOperationVersion } from './face-profile.ts';
 const DAY = 86400000;
+type InactiveKind = 'lifecycle' | 'job';
+type InactiveSource = { id: string; at: number };
+type InactiveSnapshot = { source: any; subject: string; key: string; at: number; policy: Policy; cleanup: any; operations: any[]; objects: any[]; writers: any[] };
 export const retentionSchemaStatements: readonly string[] = [
     `CREATE TABLE IF NOT EXISTS retention_settings(id TEXT PRIMARY KEY CHECK(id='default'),version INTEGER NOT NULL CHECK(version>0),raw_days INTEGER NOT NULL CHECK(raw_days BETWEEN 1 AND 3650),preview_days INTEGER NOT NULL CHECK(preview_days BETWEEN 1 AND 3650),face_crop_days INTEGER NOT NULL CHECK(face_crop_days BETWEEN 1 AND 3650),free_cache_days INTEGER NOT NULL CHECK(free_cache_days BETWEEN 1 AND 3650),audit_days INTEGER NOT NULL CHECK(audit_days BETWEEN 1 AND 30),legal_hold INTEGER NOT NULL DEFAULT 0 CHECK(legal_hold IN(0,1)),updated_at INTEGER NOT NULL)`,
     `CREATE TABLE IF NOT EXISTS asset_retention(asset_id TEXT PRIMARY KEY REFERENCES assets(id) ON DELETE CASCADE,raw_expires_at INTEGER NOT NULL,preview_expires_at INTEGER NOT NULL,legal_hold INTEGER NOT NULL DEFAULT 0 CHECK(legal_hold IN(0,1)),version INTEGER NOT NULL DEFAULT 1,updated_at INTEGER NOT NULL)`,
@@ -159,8 +163,9 @@ export async function runRetention(ctx: AppContext, maximum = 50): Promise<{
 }> {
     if (!Number.isInteger(maximum) || maximum < 1 || maximum > 200)
         throw new ApiError(400, 'retention_limit_invalid');
+    const metadataFailures = await pruneInactiveProfileMetadata(ctx, maximum);
     (await ctx.db.transaction(async () => { await pruneRetainedMetadata(ctx, maximum); await snapshotExpired(ctx, maximum); }));
-    let verified = 0, failed = 0;
+    let verified = 0, failed = metadataFailures;
     for (const row of (await ctx.db.all<Job>("SELECT * FROM retention_jobs WHERE status IN('pending','failed','processing') AND (lease_until IS NULL OR lease_until<=?) ORDER BY created_at,id LIMIT ?", ctx.now(), maximum))) {
         const lease = crypto.randomUUID();
         try {
@@ -214,6 +219,151 @@ export async function runRetention(ctx: AppContext, maximum = 50): Promise<{
             n: number;
         }>("SELECT count(*) n FROM retention_jobs WHERE status<>'verified'"))!.n, failed };
 }
+// Inactive reference reconciliation keeps exact keys only while cleanup or
+// recovery still needs them. Minimal completion facts carry no object address.
+const INACTIVE_JOB_FACT = 'lovelies-inactive-profile-job-completion-v1';
+const canonicalID = (value: unknown): value is string => typeof value === 'string' && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(value);
+const canonicalReference = (key: unknown, subject: string, profile?: string) => {
+    if (typeof key !== 'string') return false;
+    const pieces = key.split('/');
+    return pieces.length === 4 && pieces[0] === 'registered-face' && pieces[1] === subject &&
+        canonicalID(pieces[2]) && canonicalID(pieces[3]) && (profile === undefined || pieces[2] === profile);
+};
+async function inactiveSources(ctx: AppContext, kind: InactiveKind, maximum: number): Promise<InactiveSource[]> {
+    return ctx.db.transaction(async () => {
+        const p = await policy(ctx);
+        if (p.legal_hold) return [];
+        const entity = 'inactive-profile-' + kind + '-v1';
+        const cursor = await ctx.db.one<{last_at: number | null; last_id: string | null}>(
+            "SELECT last_at,last_id FROM retention_scan_cursors WHERE scan='privacy' AND entity_id=?", entity);
+        const after = cursor?.last_at ?? null, id = cursor?.last_id ?? null;
+        if ((after === null) !== (id === null) || after !== null && (!integer(after) || !canonicalID(id)))
+            throw new ApiError(503, 'retention_cursor_invalid');
+        const relation = kind === 'lifecycle' ?
+            "face_profile_retirements r JOIN cleanup_intents c ON c.id=r.cleanup_id WHERE c.status='verified'" :
+            "retention_jobs r WHERE r.kind='profile' AND r.status='verified' AND json_extract(r.binding_json,'$.template_key') IS NOT NULL";
+        const date = kind === 'lifecycle' ? 'c.created_at' : 'r.created_at', key = kind === 'lifecycle' ? 'r.cleanup_id' : 'r.id';
+        const rows = await ctx.db.all<InactiveSource>(`SELECT ${key} id,${date} at FROM ${relation} AND ${date}<=?
+            ${after === null ? '' : `AND (${date}>? OR (${date}=? AND ${key}>?))`}
+            ORDER BY ${date},${key} LIMIT ?`, ctx.now() - p.face_crop_days * DAY,
+            ...(after === null ? [] : [after, after, id]), maximum);
+        const last = rows.at(-1);
+        await ctx.db.run("INSERT INTO retention_scan_cursors(scan,entity_id,last_at,last_id) VALUES('privacy',?,?,?) ON CONFLICT(scan,entity_id) DO UPDATE SET last_at=excluded.last_at,last_id=excluded.last_id",
+            entity, last?.at ?? null, last?.id ?? null);
+        return rows;
+    });
+}
+async function inactiveSnapshot(ctx: AppContext, kind: InactiveKind, candidate: InactiveSource): Promise<InactiveSnapshot | null> {
+    const p = await policy(ctx);
+    if (p.legal_hold || !integer(candidate.at) || candidate.at > ctx.now() - p.face_crop_days * DAY) return null;
+    const source = await ctx.db.one<any>(kind === 'lifecycle' ?
+        'SELECT * FROM face_profile_retirements WHERE cleanup_id=?' : 'SELECT * FROM retention_jobs WHERE id=?', candidate.id);
+    if (!source) return null;
+    const subject = kind === 'lifecycle' ? source.account_id : source.subject_id;
+    if (!canonicalID(subject)) return null;
+    let key: string, cleanup: any = null, operations: any[] = [], objects: any[] = [];
+    if (kind === 'lifecycle') {
+        key = source.template_key;
+        cleanup = await ctx.db.one<any>('SELECT * FROM cleanup_intents WHERE id=?', source.cleanup_id);
+        if (!canonicalReference(key, subject, source.profile_id) || !canonicalID(source.profile_revision) || !/^[0-9a-f]{64}$/.test(source.template_digest) ||
+            !cleanup || cleanup.request_id !== null || cleanup.subject_id !== subject || cleanup.bucket !== 'PHOTOS' || cleanup.object_key !== key ||
+            cleanup.status !== 'verified' || cleanup.created_at !== candidate.at || !integer(cleanup.verified_at) || cleanup.verified_at < candidate.at || cleanup.verified_at > ctx.now()) return null;
+        operations = await ctx.db.all<any>('SELECT * FROM face_profile_operations WHERE cleanup_id=? ORDER BY account_id,operation_key LIMIT 201', source.cleanup_id);
+        if (operations.length > 200) return null;
+        const own = operations.filter(row => row.account_id === subject && row.operation_key === source.operation_key);
+        if (source.operation_key.startsWith('audience:')) {
+            if (operations.length !== 0) return null;
+        } else if (own.length !== 1 || !canonicalID(source.operation_key)) return null;
+        for (const op of operations) {
+            const terminal = op.action === 'replace' ? op.state === 'completed' : ['pause', 'withdraw_authentication', 'remove'].includes(op.action) && op.state === 'applied';
+            if (op.account_id !== subject || !canonicalID(op.operation_key) || !terminal || !integer(op.created_at) || op.created_at > candidate.at ||
+                !/^[0-9a-f]{64}$/.test(op.input_hash) || await ctx.db.one("SELECT id FROM retention_jobs WHERE subject_id=? AND kind='profile' AND object_version=? LIMIT 1", subject, inactiveProfileOperationVersion(op.operation_key))) return null;
+        }
+        if (await ctx.db.one('SELECT cleanup_id FROM face_profile_retirements WHERE template_key=? AND cleanup_id<>? LIMIT 1', key, source.cleanup_id) ||
+            await ctx.db.one('SELECT id FROM retention_objects WHERE bucket=\'PHOTOS\' AND object_key=? LIMIT 1', key)) return null;
+    } else {
+        let binding: any;
+        try { binding = JSON.parse(source.binding_json); } catch { return null; }
+        if (!object(binding) || !shape(binding, ['template_key', 'template_digest']) || !canonicalReference(binding.template_key, subject) ||
+            typeof binding.template_digest !== 'string' || !/^[0-9a-f]{64}$/.test(binding.template_digest) || !canonicalID(source.object_version) ||
+            source.kind !== 'profile' || source.asset_id !== null || source.status !== 'verified' || source.created_at !== candidate.at ||
+            source.lease_token !== null || source.lease_until !== null || !integer(source.verified_at) || source.verified_at < candidate.at || source.verified_at > ctx.now()) return null;
+        key = binding.template_key;
+        objects = await ctx.db.all<any>('SELECT * FROM retention_objects WHERE job_id=? ORDER BY id LIMIT 201', source.id);
+        if (objects.length !== 1 || objects[0].bucket !== 'PHOTOS' || objects[0].object_key !== key || objects[0].status !== 'verified' ||
+            !integer(objects[0].verified_at) || objects[0].verified_at < objects[0].created_at || objects[0].verified_at > ctx.now() ||
+            await ctx.db.one('SELECT id FROM retention_objects WHERE bucket=\'PHOTOS\' AND object_key=? AND job_id<>? LIMIT 1', key, source.id) ||
+            await ctx.db.one('SELECT cleanup_id FROM face_profile_retirements WHERE template_key=? LIMIT 1', key)) return null;
+    }
+    // Any current reference, unresolved privacy review, hold or newer/foreign
+    // writer makes this historical address necessary until reconciled.
+    if (await ctx.db.one('SELECT id FROM moderation_holds WHERE active=1 AND subject_id=? LIMIT 1', subject) ||
+        await ctx.db.one('SELECT id FROM face_profiles WHERE template_key=? LIMIT 1', key) ||
+        await ctx.db.one("SELECT id FROM privacy_requests WHERE subject_id=? AND request_type='delete' AND status IN('pending_approval','approved','queued','processing','failed') LIMIT 1", subject) ||
+        await ctx.db.one("SELECT id FROM auth_challenges WHERE account_id=? AND status IN('pending','verifying') AND used_at IS NULL AND expires_at>? LIMIT 1", subject, ctx.now())) return null;
+    const copies = await ctx.db.all<any>("SELECT * FROM cleanup_intents WHERE bucket='PHOTOS' AND object_key=? ORDER BY id LIMIT 201", key);
+    if (kind === 'lifecycle' ? copies.length !== 1 || copies[0].id !== cleanup.id : copies.length !== 0) return null;
+    const writers = await ctx.db.all<any>("SELECT * FROM media_write_intents WHERE bucket='PHOTOS' AND object_key=? ORDER BY id LIMIT 201", key);
+    if (writers.length > 200 || writers.some(row => row.account_id !== subject || row.status !== 'settled' || !integer(row.created_at) || row.created_at > candidate.at ||
+        !integer(row.settled_at) || row.settled_at < row.created_at || row.settled_at > ctx.now())) return null;
+    return {source, subject, key, at: candidate.at, policy: p, cleanup, operations, objects, writers};
+}
+/** HEAD runs outside the global SQL lock. The exact snapshot is checked again
+ * after the await; unsupported/new writer or hold state preserves all old facts.
+ * This phase never deletes an object or relabels an unknown key as completed. */
+export async function pruneInactiveProfileMetadata(ctx: AppContext, maximum = 50): Promise<number> {
+    if (!Number.isInteger(maximum) || maximum < 1 || maximum > 200) throw new ApiError(400, 'retention_limit_invalid');
+    const kinds = await ctx.db.transaction(async (): Promise<InactiveKind[]> => {
+        if ((await policy(ctx)).legal_hold) return [];
+        const entity = 'inactive-profile-class-v1';
+        const cursor = await ctx.db.one<{last_at: number | null; last_id: string | null}>(
+            "SELECT last_at,last_id FROM retention_scan_cursors WHERE scan='privacy' AND entity_id=?", entity);
+        if (cursor && (!integer(cursor.last_at) || cursor.last_id !== 'lifecycle' && cursor.last_id !== 'job'))
+            throw new ApiError(503, 'retention_cursor_invalid');
+        const first: InactiveKind = cursor?.last_id === 'lifecycle' ? 'job' : 'lifecycle';
+        await ctx.db.run("INSERT INTO retention_scan_cursors(scan,entity_id,last_at,last_id) VALUES('privacy',?,?,?) ON CONFLICT(scan,entity_id) DO UPDATE SET last_at=excluded.last_at,last_id=excluded.last_id",
+            entity, ctx.now(), first);
+        return [first, first === 'lifecycle' ? 'job' : 'lifecycle'];
+    });
+    const budget = Math.min(maximum, 20);
+    let failures = 0, remaining = budget;
+    for (const [index, kind] of kinds.entries()) {
+        if (!remaining) break;
+        // Each source class gets a turn even under a continuously growing or
+        // held backlog. With limit=1, the durable class cursor alternates it.
+        const candidates = await inactiveSources(ctx, kind, index === 0 ? Math.ceil(budget / 2) : remaining);
+        remaining -= candidates.length;
+        for (const candidate of candidates) {
+            try {
+                const before = await ctx.db.transaction(() => inactiveSnapshot(ctx, kind, candidate));
+                if (!before) continue;
+                if (await ctx.env.PHOTOS.head(before.key)) { failures++; continue; }
+                await ctx.db.transaction(async () => {
+                    const actual = await inactiveSnapshot(ctx, kind, candidate);
+                    if (!actual || stable(actual) !== stable(before)) return;
+                    if (kind === 'lifecycle') {
+                        for (const op of actual.operations) {
+                            const binding = {protocol: INACTIVE_PROFILE_FACT, account_id: actual.subject, operation_key: op.operation_key,
+                                action: op.action, state: op.state, input_hash: op.input_hash, retired_at: actual.at};
+                            await ctx.db.run("INSERT INTO retention_jobs(id,subject_id,asset_id,kind,binding_json,policy_version,object_version,status,created_at,verified_at) VALUES(?,?,NULL,'profile',?,?,?,'verified',?,?)",
+                                crypto.randomUUID(), actual.subject, stable(binding), actual.policy.version, inactiveProfileOperationVersion(op.operation_key), actual.at, actual.cleanup.verified_at);
+                            await ctx.db.run('UPDATE face_profile_operations SET cleanup_id=NULL WHERE account_id=? AND operation_key=? AND cleanup_id=?', op.account_id, op.operation_key, actual.cleanup.id);
+                        }
+                        await ctx.db.run('DELETE FROM face_profile_retirements WHERE cleanup_id=?', actual.source.cleanup_id);
+                        await ctx.db.run('DELETE FROM cleanup_intents WHERE id=?', actual.cleanup.id);
+                    } else {
+                        await ctx.db.run('DELETE FROM retention_objects WHERE job_id=?', actual.source.id);
+                        await ctx.db.run('UPDATE retention_jobs SET binding_json=? WHERE id=?', stable({protocol: INACTIVE_JOB_FACT, account_id: actual.subject,
+                            object_version: actual.source.object_version, retired_at: actual.at}), actual.source.id);
+                    }
+                    for (const writer of actual.writers) await ctx.db.run('DELETE FROM media_write_intents WHERE id=?', writer.id);
+                });
+            } catch { failures++; }
+        }
+    }
+    return failures;
+}
+
 function exact(body: Record<string, unknown>, keys: string[]): void { if (Object.keys(body).some(key => !keys.includes(key)))
     throw new ApiError(400, 'invalid_retention_input'); }
 export async function handleRetention(request: Request, ctx: AppContext): Promise<Response | null> {
@@ -320,7 +470,12 @@ export async function nextRetentionAt(ctx: AppContext): Promise<number | null> {
         deadline: number | null;
     }>("SELECT min(c.expires_at) deadline FROM consents c JOIN face_profiles f ON f.account_id=c.account_id AND f.status='active' WHERE c.status='granted' AND c.revoked_at IS NULL AND c.purpose IN('face_authentication','photo_matching') AND c.expires_at>?", ctx.now()));
     const pending = (await ctx.db.one("SELECT id FROM retention_jobs WHERE status IN('pending','failed','processing') LIMIT 1"));
-    const deadlines = [asset?.deadline, profile?.deadline, pending ? ctx.now() + 60000 : null].filter((value): value is number => value !== null && value !== undefined);
+    const lifecycleMetadata = await ctx.db.one<{deadline: number | null}>(`SELECT min(c.created_at)+? deadline FROM face_profile_retirements r JOIN cleanup_intents c ON c.id=r.cleanup_id
+        WHERE c.status='verified' AND NOT EXISTS(SELECT 1 FROM moderation_holds h WHERE h.active=1 AND h.subject_id=r.account_id)`, p.face_crop_days * DAY);
+    const jobMetadata = await ctx.db.one<{deadline: number | null}>(`SELECT min(j.created_at)+? deadline FROM retention_jobs j
+        WHERE j.kind='profile' AND j.status='verified' AND json_extract(j.binding_json,'$.template_key') IS NOT NULL
+        AND NOT EXISTS(SELECT 1 FROM moderation_holds h WHERE h.active=1 AND h.subject_id=j.subject_id)`, p.face_crop_days * DAY);
+    const deadlines = [asset?.deadline, profile?.deadline, lifecycleMetadata?.deadline, jobMetadata?.deadline, pending ? ctx.now() + 60000 : null].filter((value): value is number => value !== null && value !== undefined);
     return deadlines.length ? Math.max(ctx.now() + 60000, Math.min(...deadlines)) : null;
 }
 

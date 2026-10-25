@@ -87,7 +87,7 @@ private actor AccountFixture: NativeTransport {
     private func newChallenge(ordinary: Bool = false) -> WireValue {
         var value: [String: WireValue] = ["protocol": .string("lovelies-face-auth-v1"), "challenge_id": .string(UUID().uuidString.lowercased()), "nonce": .string("lfn_" + Data(repeating: UInt8(generation), count: 32).base64URL), "account_id": .string(Self.account), "device_id": .string(currentDevice), "device_revision": .string(currentRevision), "purpose": .string("login"), "profile_id": .string(Self.profile), "profile_revision": .string("profile-v1"), "model_id": .string("yunet-sface-v1"), "policy_version": .string(Self.policy), "required_captures": .integer(1), "poses": .strings(["front"]), "maximum_capture_bytes": .integer(8 * 1024 * 1024), "expires_at": date(Date().addingTimeInterval(100))]
         if !ordinary { value["recovery_request_id"] = base?["recovery_request_id"] ?? .null; value["recovery_generation"] = .integer(generation) }
-        return .object(value)
+        return audienceBoundChallenge(.object(value))
     }
     private func deliveryReply(_ value: WireValue, body: WireValue) throws -> WireValue {
         guard body["protocol"].string == NativeRefreshDeliveryRecord.protocolName else { return value }
@@ -100,10 +100,29 @@ private actor AccountFixture: NativeTransport {
         fields["delivery_expires_at"] = .string(formatter.string(from: Date().addingTimeInterval(86400)))
         return .object(fields)
     }
+    // These named software actors are explicitly declared synthetic adults in
+    // this fixture setup. This is neither a production default nor age proof.
+    private func declaredAdultAudience(account: String) -> WireValue {
+        .object(["protocol": .string("lovelies-audience-v1"), "policy_version": .string("audience-2026-10-24-v1"), "account_id": .string(account),
+            "audience": .object(["age_band": .string("18_plus"), "status": .string("eligible"), "version": .integer(1), "policy_version": .string("audience-2026-10-24-v1"), "next_review_at": .null]),
+            "guardian_request": .null, "capabilities": .object(["face_authentication": .bool(true), "photo_matching": .bool(true), "photo_processing": .bool(true)])])
+    }
+    private func audienceBoundChallenge(_ wire: WireValue) -> WireValue {
+        var value = wire.object!
+        value["audience_authority"] = .object(["protocol": .string("lovelies-audience-challenge-v1"), "policy_version": .string("audience-2026-10-24-v1"),
+            "account_id": wire["account_id"], "challenge_id": wire["challenge_id"], "device_id": wire["device_id"], "purpose": wire["purpose"], "audience_version": .integer(1), "expires_at": wire["expires_at"]])
+        return .object(value)
+    }
     func send(_ request: URLRequest, limit: Int) async throws -> NativeHTTPReply {
         let path = request.url!.path; paths.append(path); try lost(path, after: false)
         let body = request.value(forHTTPHeaderField: "Content-Type") == "application/json" ? try request.httpBody.map(WireValue.decoded) ?? .null : .null
         switch path {
+        case "/me/audience":
+            guard let token = request.value(forHTTPHeaderField: "Authorization")?.split(separator: " ").last,
+                  let payload = token.split(separator: ".").dropFirst().first.flatMap({ Data(base64URL: String($0)) }),
+                  let claims = try? WireValue.decoded(payload), let account = claims["sub"].string,
+                  [Self.account, Self.guest].contains(account) else { return try failure(401, "session_invalid") }
+            return try response(declaredAdultAudience(account: account))
         case "/auth/anonymous": anonymousCount += 1; return try response(credential(account: Self.guest, method: "anonymous"), 201)
         case "/me":
             guard let token = request.value(forHTTPHeaderField: "Authorization")?.split(separator: " ").last,
@@ -234,8 +253,25 @@ private actor AccountFixture: NativeTransport {
             try require(status.receipts.count == 1 && status.challenge?.id == challenge.id, "Signed exact capture receipt restores original challenge")
             let reconciled = try store.journal(), plain = reconciled.challengeWire ?? .null
             try require(plain["recovery_request_id"] == .null && plain["challenge_id"].string == reconciled.predecessorID, "Plain readonly recovery challenge keeps its authoritative predecessor and remains eligible for status reconciliation")
+            // An original start challenge and its signed plain status differ
+            // only in the recovery wrapper. Wrong wrappers/authority must not
+            // reach completion or consume this exact accepted capture.
+            for (field, replacement) in [("recovery_request_id", WireValue.string(UUID().uuidString.lowercased())),
+                                         ("recovery_generation", .integer(reconciled.generation + 1)),
+                                         ("challenge_id", .string(UUID().uuidString.lowercased())),
+                                         ("audience_authority", .object([:]))] {
+                var altered = challenge.wire.object!; altered[field] = replacement
+                let wrong = try NativeFaceChallenge(.object(altered), accountID: AccountFixture.account, purpose: "login")
+                let before = await fixture.completionCount
+                try await rejects("Original recovery challenge rejects wrong " + field) { _ = try await restored.completeFace(wrong, captures: status.receipts) }
+                let after = await fixture.completionCount
+                try require(before == after && (try store.journal()).state == .pending && (try store.journal()).captures.allSatisfy(\.accepted), "Wrong recovery wrapper/authority cannot dispatch completion or change accepted capture")
+            }
+            let completionsBeforeLoss = await fixture.completionCount
             await fixture.lose("/auth/face/complete")
             try await rejects("Completion loss") { _ = try await restored.completeFace(challenge, captures: status.receipts) }
+            let completionsAfterLoss = await fixture.completionCount
+            try require(completionsAfterLoss == completionsBeforeLoss + 1, "Lost completion reached and committed the fixture before its reply was lost")
             let final = restart(fixture, store, signer); let session = try await final.bootstrap(); let readonly = try await final.accountRecoverySummary()
             try require(session == nil && readonly?.state == .registered, "Committed readonly status gives no credentials")
             let fresh = try await final.continueAccountRecovery(), login = fresh.challenge!

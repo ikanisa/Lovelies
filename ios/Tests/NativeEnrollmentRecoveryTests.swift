@@ -110,7 +110,7 @@ private actor RecoveryFixture: NativeTransport {
             result["public_key_digest"] = .string(SHA256.hash(data: try! startBody["device_public_jwk"].canonical()).map { String(format: "%02x", $0) }.joined())
             result["enrollment_generation"] = .integer(generation)
         }
-        return .object(result)
+        return audienceBoundChallenge(.object(result))
     }
     private func maybeLose(_ path: String, after: Bool) throws {
         if let loss, loss.0 == path, loss.1 == after { self.loss = nil; throw URLError(.timedOut) }
@@ -126,11 +126,30 @@ private actor RecoveryFixture: NativeTransport {
         fields["delivery_expires_at"] = .string(formatter.string(from: Date().addingTimeInterval(86400)))
         return .object(fields)
     }
+    // These named software actors are explicitly declared synthetic adults in
+    // this fixture setup. This is neither a production default nor age proof.
+    private func declaredAdultAudience(account: String) -> WireValue {
+        .object(["protocol": .string("lovelies-audience-v1"), "policy_version": .string("audience-2026-10-24-v1"), "account_id": .string(account),
+            "audience": .object(["age_band": .string("18_plus"), "status": .string("eligible"), "version": .integer(1), "policy_version": .string("audience-2026-10-24-v1"), "next_review_at": .null]),
+            "guardian_request": .null, "capabilities": .object(["face_authentication": .bool(true), "photo_matching": .bool(true), "photo_processing": .bool(true)])])
+    }
+    private func audienceBoundChallenge(_ wire: WireValue) -> WireValue {
+        var value = wire.object!
+        value["audience_authority"] = .object(["protocol": .string("lovelies-audience-challenge-v1"), "policy_version": .string("audience-2026-10-24-v1"),
+            "account_id": wire["account_id"], "challenge_id": wire["challenge_id"], "device_id": wire["device_id"], "purpose": wire["purpose"], "audience_version": .integer(1), "expires_at": wire["expires_at"]])
+        return .object(value)
+    }
     func send(_ request: URLRequest, limit: Int) async throws -> NativeHTTPReply {
         let path = request.url!.path; paths.append(path)
         let body = request.value(forHTTPHeaderField: "Content-Type") == "application/json" ? try request.httpBody.map(WireValue.decoded) ?? .null : .null
         try maybeLose(path, after: false)
         switch path {
+        case "/me/audience":
+            guard let token = request.value(forHTTPHeaderField: "Authorization")?.split(separator: " ").last,
+                  let payload = token.split(separator: ".").dropFirst().first.flatMap({ Data(base64URL: String($0)) }),
+                  let claims = try? WireValue.decoded(payload), let account = claims["sub"].string,
+                  [Self.account].contains(account) else { return try denied(401, "session_invalid") }
+            return try reply(declaredAdultAudience(account: account))
         case "/auth/logout":
             logoutTokens.append(request.value(forHTTPHeaderField: "Authorization") ?? "")
             let record = try secrets.journal()

@@ -47,6 +47,15 @@ private actor UploadFixture: NativeTransport {
     func send(_ request: URLRequest, limit: Int) async throws -> NativeHTTPReply {
         let path = request.url!.path; paths.append(path)
         let body = request.httpBody.flatMap { try? WireValue.decoded($0) } ?? .null
+        // This controlled upload actor is explicitly a synthetic declared
+        // adult with current registered-face authority; neither is a production
+        // default or a claim about a person/provider/device.
+        if path == "/me/audience" {
+            return try reply(.object(["protocol": .string("lovelies-audience-v1"), "policy_version": .string("audience-2026-10-24-v1"), "account_id": .string(accountID),
+                "audience": .object(["age_band": .string("18_plus"), "status": .string("eligible"), "version": .integer(1), "policy_version": .string("audience-2026-10-24-v1"), "next_review_at": .null]),
+                "guardian_request": .null, "capabilities": .object(["face_authentication": .bool(true), "photo_matching": .bool(true), "photo_processing": .bool(true)])]))
+        }
+        if path == "/me/profile" { return try reply(.object(["user_id": .string(accountID), "name": .string("Synthetic upload actor"), "profile_scope": .string("registered_face_profile")])) }
         if path == "/me" { return try reply(.object(["user_id": .string(accountID), "authenticated": .bool(true), "auth_method": .string("registered_face")])) }
         if path == "/me/devices" { return try reply(.object(["items": .array([.object(["id": .string(wrongDevice ? UUID().uuidString.lowercased() : Self.device), "current": .bool(true), "status": .string("active")])])])) }
         if path == "/me/photo-preferences" { return try reply(.object(["processing_consent": .bool(consent), "policy_version": .string("fixture-v1")])) }
