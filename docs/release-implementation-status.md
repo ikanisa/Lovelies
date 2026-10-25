@@ -12,7 +12,10 @@ zero failures/one optional model-HTTP skip, current operator94, Android197 JVM,
 and iOS1,020 original+101 guest-deletion+35 private-media host checks pass in their
 separate scopes. The current6603 Android Debug app passes18 affected grid cases
 and12 controlled Supabase HTTP deletion checks; see the
-[source-grid qualification](release/android-source-grids-20261025.md). Round4
+[source-grid qualification](release/android-source-grids-20261025.md). Five
+[connected teen UI checks](release/android-connected-audience-20261025.md) now
+qualify pending guardian gating, withdrawal and privacy access on that same app;
+actual independent guardian approval and hosted operation remain open. Round4
 iOS app/test/unsignedRelease compilation passes; its in-place runtime qualification
 is underway. Encrypted database backup tooling passes13 operator tests and nine
 actual PostgreSQL reconstruction checks; hosted custody, expiry operation and

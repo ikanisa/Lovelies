@@ -1,5 +1,32 @@
 # Actual native backend consumer journey
 
+## Connected age and guardian UI
+
+`ConnectedAudienceJourney` is a separate instrumentation entry point for the
+production connected UI. It requires a newly created, owned local Supabase
+handler/PostgreSQL fixture on the Debug app's configured origin and an absent
+vault for that exact origin. It refuses to replace an unknown endpoint vault.
+For a later run, `owned_empty_vault_sha256` can identify only the exact empty
+encrypted journal left by an already preserved, logged-out fixture; the runner
+also decrypts and requires the journal to be empty before creating its actor.
+Use the existing `loveliesTestRunner` Gradle property to select
+`com.lovelies.frontend.preview.ConnectedAudienceJourney`, and pass
+`-e owned_local_fixture true -e variant UNIQUE_LOWERCASE_NAME` at instrumentation
+time. A repeated variant must use a new output name; existing captures are kept.
+
+The journey selects ages13–17 through real UI actions, verifies the same anonymous
+account remains gated, creates a pending guardian request, confirms its withdrawal
+and reaches the actual guest privacy/deletion screen. It checks the server's
+audience projection and production repository's private-gallery fence. It sends
+no deletion request, captures no face, grants no guardian approval and exercises
+no media or provider success. It finishes the activity and logs out only its own
+new synthetic anonymous session; its encrypted journal is retained for readback.
+The host must preserve app data before/after and archive the isolated fixture.
+Successful UI actions are freshly named, enabled and observed at48dp; this is not
+spoken TalkBack or physical hit-region acceptance.
+
+## Registered-face and media consumers
+
 This custom `android.app.Instrumentation` runner invokes the production
 `CloudflareRepository`, Android Keystore, ContentResolver and FileProvider on an
 Android runtime. Every API result comes from the declared local authority; there

@@ -1981,7 +1981,7 @@
   },
   "remaining_gates_document": "docs/release/backlog-disposition.md",
   "deployment_inputs_document": "docs/release/deployment-inputs.md",
-  "source_history": "Prepared from localb31818084e49; explicit new checkpoint pending. No remote push/CI/store build upload or review submission.",
+  "source_history": "Original baseline snapshots are retained. Bounded private source deliveries through0bea621cb7ffa16f86056e66d2b017b274c4bd29 are verified on origin/main; later connected-audience/UI work remains separately bound until delivered. GitHub billing is parked, remote CI unqualified, and no store build upload/review/publication is implied.",
   "scope_limits": "Counts are separate overlapping evidence scopes, not a summed acceptance count. Historical failures/preimages/raw output and private credentials/builds remain local outside Git. Concurrent backend integration remains outside this native checkpoint; preserved older source hashes are explicit tested-snapshot provenance.",
   "external_provider_configuration": {
     "firebase": {
@@ -2608,6 +2608,60 @@
       "runtime_qualification": "in_progress_under_ios_owner",
       "signed_store_acceptance": false,
       "scope": "Frozen four-View numeric labels/marker aliases/upload23 fixes; compile and strict ad-hoc Simulator staging only. Six public-URL/link/distribution-signature gates remain; older flags retain their source scope."
+    },
+    "android_connected_teen_ui_snapshot": {
+      "receipt": "/Volumes/PRO-G40/Projects/Lovelies/verification/android-connected-audience-20261025/runtime-attempt2/reconciliation.json",
+      "receipt_sha256": "3b73b373f11a51498173ba8e41c7e41c0bc68d717c40aa2ebc8de3fb9e3f6e49",
+      "document": "docs/release/android-connected-audience-20261025.md",
+      "test_build": {
+        "receipt": "/Volumes/PRO-G40/Projects/Lovelies/verification/android-connected-audience-20261025/build-attempt4/result.json",
+        "receipt_sha256": "4c4ca9d0263f69107ebce54745f4ecdaac3d478eb1b4d9937481d75143ba6eb7"
+      },
+      "app_sha256": "6603feadedb9307d7cde916d9af0bc3869332eb5207ee02dd171524bf88397a5",
+      "test_apk_sha256": "4534c5854b6b1a18a29f023cb13289e4b77686c88eba05555ed23f4b1ef55d1f",
+      "native_checks": 5,
+      "source_inputs": 343,
+      "source_unchanged": true,
+      "original_pngs_viewed": 6,
+      "confirmation_image_is_transition_frame": true,
+      "fixture_archive_readback": {
+        "receipt": "/Volumes/PRO-G40/Projects/Lovelies/verification/android-connected-audience-20261025/runtime-attempt2/fixture-readback.json",
+        "receipt_sha256": "521bec8b7f99fa25e2b71717a4b24e0502aa9330ab785d924ff67d3e4f6a8116"
+      },
+      "fixture_counts": {
+        "schema": 11,
+        "accounts": 1,
+        "gated_teens": 1,
+        "withdrawn_requests": 1,
+        "purpose_approvals": 0,
+        "consents": 0,
+        "media_grants": 0,
+        "face_profiles": 0,
+        "active_sessions": 0
+      },
+      "unknown_endpoint_vault_overwritten": false,
+      "full_existing_file_byte_equality": false,
+      "owned_workmanager_logically_unchanged": true,
+      "app_reset_or_uninstall": false,
+      "owned_emulator_and_server_stopped": true,
+      "independent_guardian_approval_qualified": false,
+      "spoken_or_physical_or_hosted_or_store_acceptance": false,
+      "scope": "Actual connected teen UI/Keystore/repository, Supabase handler HTTP and embedded PostgreSQL. Zero media/provider work. Existing empty owned fixture journal reused only by exact hash and actual decrypted-empty check. First wrapper/doc-freeze and setup failures retained."
+    },
+    "verified_android_grid_delivery": {
+      "commit": "0bea621cb7ffa16f86056e66d2b017b274c4bd29",
+      "verified_remote_main": "0bea621cb7ffa16f86056e66d2b017b274c4bd29",
+      "files": 7,
+      "delivery_receipt": "/Volumes/PRO-G40/Projects/Lovelies/verification/android-source-grid-source-checkpoint-20261025/delivery.json",
+      "scope": "Grid source/test and five release documents only; excludes the later connected-audience test and four active iOSViews.",
+      "ci_passed": false,
+      "billing_parked": true
+    },
+    "browser_access_20261025": {
+      "status": "disabled_in_Work_settings",
+      "observed_tool_message": "Local browser use is disabled in Work settings",
+      "unblock_action": "Enable local browser use in Work settings; existing owner approvals remain in effect.",
+      "console_changes_attempted": false
     }
   }
 }
