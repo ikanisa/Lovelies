@@ -73,7 +73,7 @@ exposed at inspection. No client schema grants were added.
   upgrades without uninstall/reset, run two-account hosted journeys and physical
   camera/storage/media/accessibility/performance/provider acceptance, and complete
   Play testing/TestFlight and reviewer access. No actual store upload occurred.
-- Google Play access is restored in Codex and its product/base plan/notification topic were read back; Apple is also authenticated in Codex and its approved monthly product/group/availability were read back. On25 October the private `ikanisa/Lovelies` repository was created and verified as local `origin`, preserving `ikanisa/Memories`. No source push or CI run is established by repository creation. Qualified private inference/push operating inputs and
+- Google Play access is restored in Codex and its product/base plan/notification topic were read back; Apple is also authenticated in Codex and its approved monthly product/group/availability were read back. On25 October the private `ikanisa/Lovelies` repository was created and verified as local `origin`, preserving `ikanisa/Memories`. Bounded backend/operator source and release docs were pushed and read back at768e3ad. Both CI runs failed before jobs; authenticated GitHub readback identifies the existing organization billing hold. The owner has explicitly parked GitHub billing; do not retry those runs or change payments/limits. Local verification continues, with remote CI still unqualified. Qualified private inference/push operating inputs and
   provider acceptance remain unresolved technical inputs. Earlier requests are
   historical and do not revoke the owner’s authorization to complete readiness.
   Temporary native-image build qualification is separate from an accepted release

@@ -196,6 +196,32 @@ is asserted implemented in Lovelies by this document.
 
 ## Current implementation gaps and release acceptance
 
+On 25 October the native cache implementation passed all 192 Android JVM tests
+(including 14 new cache cases), the original 1,020 iOS host checks and 35 separate
+iOS private-media checks. Expiry is bound to the original creation/session clock;
+cache hits do not renew it. Denial, expiry and account/session changes retire the
+private presentation. Restart cleanup is limited to recognized app-owned temporary
+files; encrypted resumable uploads, protected capture drafts, unknown files and
+copies deliberately saved to Photos/Files are preserved. These are local tests,
+not physical-device or hosted deletion acceptance.
+
+The new 14-day inactive-profile phase removes old reference keys/digests only
+after verified cleanup, a fresh absent Storage HEAD and an unchanged transaction
+snapshot. It preserves holds, current references, pending recovery/challenges,
+ambiguous cleanup and unsettled/newer writers. Exact minimal completion facts keep
+signed status and fresh three-capture re-enrollment truthful without retaining
+the old address or issuing credentials. Source classes take bounded alternating
+turns. The current API regression and its exact receipts are recorded in the
+linked integration checkpoint.
+
+Backup/restore remains a concrete implementation and operating gap: there is no
+qualified backup producer/catalog, independent current suppression ledger and
+replay operation, or startup restore quarantine guard. A privacy export is not a
+database backup, and a deletion fact restored from the same database snapshot is
+not an independent anti-resurrection record. No local erasure fixture closes this
+gap. The chosen seven-day backup expiry and restored-data suppression must be
+implemented and rehearsed before publishing those guarantees.
+
 The source inventory is independently detailed in the source-bound
 `guardian-retention-gap.json` receipt. This table preserves the initial inspected snapshot. Implementation has since advanced; see
 [audience-readiness-20261024.md](audience-readiness-20261024.md) for current local

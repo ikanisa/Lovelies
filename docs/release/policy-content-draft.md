@@ -69,12 +69,15 @@ Capture files are temporary processing evidence and are scheduled for cleanup
 following completion or expiry. Reference deletion, account deletion and retention
 jobs require actual object deletion followed by absence verification; a failed or
 uncertain cleanup remains pending. Active profile references, photos and operational
-records follow the configured retention policy and any justified hold. The current
-code defaults include 60 days for raw photos/previews, 14 days for inactive profile
-retention work, 2 days for free cache policy and 2,555 days for audit policy. These
-are implementation defaults to review, not a claim that every record legally needs
-seven-year retention. Publish the approved active schedule and backup-expiry
-period after operational configuration and necessity review. Preserve only justified
+records follow the configured retention policy and any justified hold. The
+selected schedule is recorded in [retention-and-young-users.md](retention-and-young-users.md).
+Local enforcement now includes 60-day original/preview deadlines, 14-day inactive
+reference-address minimization, native cache expiry within two days, and a 30-day
+maximum routine account-security audit setting. The hosted schema8 baseline still
+has the historical audit setting until the qualified additive migration is applied.
+Local implementation does not establish hosted cleanup or provider backup expiry.
+Publish the selected active schedule and backup-expiry period after operational
+configuration and necessity review. Preserve only justified
 financial, security, legal-hold and minimal erasure evidence after deletion.
 
 You can review purpose consent, stop matching, manage the face profile, block or

@@ -19,7 +19,7 @@
     "apple_paid_agreement": "Reviewedv127 accepted; Active effective2026-10-24 to2027-06-21. Separate billing/provider qualification remains.",
     "intended_audience": {
       "minimum_age": 13,
-      "guardian_consent_required_for": "13\u201317",
+      "guardian_consent_required_for": "13–17",
       "under13": "excluded",
       "implementation_status": "new_age_and_guardian_gate_required_not_yet_qualified",
       "retention_decision": "Ownerdelegated proportionate schedule and implementation to coordinator; currentdefaults are not policyacceptance."
@@ -387,7 +387,7 @@
         "debug_build_for_testing": "passed",
         "simulator_app_and_V4_runner": "passed",
         "source_inputs_unchanged": true,
-        "runtime": "Preserved35ca/c6 normal1\u201318 diagnostic checkpoint: all custom checks/exits pass; native failures retained, including shared banner later addressed. No newdc3 whole-matrix pass inferred.",
+        "runtime": "Preserved35ca/c6 normal1–18 diagnostic checkpoint: all custom checks/exits pass; native failures retained, including shared banner later addressed. No newdc3 whole-matrix pass inferred.",
         "runner_sha256": "c6e8536a13514b282cc2cd16b5fedfe0d9b7d34b6f180e58722a0aeac7da2711",
         "simulator_build_receipt": "verification/supabase-release-20261023/post-localization-ui/simulator-build.json"
       },
@@ -2018,11 +2018,11 @@
       "live_listing_publication": false
     }
   },
-  "last_updated_client_date": "2026-10-24",
+  "last_updated_client_date": "2026-10-25",
   "tested_source_scope": {
     "meaning": "Hashes identify tested snapshots. The current audience integration checkpoint overrides prior-current descriptions; engine/auth/native preflight work is ongoing and whole_workspace_current_green remains false.",
     "prior_backend_commit": "9b9fda2ae918b73881fe7d1b318f570f0a97d2d8",
-    "concurrent_backend_work": "OpenFace owner controls remaining model/backend/native HTTP test edits. Completed default229/222+7skip and separate strict6/6+HTTP7 have their own bounded receipts; original tested mapping is not silently replaced.",
+    "concurrent_backend_work": "Current bounded API291/290+one model skip and refreshed94 operator suite pass. The isolated pinned-image/actual-Deno/native-device integration and three-view accessibility work retain separate owners and source freezes.",
     "prior_backend_bindings_retained": [
       "services/supabase-api/src/index.ts",
       "services/supabase-api/src/model-services.ts",
@@ -2151,14 +2151,18 @@
     "status": "in_progress_not_release_accepted",
     "current_checkpoint": "docs/release/audience-readiness-20261024.md",
     "api_aggregate": {
-      "tests": 285,
-      "passed": 284,
+      "receipt": "verification/supabase-release-20261023/audience-implementation/backend-aggregate-attempt8/result.json",
+      "receipt_sha256": "666a953392dc0215db3eea20cf5b9837cef2393ecd8ce0bf02a398ae625ad228",
+      "tests": 291,
+      "passed": 290,
       "failed": 0,
       "skipped": 1,
       "source_unchanged": true,
-      "source_inputs": 84,
-      "receipt": "verification/supabase-release-20261023/audience-implementation/backend-aggregate-attempt6/result.json",
-      "scope": "Complete controlled suite with actual PostgreSQL and Deno; actual OpenFace HTTP alone skipped. No hosted provider or release acceptance."
+      "source_inputs": 85,
+      "typescript_passed": true,
+      "actual_deno_check_passed": true,
+      "actual_postgres_and_deno_ran": true,
+      "scope": "Final current serial API regression and types with actual loopback PostgreSQL and Deno, plus six affected PGlite cases, after negative writer-clock preservation guard. Controlled inference; no hosted/device/store acceptance."
     },
     "android_prior_collection_fix_snapshot": {
       "tests": 171,
@@ -2174,7 +2178,7 @@
     },
     "new_migration_applied_hosted": false,
     "whole_workspace_current_green": false,
-    "limits": "Earlier named snapshots remain historical. Bounded retention/continuation, maintenance health and complete controlled operator/API checks now pass; complete retention operation, actual inference/providers, current native/UI, hosted and stores remain separate. Counts across snapshots are not added.",
+    "limits": "Current API290/291 (one optional real-model HTTPskip), Android192 JVM, iOS1020+35 host and operator94 scopes pass independently. Current UI, isolated real-model/physical-device integration, hosted deployment/providers, backup operation and stores remain unqualified; never sum overlapping snapshots.",
     "affected_api_operator": {
       "tests": 39,
       "passed": 36,
@@ -2185,28 +2189,24 @@
       "scope": "Historical three-fixture failure snapshot, superseded by complete passing API and operator aggregates; original assertions/failures preserved."
     },
     "android_current_collection_snapshot": {
-      "tests": 178,
-      "passed": 178,
+      "receipt": "verification/supabase-release-20261023/audience-implementation/android-cache-unit-attempt1/result.json",
+      "receipt_sha256": "b5963f182798ece7974362d904ce58a78297ce5980408d7dd19238531ba49550",
+      "tests": 192,
+      "passed": 192,
       "failed": 0,
-      "source_inputs": 83,
-      "receipt": "verification/supabase-release-20261023/audience-implementation/android-unit-attempt3/result.json",
-      "scope": "Full non-incremental main/test compile+JVM only; no device/signing/store acceptance."
+      "skipped": 0,
+      "source_inputs": 84,
+      "source_unchanged": true,
+      "scope": "Full non-incremental Android main/test compile and JVM suite after preview/temp retention changes; no install/device/signing/store acceptance."
     },
     "ios_current_host_snapshot": {
+      "receipt": "verification/supabase-release-20261023/audience-implementation/ios-cache-host-regression-attempt1/result.json",
+      "receipt_sha256": "02c2be5290cf40509b280f4ef05fe2b5ae90a38143056f849908c8e96f33e4cf",
       "controlled_checks": 1020,
       "suites": 10,
       "source_inputs": 16,
-      "receipt": "verification/supabase-release-20261023/audience-implementation/ios-collection-host-attempt1/result.json",
-      "scope": "Current repository/wire/recovery/strong-collection host graph only; no SwiftUI/device/hosted proof."
-    },
-    "ios_latest_unsigned_build": {
-      "source_inputs": 202,
-      "release_executable_sha256": "962791374f574be9b364263f4a491e0ce336e175348c8f705aa8f215b8d1b2b2",
-      "simulator_dylib_sha256": "e32f1f31de97d72d3dd75394ce1a534452f1916fc3d5d1b4296049fa0825dd45",
-      "receipt": "verification/supabase-release-20261023/audience-implementation/ios-build-attempt4/result.json",
-      "artifact_readback": "verification/supabase-release-20261023/audience-implementation/ios-build-attempt4/artifacts-readback.json",
-      "installed": false,
-      "scope": "Includes exactly2 reference text-size changes. Hold installation while grouping additional demonstrated sharing-consumer corrections."
+      "source_unchanged": true,
+      "scope": "Repeat original ten controlled host suites after private repository cache change; no SwiftUI/physical/hosted qualification."
     },
     "operator_pure": {
       "tests": 55,
@@ -2239,24 +2239,125 @@
       "scope": "Before later receipt minimization/cursor/maintenance updates; sole failure was cancelled-challenge precedence assertion, subsequently corrected but not yet full-rerun."
     },
     "operator_full": {
+      "receipt": "verification/supabase-release-20261023/audience-implementation/operator-aggregate-current-20261025/result.json",
+      "receipt_sha256": "0d5be05086a54c54c94422fb03b8b2e952662d243546b6b9f2556216fbe710a5",
       "tests": 94,
       "passed": 94,
       "failed": 0,
       "skipped": 0,
-      "receipt": "verification/supabase-release-20261023/audience-implementation/operator-aggregate-20261025/result.json",
-      "scope": "Complete controlled operator suite, including integration; no actual browser camera/hosted operator acceptance."
+      "source_inputs": 117,
+      "source_unchanged": true,
+      "scope": "Complete controlled operator/session/audience/service-worker suite refreshed against final inactive-profile API source; no real browser camera, actual operators or hosted acceptance."
     },
     "deno_check": {
       "passed": true,
-      "receipt": "verification/supabase-release-20261023/audience-implementation/backend-deno-check-20261025/result.json"
+      "receipt": "verification/supabase-release-20261023/audience-implementation/backend-aggregate-attempt8/result.json",
+      "scope": "Actual cached Deno graph and actual runtime entrypoint test; no hosted function deployment."
     },
     "github_canonical": {
       "url": "https://github.com/ikanisa/Lovelies",
       "private": true,
       "origin_verified": true,
-      "bounded_source_commit": "b8bb1879596a8ac5bf6d4529f24927bcbb37c810",
+      "bounded_source_commit": "bdeb7b4dafdee99f3c1d60972efb6d65fad2f3e3",
       "receipt_folder": "verification/supabase-release-20261023/audience-implementation/github-canonical-20261025",
-      "scope": "Created repository and committed backend/operator source; delivery and CI outcomes recorded separately. Active ML/native/UI/web and credentials/evidence excluded."
-    }
+      "scope": "Bounded API/operator/native audience-cache-unit and separate ML/build source pushed/read back; active UI/connected/device/public-web work excluded.",
+      "remote_branch": "main",
+      "verified_remote_head": "bdeb7b4dafdee99f3c1d60972efb6d65fad2f3e3",
+      "source_pushed": true,
+      "ci_passed": false,
+      "ci_runs": [
+        {
+          "id": 40177422662,
+          "event": "push",
+          "conclusion": "startup_failure",
+          "jobs": 0,
+          "workflow_id": 395780677,
+          "path": "BuildFailed",
+          "url": "https://github.com/ikanisa/Lovelies/actions/runs/40177422662"
+        },
+        {
+          "id": 40177694683,
+          "event": "workflow_dispatch",
+          "conclusion": "startup_failure",
+          "jobs": 0,
+          "workflow_id": 395780625,
+          "path": ".github/workflows/backend-readiness.yml",
+          "url": "https://github.com/ikanisa/Lovelies/actions/runs/40177694683"
+        }
+      ],
+      "diagnostic_limit": "Authenticated GitHub run annotation identifies existing organization billing hold; no current payment amount inferred. Owner explicitly parked billing. No payment/limit change or CI retry; skip-CI delivery does not establish passing CI.",
+      "ml_source_commit": "0ebb8bb82f188e91a5b91e0759ec39229855e0cf",
+      "delivery_receipt": "verification/supabase-release-20261023/audience-implementation/current-source-seal-20261025/source-delivery.json",
+      "billing_parked_by_owner": true,
+      "latest_source_push_ci_annotation": "[skip ci]"
+    },
+    "api_aggregate_before_inactive_profile": {
+      "tests": 285,
+      "passed": 284,
+      "failed": 0,
+      "skipped": 1,
+      "source_unchanged": true,
+      "source_inputs": 84,
+      "receipt": "verification/supabase-release-20261023/audience-implementation/backend-aggregate-attempt6/result.json",
+      "scope": "Complete controlled suite with actual PostgreSQL and Deno; actual OpenFace HTTP alone skipped. No hosted provider or release acceptance."
+    },
+    "android_connected_test_compile": {
+      "receipt": "verification/supabase-release-20261023/audience-implementation/android-instrumentation-compile-attempt1/result.json",
+      "receipt_sha256": "f5c43840e73ed6cdf103da4f62f05b4574309c7e75903ad26e6b17e7062b11ae",
+      "source_inputs": 100,
+      "artifacts": [
+        {
+          "path": "android/app/build/outputs/apk/debug/app-debug.apk",
+          "sha256": "c8d58c16ca119f07d7d320336270f191475102ed0406e11be20fb4b5f5b43ed0",
+          "bytes": 14877476
+        },
+        {
+          "path": "android/app/build/outputs/apk/androidTest/debug/app-debug-androidTest.apk",
+          "sha256": "111ca2bf30793d1bb491fff047362042258fc4a8061f06d239296593c1aa08f9",
+          "bytes": 728495
+        }
+      ],
+      "scope": "Compile/package only before later adult-declaration fixture amendments; no install/device or store qualification."
+    },
+    "ios_private_media_host": {
+      "receipt": "verification/supabase-release-20261023/audience-implementation/ios-private-media-attempt1/result.json",
+      "receipt_sha256": "ddb859ab46be55c4dc6d9046f971de98e55f694a667c43c9d33e433de22bb718",
+      "controlled_checks": 35,
+      "suites": 1,
+      "source_inputs": 7,
+      "source_unchanged": true,
+      "scope": "Private repository cache/deadline/denial/late-completion and app-owned filesystem helpers; controlled host only."
+    },
+    "ios_prior_unsigned_build": {
+      "source_inputs": 202,
+      "release_executable_sha256": "962791374f574be9b364263f4a491e0ce336e175348c8f705aa8f215b8d1b2b2",
+      "simulator_dylib_sha256": "e32f1f31de97d72d3dd75394ce1a534452f1916fc3d5d1b4296049fa0825dd45",
+      "receipt": "verification/supabase-release-20261023/audience-implementation/ios-build-attempt4/result.json",
+      "artifact_readback": "verification/supabase-release-20261023/audience-implementation/ios-build-attempt4/artifacts-readback.json",
+      "installed": false,
+      "scope": "Includes exactly2 reference text-size changes. Hold installation while grouping additional demonstrated sharing-consumer corrections."
+    },
+    "ios_grouped_unsigned_snapshot": {
+      "receipt": "verification/supabase-release-20261023/audience-implementation/ios-grouped-cache-build-20261025/build-result.json",
+      "receipt_sha256": "9ee4f6f270088c5e529a0d78835d0c15e812809d8395ab5b94eec5157dbff243",
+      "source_inputs": 205,
+      "simulator_dylib_sha256": "a7145ac3bde82c7c3eeeef6d4e51429dc834a42abcfba11849240190fcb082da",
+      "scope": "Compiled app/c7r2 runner; installed reference smoke and three keyboard cases pass separately. Current proposed UI changes require their own grouped rebuild/runtime. No signed release acceptance."
+    },
+    "inactive_profile": {
+      "implemented": true,
+      "affected_cases": 6,
+      "cases_included_in_api_aggregate": true,
+      "extra_pglite_six_passed": true,
+      "retirement_days": 14,
+      "addresses_removed_only_after": "verified_cleanup_fresh_absent_HEAD_exact_post_await_snapshot",
+      "minimal_fact_grants_credentials": false,
+      "holds_writers_recovery_preserved": true,
+      "untrusted_writer_clock_preserved": true,
+      "backup_producer_catalog_implemented": false,
+      "independent_restore_suppression_implemented": false,
+      "startup_restore_quarantine_implemented": false
+    },
+    "current_code_source_seal": "verification/supabase-release-20261023/audience-implementation/current-source-seal-20261025/source-seal.json"
   }
 }

@@ -4,6 +4,20 @@ Current audience integration: [24 October checkpoint](release/audience-readiness
 
 **Implementation and local verification have advanced; runtime deployment and both store submissions remain blocked.** The [90-ID disposition](release/backlog-disposition.md) lists every retained obligation. Tested source and receipt hashes are recorded in [verification-summary.json](release/verification-summary.json). The concurrent OpenFace integration owns separate backend edits and verification; the completed backend follow-up below has its own frozen receipts and does not qualify all concurrent changes.
 
+## Current bounded update — 25 October 2026
+
+The [current integration checkpoint](release/audience-readiness-20261024.md)
+supersedes older current-source descriptions below. Final API291 tests/290pass/
+zero failures/one optional model-HTTP skip, current operator94, Android192 JVM,
+and iOS1,020 original+35 private-media host checks pass in their separate scopes.
+Private source0ebb8bb and bdeb7b4 is pushed/read back. GitHub billing is parked by
+the owner; no payment/limit change or CI retry is requested and remote CI is not
+qualified. UI fixes and the isolated pinned-image/actual-Deno/native-device run
+are ongoing. Hosted schema remains8/63, with the tested v9–v11 transaction staged;
+API deployment, full retention/backup operation, providers, signed store candidates
+and both live replacements remain open. No real Memories customer-data import is
+needed; preserve unknown/test data and signing/history.
+
 ## Replacement and product scope
 
 Lovelies updates the existing Google Play and Apple records using `com.lovelies.memories`. The owner confirms there are no real Memories users, photos or subscriptions to import. Preserve unknown/test data, signing lineage, installed-state qualification, rollback and source/recovery history. Retire Memories jobs/services only after both replacements are live, stable and beyond the agreed observation window.
@@ -62,6 +76,6 @@ The owner approved existing Firebase project `easymoai`; Lovelies registration i
 3. **Q01–Q07/A01–A06/U01–U10:** Complete connected two-account Android/iOS camera, secure storage, Photos/Files, save/share, background, expiry/revocation/failure, spoken screen-reader, locale/window and release performance checks. Q02 app-owned English/Kinyarwanda extraction, translation, integration and local format checks are complete within the recorded inventory; actual locale journeys, enlarged text, long names and spoken accessibility remain open.
 4. **R02/R08/R10/N01–N07:** Supply qualified published policy/support/deletion/link URLs and final signing inputs; the existing-ID Apple capabilities and matching production profile are prepared. Inspect exact signed AAB/archive,16KiB/SDK/device support, and qualify in-place updates over current store installations without uninstall/reset.
 5. **D01–D07/S01–S09:** Approve/publish notices/association files, operate support/deletion mailbox, capture genuine assets and finalize actual disclosure/rating/access/trader forms plus workable reviewer enrollment/sharing/purchase access.
-6. **R12/S01–S09:** The private `ikanisa/Lovelies` replacement repository was created and verified as local `origin` on 25 October, preserving `ikanisa/Memories`. Publish the coordinated source and run prepared CI, execute Play testing/TestFlight, resolve observed feedback, then complete the authorized exact-package upload/submission/staged rollout after technical prerequisites pass, preserving any actual platform/account confirmations. Both live replacements and observation precede Memories retirement.
+6. **R12/S01–S09:** The private `ikanisa/Lovelies` replacement repository was created and verified as local `origin` on 25 October, preserving `ikanisa/Memories`. The bounded backend/operator source and release-doc checkpoint768e3ad was pushed/read back; both GitHub CI attempts stop before jobs due to the existing organization billing hold, now explicitly parked by the owner. Preserve the unresolved remote-CI gate and and seal the remaining native/UI/ML source, execute Play testing/TestFlight, resolve observed feedback, then complete the authorized exact-package upload/submission/staged rollout after technical prerequisites pass, preserving any actual platform/account confirmations. Both live replacements and observation precede Memories retirement.
 
-Source and portable verification summary are sealed locally in Git; `git-source-seal.json` records commit/tree checkpoints. No remote/push/CI/publication is claimed. Ignored verification, generated deliverables, signing/credentials and build caches are preserved outside source tracking. The [90-ID register](release/backlog-disposition.md) is authoritative for individual remaining gates; no completion percentage is assigned.
+Source and portable verification summary are sealed locally in Git; `git-source-seal.json` records commit/tree checkpoints. Private origin/main checkpoint768e3ad is pushed and verified. No passing remote CI, runtime deployment or store publication is claimed. Ignored verification, generated deliverables, signing/credentials and build caches are preserved outside source tracking. The [90-ID register](release/backlog-disposition.md) is authoritative for individual remaining gates; no completion percentage is assigned.
