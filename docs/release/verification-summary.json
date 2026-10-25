@@ -2723,10 +2723,51 @@
       "runner_source_sha256": "cef012a6a4a9d373ec6e91e27dfc50c8c8dcf967de437eb9dc4ec64c6e3979da",
       "frozen_views": 5,
       "viewer_count_visual_counterexample": "Maximum12 b80d actualPNG64cd337f shows+3 as ellipsis despite passing automated audit; exact one-expression correction is included in4dede.",
-      "runtime_qualification": "pending_independent_install_and_fresh12_normal_largest_people_navigation",
+      "runtime_qualification": "count12_verified_normal_largest_actual_people_back_navigation; wider_reference_scope_in_progress",
       "six_preflight_gates_open": true,
       "highest_uploaded_build_14_is_23Oct_history": true,
-      "signed_store_acceptance": false
+      "signed_store_acceptance": false,
+      "count12_runtime": {
+        "receipt": "/Users/jeanbosco/Documents/Lovelies/verification/accessibility-navigation-20261023/ios-isolated-simulator/grouped-ui-fix-20261025/round5/4dede-count12-reviewed.json",
+        "receipt_sha256": "9c283a863747c27d4aceb6b667c06da1e0a2091d407df4624cd93914a568ceb2",
+        "normal_and_largest_native_custom_zero": true,
+        "normal_target_pt": [
+          44,
+          44
+        ],
+        "largest_target_pt": [
+          67.6666666667,
+          50.6666666667
+        ],
+        "actual_navigation": [
+          12,
+          27,
+          12
+        ],
+        "same_photo_retained": true,
+        "owner_original_pngs_reviewed": 5,
+        "coordinator_manual_transition_pngs_reviewed": 3
+      },
+      "qualified_install": {
+        "receipt": "/Users/jeanbosco/Documents/Lovelies/verification/accessibility-navigation-20261023/ios-isolated-simulator/grouped-ui-fix-20261025/round5/qualified-install.json",
+        "receipt_sha256": "eb0bca88b86bd7b09fe13b771ace3ce20fef634be478dcc38b83e10f5391e734",
+        "regular_payload_files_retained": 9,
+        "regular_payload_bytes_retained": 138795,
+        "common_selected_nodes_exact": 25,
+        "identical_os_snapshot_renamed": true,
+        "empty_os_snapshot_directory_nodes_removed": 2,
+        "preimages_retained": true,
+        "full_pathname_or_native_metadata_equality": false,
+        "app_only_installs": 1,
+        "reset_uninstall_keychain_or_retry": false
+      },
+      "pending_favorite_glyph_correction": {
+        "proposal": "/Users/jeanbosco/Documents/Lovelies/verification/accessibility-navigation-20261023/ios-isolated-simulator/grouped-ui-fix-20261025/round5/remaining-candidates/favorite-marker/proposal.json",
+        "proposed_source_sha256": "5d4513df2ec2b742a300b6f05441d35939c0223c955ebd30f55907cbd06a219b",
+        "patch_sha256": "75d32a3e9d2ff0c5d5f386ec61c4fc0c4321a1961784d3e98a7c7e6169cf5274",
+        "status": "reviewed_approved_unapplied_pending_grouped_fix",
+        "existing_five_views_and_qa_frozen": true
+      }
     },
     "ios_round4_retained_runtime": {
       "artifact_sha256": "b80d8726370d6cb2b5e4b671f43e14483bc742854e9c4d1bd2a6ee80d36b80d2",
@@ -2786,6 +2827,14 @@
       "source_seal_sha256": "4d42eca0c3235c2aefb14c626e74373a3a7e480add7831010e15ae5f99399486",
       "delivery_receipt": "/Volumes/PRO-G40/Projects/Lovelies/verification/ios-reference-ui-source-checkpoint-20261025/delivery.json",
       "runtime_or_release_acceptance": false,
+      "remote_ci_passed": false
+    },
+    "verified_ui_runner_source_delivery": {
+      "commit": "1d2ee021fb384e9722eee168056680b1b7a2b378",
+      "verified_remote_main": "1d2ee021fb384e9722eee168056680b1b7a2b378",
+      "files": 7,
+      "delivery_receipt": "/Volumes/PRO-G40/Projects/Lovelies/verification/ios-ui-runner-source-checkpoint-20261025/delivery.json",
+      "app_205_inputs_still_match": true,
       "remote_ci_passed": false
     }
   }

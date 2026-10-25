@@ -18,7 +18,8 @@ qualify pending guardian gating, withdrawal and privacy access on that same app;
 actual independent guardian approval and hosted operation remain open. Round5
 iOS app/test/unsignedRelease compilation passes; its in-place runtime qualification
 is underway; [the source-bound UI checkpoint](release/ios-reference-ui-20261025.md)
-retains raw audit findings and pending viewer12 checks. Encrypted database backup tooling passes15 operator tests and nine
+now verifies normal/maximum viewer12 and actual people/Back navigation, while
+retaining raw audit findings and a later Favorites glyph correction. Encrypted database backup tooling passes15 operator tests and nine
 actual PostgreSQL reconstruction checks; hosted custody, expiry operation and
 independent restore suppression remain open. Source through33a5d39 is pushed/read
 back; current Android/iOS UI work is outside that delivery. GitHub billing is parked by
