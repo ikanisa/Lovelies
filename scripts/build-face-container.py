@@ -15,7 +15,9 @@ import shlex
 import subprocess
 import uuid
 import importlib.util
+import re
 import sys
+import tarfile
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -41,6 +43,169 @@ def fingerprint(path):
         for block in iter(lambda: f.read(1024 * 1024), b""):
             h.update(block)
     return {"path": str(path), "bytes": path.stat().st_size, "sha256": h.hexdigest()}
+
+
+def verify_inputs_archive(path, manifest_path, canonical_id):
+    """Bind the retained config ID to one complete, uncompressed-layer OCI graph.
+
+    This explicit handoff proof supports the retained docker-save OCI layout,
+    not an arbitrary registry or compressed-layer converter. Nothing is extracted.
+    """
+    retained = json.loads(manifest_path.read_text())
+    expected = retained.get("archive", {})
+    if (retained.get("image_id") != canonical_id
+            or not re.fullmatch(r"sha256:[0-9a-f]{64}", canonical_id)
+            or type(expected.get("bytes")) is not int or expected["bytes"] < 1
+            or not re.fullmatch(r"[0-9a-f]{64}", str(expected.get("sha256", "")))
+            or path.stat().st_size != expected["bytes"]):
+        raise ValueError("Retained input archive manifest/size differs")
+    records, small, seen = {}, {}, set()
+    archive_hash = hashlib.sha256()
+    archive_bytes = 0
+
+    class HashedReader:
+        def __init__(self, source):
+            self.source = source
+
+        def read(self, size=-1):
+            nonlocal archive_bytes
+            data = self.source.read(size)
+            archive_bytes += len(data)
+            if archive_bytes > expected["bytes"]:
+                raise ValueError("Retained input archive grew while reading")
+            archive_hash.update(data)
+            return data
+
+    total, small_bytes = 0, 0
+    with path.open("rb") as source:
+        hashed = HashedReader(source)
+        with tarfile.open(fileobj=hashed, mode="r|gz") as archive:
+            for member in archive:
+                name = member.name
+                if (name in seen or name.startswith("/") or ".." in name.split("/")
+                        or name != str(Path(name)) or len(seen) >= 256
+                        or not (member.isdir() or member.isfile())):
+                    raise ValueError("Retained input archive has unsafe/duplicate members")
+                seen.add(name)
+                if member.isdir():
+                    continue
+                total += member.size
+                if member.size > 1024 ** 3 or total > 4 * 1024 ** 3:
+                    raise ValueError("Retained input archive exceeds bounded proof budget")
+                digest = hashlib.sha256()
+                capture = member.size <= 1024 ** 2
+                chunks = []
+                with archive.extractfile(member) as content:
+                    for block in iter(lambda: content.read(1024 * 1024), b""):
+                        digest.update(block)
+                        if capture:
+                            chunks.append(block)
+                records[name] = {"bytes": member.size, "sha256": digest.hexdigest()}
+                if name.startswith("blobs/") and name != "blobs/sha256/" + digest.hexdigest():
+                    raise ValueError("Retained OCI blob does not match its content address")
+                if capture:
+                    small_bytes += member.size
+                    if small_bytes > 8 * 1024 ** 2:
+                        raise ValueError("Retained input archive metadata exceeds budget")
+                    small[name] = b"".join(chunks)
+        # Include compressed trailing bytes/read-ahead in the original receipt's
+        # digest. The graph and archive hash are observed in this same file pass.
+        while hashed.read(1024 * 1024):
+            pass
+    if archive_bytes != expected["bytes"] or archive_hash.hexdigest() != expected["sha256"]:
+        raise ValueError("Retained input archive checksum differs")
+
+    def metadata(name):
+        if name not in small:
+            raise ValueError("Retained OCI metadata missing or oversized: " + name)
+        return json.loads(small[name])
+
+    def descriptor(value, media_type):
+        if (not isinstance(value, dict) or value.get("mediaType") != media_type
+                or not re.fullmatch(r"sha256:[0-9a-f]{64}", str(value.get("digest", "")))
+                or type(value.get("size")) is not int or value["size"] < 1):
+            raise ValueError("Retained OCI descriptor differs")
+        name = "blobs/sha256/" + value["digest"][7:]
+        if records.get(name) != {"bytes": value["size"], "sha256": value["digest"][7:]}:
+            raise ValueError("Retained OCI descriptor bytes/checksum differ")
+        return {key: value[key] for key in ["mediaType", "digest", "size"]}, name
+
+    if metadata("oci-layout").get("imageLayoutVersion") != "1.0.0":
+        raise ValueError("Retained OCI layout version differs")
+    index = metadata("index.json")
+    if (index.get("schemaVersion") != 2 or index.get("mediaType") != "application/vnd.oci.image.index.v1+json"
+            or not isinstance(index.get("manifests"), list) or len(index["manifests"]) != 1):
+        raise ValueError("Retained OCI input must select exactly one manifest")
+    manifest_descriptor, manifest_name = descriptor(index["manifests"][0], "application/vnd.oci.image.manifest.v1+json")
+    manifest = metadata(manifest_name)
+    if manifest.get("schemaVersion") != 2 or manifest.get("mediaType") != manifest_descriptor["mediaType"]:
+        raise ValueError("Retained OCI manifest schema differs")
+    config_descriptor, config_name = descriptor(manifest.get("config"), "application/vnd.oci.image.config.v1+json")
+    if config_descriptor["digest"] != canonical_id:
+        raise ValueError("Retained OCI config differs from canonical input identity")
+    config = metadata(config_name)
+    if config.get("os") != "linux" or config.get("architecture") != "amd64" or config.get("variant") not in [None, ""]:
+        raise ValueError("Retained OCI input platform must be linux/amd64")
+    platform = index["manifests"][0].get("platform")
+    if platform is not None and platform != {"os": "linux", "architecture": "amd64"}:
+        raise ValueError("Retained OCI index platform differs")
+    layers, rootfs = manifest.get("layers"), config.get("rootfs", {})
+    if (not isinstance(layers, list) or not 1 <= len(layers) <= 64 or rootfs.get("type") != "layers"
+            or not isinstance(rootfs.get("diff_ids"), list) or len(rootfs["diff_ids"]) != len(layers)
+            or not isinstance(config.get("config"), dict)):
+        raise ValueError("Retained OCI rootfs/config differs")
+    layer_names, layer_descriptors = [], []
+    for layer, diff_id in zip(layers, rootfs["diff_ids"]):
+        item, name = descriptor(layer, "application/vnd.oci.image.layer.v1.tar")
+        if item["digest"] != diff_id:
+            raise ValueError("Retained uncompressed layer differs from ordered rootfs")
+        layer_names.append(name)
+        layer_descriptors.append(item)
+    if "manifest.json" in records:
+        legacy = metadata("manifest.json")
+        if (not isinstance(legacy, list) or len(legacy) != 1 or legacy[0].get("Config") != config_name
+                or legacy[0].get("Layers") != layer_names):
+            raise ValueError("Docker/OCI archive graphs disagree")
+    return {"schema": "lovelies-input-oci-archive-proof-v1", "canonical_config_id": canonical_id,
+            "archive": {"path": str(path), "bytes": archive_bytes, "sha256": archive_hash.hexdigest()},
+            "archive_manifest": fingerprint(manifest_path), "manifest_descriptor": manifest_descriptor,
+            "config_descriptor": config_descriptor, "platform": {"os": "linux", "architecture": "amd64"},
+            "config": config["config"], "rootfs_diff_ids": rootfs["diff_ids"], "layer_descriptors": layer_descriptors}
+
+
+def verify_inputs_inspection(inspection, proof):
+    """Verify a loaded immutable reference; a manifest ID is never relabelled."""
+    if not isinstance(inspection, list) or len(inspection) != 1:
+        raise ValueError("Expected one retained input image inspection")
+    image = inspection[0]
+    canonical_id, manifest = proof["canonical_config_id"], proof["manifest_descriptor"]
+    if image.get("Id") not in [canonical_id, manifest["digest"]]:
+        raise ValueError("Loaded input reference differs from verified OCI graph")
+    actual_descriptor = image.get("Descriptor")
+    if image["Id"] != canonical_id or actual_descriptor is not None:
+        if (not isinstance(actual_descriptor, dict)
+                or {key: actual_descriptor.get(key) for key in ["mediaType", "digest", "size"]} != manifest):
+            raise ValueError("Loaded input manifest descriptor differs")
+    if image.get("Os") != "linux" or image.get("Architecture") != "amd64" or image.get("Variant") not in [None, ""]:
+        raise ValueError("Loaded input platform differs")
+    if image.get("RootFS") != {"Type": "layers", "Layers": proof["rootfs_diff_ids"]}:
+        raise ValueError("Loaded input ordered rootfs differs")
+    actual, expected = image.get("Config"), proof["config"]
+    if not isinstance(actual, dict) or any(actual.get(key) != value for key, value in expected.items()):
+        raise ValueError("Loaded input execution config differs")
+    # Classic Docker may include absent fields with empty/default values. Added
+    # nondefault execution settings still change semantics and must be rejected.
+    if any(value not in [None, "", False, 0, [], {}] for key, value in actual.items() if key not in expected):
+        raise ValueError("Loaded input has additional execution settings")
+    return image["Id"]
+
+
+def resolve_inputs_archive(run, proof):
+    canonical_id = proof["canonical_config_id"]
+    encoded = run(["image", "inspect", canonical_id], "input-image-config", True, allow_failure=True)
+    if encoded is None:
+        encoded = run(["image", "inspect", proof["manifest_descriptor"]["digest"]], "input-image-manifest", True)
+    return verify_inputs_inspection(json.loads(encoded), proof)
 
 
 def validate_receipt(receipt):
@@ -107,7 +272,15 @@ def validate_opencv(directory, manifest):
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--tag", default="lovelies-face:local")
+    parser.add_argument("--build-network", choices=["default", "host"], default="default",
+                        help="Networking for image-build steps only; the canonical fixture remains network-none")
+    parser.add_argument("--output-stage", choices=["final", "security-runtime-unminimized"], default="final",
+                        help="Use the unminimized stage only for actual-image closure observations, never distribution")
     parser.add_argument("--inputs-image", help="Immutable sha256 ID of the exact exported glibc input image")
+    parser.add_argument("--inputs-archive", type=Path,
+                        help="Explicit retained OCI docker-save archive proving the canonical input config ID")
+    parser.add_argument("--inputs-archive-manifest", type=Path,
+                        help="Original hash/size/config-ID handoff manifest, required with --inputs-archive")
     parser.add_argument("--docker-storage-path", type=Path,
                         help="Docker backing file or local daemon data directory; defaults to discovered local storage")
     parser.add_argument("--minimum-free-gib", type=float, default=8,
@@ -133,6 +306,8 @@ def main():
         parser.error("--resume-tar and --resume-manifest must be supplied together")
     if bool(args.opencv_artifacts) != bool(args.opencv_manifest):
         parser.error("--opencv-artifacts and --opencv-manifest must be supplied together")
+    if bool(args.inputs_archive) != bool(args.inputs_archive_manifest) or args.inputs_archive and not args.inputs_image:
+        parser.error("--inputs-archive and --inputs-archive-manifest require each other and --inputs-image")
     evidence = args.evidence.resolve()
     evidence.mkdir(parents=True, exist_ok=False, mode=0o700)
     if args.opencv_artifacts:
@@ -145,7 +320,9 @@ def main():
         raise SystemExit("Docker is not installed")
     commands = []
 
-    def run(arguments, name, capture=False):
+    def run(arguments, name, capture=False, allow_failure=False):
+        if arguments[0] == "build" and args.build_network == "host":
+            arguments = [arguments[0], "--network=host", *arguments[1:]]
         print(name, flush=True)
         commands.append({"command": [docker, *arguments], "log": name + ".log"})
         with (evidence / (name + ".log")).open("wb") as log:
@@ -156,6 +333,8 @@ def main():
         commands[-1]["exit_code"] = p.returncode
         (evidence / "commands.json").write_text(json.dumps(commands, indent=2) + "\n")
         if p.returncode:
+            if allow_failure:
+                return None
             failure = {"schema": "lovelies-private-face-container-build-failure-v1",
                        "status": "failed", "native_acceptance": False,
                        "stage": name, "exit_code": p.returncode,
@@ -187,7 +366,15 @@ def main():
         validate_opencv(args.opencv_artifacts.resolve(), opencv)
         final_contexts = ["--build-context", "opencv-builder=" + str(args.opencv_artifacts.resolve())]
     check_storage("inputs")
-    if args.inputs_image:
+    inputs_proof = None
+    if args.inputs_archive:
+        inputs_proof = verify_inputs_archive(args.inputs_archive, args.inputs_archive_manifest, args.inputs_image)
+        execution_reference = resolve_inputs_archive(run, inputs_proof)
+        inputs_id = args.inputs_image
+        inputs_proof["execution_reference"] = execution_reference
+        (evidence / "input-image-archive-proof.json").write_text(json.dumps(inputs_proof, indent=2) + "\n")
+        shutil.copy2(args.inputs_archive_manifest, evidence / "input-image-archive-manifest.json")
+    elif args.inputs_image:
         inputs_id = run(["image", "inspect", "--format", "{{.Id}}", args.inputs_image], "input-image", True).strip()
         if inputs_id != args.inputs_image:
             raise ValueError("Retained glibc input image differs")
@@ -196,6 +383,8 @@ def main():
              "--target", "glibc-compile-inputs", "--tag", inputs_tag,
              "--file", str(CONTEXT / "Dockerfile"), str(CONTEXT)], "compile-inputs")
         inputs_id = run(["image", "inspect", "--format", "{{.Id}}", inputs_tag], "input-image", True).strip()
+    if inputs_proof is None:
+        execution_reference = inputs_id
     resume = None
     if args.resume_tar:
         resume = json.loads(args.resume_manifest.read_text())
@@ -249,7 +438,7 @@ for subdir in tests:
          "--user", "0:0", "--env", "HOME=/root", "--env", "TIMEOUTFACTOR=8",
          "--env", "LOVELIES_GLIBC_BUILD_JOBS=2", "--cap-add", "SYS_ADMIN",
          "--cap-add", "NET_ADMIN", "--security-opt", "seccomp=unconfined",
-         "--entrypoint", "/bin/sh", inputs_id, "-ec", command], "create-fixture")
+         "--entrypoint", "/bin/sh", execution_reference, "-ec", command], "create-fixture")
     run(["cp", str(ROOT / "scripts/lib/verify-face-libc-package.py"),
          fixture + ":/tmp/verify-face-libc-package.py"], "copy-package-verifier")
     if resume:
@@ -294,6 +483,7 @@ for subdir in tests:
     check_storage("final-solve")
     run(["build", "--pull=false", "--platform", "linux/amd64", "--progress", "plain", *final_contexts,
          "--build-context", "glibc-security-builder=" + str(evidence / "accepted-glibc"),
+         "--target", args.output_stage,
          "--tag", args.tag, "--iidfile", str(evidence / "final-image-id.txt"),
          "--file", str(CONTEXT / "Dockerfile"), str(CONTEXT)], "final-source-build")
     if fingerprint(export / "libc6.deb") != package:
@@ -301,9 +491,12 @@ for subdir in tests:
     result = {"schema": "lovelies-private-face-container-build-v1", "status": "passed",
               "image_id": (evidence / "final-image-id.txt").read_text().strip(),
               "inputs_image_id": inputs_id, "fixture_container": fixture,
+              "inputs_execution_reference": execution_reference,
               "required_vendor_tests": sum(map(len, TESTS.values())),
               "accepted_glibc_package": package, "dockerfile": fingerprint(CONTEXT / "Dockerfile"),
               "resumed_completed_tree": resume is not None,
+              "output_stage": args.output_stage, "image_build_network": args.build_network,
+              "canonical_fixture_network": "none", "final_image_accepted": False,
               "deployment_performed": False}
     if resume:
         result["resume_manifest"] = fingerprint(evidence / "completed-tree-manifest.json")

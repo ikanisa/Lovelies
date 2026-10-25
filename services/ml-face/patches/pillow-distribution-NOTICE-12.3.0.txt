@@ -1,0 +1,50 @@
+Lovelies ML Pillow native-component notice
+
+Pillow 12.3.0 includes separately licensed native components. Its root
+MIT-CMU licence does not replace their original licences. Retain the complete
+installed pillow-12.3.0.dist-info/licenses/LICENSE and embedded sboms/*.json.
+
+FreeType licence selection and credit
+------------------------------------
+For shipped FreeType components, this distribution selects the FreeType
+License (FTL) option, with its original copyright and component-specific
+notices retained. This software uses the FreeType Project (https://freetype.org)
+under the FreeType License. The original complete FTL text and credits are
+included in Pillow's installed LICENSE. The alternative GPL option is not
+selected for these FreeType components.
+
+Pillow FriBiDi loader shim
+-------------------------
+The Pillow publisher's embedded component SBOM declares the Pillow-authored
+fribidi-shim as LGPL-2.1-or-later. It is distinct from the optional full
+FriBiDi library that the shim can load dynamically. Pillow's original setup.py
+adds the shim and vendored RAQM sources to PIL._imagingft when the corresponding
+vendor build settings are enabled. The complete original Pillow 12.3.0 source
+archive, including that combined shared extension's sources and build scripts,
+is supplied in the paired local image/source distribution kit:
+
+  additional-upstream-sources/pillow-12.3.0.tar.gz
+  SHA-256 3b8182a766685eaa002637e28b4ec8d6b18819a0c71f579bf0dbaa5830297cce
+
+Original shim files in that archive:
+  src/thirdparty/fribidi-shim/fribidi.c
+  SHA-256 7e8cfa78dcd21cebeb0ad91c0cd23e0dba6496c0fbd66e1ec3d25c5b1b365d11
+  src/thirdparty/fribidi-shim/fribidi.h
+  SHA-256 1751c311ab8a3017e30cace05c48e08abe75a3597dd897c0f53d2dbee9293329
+
+The full LGPL 2.1 text is retained at /usr/share/common-licenses/LGPL-2.1 in
+the image and in the paired source kit. Original source/header text and other
+component notices are retained without inventing missing copyright attributions.
+
+Recipients may modify and rebuild the LGPL shim/combined shared extension,
+replace PIL._imagingft or install a compatible rebuilt Pillow distribution,
+and debug such modifications. Preserve those rights when transferring the
+image. The service imports the replaceable Python shared extension through
+Python's normal extension interface. No restriction in this notice prevents
+recipient modification, replacement or reverse engineering for that purpose.
+See PILLOW_RELINKING.md in the paired source kit for build/replacement steps.
+
+The actual immutable-image licensing and native inventory records identify
+shipped extension/library bytes and embedded component declarations. Optional
+SBOM entries do not establish that full FriBiDi or GPL libimagequant binaries
+are present. No source-version conclusion is drawn from a library SONAME alone.

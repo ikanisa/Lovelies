@@ -1,0 +1,154 @@
+{
+  "schema": "lovelies-cpython-stdlib-backports-v1",
+  "base_version": "3.13.15",
+  "base_git_commit": "4061bc4c35f7c26f25264666d4ba083b93d2f6f9",
+  "patch_order": [
+    {
+      "id": "PSF-2026-36",
+      "aliases": [
+        "CVE-2026-15806"
+      ],
+      "upstream_commit": "a2773a34183b7d94a243bb98fd658926cc5348ce",
+      "upstream_url": "https://github.com/python/cpython/commit/a2773a34183b7d94a243bb98fd658926cc5348ce",
+      "upstream_patch": "cpython-upstream-CVE-2026-15806.patch",
+      "upstream_patch_sha256": "8d4ae42ff68edb72bdd55b6b7135fa08a9b7d37f6c380666ef3cf6ccfa4bc4ef",
+      "runtime_patch": "cpython-runtime-CVE-2026-15806.patch",
+      "runtime_patch_sha256": "4e6d959ed0246acd95ce1a23888d4fe05e795dfc3207134331dc1282f19850c3",
+      "adaptation": "Only library module diffs selected; no source-code edits."
+    },
+    {
+      "id": "PSF-2026-37",
+      "aliases": [
+        "CVE-2026-17084"
+      ],
+      "upstream_commit": "c28b121a4f0b975937c8b5a1b4934bb361d84296",
+      "upstream_url": "https://github.com/python/cpython/commit/c28b121a4f0b975937c8b5a1b4934bb361d84296",
+      "upstream_patch": "cpython-upstream-CVE-2026-17084.patch",
+      "upstream_patch_sha256": "263cbafcee118089ada8887758bbe3a09865cfeeb0727d26230b121f3194098f",
+      "runtime_patch": "cpython-runtime-CVE-2026-17084.patch",
+      "runtime_patch_sha256": "437ec391be5e81444f3cf377481700248a039abc60b1e982bf76a3cb61d10df4",
+      "adaptation": "Only library module diffs selected; no source-code edits."
+    },
+    {
+      "id": "PSF-2026-38",
+      "aliases": [
+        "CVE-2026-19672"
+      ],
+      "upstream_commit": "c7979f3a819011a3222bd16e671264b1e34282cb",
+      "upstream_url": "https://github.com/python/cpython/commit/c7979f3a819011a3222bd16e671264b1e34282cb",
+      "upstream_patch": "cpython-upstream-CVE-2026-19672.patch",
+      "upstream_patch_sha256": "27ed4fb73df7c208a9be743664f096e548b5d15fad692aec29863e4575a2e864",
+      "runtime_patch": "cpython-runtime-CVE-2026-19672.patch",
+      "runtime_patch_sha256": "a4c69df6eb12628f82c3a9a6c7a441d105d3bcfccb1d7c52b2f983010d735f50",
+      "adaptation": "Only library module diffs selected; no source-code edits."
+    },
+    {
+      "id": "PSF-2026-39",
+      "aliases": [
+        "CVE-2026-15310"
+      ],
+      "upstream_commit": "dcdd406ddbfc4cb29b24c3df17cbabe21d316ce1",
+      "upstream_url": "https://github.com/python/cpython/commit/dcdd406ddbfc4cb29b24c3df17cbabe21d316ce1",
+      "upstream_patch": "cpython-upstream-CVE-2026-15310.patch",
+      "upstream_patch_sha256": "b3d3b57549094b9afd6dc504746e33173bfa051ad6fd5daf964265ab3337f43b",
+      "runtime_patch": "cpython-runtime-CVE-2026-15310.patch",
+      "runtime_patch_sha256": "50115b1d28502aad4daceea51fe065d5e38a44c56333783778f3c01b3ca4678a",
+      "adaptation": "Only library module diffs selected; no source-code edits."
+    },
+    {
+      "id": "PSF-2026-40",
+      "aliases": [
+        "CVE-2026-87910"
+      ],
+      "upstream_commit": "9c17bace90f88dfba6d0e2fe23c8e7ae35f83955",
+      "upstream_url": "https://github.com/python/cpython/commit/9c17bace90f88dfba6d0e2fe23c8e7ae35f83955",
+      "upstream_patch": "cpython-upstream-CVE-2026-87910.patch",
+      "upstream_patch_sha256": "a830fadf2479db5deb76a78e07ca6adc2d35639acfbdc94ade9a0f02b988cccf",
+      "runtime_patch": "cpython-runtime-CVE-2026-87910.patch",
+      "runtime_patch_sha256": "06b7484c52fe40d21f4bd810a94e91c91c89a800652b3a02d16b9e35f4ae95f1",
+      "adaptation": "Only library module diffs selected; no source-code edits."
+    },
+    {
+      "id": "PSF-2026-41",
+      "aliases": [
+        "CVE-2026-82049"
+      ],
+      "upstream_commit": "b8f23e307097552eaea2604383a12ab280520d0d",
+      "upstream_url": "https://github.com/python/cpython/commit/b8f23e307097552eaea2604383a12ab280520d0d",
+      "upstream_patch": "cpython-upstream-CVE-2026-82049.patch",
+      "upstream_patch_sha256": "a6678e568548a251ba6482e7f191c58ace5f9dd27f3cf2f1d0a4703443417fff",
+      "runtime_patch": "cpython-runtime-CVE-2026-82049.patch",
+      "runtime_patch_sha256": "df31ec439249dcea0cb70bebefc31d6faa4bac1f153be959f5bbde06e85363ba",
+      "adaptation": "Only library module diffs selected; no source-code edits."
+    },
+    {
+      "id": "PSF-2026-42",
+      "aliases": [
+        "CVE-2026-12345"
+      ],
+      "upstream_commit": "5c20517a4fc56683efe63a7751020db9573f538d",
+      "upstream_url": "https://github.com/python/cpython/commit/5c20517a4fc56683efe63a7751020db9573f538d",
+      "upstream_patch": "cpython-upstream-CVE-2026-12345.patch",
+      "upstream_patch_sha256": "be4fc5ebf4cfd370cc242dc710da0e6ff637b2f72712d2d5cfaaf7a3ce0377bd",
+      "runtime_patch": "cpython-runtime-CVE-2026-12345.patch",
+      "runtime_patch_sha256": "c98c7d5de4c2dcc871181207dca70b09e740f2863c32110f334a50aa78f84a54",
+      "adaptation": "Latest upstream main fix: same tempfile changes; adapt two shutil hunks to3.13 inline rmtree wrapper (main factors helper _rmtree_impl). Retain3.13 traversal, private keyword opt-in and public3-argument callbacks; paireddescriptor error context changes unchanged."
+    }
+  ],
+  "modules": [
+    {
+      "path": "urllib/request.py",
+      "original_sha256": "94e12238d24f586253725d8e23d56e3d7d81bf34fbcefaf98ae541080f2cccbd",
+      "original_bytes": 102602,
+      "original_url": "https://raw.githubusercontent.com/python/cpython/4061bc4c35f7c26f25264666d4ba083b93d2f6f9/Lib/urllib/request.py",
+      "patched_sha256": "e3bf4446c45300c800f62e869ce1ee89fa745fa073c03e6655f4f4e20fde6eb2",
+      "patched_bytes": 103148
+    },
+    {
+      "path": "stringprep.py",
+      "original_sha256": "60b6c83581093029312efb6670b11c540090b3f78bcf72264467b494f02f21a5",
+      "original_bytes": 12917,
+      "original_url": "https://raw.githubusercontent.com/python/cpython/4061bc4c35f7c26f25264666d4ba083b93d2f6f9/Lib/stringprep.py",
+      "patched_sha256": "fc42fedb2a828a34a70cb0ff1b9a17039ca148b4f561fa7db98ce49bb2141c7a",
+      "patched_bytes": 25834
+    },
+    {
+      "path": "tarfile.py",
+      "original_sha256": "9fedddf7e814c226cb7e1ac0aa603092eda40047367ec00ad740a81484a17d01",
+      "original_bytes": 117110,
+      "original_url": "https://raw.githubusercontent.com/python/cpython/4061bc4c35f7c26f25264666d4ba083b93d2f6f9/Lib/tarfile.py",
+      "patched_sha256": "8f46eb2064b20420b8126508a3524cd684830ed97a860992283a5074d1793743",
+      "patched_bytes": 117882
+    },
+    {
+      "path": "zipfile/__init__.py",
+      "original_sha256": "c3412800039509b02afeda3f8d8e844bf566ea46490561fb09bbb08bb91909a6",
+      "original_bytes": 90429,
+      "original_url": "https://raw.githubusercontent.com/python/cpython/4061bc4c35f7c26f25264666d4ba083b93d2f6f9/Lib/zipfile/__init__.py",
+      "patched_sha256": "4067e573036149c17b2a80c288c392e1f574a9566c1d94332b2576b0c2b0a0d4",
+      "patched_bytes": 91672
+    },
+    {
+      "path": "tempfile.py",
+      "original_sha256": "7350d7f75ca8d6e4752c377777a315dc26eb4ecd3b6c9c0951bffddc576f030f",
+      "original_bytes": 32643,
+      "original_url": "https://raw.githubusercontent.com/python/cpython/4061bc4c35f7c26f25264666d4ba083b93d2f6f9/Lib/tempfile.py",
+      "patched_sha256": "05f12fd8e347c9ac71777e3a5b2811a8b9da5200999b3bea83f660599ae460da",
+      "patched_bytes": 35663
+    },
+    {
+      "path": "shutil.py",
+      "original_sha256": "11c32fd568588e38463fdf281caa7ef0edbf3d64daf7961f0e7e68d779528731",
+      "original_bytes": 57130,
+      "original_url": "https://raw.githubusercontent.com/python/cpython/4061bc4c35f7c26f25264666d4ba083b93d2f6f9/Lib/shutil.py",
+      "patched_sha256": "d123911805c26aff3cd2223d0747d3e2b9706d9c7c114273666d47f8aada7f66",
+      "patched_bytes": 57580
+    }
+  ],
+  "license": {
+    "file": "cpython-LICENSE.txt",
+    "sha256": "78b12c3a81360b357002334f0e70ea0e92eebf7a9b358805c03c48484945f3bb",
+    "url": "https://raw.githubusercontent.com/python/cpython/4061bc4c35f7c26f25264666d4ba083b93d2f6f9/LICENSE"
+  },
+  "scope": "Selected pure Python standard-library security fixes; no interpreter or extension ABI changes. Version remains 3.13.15 with separately identified local backports. Regression evidence must bind the exact final Linux image and its release architecture."
+}

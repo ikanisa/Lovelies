@@ -1,12 +1,27 @@
-# Local verification only. The default Dockerfile reproduces the pinned native
-# dependencies from source. This overlay reuses the already retained runtime;
-# the parent ID is verified by scripts/build-local-face-container.py.
+# Supplemental local engineering only. The canonical Dockerfile/producer retain
+# all final native acceptance gates. This reuses the exact retained AMD64 image;
+# scripts/build-local-face-container.py verifies its ID and frozen input snapshot.
 FROM lovelies-ml-release:security-4a8a73463c5c4ec6
+ARG LOVELIES_OVERLAY_SOURCE_SHA256
+LABEL io.lovelies.artifact.role="supplemental-local-engineering" \
+    io.lovelies.native-acceptance="false" \
+    io.lovelies.overlay.source-sha256="${LOVELIES_OVERLAY_SOURCE_SHA256}"
 ENV PYTHONPATH=/app/src MODEL_MANIFEST_PATH=/app/models/model-manifest.json \
-    APP_ENV=production CLOUDFLARE_ENV=production ML_DEPLOYMENT_MODE=monitored_pilot \
-    ML_REQUIRE_MODEL_ARTIFACTS=true ML_USE_DETERMINISTIC_SIMULATOR=false
-COPY --chown=lovelies:lovelies src /app/src
-COPY --chown=lovelies:lovelies models /app/models
-COPY --chown=lovelies:lovelies licenses /app/licenses
-RUN ["/app/.venv/bin/python", "-c", "from lovelies_ml_face.app import pipeline; assert pipeline.artifact_integrity == 'verified'; assert not pipeline.using_deterministic_simulator"]
+    APP_ENV=production ML_DEPLOYMENT_MODE=monitored_pilot \
+    ML_REQUIRE_MODEL_ARTIFACTS=true ML_USE_DETERMINISTIC_SIMULATOR=false \
+    ML_DEPLOYMENT_TRANSPORT=https_service
+USER 0:0
+COPY patches/install-still-wheel.py /usr/local/share/doc/lovelies-openface-local/install-still-wheel.py
+COPY vendor /app/vendor
+RUN ["/app/.venv/bin/python", "/usr/local/share/doc/lovelies-openface-local/install-still-wheel.py", "--wheel", "/app/vendor/openface_still-0.1.0-py3-none-any.whl", "--manifest", "/app/vendor/openface-still.json", "--receipt", "/usr/local/share/doc/lovelies-openface-local/install-receipt.json"]
+COPY src /app/src
+COPY models /app/models
+COPY licenses /app/licenses
+COPY pyproject.toml uv.lock /app/
+COPY local-cache-inputs.json /usr/local/share/doc/lovelies-openface-local/inputs.json
+COPY Dockerfile.local-cache /usr/local/share/doc/lovelies-openface-local/Dockerfile.local-cache
+USER lovelies
+# Component readiness requires actual loaded models, but no HTTP application,
+# credential or account service is initialized during the build.
+RUN ["/app/.venv/bin/python", "-c", "import json,os,ssl,sys; from pathlib import Path; import cv2,numpy,PIL; from lovelies_ml_face.engine import OpenFacePipeline; assert os.geteuid()!=0; assert sys.version_info[:3]==(3,13,15); assert cv2.__version__=='4.13.0' and numpy.__version__=='2.4.6' and PIL.__version__=='12.3.0'; assert ssl.OPENSSL_VERSION.startswith('OpenSSL 3.5.9 '); assert all(p.stat().st_uid==0 and not (p.stat().st_mode & 0o022) for root in ('/app/src','/app/models','/app/vendor','/usr/local/share/doc/lovelies-openface-local') for p in [Path(root),*Path(root).rglob('*')] if p.is_file() or p.is_dir()); engine=OpenFacePipeline(os.environ['MODEL_MANIFEST_PATH']);\ntry:\n assert engine.artifact_integrity=='verified' and not engine.using_deterministic_simulator and engine.ready(); print(json.dumps({'scope':'supplemental_local_engineering','native_acceptance':False,'engine_space':'lovelies-sface-openface-still-v1','identity':engine.identity,'python':sys.version.split()[0],'opencv':cv2.__version__,'numpy':numpy.__version__,'pillow':PIL.__version__,'openssl':ssl.OPENSSL_VERSION},sort_keys=True))\nfinally:\n engine.close()"]
 CMD ["/app/.venv/bin/python", "-m", "lovelies_ml_face"]

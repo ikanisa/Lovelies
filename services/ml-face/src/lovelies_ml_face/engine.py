@@ -21,6 +21,7 @@ from openface_still import PlatformError, StillImagePolicy, StillImageRuntime
 from pictured_ml_face.image_contract import ImageValidationError
 from pictured_ml_face.model_integrity import load_manifest_object, select_active_model
 from pictured_ml_face.vector_matching import rank_face_candidates
+from .native_identity import native_processing_identity
 
 MODEL = "opencv-yunet-sface-2021dec-v1"
 ENGINE_SPACE = "lovelies-sface-openface-still-v1"
@@ -68,6 +69,13 @@ class OpenFacePipeline:
             raise RuntimeError("New inference space requires its own recognition evaluation")
         self.evaluation_status = "monitored_pilot" if self.deployment_mode == "monitored_pilot" else "not_evaluated"
         self.using_deterministic_simulator = False
+        # Reject configuration before constructing an owned inference child.
+        auth_distance = float(os.environ.get("FACE_AUTH_MAX_COSINE_DISTANCE", "0.35"))
+        if not math.isfinite(auth_distance) or not 0 < auth_distance <= 0.42:
+            raise RuntimeError("Invalid registered-face comparison threshold")
+        # Package versions do not identify rebuilt native code or its ABI.
+        # Inventory before constructing an owned worker so failure leaves none.
+        native_identity = native_processing_identity()
         self.runtime = StillImageRuntime(
             self.manifest_path.parent,
             policy=POLICY,
@@ -76,36 +84,46 @@ class OpenFacePipeline:
             boot_deadline_seconds=60,
             max_workers=1,
         )
-        self.identity = dict(self.runtime.identity)
-        auth_distance = float(os.environ.get("FACE_AUTH_MAX_COSINE_DISTANCE", "0.35"))
-        if not math.isfinite(auth_distance) or not 0 < auth_distance <= 0.42:
-            self.close()
-            raise RuntimeError("Invalid registered-face comparison threshold")
-        package_root = Path(__file__).parents[1]
-        # Bind the consumer policy and numerical/validation implementation too;
-        # OpenFace's own identity alone cannot describe Lovelies' decisions.
-        consumer_files = (
-            "lovelies_ml_face/engine.py", "lovelies_ml_face/app.py",
-            "pictured_ml_face/vector_matching.py", "pictured_ml_face/embedding_contract.py",
-            "pictured_ml_face/models.py",
-        )
-        contract = {
-            "contract": ENGINE_SPACE,
-            "core_processing_fingerprint": self.identity["processing_fingerprint"],
-            "auth_distance": auth_distance,
-            "photo_distance": 0.42,
-            "photo_distinct_identity_margin": 0.05,
-            "quality": "opencv-laplacian-brightness-quality-v1",
-            "quality_minimum": 0.25,
-            "source_sha256": {name: hashlib.sha256((package_root / name).read_bytes()).hexdigest()
-                              for name in consumer_files},
-        }
-        self.identity["core_processing_fingerprint"] = self.identity["processing_fingerprint"]
-        self.identity["processing_fingerprint"] = hashlib.sha256(json.dumps(
-            contract, sort_keys=True, separators=(",", ":"), allow_nan=False,
-        ).encode()).hexdigest()
-        self.artifact_integrity = "verified"
-        atexit.register(self.close)
+        try:
+            self.identity = dict(self.runtime.identity)
+            package_root = Path(__file__).parents[1]
+            # Bind the consumer policy and numerical/validation implementation
+            # too; OpenFace's identity alone cannot describe these decisions.
+            consumer_files = (
+                "lovelies_ml_face/engine.py", "lovelies_ml_face/app.py",
+                "lovelies_ml_face/native_identity.py",
+                "pictured_ml_face/vector_matching.py", "pictured_ml_face/embedding_contract.py",
+                "pictured_ml_face/models.py",
+            )
+            contract = {
+                "contract": ENGINE_SPACE,
+                "core_processing_fingerprint": self.identity["processing_fingerprint"],
+                "native_processing_digest": native_identity["digest"],
+                "native_processing_scope": native_identity["scope"],
+                "auth_distance": auth_distance,
+                "photo_distance": 0.42,
+                "photo_distinct_identity_margin": 0.05,
+                "quality": "opencv-laplacian-brightness-quality-v1",
+                "quality_minimum": 0.25,
+                "source_sha256": {name: hashlib.sha256((package_root / name).read_bytes()).hexdigest()
+                                  for name in consumer_files},
+            }
+            self.identity["core_processing_fingerprint"] = self.identity["processing_fingerprint"]
+            self.identity["native_runtime_identity"] = native_identity
+            self.identity["processing_fingerprint"] = hashlib.sha256(json.dumps(
+                contract, sort_keys=True, separators=(",", ":"), allow_nan=False,
+            ).encode()).hexdigest()
+            self.artifact_integrity = "verified"
+            atexit.register(self.close)
+        except BaseException as error:
+            # Source hashing/identity setup can fail after the resident child
+            # starts. Always retire/reap it; preserve the original exception
+            # even if cleanup itself fails, without exposing paths or values.
+            try:
+                self.close()
+            except BaseException:
+                error.add_note("Owned inference runtime cleanup failed")
+            raise
 
     def close(self):
         self.runtime.close()

@@ -1,8 +1,26 @@
 {
-  "schema": "lovelies-cpython-stdlib-backports-v1",
-  "base_version": "3.13.15",
-  "base_git_commit": "4061bc4c35f7c26f25264666d4ba083b93d2f6f9",
+  "schema": "lovelies-cpython-stdlib-backports-v2",
+  "base_version": "3.13.17",
+  "base_git_commit": "64e080d38154391ff2d2caa1161c298bb7cd8f30",
+  "base_tag": "v3.13.17",
+  "base_image_candidate": "python-base-image-candidate.json",
+  "preserved_previous_manifest": "history/3.13.15/cpython-backports-manifest.json",
   "patch_order": [
+    {
+      "id": "PSF-2026-42",
+      "aliases": [
+        "CVE-2026-12345"
+      ],
+      "upstream_commit": "5c20517a4fc56683efe63a7751020db9573f538d",
+      "upstream_url": "https://github.com/python/cpython/commit/5c20517a4fc56683efe63a7751020db9573f538d",
+      "upstream_patch": "cpython-upstream-CVE-2026-12345.patch",
+      "upstream_patch_sha256": "be4fc5ebf4cfd370cc242dc710da0e6ff637b2f72712d2d5cfaaf7a3ce0377bd",
+      "runtime_patch": "cpython-runtime-CVE-2026-12345.patch",
+      "runtime_patch_sha256": "c98c7d5de4c2dcc871181207dca70b09e740f2863c32110f334a50aa78f84a54",
+      "adaptation": "Latest upstream main fix: same tempfile changes; adapt two shutil hunks to3.13 inline rmtree wrapper (main factors helper _rmtree_impl). Retain3.13 traversal, private keyword opt-in and public3-argument callbacks; paireddescriptor error context changes unchanged."
+    }
+  ],
+  "upstream_included_fixes": [
     {
       "id": "PSF-2026-36",
       "aliases": [
@@ -82,73 +100,145 @@
       "adaptation": "Only library module diffs selected; no source-code edits."
     },
     {
-      "id": "PSF-2026-42",
-      "aliases": [
-        "CVE-2026-12345"
-      ],
-      "upstream_commit": "5c20517a4fc56683efe63a7751020db9573f538d",
-      "upstream_url": "https://github.com/python/cpython/commit/5c20517a4fc56683efe63a7751020db9573f538d",
-      "upstream_patch": "cpython-upstream-CVE-2026-12345.patch",
-      "upstream_patch_sha256": "be4fc5ebf4cfd370cc242dc710da0e6ff637b2f72712d2d5cfaaf7a3ce0377bd",
-      "runtime_patch": "cpython-runtime-CVE-2026-12345.patch",
-      "runtime_patch_sha256": "c98c7d5de4c2dcc871181207dca70b09e740f2863c32110f334a50aa78f84a54",
-      "adaptation": "Latest upstream main fix: same tempfile changes; adapt two shutil hunks to3.13 inline rmtree wrapper (main factors helper _rmtree_impl). Retain3.13 traversal, private keyword opt-in and public3-argument callbacks; paireddescriptor error context changes unchanged."
+      "id": "CVE-2026-19445",
+      "upstream_commit": "d8717ed01717a9641686e6e6f83f0ab8af235e2c",
+      "scope": "Native Modules/_ssl.c; source inclusion does not qualify the actual binary.",
+      "upstream_patch": "cpython-upstream-CVE-2026-19445.patch",
+      "upstream_patch_sha256": "ce4e3df09e9109c39a2acb1096844863f9aca2acfb940ed920434747cdb40371"
+    },
+    {
+      "id": "CVE-2026-19553",
+      "upstream_commit": "f4e43ba525187282f2011da0e6ffc0d2b08d8062",
+      "scope": "Lib/ssl.py parameter validation, included upstream.",
+      "upstream_patch": "cpython-upstream-CVE-2026-19553.patch",
+      "upstream_patch_sha256": "858c259bc5c99a471c688f91c0c5fd37f919d4465e09a6f3a147134696ff3b52"
     }
   ],
   "modules": [
     {
       "path": "urllib/request.py",
-      "original_sha256": "94e12238d24f586253725d8e23d56e3d7d81bf34fbcefaf98ae541080f2cccbd",
-      "original_bytes": 102602,
-      "original_url": "https://raw.githubusercontent.com/python/cpython/4061bc4c35f7c26f25264666d4ba083b93d2f6f9/Lib/urllib/request.py",
+      "original_sha256": "e3bf4446c45300c800f62e869ce1ee89fa745fa073c03e6655f4f4e20fde6eb2",
+      "original_bytes": 103148,
+      "original_url": "https://raw.githubusercontent.com/python/cpython/64e080d38154391ff2d2caa1161c298bb7cd8f30/Lib/urllib/request.py",
       "patched_sha256": "e3bf4446c45300c800f62e869ce1ee89fa745fa073c03e6655f4f4e20fde6eb2",
-      "patched_bytes": 103148
+      "patched_bytes": 103148,
+      "operation": "retain_exact_upstream"
     },
     {
       "path": "stringprep.py",
-      "original_sha256": "60b6c83581093029312efb6670b11c540090b3f78bcf72264467b494f02f21a5",
-      "original_bytes": 12917,
-      "original_url": "https://raw.githubusercontent.com/python/cpython/4061bc4c35f7c26f25264666d4ba083b93d2f6f9/Lib/stringprep.py",
+      "original_sha256": "fc42fedb2a828a34a70cb0ff1b9a17039ca148b4f561fa7db98ce49bb2141c7a",
+      "original_bytes": 25834,
+      "original_url": "https://raw.githubusercontent.com/python/cpython/64e080d38154391ff2d2caa1161c298bb7cd8f30/Lib/stringprep.py",
       "patched_sha256": "fc42fedb2a828a34a70cb0ff1b9a17039ca148b4f561fa7db98ce49bb2141c7a",
-      "patched_bytes": 25834
+      "patched_bytes": 25834,
+      "operation": "retain_exact_upstream"
     },
     {
       "path": "tarfile.py",
-      "original_sha256": "9fedddf7e814c226cb7e1ac0aa603092eda40047367ec00ad740a81484a17d01",
-      "original_bytes": 117110,
-      "original_url": "https://raw.githubusercontent.com/python/cpython/4061bc4c35f7c26f25264666d4ba083b93d2f6f9/Lib/tarfile.py",
-      "patched_sha256": "8f46eb2064b20420b8126508a3524cd684830ed97a860992283a5074d1793743",
-      "patched_bytes": 117882
+      "original_sha256": "0fd87b49826f745c16e3ee68b2390a206b2dfcfe9a0b1118bd7fcd7c06deaff1",
+      "original_bytes": 118060,
+      "original_url": "https://raw.githubusercontent.com/python/cpython/64e080d38154391ff2d2caa1161c298bb7cd8f30/Lib/tarfile.py",
+      "patched_sha256": "0fd87b49826f745c16e3ee68b2390a206b2dfcfe9a0b1118bd7fcd7c06deaff1",
+      "patched_bytes": 118060,
+      "operation": "retain_exact_upstream"
     },
     {
       "path": "zipfile/__init__.py",
-      "original_sha256": "c3412800039509b02afeda3f8d8e844bf566ea46490561fb09bbb08bb91909a6",
-      "original_bytes": 90429,
-      "original_url": "https://raw.githubusercontent.com/python/cpython/4061bc4c35f7c26f25264666d4ba083b93d2f6f9/Lib/zipfile/__init__.py",
+      "original_sha256": "4067e573036149c17b2a80c288c392e1f574a9566c1d94332b2576b0c2b0a0d4",
+      "original_bytes": 91672,
+      "original_url": "https://raw.githubusercontent.com/python/cpython/64e080d38154391ff2d2caa1161c298bb7cd8f30/Lib/zipfile/__init__.py",
       "patched_sha256": "4067e573036149c17b2a80c288c392e1f574a9566c1d94332b2576b0c2b0a0d4",
-      "patched_bytes": 91672
+      "patched_bytes": 91672,
+      "operation": "retain_exact_upstream"
     },
     {
       "path": "tempfile.py",
       "original_sha256": "7350d7f75ca8d6e4752c377777a315dc26eb4ecd3b6c9c0951bffddc576f030f",
       "original_bytes": 32643,
-      "original_url": "https://raw.githubusercontent.com/python/cpython/4061bc4c35f7c26f25264666d4ba083b93d2f6f9/Lib/tempfile.py",
+      "original_url": "https://raw.githubusercontent.com/python/cpython/64e080d38154391ff2d2caa1161c298bb7cd8f30/Lib/tempfile.py",
       "patched_sha256": "05f12fd8e347c9ac71777e3a5b2811a8b9da5200999b3bea83f660599ae460da",
-      "patched_bytes": 35663
+      "patched_bytes": 35663,
+      "operation": "apply_missing_security_backport"
     },
     {
       "path": "shutil.py",
       "original_sha256": "11c32fd568588e38463fdf281caa7ef0edbf3d64daf7961f0e7e68d779528731",
       "original_bytes": 57130,
-      "original_url": "https://raw.githubusercontent.com/python/cpython/4061bc4c35f7c26f25264666d4ba083b93d2f6f9/Lib/shutil.py",
+      "original_url": "https://raw.githubusercontent.com/python/cpython/64e080d38154391ff2d2caa1161c298bb7cd8f30/Lib/shutil.py",
       "patched_sha256": "d123911805c26aff3cd2223d0747d3e2b9706d9c7c114273666d47f8aada7f66",
-      "patched_bytes": 57580
+      "patched_bytes": 57580,
+      "operation": "apply_missing_security_backport"
+    },
+    {
+      "path": "ssl.py",
+      "original_sha256": "3ea103be59b47ad58cb53b249e5b74d00c87b54b20650e208e3b4b9ca533e9e8",
+      "original_bytes": 53287,
+      "original_url": "https://raw.githubusercontent.com/python/cpython/64e080d38154391ff2d2caa1161c298bb7cd8f30/Lib/ssl.py",
+      "patched_sha256": "3ea103be59b47ad58cb53b249e5b74d00c87b54b20650e208e3b4b9ca533e9e8",
+      "patched_bytes": 53287,
+      "operation": "retain_exact_upstream"
+    }
+  ],
+  "upstream_source_manifest": "upstream/3.13.17/source-manifest.json",
+  "upstream_source_manifest_sha256": "9001ed18cfdff0cdf28ba1bdd876eb4b8e6be73a749d082fac48f51508c4e47a",
+  "source_checks": [
+    {
+      "ids": [
+        "CVE-2026-19672"
+      ],
+      "path": "Lib/tarfile.py",
+      "required_text": [
+        "if '..' in name.replace(os.sep, '/').split('/'):",
+        "normalized = os.path.normpath(name)",
+        "name = new_attrs['name'] = normalized"
+      ]
+    },
+    {
+      "ids": [
+        "CVE-2026-82049"
+      ],
+      "path": "Lib/tarfile.py",
+      "required_text": [
+        "os.link(os.path.realpath(tarinfo._link_target), targetpath)"
+      ]
+    },
+    {
+      "ids": [
+        "CVE-2026-87910"
+      ],
+      "path": "Lib/tarfile.py",
+      "required_text": [
+        "filtered = filter_function(\n                    unfiltered.replace(name=tarinfo.name, deep=False),\n                    extraction_root)\n                if filtered is None:\n                    return"
+      ]
+    },
+    {
+      "ids": [
+        "CVE-2026-19553"
+      ],
+      "path": "Lib/ssl.py",
+      "required_text": [
+        "def _check_sslobject_params(server_side, context=None, server_hostname=None, session=None):",
+        "if context.check_hostname and not server_hostname:"
+      ]
+    },
+    {
+      "ids": [
+        "CVE-2026-19445"
+      ],
+      "path": "Modules/_ssl.c",
+      "required_text": [
+        "sslctx = (PySSLContext *)Py_NewRef(ssl->ctx);",
+        "sni_cb = Py_XNewRef(sslctx->set_sni_cb);",
+        "Py_DECREF(sni_cb);",
+        "Py_DECREF(sslctx);"
+      ],
+      "qualification": "Pinned upstream source evidence only; actual native binary execution remains required."
     }
   ],
   "license": {
     "file": "cpython-LICENSE.txt",
     "sha256": "78b12c3a81360b357002334f0e70ea0e92eebf7a9b358805c03c48484945f3bb",
-    "url": "https://raw.githubusercontent.com/python/cpython/4061bc4c35f7c26f25264666d4ba083b93d2f6f9/LICENSE"
+    "url": "https://raw.githubusercontent.com/python/cpython/64e080d38154391ff2d2caa1161c298bb7cd8f30/LICENSE"
   },
-  "scope": "Selected pure Python standard-library security fixes; no interpreter or extension ABI changes. Version remains 3.13.15 with separately identified local backports. Regression evidence must bind the exact final Linux image and its release architecture."
+  "scope": "Candidate CPython 3.13.17 source rebase. Preserve exact newer upstream modules and apply only the still-missing tempfile/shutil PSF-2026-42 correction. No native binary, container, scanner or release qualification is implied."
 }

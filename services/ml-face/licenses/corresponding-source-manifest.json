@@ -1,8 +1,44 @@
 {
   "schema": "lovelies-ml-licensing-sources-v1",
-  "reviewed_at": "2026-10-01",
-  "scope": "Exact libheif original and Debian packaging source supplied with the ML image. libde265 corresponding source is supplied by its custom builder under /usr/share/doc/libde265-0/source. The complete hash-bound pydantic-core2.46.4 and103-crate offline source bundle supplies the source-wheel builder and corresponding source.",
+  "reviewed_at": "2026-10-24",
+  "scope": "Exact libheif 1.23.6-2~deb13u1 original and Debian packaging source prepared for the new ML image candidate. Prior libheif 1.23.4 files remain as explicit historical source provenance, not the candidate runtime identity. libde265 source remains supplied by its unchanged custom builder. The unchanged pydantic-core/Rust offline source bundle retains its existing role.",
   "source_records": [
+    {
+      "component": "libheif",
+      "version": "1.23.6-2~deb13u1",
+      "path": "sources/libheif_1.23.6.orig.tar.gz",
+      "sha256": "4484346dc5995319dbc11e3a1c35d0a2ec46511ce370900869337fd2c7033125",
+      "bytes": 2373898,
+      "publisher_url": "https://deb.debian.org/debian-security/pool/updates/main/libh/libheif/libheif_1.23.6.orig.tar.gz"
+    },
+    {
+      "component": "libheif",
+      "version": "1.23.6-2~deb13u1",
+      "path": "sources/libheif_1.23.6-2~deb13u1.debian.tar.xz",
+      "sha256": "91802e614b0a78acbf0fd6a23937bbf6898a5c2188e1f002a9a9eef0da132f87",
+      "bytes": 16116,
+      "publisher_url": "https://deb.debian.org/debian-security/pool/updates/main/libh/libheif/libheif_1.23.6-2~deb13u1.debian.tar.xz"
+    },
+    {
+      "component": "libheif",
+      "version": "1.23.6-2~deb13u1",
+      "path": "sources/libheif_1.23.6-2~deb13u1.dsc",
+      "sha256": "b3d997ab26a37f7bb7309052a28d1e41c057588b6687616f7fb6ed415b021480",
+      "bytes": 3366,
+      "publisher_url": "https://deb.debian.org/debian-security/pool/updates/main/libh/libheif/libheif_1.23.6-2~deb13u1.dsc"
+    },
+    {
+      "component": "pydantic-core and locked Rust dependencies",
+      "version": "2.46.4",
+      "path": "rust-source-build/pydantic-core-2.46.4-offline-source.tar.gz",
+      "sha256": "323a9a858f144698364bf4e91e6fbab4913188ab13921dd6614b9d45fb33a19f",
+      "bytes": 18844873,
+      "provenance": "Existing accepted104-archive/103-crate offline bundle; original publisher archive identities and crate checksums retained in bundle-manifest.json."
+    }
+  ],
+  "verification": "Fetched from official Debian HTTPS. New archive byte lengths and SHA256 match the OpenPGP-signed source descriptor. The source descriptor and suite InRelease OpenPGP signatures were not independently verified by this source-preparation step; actual apt/build signature verification and native/runtime tests remain required.",
+  "release_source_channel_published": false,
+  "historical_source_records": [
     {
       "component": "libheif",
       "version": "1.23.4-1~deb13u1",
@@ -26,16 +62,132 @@
       "sha256": "d0c02b4b0e978f34a1974b6f3eea7975a537bf7a9195ffeea38e7242ff316fdd",
       "bytes": 2217221,
       "publisher_url": "https://deb.debian.org/debian-security/pool/updates/main/libh/libheif/libheif_1.23.4.orig.tar.gz"
-    },
-    {
-      "component": "pydantic-core and locked Rust dependencies",
-      "version": "2.46.4",
-      "path": "rust-source-build/pydantic-core-2.46.4-offline-source.tar.gz",
-      "sha256": "323a9a858f144698364bf4e91e6fbab4913188ab13921dd6614b9d45fb33a19f",
-      "bytes": 18844873,
-      "provenance": "Existing accepted104-archive/103-crate offline bundle; original publisher archive identities and crate checksums retained in bundle-manifest.json."
     }
   ],
-  "verification": "Downloaded over HTTPS from Debian, SHA256 checked against the source descriptor. The descriptor OpenPGP signature was not independently verified.",
-  "release_source_channel_published": false
+  "historical_notice_preimage": {
+    "path": "NOTICE-heif-runtime.txt (before candidate update)",
+    "bytes": 2679,
+    "sha256": "44618894a38117c45a9c402f9f6ee1e563f4645b9f6b636a072d9371b9bac87e"
+  },
+  "candidate_status": {
+    "source_prepared": true,
+    "runtime_built": false,
+    "runtime_accepted": false,
+    "final_image_accepted": false,
+    "purpose": "Input availability/security revision repair; this source kit is not native/runtime/distribution acceptance."
+  },
+  "licence_source_checks": [
+    {
+      "path": "LICENSE-libheif-COPYING.txt",
+      "publisher_source": "libheif_1.23.6.orig.tar.gz/COPYING",
+      "bytes": 44366,
+      "sha256": "fa81ce652315b013359d6e8e4744335f31a50c7c192907176d3632f78a3b4596",
+      "unchanged_from_prior": true
+    },
+    {
+      "path": "COPYRIGHT-libheif-debian.txt",
+      "publisher_source": "libheif_1.23.6-2~deb13u1.debian.tar.xz/debian/copyright",
+      "bytes": 11165,
+      "sha256": "c98ad382697d5b6a6b3166b593d3ca4028361f5df0ccffdc2638b87aedb606ad",
+      "unchanged_from_prior": true
+    }
+  ],
+  "debian_index_provenance": [
+    {
+      "inrelease_url": "https://deb.debian.org/debian/dists/trixie/InRelease",
+      "inrelease_bytes": 140421,
+      "inrelease_sha256": "0584fba32e13e0ab8285fb16c27adea1ec03a73669c18702821094fd6ca86675",
+      "release": {
+        "Origin": "Debian",
+        "Label": "Debian",
+        "Suite": "stable",
+        "Version": "13.7",
+        "Codename": "trixie",
+        "Date": "Sat, 12 Sep 2026 07:55:41 UTC"
+      },
+      "packages_url": "https://deb.debian.org/debian/dists/trixie/main/binary-amd64/Packages.xz",
+      "packages_bytes": 9678380,
+      "packages_sha256": "7778d3e3f303b7ddb8ce0fe7c8d57473a076c6bf2e8f241f75421d2396352498",
+      "index_hash_verified": true,
+      "openpgp_signature_independently_verified": false
+    },
+    {
+      "inrelease_url": "https://deb.debian.org/debian-security/dists/trixie-security/InRelease",
+      "inrelease_bytes": 43409,
+      "inrelease_sha256": "198287b2fa5f7e3bc836fc6ddb4fe339b90a2fe43dc3f2b57c002a66309e49d5",
+      "release": {
+        "Origin": "Debian",
+        "Label": "Debian-Security",
+        "Suite": "stable-security",
+        "Version": "13",
+        "Codename": "trixie-security",
+        "Date": "Sat, 24 Oct 2026 04:00:57 UTC",
+        "Valid-Until": "Sat, 31 Oct 2026 04:00:57 UTC"
+      },
+      "packages_url": "https://deb.debian.org/debian-security/dists/trixie-security/main/binary-amd64/Packages.xz",
+      "packages_bytes": 269916,
+      "packages_sha256": "c7fc2c6a79fa6288ed4389753dddee83cab791b3b9535ef21d9cfebde1aba2fb",
+      "index_hash_verified": true,
+      "openpgp_signature_independently_verified": false
+    },
+    {
+      "inrelease_url": "https://deb.debian.org/debian/dists/trixie-updates/InRelease",
+      "inrelease_bytes": 47340,
+      "inrelease_sha256": "e0ba24d09f77d6b2ab8dea42931742ade20ca80529b65129cf88185f0305743d",
+      "release": {
+        "Origin": "Debian",
+        "Label": "Debian",
+        "Suite": "stable-updates",
+        "Version": "13-updates",
+        "Codename": "trixie-updates",
+        "Date": "Sat, 24 Oct 2026 08:07:31 UTC",
+        "Valid-Until": "Sat, 31 Oct 2026 08:07:31 UTC"
+      },
+      "packages_url": "https://deb.debian.org/debian/dists/trixie-updates/main/binary-amd64/Packages.xz",
+      "packages_bytes": 720,
+      "packages_sha256": "235fb859490d45c1490bc69836bd2607c9a8557b629ebc33bab1008edb6e9e6d",
+      "index_hash_verified": true,
+      "openpgp_signature_independently_verified": false
+    }
+  ],
+  "candidate_binary_packages": [
+    {
+      "package": "libheif-dev",
+      "version": "1.23.6-2~deb13u1",
+      "architecture": "amd64",
+      "bytes": 79612,
+      "sha256": "c85b82c0125faf92a42f93ba3491fbcdadbe589e9710c1972df716b1c91a502e",
+      "publisher_url": "https://deb.debian.org/debian-security/pool/updates/main/libh/libheif/libheif-dev_1.23.6-2~deb13u1_amd64.deb",
+      "source": "Actual trixie-security Packages.xz matched to the InRelease SHA256 entry; binary payload was not downloaded by this preparation."
+    },
+    {
+      "package": "libheif1",
+      "version": "1.23.6-2~deb13u1",
+      "architecture": "amd64",
+      "bytes": 828232,
+      "sha256": "66e992705f29ebc4499b7b9c142f2ed92cfca1e17df81b7a646c82d42cd28864",
+      "publisher_url": "https://deb.debian.org/debian-security/pool/updates/main/libh/libheif/libheif1_1.23.6-2~deb13u1_amd64.deb",
+      "source": "Actual trixie-security Packages.xz matched to the InRelease SHA256 entry; binary payload was not downloaded by this preparation."
+    },
+    {
+      "package": "libheif-plugin-libde265",
+      "version": "1.23.6-2~deb13u1",
+      "architecture": "amd64",
+      "bytes": 20876,
+      "sha256": "87ceca51500055813fb4f435423df0290461e5e1104b8581ed71afb8620581c5",
+      "publisher_url": "https://deb.debian.org/debian-security/pool/updates/main/libh/libheif/libheif-plugin-libde265_1.23.6-2~deb13u1_amd64.deb",
+      "source": "Actual trixie-security Packages.xz matched to the InRelease SHA256 entry; binary payload was not downloaded by this preparation."
+    }
+  ],
+  "packaging_compatibility_observations": {
+    "old_version": "1.23.4-1~deb13u1",
+    "new_version": "1.23.6-2~deb13u1",
+    "debian_symbol_manifest_sha256": "e866a790c1c4ce18e97fe7969526cad30072937fb6e2423b32941244098bbdad",
+    "symbol_manifest_byte_identical": true,
+    "exported_symbol_entries": 470,
+    "soname": "libheif.so.1",
+    "runtime_install_manifest_byte_identical": true,
+    "hevc_plugin_install_manifest_byte_identical": true,
+    "limits": "Packaging/source observations only. Actual new binary/linkage, image/codec, security and runtime tests remain pending."
+  }
 }

@@ -1,0 +1,21 @@
+CPython standard-library security backports for Lovelies ML
+Modified for Lovelies on 30 September 2026.
+
+The pinned interpreter remains CPython 3.13.15 (upstream tag commit
+4061bc4c35f7c26f25264666d4ba083b93d2f6f9). Six pure Python modules are
+modified by seven selected upstream security fixes. No interpreter or native
+extension ABI is changed. This is a locally modified build, not an official
+CPython release. The CPython license is included as cpython-LICENSE.txt.
+
+The manifest identifies every immutable upstream commit, original patch,
+selected runtime patch, original module hash and final module hash. Original
+upstream patches include regression tests and documentation; the runtime only
+receives library-module changes. CVE-2026-12345 uses the upstream main change
+with a documented compatibility adaptation to the CPython 3.13 shutil.rmtree
+wrapper. No unrelated standard-library changes are included.
+
+TemporaryDirectory cleanup security still depends on platform support for
+file-descriptor traversal. Platforms where shutil.rmtree.avoids_symlink_attacks
+is false remain affected; resetting file flags can still race on platforms
+with chflags. The local verified image is Linux ARM64 and has no os.chflags.
+See the recorded runtime tests and the manifest for the exact evidence.

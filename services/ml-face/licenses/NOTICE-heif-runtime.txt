@@ -1,8 +1,10 @@
 HEIF runtime packaging notice
-30 September 2026
+24 October 2026 — prepared source candidate
 
-The ML service decodes contributed HEIC/HEIF originals. It does not require
-HEIC/HEIF encoding. The Dockerfile builds the locked pillow-heif source
+The still-image runtime retains shared HEIC/HEIF decoder components. This
+source preparation does not broaden the admitted Lovelies private-inference
+input contract or require HEIC/HEIF encoding. The Dockerfile builds the locked
+pillow-heif source
 distribution against shared Debian libheif libraries, instead of installing
 the upstream wheel that bundles native libraries and a GPL x265 encoder.
 
@@ -14,7 +16,7 @@ pillow-heif adapter
   The adapter's upstream license/notice files remain in its installed metadata.
 
 Shared native decoder packages
-  libheif1 and libheif-plugin-libde265: 1.23.4-1~deb13u1
+  libheif1 and libheif-plugin-libde265: 1.23.6-2~deb13u1 (candidate)
   libde265-0: 1.0.15-1+deb13u2+lovelies1 (Lovelies modified build)
   Includes the original Debian security patch series and upstream fix
   f8d324914e43d92af23614f22959cf9eee7bf9ea for CVE-2026-88373.
@@ -33,16 +35,32 @@ file. Use the final image inventory and linkage evidence to identify the
 actual shared native libraries in this source-built container.
 
 The exact libheif original source and Debian packaging archives, with their
-descriptor and checksum manifest, accompany this image under
-/app/licenses/sources. The full original libheif COPYING and Debian copyright
-records are also retained under /app/licenses. The decoder source payload is
+descriptor and checksum manifest, are prepared under licenses/sources for
+/app/licenses/sources in the candidate image. The prior 1.23.4 source files remain
+explicit historical provenance in corresponding-source-manifest.json; they are
+not relabelled as the new runtime. The full original libheif COPYING and Debian copyright
+records are also retained under /app/licenses. The candidate build must keep the decoder source payload
 readable by the service's UID 10001.
 
 The shared-library replacement route and build/installation instructions are
 documented in /app/licenses/RELINKING.md. Preserve these materials, licence
 texts, source access and recipients' ability to modify or replace LGPL
-components when distributing an image. The complete image's Python and Debian
-notices are inventoried by scripts/validate-ml-runtime-licenses.py. Removing
-x265 does not make the whole image permissively licensed. Publication of a
+components when distributing an image. Record the complete candidate image's
+actual Python/Debian inventory and exact corresponding source before distribution.
+Removing x265 does not make the whole image permissively licensed. Publication of a
 recipient-facing source channel and independent legal clearance are not
 established by this local packaging work.
+
+Candidate preparation evidence
+  The exact official Debian 1.23.6-2~deb13u1 original/packaging archives match
+  their signed source descriptor's SHA-256 and lengths. The descriptor and
+  suite InRelease signatures were not independently verified in this step.
+  Actual suite index hashes, binary package identities and source hashes are
+  retained in corresponding-source-manifest.json.
+  Upstream COPYING and Debian copyright are byte-identical to the prior kit.
+  The Debian symbol manifest retains all 470 entries and SONAME libheif.so.1;
+  this packaging observation does not establish binary/runtime compatibility.
+  This source-only candidate is not built, tested, accepted or distributed by
+  this preparation. Actual codec/ABI/security checks and notices/source-channel
+  publication remain pending. Existing completed and failed runtime evidence
+  retains its original artifact identity.

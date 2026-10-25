@@ -1,0 +1,28 @@
+{
+  "schema": "lovelies-python-base-candidate-v1",
+  "verified_utc": "2026-10-24T10:04:44.534085+00:00",
+  "repository": "docker.io/library/python",
+  "tag": "3.13.17-slim-trixie",
+  "index_digest": "sha256:fe14fd57a4c0361110eaa0c284112b189750bcb43fb04bb5d1ee7b7744027ccf",
+  "index_bytes": 9089,
+  "amd64_manifest_digest": "sha256:d879ed88565a7a3c614b980b369d4a5025a9d057b71f93d09fc6d0b2ca823a18",
+  "manifest_bytes": 1746,
+  "config_digest": "sha256:72036a705a7cff38924efd674e60654666cb283faf7b3fad160b34007f7395bd",
+  "python_version": "3.13.17",
+  "architecture": "amd64",
+  "os": "linux",
+  "source_revision": "e316b6c5b88b7c8e4806aa7626060c9bd8227e66",
+  "source_path": "3.13/slim-trixie",
+  "base_image": "debian:trixie-slim",
+  "base_digest": "sha256:4876fdea29cac1a33a3195f1eb1952feb1fca7dd6dd00be3e2f1879cf20d34d2",
+  "verification": "Each registry index, child manifest and config response body SHA-256 equalled its content digest; config whitelisted Python version/architecture/os; no layers downloaded.",
+  "layers_downloaded": false,
+  "native_build_performed": false,
+  "candidate_accepted": false,
+  "official_dockerfile": {
+    "url": "https://raw.githubusercontent.com/docker-library/python/e316b6c5b88b7c8e4806aa7626060c9bd8227e66/3.13/slim-trixie/Dockerfile",
+    "bytes": 4774,
+    "sha256": "be62afe4c449f4ff23037a60b38a91cbfe15b544847d6ce0d4b9732ab4c6124e",
+    "python_source_sha256": "6020bd10aff3bf4821be16f088ebb1591beb7b811dcd8fab1da8f7c22a7b27e7"
+  }
+}

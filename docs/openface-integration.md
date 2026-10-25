@@ -1,7 +1,19 @@
 # Lovelies × OpenFace local integration
 
-24 October 2026. This implements the proposed first slice, LOF01–05, with the
-necessary LOF06 admission/body corrections. Nothing has been deployed or submitted.
+25 October 2026 checkpoint. The owner-selected host is Cloudflare Containers,
+EU jurisdiction/WEUR placement, Linux AMD64, behind Supabase. The separate
+authenticated Worker remains **disabled**. The first minimized native image is
+built, privately preserved and qualified for its recorded engineering scopes;
+it remains **UNACCEPTED**. The corrected native-binary fingerprint consumer has
+now passed its 55-case service suite, separate 35 fixtures, real worker and six
+native modes plus exact minimization checks. Its fresh raw scan remains
+**exit 2 / DENY**. Exact High-row dispositions permit scoped local engineering
+use, and the current seven-case actual PostgreSQL/Storage/native-HTTP integration
+passed. The fresh Edge resource cases also passed. The temporary native builder
+is stopped and its start/input window has expired; evidence is preserved.
+No inference traffic,
+Supabase function/schema or store distribution has been cut over. See the
+[continuation checkpoint](openface-integration-continuation.md#25-october-checkpoint).
 The original release register remains authoritative; these LOF IDs add no new
 blanket release requirements.
 
@@ -29,10 +41,25 @@ is installed.
   `173b43d8f5d259f022f4fd83b7c658fc7ade3070e36321965436cd59f2da909f`.
   The wheel contains first-party and third-party notices, no models, account
   application, PAD or video graph. It does not install a stock OpenCV wheel.
-- Lovelies retains its NumPy 2.4.6/Pillow 12.3.0 lock and native security recipes;
-  no generic runtime replaces its image-only build. The selected Python range is
-  3.12–3.13, matching the extracted dependency. The updated lock only adds the
-  still wheel and prunes unsupported Python-version artifacts.
+- The earlier supplemental local image retains NumPy 2.4.6/Pillow 12.3.0/Python 3.13.15 and the
+  existing image-only native security artifacts. Its immutable ID is
+  `sha256:1cd0babb79c7ab27b25e3fc6a30bd28cd06d10fc1661ca254c7ac9315850ede5`.
+  Its failing scan and earlier Rosetta allocator results remain preserved.
+- The native minimized V1 image uses Python 3.13.17/Pillow 13.0.0, the retained
+  image-only OpenCV build and applicable native fixes. Its AMD64 manifest is
+  `sha256:185bb04257150bc9f831f638dfe60fec60d185df903d487a2df4be7dfca476ef`,
+  config `sha256:ed47ab9a07dc48c942d2aedd11b11dfb8f355cc902e174f6e9d3592a5e4d3423`
+  and source OCI index
+  `sha256:e77d001aaee0aa7069cd41625a299805bd33009804ac3d65930751118f483dc3`.
+  Its 55-case service suite, actual worker lifecycle, six runtime modes and exact
+  1,347-path omission/161-path retention verification passed. These are scoped
+  results, not image acceptance. The corrected two-file consumer is now built:
+  index `sha256:761c0861c4fe901d1eb437c8289093c2c5f749df42f5c7270cba9ee372774b95`,
+  config `sha256:3e2baafacee7ccfe306f9c76a9c29fae738542b68742a34f91903ba899d8a4b0`,
+  AMD64 manifest
+  `sha256:982e2ed7bb66b17db17979495495892579f1b734c55d93516a2aeedbf70e1c6c`.
+  Its actual native inventory binds 441 ELF objects/492,179,269 bytes. Prior
+  component results transfer only where exact installed bytes match.
 
 ## Compatibility and transition
 
@@ -45,19 +72,31 @@ These remain existing operating defaults, not new recognition acceptance.
 
 References use `lovelies-face-template-v2`, binding model ID, the new
 `lovelies-sface-openface-still-v1` space, package SHA and complete processing
-fingerprint. That fingerprint includes actual OpenCV/NumPy/Pillow versions, exact
-model hashes, immutable core policy, consumer source/validation/math and selected
-thresholds. A different runtime or consumer implementation requires a deliberate
-compatibility decision; changing configuration cannot relabel stored vectors.
+fingerprint. The 25 October source adds installed native ELF hashes, CPU/OS/ABI
+identity and strict mapped-library validation to the existing versions, model
+hashes, core policy, consumer source/validation/math and thresholds. The earlier
+Pillow 13 fingerprint `28fb0d72…` did not bind native bytes and is superseded
+by actual consumer fingerprint
+`e5366532fe94660257f2228e59e5d6032fd35d45ee41733d82c84aee440a26fa`.
+Missing Linux mappings fail closed;
+initialization failures close an owned runtime without hiding the primary error.
+Only the exact pinned OpenCV loader's bootstrap environment rewrite is normalized;
+foreign overrides remain denied. Root passed 35 separate native-identity/cleanup/
+bootstrap fixtures and 11 consumer-producer fixtures on 25 October; the same 35
+also passed in the actual native image. A different runtime or consumer requires a compatibility decision;
+old templates must be denied rather than relabelled.
 
 Legacy v1 or different-space templates fail closed with private
 `registered_reference_space_incompatible`. No stored data is deleted, rewritten,
 imported or silently accepted. The explicit transition is the existing authorized
 profile-removal, durable cleanup and re-enrollment path. Keep old serving traffic
 on the preserved compatible engine until transition/connected qualification is
-complete; this slice does not establish a seamless old-profile cutover. No schema
-migration is needed for this slice: the existing template digest binds the opaque
-v2 content through profiles, challenges, replacement and processing snapshots.
+complete; this slice does not establish a seamless old-profile cutover. The
+initial opaque-template slice needed no migration. The later local schema-10
+generation migration binds new challenges/processing attempts to the exact
+space/artifact/fingerprint tuple without backfilling old rows. The separate
+Supabase owner is preparing schema 11 retention work; hosted schema 8 was last
+observed on 24 October and has not been changed by this integration.
 
 Every private request and result binds `engine_space`, `engine_artifact_sha256`,
 `processing_fingerprint`, fresh `request_id` and `request_sha256`. The latter is
@@ -73,8 +112,12 @@ The active consumer requires `https_service` and an independent service secret;
 missing credentials or `private_binding` cannot start an unauthenticated service.
 The credential is removed before parsing/inference and is absent from the child
 environment. Local tests use an ephemeral test credential and loopback listener.
-TLS termination, network isolation and host resource limits require the selected
-hosting environment.
+The selected host terminates TLS at Cloudflare and streams only the three private
+routes to a still-only Container, with no Supabase/account/storage credential.
+Its current deployed Worker rejects authenticated traffic because the release is
+unaccepted. The container template selects one 1-vCPU/3-GiB/8-GB AMD64 instance,
+EU/WEUR constraints, five-minute idle sleep, no internet and no SSH. No inference
+Container application has been created from that template yet.
 
 Authenticated `/ready` probes the loaded resident worker and reports actual
 package/processing/model identities, exact capabilities and limits. The API's
@@ -99,9 +142,9 @@ service failures; only bounded decode/no-face/multi-face/quality cases become
 capture retry reasons. Reduced previews strip orientation/private metadata;
 matching still returns only proposals from the supplied profile snapshot.
 
-## Evidence and remaining work
+## First-slice evidence retained
 
-Current Lovelies checks pass: **215 backend tests**, with seven explicitly
+The first committed slice passed **215 backend tests**, with seven explicitly
 skipped optional environment scopes; **55 private ML tests** (including the
 24-case real-model compatibility suite); **719 preserved pipeline tests and
 10 subtests**, with one existing skip; **51 client tests**; and the
@@ -127,11 +170,18 @@ geometry and decisions, not raw images/vectors/templates/secrets. The tracked
 fixtures derive from existing supplied portraits and their declared transforms;
 three encodings do not represent three new optical captures.
 
-The real HTTP journey uses the actual authenticated private service, actual
+The first real HTTP journey used the actual authenticated private service, actual
 YuNet/SFace, signed API capture/completion and the existing Supabase application
-engine. Its database is PGlite and Storage is the existing memory test adapter.
-It proves local integration and authorization behavior, not hosted Storage,
-multi-connection PostgreSQL, camera, threshold accuracy or distribution acceptance.
+engine. That initial execution used PGlite and the existing memory Storage test
+adapter. The later actual PostgreSQL/Storage executions are recorded separately
+in [continuation evidence](openface-integration-continuation.md).
+That result is preserved. The continuation additionally executes seven real
+HTTP cases with actual disposable PostgreSQL and Supabase Storage, both with the
+host engine and the exact local image. The latest transport repair has passed
+those seven cases again. This remains local engineering evidence, separate from
+hosted operations, optical camera capture, recognition accuracy and distribution.
+
+## Current work-package state
 
 | ID | Implemented local scope / remaining evidence |
 |---|---|
@@ -140,35 +190,45 @@ multi-connection PostgreSQL, camera, threshold accuracy or distribution acceptan
 | LOF03 | Active consumer uses the pinned wheel for registration, returning comparison, replacement and photo candidates; superseded authority documentation corrected. |
 | LOF04 | Seventeen permitted engineering inputs compare vectors/geometry/quality/task decisions. Explicit v2 reference boundary; no representative accuracy or universal legacy-compatibility approval. |
 | LOF05 | Authenticated loaded readiness and exact identity/request binding in Supabase transport/Edge wiring. Wrong engine/model/reply/timeout denied; existing post-await guards retained. |
-| LOF06 | Necessary MIME/size/profile/serialized-body alignment implemented. Maximum-payload Edge memory/CPU qualification remains on the actual target. |
-| LOF07 | No forward schema change needed for this opaque-template slice. Hosted migration-history reconciliation remains required before any future db push. |
-| LOF08 | Image recipe consumes the exact wheel while retaining patched native components. No new final container/scan is claimed. Choose host architecture; qualify a new native image, actual ABI/codec inventory and scan. Existing x86/Rosetta allocator failures remain unresolved in their original scope. |
-| LOF09 | Local real-service signed enrollment/login and upload→candidate→review→accept→grant proof added to the existing harness. Actual PostgreSQL/Storage HTTP and hosted stale-state/retention/restore qualification remain. |
-| LOF10–11 | Native source/contracts/UI unchanged by this slice. Existing client suite reused/refreshed as applicable; connected Android/iOS and affected physical-device evidence remain. |
-| LOF12 | No hosted mutation. Private host/operator/region/architecture, secure Edge/scheduler/TLS configuration and operated restore remain inputs to a concrete later deployment. |
+| LOF06 | MIME/size/profile/body alignment and bounded canonical transport implemented. Actual cached Edge Runtime worker checks pass at 256 MiB/2,000 ms: 20 MiB source, 1,000 profiles and exactly 40 MiB outbound; the next byte returns413 without private transport. Prior memory failures remain. This is synthetic adapter evidence, not full hosted API/Storage/TLS aggregate capacity. |
+| LOF07 | Local schema-10 durable generation binding is implemented without backfilling legacy operations; separate schema-11 retention work is prepared by the Supabase owner. Hosted schema/history reconciliation and deployment remain. |
+| LOF08 | Corrected native fingerprint image passed the original 55 cases, separate 35 fixtures, worker, six modes and 1,347-omission/161-retention scopes and is privately preserved. Raw 171 rows/75 IDs, zero Critical/15 High IDs remain exit 2/DENY. Every High row has an exact engineering disposition; 111 other rows remain outside that policy. Outcome is ALLOW_SCOPED_LOCAL_ENGINEERING_CANDIDATE; no final-image/production acceptance. |
+| LOF09 | Current seven-case actual PostgreSQL/private Storage/faithful native model HTTP run passed 7/7, zero skips and no changed inputs: registration/login, review/accept/grants, stale profile/consent/session/source/lease and DELETE plus absence. Node loopback/SSH scope; Deno, production TLS and hosted scheduler/retention/restore remain separate. |
+| LOF10 | Android unit/contract checks and actual Pixel4a API33 Keystore, sharing, recovery and process-restart fixture journeys pass. Debug same-signature in-place update/state preservation is recorded. Optical capture, spoken accessibility and store-installed release updates remain separate. |
+| LOF11 | Existing Swift host suites and real HTTP/live/recovery/lifecycle journeys pass within their exact source/runtime scopes. No iPhone, physical camera, iOS Keychain/Secure Enclave or whole-app acceptance is claimed. |
+| LOF12 | Cloudflare/EU/WEUR/AMD64 selected and separate disabled Worker deployed; HTTPS401/503 and exact active version read back. Temporary native builder is separate. No Supabase function/schema/cutover, scheduler or operated restore is established. |
 | LOF13 | Purpose-specific permissioned representative data and recorded threshold decisions remain. No PAD or extra committee requirement is added. |
-| LOF14 | Physical devices, signed clean/in-place updates preserving com.lovelies.memories, enabled billing/push and authorized release remain separate. |
+| LOF14 | Android debug in-place proof preserves com.lovelies.memories; exact signed store packages/store-installed updates, physical optical/iPhone scope, enabled billing/push and authorized distribution remain separate. |
 
-Repeat the local checks using the existing suites:
+Use the existing suites under the shared build owner; keep their source/runtime
+identities separate. The actual PostgreSQL/Storage seven-case HTTP entrypoint is:
 
 ```sh
-cd services/ml-face
-uv sync --frozen --no-install-project
-APP_ENV=local ML_USE_DETERMINISTIC_SIMULATOR=false .venv/bin/pytest -q tests/lovelies
-cd ../..
-RUN_OPENFACE_HTTP_TESTS=1 node --experimental-transform-types --test --test-concurrency=1 services/supabase-api/test/openface-http.test.mjs
-pnpm backend:test
-pnpm backend:client:test
-pnpm backend:build
+node --env-file=/absolute/owned-local-services/test.env \
+  --env-file=/absolute/private-selected-inference.env \
+  --experimental-transform-types --test --test-concurrency=1 \
+  services/supabase-api/test/openface-http.test.mjs
 ```
 
-`RUN_OPENFACE_HTTP_TESTS=1` starts/stops its own loopback service and uses only
-tracked engineering images. The ordinary backend aggregate marks this optional
-real-native-model check skipped unless explicitly enabled; its separate execution
-is recorded. Source-bound unit/contract fixtures do not substitute for that run.
+The owned service file sets both OpenFace HTTP flags and disposable PostgreSQL/
+Storage configuration. The private file selects the exact image service through
+`ML_INFERENCE_URL` and its independent secret; it must stay outside source/logs.
+Without an explicit URL the harness starts the host Python service instead.
+Readiness supplies the actual fingerprint, which must separately match the
+selected image's proof. The Node loopback production-handler bridge is not the
+Deno Edge supervisor. Source fixtures do not substitute for this HTTP run.
 OpenFace's required `tools/check.sh` includes its separately built package suite;
 select its reviewed isolated Python and a permitted face fixture for model smoke.
 
-No hosted runtime, function, database migration, provider action, remote/CI
-destination or store release was changed by this local work. Local tests create
-disposable synthetic accounts only.
+Keep the retained test environment/image unchanged when preparing that candidate.
+The new source candidate is not qualified by the prior runtime's passes. Root
+runs shared builds and integration tests; do not run competing heavy native jobs
+on the constrained workstation.
+
+The disabled host and temporary builder are the only continued provider changes.
+No Supabase function/database migration, application traffic switch, provider
+message or store release was performed. The separate repository owner has
+verified a private origin; this checkpoint does not claim that concurrent
+uncommitted work was committed or pushed. Local tests create
+disposable synthetic accounts only. Unknown/test data, installed keys and the
+concurrent unrelated SwiftUI edits are preserved.

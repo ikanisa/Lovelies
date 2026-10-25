@@ -1,6 +1,6 @@
 {
   "name":"@lovelies/ml-container-worker","private":true,"type":"module",
-  "scripts":{"dev":"wrangler dev --local --ip 127.0.0.1 --port 8788","typecheck":"tsc --noEmit","build":"wrangler deploy --dry-run --containers-rollout=none --outdir ../../verification/cloudflare-native-port/ml-worker-build","test":"node --test test/*.test.mjs"},
+  "scripts":{"dev":"wrangler dev --local --ip 127.0.0.1 --port 8788","typecheck":"tsc --noEmit","build":"wrangler deploy --dry-run --containers-rollout=none --outdir ../../verification/cloudflare-native-port/ml-worker-build","test":"node --test test/*.test.mjs","test:supabase":"node --test test/supabase-inference.test.mjs"},
   "dependencies":{"@cloudflare/containers":"0.3.7"},
   "devDependencies":{"@types/node":"24.12.4","esbuild":"0.28.1","miniflare":"4.20260714.0","typescript":"5.9.3","wrangler":"4.112.0"}
 }

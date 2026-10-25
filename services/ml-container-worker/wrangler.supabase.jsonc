@@ -1,0 +1,26 @@
+{
+  "$schema":"node_modules/wrangler/config-schema.json",
+  "name":"lovelies-supabase-inference",
+  "main":"src/supabase-inference.ts",
+  "compatibility_date":"2026-07-21",
+  "compatibility_flags":["nodejs_compat"],
+  "workers_dev":true,
+  "preview_urls":false,
+  "send_metrics":false,
+  "logpush":false,
+  "observability":{"enabled":false,"head_sampling_rate":0,"logs":{"enabled":false,"invocation_logs":false,"persist":false},"traces":{"enabled":false,"persist":false}},
+  // Deployment preparation replaces this sentinel with an accepted immutable
+  // Cloudflare-registry URI. It never resolves to the canonical Dockerfile.
+  "containers":[{
+    "class_name":"SupabaseInferenceContainer",
+    "image":"__QUALIFIED_IMMUTABLE_CLOUDFLARE_IMAGE_URI_REQUIRED__",
+    "scheduling_policy":"default",
+    "instance_type":{"vcpu":1,"memory_mib":3072,"disk_mb":8000},
+    "max_instances":1,
+    "constraints":{"jurisdiction":"eu","regions":["WEUR"]},
+    "ssh":{"enabled":false}
+  }],
+  "durable_objects":{"bindings":[{"name":"ML_SUPABASE_CONTAINER","class_name":"SupabaseInferenceContainer"}]},
+  "migrations":[{"tag":"lovelies-supabase-inference-v1","new_sqlite_classes":["SupabaseInferenceContainer"]}],
+  "vars":{"INFERENCE_SERVING_ENABLED":"false","INFERENCE_RELEASE_RECEIPT_SHA256":"","INFERENCE_IMAGE_URI":""}
+}

@@ -1,0 +1,69 @@
+{
+  "schema": "lovelies-cpython-upstream-source-v1",
+  "retrieved_utc": "2026-10-24T10:04:44.533228+00:00",
+  "tag": "v3.13.17",
+  "tag_object": "8a10ce001cde9a3f9fbb74ded5ed4e88a6048bdf",
+  "tag_commit": "64e080d38154391ff2d2caa1161c298bb7cd8f30",
+  "github_tag_verification_report": {
+    "verified": true,
+    "reason": "valid",
+    "independently_cryptographically_verified": false
+  },
+  "files": [
+    {
+      "path": "Lib/urllib/request.py",
+      "bytes": 103148,
+      "sha256": "e3bf4446c45300c800f62e869ce1ee89fa745fa073c03e6655f4f4e20fde6eb2",
+      "url": "https://raw.githubusercontent.com/python/cpython/64e080d38154391ff2d2caa1161c298bb7cd8f30/Lib/urllib/request.py"
+    },
+    {
+      "path": "Lib/stringprep.py",
+      "bytes": 25834,
+      "sha256": "fc42fedb2a828a34a70cb0ff1b9a17039ca148b4f561fa7db98ce49bb2141c7a",
+      "url": "https://raw.githubusercontent.com/python/cpython/64e080d38154391ff2d2caa1161c298bb7cd8f30/Lib/stringprep.py"
+    },
+    {
+      "path": "Lib/tarfile.py",
+      "bytes": 118060,
+      "sha256": "0fd87b49826f745c16e3ee68b2390a206b2dfcfe9a0b1118bd7fcd7c06deaff1",
+      "url": "https://raw.githubusercontent.com/python/cpython/64e080d38154391ff2d2caa1161c298bb7cd8f30/Lib/tarfile.py"
+    },
+    {
+      "path": "Lib/zipfile/__init__.py",
+      "bytes": 91672,
+      "sha256": "4067e573036149c17b2a80c288c392e1f574a9566c1d94332b2576b0c2b0a0d4",
+      "url": "https://raw.githubusercontent.com/python/cpython/64e080d38154391ff2d2caa1161c298bb7cd8f30/Lib/zipfile/__init__.py"
+    },
+    {
+      "path": "Lib/tempfile.py",
+      "bytes": 32643,
+      "sha256": "7350d7f75ca8d6e4752c377777a315dc26eb4ecd3b6c9c0951bffddc576f030f",
+      "url": "https://raw.githubusercontent.com/python/cpython/64e080d38154391ff2d2caa1161c298bb7cd8f30/Lib/tempfile.py"
+    },
+    {
+      "path": "Lib/shutil.py",
+      "bytes": 57130,
+      "sha256": "11c32fd568588e38463fdf281caa7ef0edbf3d64daf7961f0e7e68d779528731",
+      "url": "https://raw.githubusercontent.com/python/cpython/64e080d38154391ff2d2caa1161c298bb7cd8f30/Lib/shutil.py"
+    },
+    {
+      "path": "Lib/ssl.py",
+      "bytes": 53287,
+      "sha256": "3ea103be59b47ad58cb53b249e5b74d00c87b54b20650e208e3b4b9ca533e9e8",
+      "url": "https://raw.githubusercontent.com/python/cpython/64e080d38154391ff2d2caa1161c298bb7cd8f30/Lib/ssl.py"
+    },
+    {
+      "path": "Modules/_ssl.c",
+      "bytes": 204909,
+      "sha256": "119656998f549bf2985e438b8d5544f471cbf18e91affb15f5adaa649142f49a",
+      "url": "https://raw.githubusercontent.com/python/cpython/64e080d38154391ff2d2caa1161c298bb7cd8f30/Modules/_ssl.c"
+    },
+    {
+      "path": "LICENSE",
+      "bytes": 13809,
+      "sha256": "78b12c3a81360b357002334f0e70ea0e92eebf7a9b358805c03c48484945f3bb",
+      "url": "https://raw.githubusercontent.com/python/cpython/64e080d38154391ff2d2caa1161c298bb7cd8f30/LICENSE"
+    }
+  ],
+  "native_runtime_qualified": false
+}

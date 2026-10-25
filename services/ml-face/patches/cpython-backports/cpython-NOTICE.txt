@@ -1,21 +1,31 @@
-CPython standard-library security backports for Lovelies ML
-Modified for Lovelies on 30 September 2026.
+CPython security candidate source for Lovelies ML
+Prepared 24 October 2026. Native image qualification remains pending.
 
-The pinned interpreter remains CPython 3.13.15 (upstream tag commit
-4061bc4c35f7c26f25264666d4ba083b93d2f6f9). Six pure Python modules are
-modified by seven selected upstream security fixes. No interpreter or native
-extension ABI is changed. This is a locally modified build, not an official
-CPython release. The CPython license is included as cpython-LICENSE.txt.
+The candidate interpreter is official CPython 3.13.17. The source manifest binds
+upstream tag commit 64e080d38154391ff2d2caa1161c298bb7cd8f30, original module
+bytes, the registry-verified slim-Trixie index and its Linux AMD64 child. The
+CPython license is included as cpython-LICENSE.txt; its bytes equal the license
+at that pinned upstream commit.
 
-The manifest identifies every immutable upstream commit, original patch,
-selected runtime patch, original module hash and final module hash. Original
-upstream patches include regression tests and documentation; the runtime only
-receives library-module changes. CVE-2026-12345 uses the upstream main change
-with a documented compatibility adaptation to the CPython 3.13 shutil.rmtree
-wrapper. No unrelated standard-library changes are included.
+Seven standard-library modules are verified against the new upstream source.
+The newer tarfile.py is retained unchanged, including the three previously
+backported tar security corrections. urllib/request.py, stringprep.py and
+zipfile/__init__.py already equal the formerly patched module bytes. ssl.py
+includes the upstream hostname-validation fix. Native _ssl.c includes the
+upstream SNI context-lifetime source correction; source inspection does not
+qualify its compiled binary.
 
-TemporaryDirectory cleanup security still depends on platform support for
-file-descriptor traversal. Platforms where shutil.rmtree.avoids_symlink_attacks
-is false remain affected; resetting file flags can still race on platforms
-with chflags. The local verified image is Linux ARM64 and has no os.chflags.
-See the recorded runtime tests and the manifest for the exact evidence.
+Only the still-missing PSF-2026-42 / CVE-2026-12345 tempfile/shutil correction is
+applied locally. Its original main-branch patch and the existing documented
+CPython 3.13 context adaptation are retained with exact hashes. Standard public
+rmtree callback behavior remains preserved. Current source checks do not grant
+native build, deployment, scanner or release acceptance.
+
+The previous 3.13.15 manifest, installer, notice and license are preserved under
+history/3.13.15/. All earlier patch files and prior runtime receipts remain
+historical evidence. They must not be relabelled as 3.13.17 runtime results.
+
+TemporaryDirectory cleanup safety still depends on file-descriptor traversal.
+Platforms without shutil.rmtree.avoids_symlink_attacks and platforms with
+chflags need their own qualification. The selected target is Linux AMD64;
+no new native target execution is claimed by this source preparation.

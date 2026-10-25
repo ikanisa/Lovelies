@@ -4,10 +4,13 @@
 ARG ML_SECURITY_ARTIFACTS=security-artifacts-built
 ARG ML_SECURITY_RUNTIME=runtime
 
-# Verified official multiarchitecture index; keep platform selection portable.
-FROM python:3.13-slim@sha256:7c61056e61ac89e852de05f3dc6fa51a6dd2181797bceed46aa725dd7cb2cd3b AS python-base
+# Security candidate: registry-verified official 3.13.17 slim-Trixie index.
+# Selected linux/amd64 child: sha256:d879ed88565a7a3c614b980b369d4a5025a9d057b71f93d09fc6d0b2ca823a18.
+# Metadata/source preparation does not qualify a native build or final image.
+# Exact metadata receipt: patches/cpython-backports/python-base-image-candidate.json.
+FROM python:3.13.17-slim-trixie@sha256:fe14fd57a4c0361110eaa0c284112b189750bcb43fb04bb5d1ee7b7744027ccf AS python-base
 
-ARG LIBHEIF_DEBIAN_VERSION=1.23.4-1~deb13u1
+ARG LIBHEIF_DEBIAN_VERSION=1.23.6-2~deb13u1
 ARG LIBDE265_DEBIAN_VERSION=1.0.15-1+deb13u2
 
 ENV PYTHONDONTWRITEBYTECODE=1 \
@@ -42,7 +45,7 @@ RUN apt-get update \
 ADD --checksum=sha256:603f5602e2eef00d77fbd429d34dcd5822bb301757a1bc9cdb24c670f1eb859a \
     https://github.com/openssl/openssl/releases/download/openssl-3.5.9/openssl-3.5.9.tar.gz /openssl/openssl-3.5.9.tar.gz
 ADD --checksum=sha256:593a47654ead460a3b609503733f80bef552ff0802799d3b47784faacc50809f \
-    https://deb.debian.org/debian-security/pool/updates/main/o/openssl/openssl_3.5.7-1~deb13u2.debian.tar.xz /openssl/openssl_3.5.7-1~deb13u2.debian.tar.xz
+    https://deb.debian.org/debian/pool/main/o/openssl/openssl_3.5.7-1~deb13u2.debian.tar.xz /openssl/openssl_3.5.7-1~deb13u2.debian.tar.xz
 COPY patches/build-openssl-patch.sh /openssl/build-openssl-patch.sh
 RUN sh /openssl/build-openssl-patch.sh
 
@@ -255,7 +258,7 @@ CMD ["/app/.venv/bin/python", "-m", "lovelies_ml_face"]
 # Component artifacts and runtime inputs can be supplied by the local producer
 # after their identities are verified; defaults reproduce all source builders.
 FROM ${ML_SECURITY_ARTIFACTS} AS security-artifacts
-FROM ${ML_SECURITY_RUNTIME} AS security-runtime
+FROM ${ML_SECURITY_RUNTIME} AS security-runtime-unminimized
 USER 0
 # An optional reused runtime must precede minimization. A finished release image
 # deliberately lacks a shell/package tools and cannot be an installation stage.
@@ -297,7 +300,17 @@ COPY --from=builder /app/.venv/lib/python3.13/site-packages/openface_still /app/
 COPY --from=builder /app/.venv/lib/python3.13/site-packages/openface_still-0.1.0.dist-info /app/.venv/lib/python3.13/site-packages/openface_still-0.1.0.dist-info
 COPY pyproject.toml uv.lock /app/
 COPY Dockerfile /usr/local/share/doc/lovelies-build/Dockerfile
-RUN chmod -R a+rX,go-w /app /usr/local/share/doc/lovelies-pydantic /usr/local/share/doc/lovelies-security-native /usr/local/share/doc/lovelies-minimization \
+# First pass: this named target contains the actual native security packages,
+# patched pydantic wheel and current consumer, while inspection tools still exist.
+# Observe this immutable image and prepare a new finite plan before the final pass.
+RUN chmod -R a+rX,go-w /app /usr/local/share/doc/lovelies-pydantic /usr/local/share/doc/lovelies-security-native /usr/local/share/doc/lovelies-minimization
+
+FROM security-runtime-unminimized AS security-runtime
+# A stale plan fails on observed runtime versions and exact retained/removal bytes;
+# no skip/minimization-bypass build flag. Keep the prior plan until new evidence
+# supports an explicitly reviewed replacement in the second build pass.
+RUN /app/.venv/bin/python /usr/local/share/doc/lovelies-minimization/prepare-plan.py \
+       verify-runtime --manifest=/usr/local/share/doc/lovelies-minimization/removal-plan.json \
     && /app/.venv/bin/python /usr/local/share/doc/lovelies-minimization/minimize-runtime.py \
        --manifest=/usr/local/share/doc/lovelies-minimization/removal-plan.json \
        --receipt=/usr/local/share/doc/lovelies-minimization/receipt.json
