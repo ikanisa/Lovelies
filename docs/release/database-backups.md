@@ -21,6 +21,14 @@ HMAC catalog. Ciphertext and plaintext hashes, lengths and the full GCM tag are
 verified before a recovery consumer receives plaintext. No plaintext dump file
 is written by this tooling. Archives are bounded to 512 MiB.
 
+Delivery verifies and reads the same private encrypted snapshot through one
+retained descriptor. The temporary name is unlinked before copying, and the
+descriptor closes on success or failure. Changing or replacing the original
+catalog path after verification cannot replace the delivered bytes. This uses
+streaming memory and temporarily requires up to one additional encrypted
+archive's disk space. Copy/allocation/authentication errors prevent delivery;
+it does not create a plaintext scratch file or release a serving restore.
+
 A dedicated POSIX directory must belong to the operator and have mode 0700;
 artifacts use 0600. Symlink ancestors, symlink/hardlink artifacts and broad modes
 are refused. Production custody must additionally verify the actual filesystem,
@@ -67,10 +75,10 @@ and privilege restoration; it does not authorize reconnecting the application.
 
 ## Observed qualification and remaining operation
 
-`pnpm backup:test` passes 13 controlled cases covering interrupted producers,
+`pnpm backup:test` passes 15 controlled cases covering interrupted producers,
 corruption, wrong keys/catalog tampering, exact expiry and interrupted expiry,
 unknown-file preservation, locks, permissions/links, consumer cancellation,
-wrong-project/local target refusal and credential-safe CLI errors. The backend
+post-verification mutation/replacement, wrong-project/local target refusal and credential-safe CLI errors. The backend
 readiness workflow includes that command and passes local actionlint1.7.12.
 GitHub billing remains parked; no passing remote run is inferred.
 
@@ -84,12 +92,20 @@ reconstruction unusable for serving. A separately copied encrypted artifact
 passes the exact seven-day expiry boundary. Both disposable databases are removed;
 the owned container is stopped and preserved. No hosted or customer data is used.
 
-Receipts:
-`/Volumes/PRO-G40/Projects/Lovelies/verification/encrypted-backup-20261025-attempt2/`
-(`result.json`, `operator-checks.json`, `source-seal.json`,
-`owned-container-cleanup.json`). The earlier passing attempt1 is retained before
-the CLI began rejecting options that do not apply to the chosen command. Keys and synthetic database artifacts remain
-private and outside Git.
+A real counterexample changed an8MiB encrypted fixture after initial verification:
+altered plaintext reached the old consumer before GCM's final rejection. The
+corrected snapshot delivers only the originally verified bytes under that same
+mutation. A smaller first probe did not reproduce the race and remains recorded.
+The original13-case and PostgreSQL runs retain their source scope. All15 cases
+and all nine actual PostgreSQL checks were refreshed after the correction.
+
+Current receipts:
+`/Volumes/PRO-G40/Projects/Lovelies/verification/encrypted-backup-snapshot-fix-20261025/`
+(`counterexample2.json`, `counterexample-fixed.json`,
+`operator-current/{result,source-seal}.json`,
+`actual-pg17/{result,source-seal,owned-container-cleanup}.json`). Earlier attempts,
+failures and synthetic artifacts remain preserved. Keys and synthetic database
+artifacts remain private and outside Git.
 
 Before release, configure and observe a monitored backup/expiry schedule with
 independent off-site custody and recovery-key access. Inventory provider backups,

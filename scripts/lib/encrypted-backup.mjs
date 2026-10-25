@@ -70,7 +70,8 @@ function checkManifest(value,key,environment){
   return metadata;
 }
 function environmentName(value){if(!['production','local-qualification'].includes(value))throw fail('backup_environment_invalid');return value;}
-async function hashFile(file){const hash=createHash('sha256');for await(const chunk of createReadStream(file))hash.update(chunk);return hash.digest('hex');}
+function archiveRead(file,handle,options={}){return handle?handle.createReadStream({...options,autoClose:false}):createReadStream(file,options);}
+async function hashFile(file,handle){const hash=createHash('sha256');for await(const chunk of archiveRead(file,handle,{start:0}))hash.update(chunk);return hash.digest('hex');}
 async function loadManifest(directory,id,key,environment){
   if(!idPattern.test(id))throw fail('backup_id_invalid');
   const derived=keys(key),manifestFile=path.join(directory,`lovelies-db-${id}.json`);
@@ -79,24 +80,24 @@ async function loadManifest(directory,id,key,environment){
   if(metadata.id!==id||metadata.key_id!==derived.id)throw fail('backup_manifest_invalid');
   return {metadata,manifestFile,manifestStat:ms,derived};
 }
-async function verifyUnlocked(directory,id,key,environment){
+async function verifyUnlocked(directory,id,key,environment,snapshot){
   const {metadata,manifestFile,manifestStat:ms,derived}=await loadManifest(directory,id,key,environment);
-  const archive=path.join(directory,metadata.archive),as=await regular(archive);
-  if(as.size!==metadata.archive_bytes||await hashFile(archive)!==metadata.archive_sha256)throw fail('backup_archive_integrity');
-  const handle=await fs.open(archive,'r');let encoded,tag;
+  const archive=path.join(directory,metadata.archive),original=await regular(archive),as=snapshot?await snapshot.stat():original;
+  if(original.size!==metadata.archive_bytes||as.size!==metadata.archive_bytes||await hashFile(archive,snapshot)!==metadata.archive_sha256)throw fail('backup_archive_integrity');
+  const handle=snapshot??await fs.open(archive,'r');let encoded,tag;
   try{
     const prefix=Buffer.alloc(12);if((await handle.read(prefix,0,12,0)).bytesRead!==12||!prefix.subarray(0,8).equals(MAGIC))throw fail('backup_header_invalid');
     const size=prefix.readUInt32BE(8);if(size<2||size>2048||as.size<12+size+16)throw fail('backup_header_invalid');
     encoded=Buffer.alloc(12+size);if((await handle.read(encoded,0,encoded.length,0)).bytesRead!==encoded.length)throw fail('backup_header_invalid');
     tag=Buffer.alloc(16);if((await handle.read(tag,0,16,as.size-16)).bytesRead!==16)throw fail('backup_archive_integrity');
-  }finally{await handle.close();}
+  }finally{if(!snapshot)await handle.close();}
   const header=JSON.parse(encoded.subarray(12).toString('utf8'));
   if(!headerBytes(header).equals(encoded)||Object.keys(header).sort().join('|')!==['algorithm','created_at','environment','expires_at','format','id','iv','key_id','project','protocol','schema'].sort().join('|')||
     header.protocol!=='lovelies-db-backup-v1'||header.project!==PROJECT||header.environment!==environment||header.id!==id||header.created_at!==metadata.created_at||header.expires_at!==metadata.expires_at||
     header.algorithm!=='AES-256-GCM'||header.schema!=='lovelies_private'||header.format!=='pg_dump_custom'||header.key_id!==derived.id||typeof header.iv!=='string'||!/^[A-Za-z0-9_-]{16}$/.test(header.iv))throw fail('backup_header_invalid');
   const decrypt=()=>{const cipher=createDecipheriv('aes-256-gcm',derived.encryption,Buffer.from(header.iv,'base64url'));cipher.setAAD(encoded);cipher.setAuthTag(tag);return cipher;};
   const hash=createHash('sha256');let bytes=0,magic=Buffer.alloc(0);
-  await pipeline(createReadStream(archive,{start:encoded.length,end:as.size-17}),decrypt(),new Writable({write(chunk,encoding,done){bytes+=chunk.length;hash.update(chunk);if(magic.length<5)magic=prefix(magic,chunk);chunk.fill(0);done();}}));
+  await pipeline(archiveRead(archive,snapshot,{start:encoded.length,end:as.size-17}),decrypt(),new Writable({write(chunk,encoding,done){bytes+=chunk.length;hash.update(chunk);if(magic.length<5)magic=prefix(magic,chunk);chunk.fill(0);done();}}));
   if(bytes!==metadata.plaintext_bytes||hash.digest('hex')!==metadata.plaintext_sha256||magic.toString()!=='PGDMP')throw fail('backup_plaintext_integrity');
   derived.encryption.fill(0);derived.manifest.fill(0);
   return {metadata,archive,archiveStat:as,manifestFile,manifestStat:ms,encoded,tag,iv:header.iv};
@@ -107,18 +108,31 @@ export async function verifyBackup({directory,id,key,environment='production'}){
   return locked(directory,async()=>{const {metadata}=await verifyUnlocked(directory,id,key,environment);return metadata;});
 }
 
-/** Integrity is checked in full before invoking the consumer. The consumer must
- * use an isolated recovery target; this API never releases a serving restore. */
+/** Verify and consume the same unlinked encrypted snapshot. Reopening the catalog
+ * path after verification could stream changed, unauthenticated plaintext before
+ * GCM's final rejection. The consumer still requires an isolated recovery target. */
 export async function withVerifiedBackup({directory,id,key,environment='production'},consume){
   environmentName(environment);
   return locked(directory,async()=>{
-    const verified=await verifyUnlocked(directory,id,key,environment),derived=keys(key);
-    const cipher=createDecipheriv('aes-256-gcm',derived.encryption,Buffer.from(verified.iv,'base64url'));
-    cipher.setAAD(verified.encoded);cipher.setAuthTag(verified.tag);
-    const output=new PassThrough(),transfer=pipeline(createReadStream(verified.archive,{start:verified.encoded.length,end:verified.archiveStat.size-17}),cipher,output);
-    try{return (await Promise.all([transfer,Promise.resolve().then(()=>consume(output,verified.metadata))]))[1];}
-    catch(error){output.destroy();await transfer.catch(()=>{});throw error;}
-    finally{derived.encryption.fill(0);derived.manifest.fill(0);}
+    const record=await loadManifest(directory,id,key,environment),metadata=record.metadata;
+    record.derived.encryption.fill(0);record.derived.manifest.fill(0);
+    const archive=path.join(directory,metadata.archive),original=await regular(archive);
+    if(original.size!==metadata.archive_bytes)throw fail('backup_archive_integrity');
+    const temporary=path.join(directory,`.lovelies-verified-${randomUUID()}`),snapshot=await fs.open(temporary,'wx+',0o600);
+    try{
+      // There is never a plaintext file. Unlink before copying so a crash cannot
+      // leave an untracked extra archive; the private descriptor owns its life.
+      await fs.unlink(temporary);
+      await pipeline(createReadStream(archive,{start:0,end:metadata.archive_bytes-1}),new Writable({write(chunk,encoding,done){writeAll(snapshot,chunk).then(()=>done(),done);}}));
+      await snapshot.chmod(0o400);
+      const verified=await verifyUnlocked(directory,id,key,environment,snapshot),derived=keys(key);
+      const cipher=createDecipheriv('aes-256-gcm',derived.encryption,Buffer.from(verified.iv,'base64url'));
+      cipher.setAAD(verified.encoded);cipher.setAuthTag(verified.tag);
+      const output=new PassThrough(),transfer=pipeline(archiveRead(verified.archive,snapshot,{start:verified.encoded.length,end:verified.archiveStat.size-17}),cipher,output);
+      try{return (await Promise.all([transfer,Promise.resolve().then(()=>consume(output,verified.metadata))]))[1];}
+      catch(error){output.destroy();await transfer.catch(()=>{});throw error;}
+      finally{derived.encryption.fill(0);derived.manifest.fill(0);}
+    }finally{await snapshot.close();}
   });
 }
 

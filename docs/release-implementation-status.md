@@ -17,7 +17,7 @@ and12 controlled Supabase HTTP deletion checks; see the
 qualify pending guardian gating, withdrawal and privacy access on that same app;
 actual independent guardian approval and hosted operation remain open. Round4
 iOS app/test/unsignedRelease compilation passes; its in-place runtime qualification
-is underway. Encrypted database backup tooling passes13 operator tests and nine
+is underway. Encrypted database backup tooling passes15 operator tests and nine
 actual PostgreSQL reconstruction checks; hosted custody, expiry operation and
 independent restore suppression remain open. Source through33a5d39 is pushed/read
 back; current Android/iOS UI work is outside that delivery. GitHub billing is parked by

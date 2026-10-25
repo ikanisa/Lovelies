@@ -43,6 +43,26 @@ test('corrupted ciphertext never reaches a plaintext consumer or permits expiry'
   assert.equal(called,false);await assert.rejects(expireBackups({...config,now:()=>metadata.expires_at}),/backup_archive_integrity/);
   assert(await fs.stat(file));
 });
+test('consumer receives only the verified snapshot when the original archive changes after verification',async t=>{
+  const config=await scope(t),plain=Buffer.concat([Buffer.from('PGDMP'),Buffer.alloc(8*1024*1024,65)]);
+  const metadata=await createBackup({...config,source:Readable.from([plain])}),file=path.join(config.directory,metadata.archive);
+  const recovered=await withVerifiedBackup({...config,id:metadata.id},async stream=>{
+    const changed=await fs.readFile(file);changed[changed.length-65536]^=1;await fs.writeFile(file,changed);
+    const chunks=[];for await(const chunk of stream)chunks.push(chunk);return Buffer.concat(chunks);
+  });
+  assert.deepEqual(recovered,plain);
+  await assert.rejects(verifyBackup({...config,id:metadata.id}),/backup_archive_integrity/);
+  assert.deepEqual((await fs.readdir(config.directory)).sort(),[metadata.archive,`lovelies-db-${metadata.id}.json`].sort());
+});
+test('replacing the catalog pathname after verification cannot replace the delivered snapshot',async t=>{
+  const config=await scope(t),metadata=await create(config),file=path.join(config.directory,metadata.archive),preserved=path.join(config.directory,'preserved-original.lvbk');
+  const recovered=await withVerifiedBackup({...config,id:metadata.id},async stream=>{
+    await fs.rename(file,preserved);await fs.writeFile(file,'untrusted replacement',{mode:0o600});
+    const chunks=[];for await(const chunk of stream)chunks.push(chunk);return Buffer.concat(chunks);
+  });
+  assert.deepEqual(recovered,fixture);await assert.rejects(verifyBackup({...config,id:metadata.id}),/backup_archive_integrity/);
+  assert((await fs.stat(preserved)).isFile());assert.equal(await fs.readFile(file,'utf8'),'untrusted replacement');
+});
 test('manifest alterations and wrong keys fail without pruning an otherwise eligible archive',async t=>{
   const config=await scope(t),metadata=await create(config),file=path.join(config.directory,`lovelies-db-${metadata.id}.json`),raw=await fs.readFile(file);
   await assert.rejects(verifyBackup({...config,id:metadata.id,key:randomBytes(32)}),/backup_manifest_authentication/);

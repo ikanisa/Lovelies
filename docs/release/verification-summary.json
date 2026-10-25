@@ -2489,12 +2489,12 @@
     },
     "database_backup_operator_snapshot": {
       "document": "docs/release/database-backups.md",
-      "actual_postgres_receipt": "/Volumes/PRO-G40/Projects/Lovelies/verification/encrypted-backup-20261025-attempt2/result.json",
-      "actual_postgres_receipt_sha256": "745b41d49e349e67110e0e9fd25e682db625f30815dee11fe2ce20ee57a6ca59",
-      "operator_checks": "/Volumes/PRO-G40/Projects/Lovelies/verification/encrypted-backup-20261025-attempt2/operator-checks.json",
-      "operator_checks_sha256": "bc634b9695fc1cbb089d4ff9c678535d9274a760d871281764ddc23d5cc077fb",
-      "tests": 13,
-      "passed": 13,
+      "actual_postgres_receipt": "/Volumes/PRO-G40/Projects/Lovelies/verification/encrypted-backup-snapshot-fix-20261025/actual-pg17/result.json",
+      "actual_postgres_receipt_sha256": "6a9a0fde8ac2ac474c993a36e60b5b08cedb545a89098c8533fa6585f9ae6808",
+      "operator_checks": "/Volumes/PRO-G40/Projects/Lovelies/verification/encrypted-backup-snapshot-fix-20261025/operator-current/result.json",
+      "operator_checks_sha256": "1b43898120f2e00124d8753b5876d039c0737352a8be42c183d6d7ccf450df20",
+      "tests": 15,
+      "passed": 15,
       "failed": 0,
       "skipped": 0,
       "actual_pg17_checks": 9,
@@ -2509,7 +2509,20 @@
       "startup_restore_quarantine_implemented": false,
       "serving_restore_qualified": false,
       "ci_workflow_local_actionlint_passed": true,
-      "remote_ci_passed": false
+      "remote_ci_passed": false,
+      "snapshot_delivery": {
+        "implemented": true,
+        "original_mutation_counterexample": "/Volumes/PRO-G40/Projects/Lovelies/verification/encrypted-backup-snapshot-fix-20261025/counterexample2.json",
+        "original_mutation_counterexample_sha256": "42ae2d8bd3200624052246c9663c4fba90555bfa90b0ad67776b5831bde3764e",
+        "fixed_counterexample": "/Volumes/PRO-G40/Projects/Lovelies/verification/encrypted-backup-snapshot-fix-20261025/counterexample-fixed.json",
+        "fixed_counterexample_sha256": "ef067f249fa73346d3938a9e44d23c677b8b419cfe489c2402eb64c77b85b1b5",
+        "same_unlinked_encrypted_descriptor_verified_and_consumed": true,
+        "plaintext_scratch_file_created": false,
+        "extra_encrypted_disk_bytes_bounded": 536875008,
+        "actual_postgres_checks_refreshed": 9,
+        "owned_container_readback": "/Volumes/PRO-G40/Projects/Lovelies/verification/encrypted-backup-snapshot-fix-20261025/owned-container-readback.json",
+        "owned_container_readback_sha256": "a97be5d51f753c59814aff08a6a26fb14e773e91a78c752939e39c1ea28b4256"
+      }
     },
     "android_deletion_connected_snapshot": {
       "receipt": "/Volumes/PRO-G40/Projects/Lovelies/verification/android-deletion-connected-20261025-attempt3/reconciliation.json",
@@ -2662,6 +2675,38 @@
       "observed_tool_message": "Local browser use is disabled in Work settings",
       "unblock_action": "Enable local browser use in Work settings; existing owner approvals remain in effect.",
       "console_changes_attempted": false
+    },
+    "database_backup_operator_before_snapshot_fix": {
+      "document": "docs/release/database-backups.md",
+      "actual_postgres_receipt": "/Volumes/PRO-G40/Projects/Lovelies/verification/encrypted-backup-20261025-attempt2/result.json",
+      "actual_postgres_receipt_sha256": "745b41d49e349e67110e0e9fd25e682db625f30815dee11fe2ce20ee57a6ca59",
+      "operator_checks": "/Volumes/PRO-G40/Projects/Lovelies/verification/encrypted-backup-20261025-attempt2/operator-checks.json",
+      "operator_checks_sha256": "bc634b9695fc1cbb089d4ff9c678535d9274a760d871281764ddc23d5cc077fb",
+      "tests": 13,
+      "passed": 13,
+      "failed": 0,
+      "skipped": 0,
+      "actual_pg17_checks": 9,
+      "source_unchanged": true,
+      "restored_private_tables": 68,
+      "restored_forced_rls": 68,
+      "restored_client_table_grants": 0,
+      "expiry_days": 7,
+      "producer_and_catalog_local_qualified": true,
+      "hosted_schedule_or_offsite_custody_qualified": false,
+      "independent_current_suppression_implemented": false,
+      "startup_restore_quarantine_implemented": false,
+      "serving_restore_qualified": false,
+      "ci_workflow_local_actionlint_passed": true,
+      "remote_ci_passed": false
+    },
+    "verified_connected_teen_delivery": {
+      "commit": "c6843862c3e15cecbd7dfca3c709f2c5709cbb4d",
+      "verified_remote_main": "c6843862c3e15cecbd7dfca3c709f2c5709cbb4d",
+      "files": 6,
+      "delivery_receipt": "/Volumes/PRO-G40/Projects/Lovelies/verification/android-connected-audience-source-checkpoint-20261025/delivery.json",
+      "scope": "Connected teen instrumentation/runbook and release evidence only; no product or iOS source.",
+      "ci_passed": false
     }
   }
 }
