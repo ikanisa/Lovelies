@@ -93,7 +93,7 @@ struct GalleryViews: View {
                         Button { store.go(.photoPeople) } label: {
                             HStack(spacing: -6) { Avatar(asset: "person05", size: 42, pink: true); Avatar(asset: "person03", size: 42) }.frame(minHeight: 44).contentShape(Rectangle())
                         }.accessibilityLabel("People in this photo")
-                        Button { store.go(.photoPeople) } label: { Text("+3").loveliesFont(size: 15).frame(width: 44, height: 44).background(.white.opacity(0.13), in: Circle()) }.accessibilityLabel("3 more people")
+                        Button { store.go(.photoPeople) } label: { Text("+3").loveliesFont(size: 15).fixedSize().padding(.horizontal, 8).frame(minWidth: 44, minHeight: 44).background(.white.opacity(0.13), in: Capsule()) }.accessibilityLabel("3 more people")
                         Spacer()
                         Button { store.toggleFavorite(store.currentPhoto.id) } label: {
                             Image(systemName: store.favoriteIDs.contains(store.currentPhoto.id) ? "heart.fill" : "heart").font(.system(size: 25))

@@ -51,6 +51,7 @@ enum LoveliesUploadSource: String, Identifiable {
 
 struct UploadViews: View {
     @EnvironmentObject private var store: DemoStore
+    @Environment(\.dynamicTypeSize) private var textSize
     let screen: Screen
     @State private var picker: UploadPicker?
     @State private var cancelUpload = false
@@ -134,16 +135,7 @@ struct UploadViews: View {
 
     private var selection: some View {
         VStack(spacing: 13) {
-            HStack {
-                Button { store.go(.uploadEntry) } label: { Text("Cancel").font(.body).frame(minWidth: 44, minHeight: 44).contentShape(Rectangle()) }.foregroundStyle(LoveliesTheme.pink)
-                Spacer()
-                Text("\(store.uploadIDs.count) selected").loveliesFont(size: 17, weight: .semibold)
-                Spacer()
-                Button { store.go(.uploadReview) } label: {
-                    Text("Next").loveliesFont(size: 15, weight: .medium).foregroundStyle(LoveliesTheme.pink.opacity(store.uploadIDs.isEmpty ? 0.35 : 1))
-                        .padding(.horizontal, 14).padding(.vertical, 10).frame(minHeight: 44).background(LoveliesTheme.surface, in: Capsule())
-                }.disabled(store.uploadIDs.isEmpty)
-            }.padding(.horizontal, 19).padding(.vertical, 7)
+            selectionHeader.padding(.horizontal, 19).padding(.vertical, 7)
             Text("\(NSLocalizedString(store.uploadSource, comment: "App-owned upload source label")) · Sample photos").loveliesFont(size: 13).foregroundStyle(LoveliesTheme.secondary)
                 .frame(maxWidth: .infinity, alignment: .leading).padding(.horizontal, 19)
             ScrollView {
@@ -156,6 +148,51 @@ struct UploadViews: View {
             }.scrollIndicators(.hidden)
         }.foregroundStyle(.white)
     }
+    @ViewBuilder private var selectionHeader: some View {
+        if textSize.isAccessibilitySize {
+            VStack(spacing: 10) {
+                selectionCount.fixedSize(horizontal: false, vertical: true)
+                ViewThatFits(in: .horizontal) {
+                    HStack(spacing: 12) {
+                        cancelSelectionButton.fixedSize()
+                        Spacer(minLength: 0)
+                        nextSelectionButton.fixedSize()
+                    }
+                    VStack(spacing: 8) {
+                        HStack { cancelSelectionButton; Spacer(minLength: 0) }
+                        HStack { Spacer(minLength: 0); nextSelectionButton }
+                    }
+                }
+            }
+        } else {
+            HStack {
+                cancelSelectionButton
+                Spacer()
+                selectionCount
+                Spacer()
+                nextSelectionButton
+            }
+        }
+    }
+
+    private var selectionCount: some View {
+        Text("\(store.uploadIDs.count) selected").loveliesFont(size: 17, weight: .semibold)
+            .accessibilityAddTraits(.isHeader)
+    }
+
+    private var cancelSelectionButton: some View {
+        Button { store.go(.uploadEntry) } label: {
+            Text("Cancel").font(.body).frame(minWidth: 44, minHeight: 44).contentShape(Rectangle())
+        }.foregroundStyle(LoveliesTheme.pink)
+    }
+
+    private var nextSelectionButton: some View {
+        Button { store.go(.uploadReview) } label: {
+            Text("Next").loveliesFont(size: 15, weight: .medium).foregroundStyle(LoveliesTheme.pink.opacity(store.uploadIDs.isEmpty ? 0.35 : 1))
+                .padding(.horizontal, 14).padding(.vertical, 10).frame(minHeight: 44).background(LoveliesTheme.surface, in: Capsule())
+        }.disabled(store.uploadIDs.isEmpty)
+    }
+
     private var uploadOrder: [DemoPhoto] { [1, 7, 16, 6, 3, 5, 9, 10, 11, 8, 4, 13, 17, 12, 2, 14, 18, 15].map { DemoPhoto.all[$0 - 1] } }
 
     private var review: some View {
@@ -168,7 +205,7 @@ struct UploadViews: View {
                         .frame(maxWidth: .infinity, alignment: .leading).padding(.horizontal, 21)
                     VStack(spacing: 16) {
                         reviewThumbnailStrip
-                        TextField("Add a caption (optional)", text: $store.caption, axis: .vertical).loveliesFont(size: 15)
+                        TextField("Add a caption (optional)", text: $store.caption, prompt: Text("Add a caption (optional)").foregroundColor(LoveliesTheme.secondary), axis: .vertical).loveliesFont(size: 15)
                             .frame(minHeight: 44).contentShape(Rectangle()).accessibilityLabel("Add a caption (optional)").padding(17)
                             .background(LoveliesTheme.surface, in: RoundedRectangle(cornerRadius: 14)).lineLimit(3, reservesSpace: true)
                         GroupSurface { SettingsRow(icon: "photo", title: String(localized: "Add to album"), value: store.album) { picker = .album } }
@@ -232,11 +269,7 @@ struct UploadViews: View {
 
     private var progress: some View {
         VStack(spacing: 12) {
-            HStack {
-                Button { cancelUpload = true } label: { Image(systemName: "xmark").font(.system(size: 22)).frame(width: 44, height: 44) }.accessibilityLabel("Cancel upload")
-                Text("Uploading...").loveliesFont(size: 20, weight: .semibold).frame(maxWidth: .infinity)
-                Color.clear.frame(width: 44, height: 44)
-            }.padding(.horizontal, 18).padding(.top, 4)
+            progressHeader
             ScrollView {
                 VStack(spacing: 12) {
                     ForEach(Array(store.uploadPhotos.enumerated()), id: \.element.id) { index, photo in uploadProgressRow(photo, index: index) }
@@ -248,27 +281,59 @@ struct UploadViews: View {
                 Button("Back to selection") { store.go(.uploadSelection) }
             } message: { Text("Your selected photos and caption will stay here. This upload is a local preview.") }
     }
+
+    private var progressHeader: some View {
+        ViewThatFits(in: .horizontal) {
+            HStack(spacing: 8) {
+                cancelUploadButton
+                progressTitle.fixedSize().frame(maxWidth: .infinity)
+                Color.clear.frame(width: 44, height: 44)
+            }
+            VStack(spacing: 8) {
+                HStack { cancelUploadButton; Spacer(minLength: 0) }
+                progressTitle.fixedSize(horizontal: false, vertical: true).frame(maxWidth: .infinity)
+            }
+        }.padding(.horizontal, 18).padding(.top, 4)
+    }
+
+    private var progressTitle: some View {
+        Text("Uploading photos").loveliesFont(size: 20, weight: .semibold).multilineTextAlignment(.center).accessibilityAddTraits(.isHeader)
+    }
+
+    private var cancelUploadButton: some View {
+        Button { cancelUpload = true } label: {
+            Image(systemName: "xmark").font(.system(size: 22)).frame(width: 44, height: 44)
+        }.accessibilityLabel("Cancel upload")
+    }
+
     private func uploadProgressRow(_ photo: DemoPhoto, index: Int) -> some View {
         let baseline: Double = index == 0 ? 0.78 : index == 1 ? 0.42 : index == 2 ? 0.2 : 0
         let value = min(1, baseline + store.progress * (index < 3 ? 0.85 : 1.15))
         let filename = "IMG_\(2931 + index).\(index == 2 ? "MOV" : "JPG")"
         let status = value >= 1 ? String(localized: "Complete") : value == 0 ? String(localized: "Waiting...") : index == 2 ? String(localized: "Processing...") : String(localized: "Uploading... \(Int(value * 100))%")
-        return HStack(spacing: 14) {
-            AssetImage(name: photo.asset).scaledToFill().frame(width: 58, height: 60).clipped().clipShape(RoundedRectangle(cornerRadius: 7))
-                .accessibilityHidden(true)
-            VStack(alignment: .leading, spacing: 6) {
-                Text(verbatim: filename).loveliesFont(size: 14)
-                Text(status).loveliesFont(size: 12).foregroundStyle(LoveliesTheme.secondary)
-                GeometryReader { geometry in
-                    ZStack(alignment: .leading) { Capsule().fill(.white.opacity(0.12)); Capsule().fill(LoveliesTheme.pink).frame(width: geometry.size.width * value) }
-                }.frame(height: 5)
+        let thumbnail = AssetImage(name: photo.asset).scaledToFill().frame(width: 58, height: 60).clipped().clipShape(RoundedRectangle(cornerRadius: 7))
+            .accessibilityHidden(true)
+        let details = VStack(alignment: .leading, spacing: 6) {
+            Text(verbatim: filename).loveliesFont(size: 14).fixedSize(horizontal: false, vertical: true)
+            Text(status).loveliesFont(size: 12).foregroundStyle(LoveliesTheme.secondary).fixedSize(horizontal: false, vertical: true)
+            GeometryReader { geometry in
+                ZStack(alignment: .leading) { Capsule().fill(.white.opacity(0.12)); Capsule().fill(LoveliesTheme.pink).frame(width: geometry.size.width * value) }
+            }.frame(height: 5)
+        }
+        let indicator = ZStack {
+            Circle().stroke(.white.opacity(0.35), lineWidth: 1.5)
+            if value >= 1 { Image(systemName: "checkmark").font(.system(size: 12, weight: .semibold)).foregroundStyle(LoveliesTheme.pink) }
+            else if value > 0 { Circle().trim(from: 0, to: value).stroke(LoveliesTheme.pink, style: StrokeStyle(lineWidth: 2, lineCap: .round)).rotationEffect(.degrees(-90)) }
+        }.frame(width: 23, height: 23)
+        return Group {
+            if textSize.isAccessibilitySize {
+                VStack(alignment: .leading, spacing: 10) {
+                    HStack { thumbnail; Spacer(minLength: 4); indicator }
+                    details
+                }
+            } else {
+                HStack(spacing: 14) { thumbnail; details; Spacer(minLength: 4); indicator }
             }
-            Spacer(minLength: 4)
-            ZStack {
-                Circle().stroke(.white.opacity(0.35), lineWidth: 1.5)
-                if value >= 1 { Image(systemName: "checkmark").font(.system(size: 12, weight: .semibold)).foregroundStyle(LoveliesTheme.pink) }
-                else if value > 0 { Circle().trim(from: 0, to: value).stroke(LoveliesTheme.pink, style: StrokeStyle(lineWidth: 2, lineCap: .round)).rotationEffect(.degrees(-90)) }
-            }.frame(width: 23, height: 23)
         }.accessibilityElement(children: .ignore)
             .accessibilityLabel(Text("Photo \(photo.id), \(filename)"))
             .accessibilityValue(Text(verbatim: status))

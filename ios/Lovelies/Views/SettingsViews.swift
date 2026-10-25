@@ -1,4 +1,5 @@
 import SwiftUI
+import UIKit
 
 struct SettingsViews: View {
     @EnvironmentObject private var store: DemoStore
@@ -166,28 +167,31 @@ struct SettingsViews: View {
                     .frame(maxWidth: .infinity).accessibilityAddTraits(.isHeader)
                 Color.clear.frame(width: 44, height: 44)
             }.padding(.horizontal, 15)
-            Text("Every matched person is allowed unless you block them. You still review each photo and recipient before sharing.")
-                .loveliesFont(size: 13).foregroundStyle(LoveliesTheme.secondary).fixedSize(horizontal: false, vertical: true).padding(.horizontal, 22)
-            HStack(spacing: 0) {
-                peopleSegment("Allowed", count: store.allowedPeople.count)
-                peopleSegment("Blocked", count: store.blockedPeople.count)
-            }.background(LoveliesTheme.surface, in: RoundedRectangle(cornerRadius: 14)).padding(.horizontal, 20)
             ScrollView {
-                VStack(spacing: 0) {
-                    ForEach(peopleTab == "Blocked" ? store.blockedPeople : store.allowedPeople) { person in
-                        Button { store.currentPerson = person; sheet = .managePerson } label: {
-                            HStack(spacing: 15) {
-                                Avatar(asset: person.asset, size: 43)
-                                Text(person.fullName).loveliesFont(size: 14).fixedSize(horizontal: false, vertical: true)
-                                Spacer(minLength: 0)
-                                Text(peopleTab == "Blocked" ? String(localized: "Blocked") : String(localized: "Can share with")).loveliesFont(size: 12).foregroundStyle(LoveliesTheme.secondary)
-                                    .multilineTextAlignment(.trailing).fixedSize(horizontal: false, vertical: true)
-                                Image(systemName: "chevron.right").font(.system(size: 14)).foregroundStyle(LoveliesTheme.secondary)
-                            }.padding(.vertical, 11).contentShape(Rectangle())
-                        }.buttonStyle(LoveliesPressStyle())
-                        Divider().overlay(.white.opacity(0.04))
-                    }
-                }.padding(.horizontal, 22)
+                VStack(spacing: 15) {
+                    Text("Every matched person is allowed unless you block them. You still review each photo and recipient before sharing.")
+                        .loveliesFont(size: 13).foregroundStyle(LoveliesTheme.secondary).fixedSize(horizontal: false, vertical: true).padding(.horizontal, 22)
+                    HStack(spacing: 0) {
+                        peopleSegment("Allowed", count: store.allowedPeople.count)
+                        peopleSegment("Blocked", count: store.blockedPeople.count)
+                    }.fixedSize(horizontal: false, vertical: true)
+                        .background(LoveliesTheme.surface, in: RoundedRectangle(cornerRadius: 14)).padding(.horizontal, 20)
+                    VStack(spacing: 0) {
+                        ForEach(peopleTab == "Blocked" ? store.blockedPeople : store.allowedPeople) { person in
+                            Button { store.currentPerson = person; sheet = .managePerson } label: {
+                                HStack(spacing: 15) {
+                                    Avatar(asset: person.asset, size: 43)
+                                    Text(person.fullName).loveliesFont(size: 14).fixedSize(horizontal: false, vertical: true)
+                                    Spacer(minLength: 0)
+                                    Text(peopleTab == "Blocked" ? String(localized: "Blocked") : String(localized: "Can share with")).loveliesFont(size: 12).foregroundStyle(LoveliesTheme.secondary)
+                                        .multilineTextAlignment(.trailing).fixedSize(horizontal: false, vertical: true)
+                                    Image(systemName: "chevron.right").font(.system(size: 14)).foregroundStyle(LoveliesTheme.secondary)
+                                }.padding(.vertical, 11).contentShape(Rectangle())
+                            }.buttonStyle(LoveliesPressStyle())
+                            Divider().overlay(.white.opacity(0.04))
+                        }
+                    }.padding(.horizontal, 22)
+                }.frame(maxWidth: .infinity)
             }.scrollIndicators(.hidden)
         }.foregroundStyle(.white)
     }
@@ -284,21 +288,28 @@ struct SettingsViews: View {
         }.foregroundStyle(.white)
     }
     private func preferenceRow(_ title: String, icon: String, subtitle: String? = nil) -> some View {
-        Toggle(isOn: store.preference(title)) {
-            HStack(alignment: .top, spacing: 15) {
-                Image(systemName: icon).font(.system(size: 23, weight: .light)).frame(width: 27).accessibilityHidden(true)
-                VStack(alignment: .leading, spacing: 6) {
-                    Text(LocalizedStringKey(title)).loveliesFont(size: 16).fixedSize(horizontal: false, vertical: true)
-                    if let subtitle {
-                        Text(LocalizedStringKey(subtitle)).loveliesFont(size: 12).foregroundStyle(LoveliesTheme.secondary).fixedSize(horizontal: false, vertical: true)
-                    }
-                }.frame(maxWidth: .infinity, alignment: .leading).fixedSize(horizontal: false, vertical: true)
+        let label = HStack(alignment: .top, spacing: 15) {
+            Image(systemName: icon).font(.system(size: 23, weight: .light)).frame(width: 27)
+            VStack(alignment: .leading, spacing: 6) {
+                Text(LocalizedStringKey(title)).loveliesFont(size: 16).fixedSize(horizontal: false, vertical: true)
+                if let subtitle {
+                    Text(LocalizedStringKey(subtitle)).loveliesFont(size: 12).foregroundStyle(LoveliesTheme.secondary).fixedSize(horizontal: false, vertical: true)
+                }
+            }.frame(maxWidth: .infinity, alignment: .leading).fixedSize(horizontal: false, vertical: true)
+        }.frame(minHeight: 44).accessibilityHidden(true)
+        let control = PreferenceNativeSwitch(isOn: store.preference(title), labelKey: title, hintKey: subtitle ?? "")
+            .fixedSize()
+        return Group {
+            if textSize.isAccessibilitySize {
+                VStack(alignment: .leading, spacing: 12) {
+                    label
+                    HStack { Spacer(minLength: 0); control }
+                }
+            } else {
+                HStack(spacing: 8) { label; control }
             }
-        }
-        .accessibilityLabel(Text(LocalizedStringKey(title)))
-        .accessibilityHint(Text(LocalizedStringKey(subtitle ?? "")))
-        .frame(minHeight: 44)
-        .tint(LoveliesTheme.pink).padding(.horizontal, 16).padding(.vertical, subtitle == nil ? 17 : 21)
+        }.frame(minHeight: 44)
+            .padding(.horizontal, 16).padding(.vertical, subtitle == nil ? 17 : 21)
     }
     private var insetDivider: some View { Divider().overlay(.white.opacity(0.025)).padding(.leading, 57) }
 
@@ -603,5 +614,108 @@ private struct HeartOrbit: View {
             }
             Image(systemName: "heart.fill").font(.system(size: 66)).foregroundStyle(LoveliesTheme.pink).shadow(color: LoveliesTheme.pink.opacity(0.6), radius: 30)
         }
+    }
+}
+
+/// Keeps UIKit's switch semantics while extending only the physical padding around its glyph.
+private struct PreferenceNativeSwitch: UIViewRepresentable {
+    @Binding var isOn: Bool
+    @Environment(\.isEnabled) private var isEnabled
+    @Environment(\.locale) private var locale
+    let labelKey: String
+    let hintKey: String
+
+    func makeCoordinator() -> Coordinator { Coordinator(value: $isOn) }
+
+    func makeUIView(context: Context) -> PreferenceSwitchContainer {
+        let view = PreferenceSwitchContainer()
+        view.control.addTarget(context.coordinator, action: #selector(Coordinator.valueChanged(_:)), for: .valueChanged)
+        return view
+    }
+
+    func updateUIView(_ view: PreferenceSwitchContainer, context: Context) {
+        context.coordinator.value = $isOn
+        view.control.setOn(isOn, animated: false)
+        view.control.onTintColor = UIColor(LoveliesTheme.pink)
+        view.control.isEnabled = isEnabled
+        view.isUserInteractionEnabled = isEnabled
+        view.control.accessibilityLabel = localized(labelKey)
+        view.control.accessibilityHint = localized(hintKey)
+    }
+
+    func sizeThatFits(_ proposal: ProposedViewSize, uiView: PreferenceSwitchContainer, context: Context) -> CGSize? {
+        uiView.intrinsicContentSize
+    }
+
+    private func localized(_ key: String) -> String {
+        guard !key.isEmpty else { return "" }
+        let languages = Bundle.preferredLocalizations(from: Bundle.main.localizations, forPreferences: [locale.identifier])
+        if let language = languages.first,
+           let path = Bundle.main.path(forResource: language, ofType: "lproj"),
+           let bundle = Bundle(path: path) {
+            return bundle.localizedString(forKey: key, value: key, table: nil)
+        }
+        return Bundle.main.localizedString(forKey: key, value: key, table: nil)
+    }
+
+    @MainActor final class Coordinator: NSObject {
+        var value: Binding<Bool>
+        init(value: Binding<Bool>) { self.value = value }
+        @objc func valueChanged(_ sender: UISwitch) { value.wrappedValue = sender.isOn }
+    }
+}
+
+private final class PreferenceSwitchContainer: UIView, UIGestureRecognizerDelegate {
+    let control = PreferenceTouchSwitch()
+
+    override init(frame: CGRect) {
+        super.init(frame: frame)
+        isAccessibilityElement = false
+        addSubview(control)
+        control.hitContainer = self
+        control.isAccessibilityElement = true
+        accessibilityElements = [control]
+        let paddingTap = UITapGestureRecognizer(target: self, action: #selector(toggleFromPadding))
+        paddingTap.delegate = self
+        paddingTap.cancelsTouchesInView = false
+        addGestureRecognizer(paddingTap)
+        setContentHuggingPriority(.required, for: .horizontal)
+        setContentCompressionResistancePriority(.required, for: .horizontal)
+    }
+
+    required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
+
+    override var intrinsicContentSize: CGSize {
+        let size = control.intrinsicContentSize
+        return CGSize(width: max(44, size.width), height: max(44, size.height))
+    }
+
+    override func layoutSubviews() {
+        super.layoutSubviews()
+        control.sizeToFit()
+        control.center = CGPoint(x: bounds.midX, y: bounds.midY)
+    }
+
+    func gestureRecognizer(_ gestureRecognizer: UIGestureRecognizer, shouldReceive touch: UITouch) -> Bool {
+        // The existing UISwitch handles its own glyph; the padding recognizer never also toggles it.
+        control.isEnabled && isUserInteractionEnabled && !control.point(inside: touch.location(in: control), with: nil)
+    }
+
+    @objc private func toggleFromPadding() {
+        guard control.isEnabled && isUserInteractionEnabled else { return }
+        control.setOn(!control.isOn, animated: !UIAccessibility.isReduceMotionEnabled)
+        control.sendActions(for: .valueChanged)
+    }
+}
+
+private final class PreferenceTouchSwitch: UISwitch {
+    weak var hitContainer: UIView?
+
+    override var accessibilityFrame: CGRect {
+        get {
+            guard let hitContainer else { return super.accessibilityFrame }
+            return UIAccessibility.convertToScreenCoordinates(hitContainer.bounds, in: hitContainer)
+        }
+        set { super.accessibilityFrame = newValue }
     }
 }

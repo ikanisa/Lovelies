@@ -1981,7 +1981,7 @@
   },
   "remaining_gates_document": "docs/release/backlog-disposition.md",
   "deployment_inputs_document": "docs/release/deployment-inputs.md",
-  "source_history": "Original baseline snapshots are retained. Bounded private source deliveries through0bea621cb7ffa16f86056e66d2b017b274c4bd29 are verified on origin/main; later connected-audience/UI work remains separately bound until delivered. GitHub billing is parked, remote CI unqualified, and no store build upload/review/publication is implied.",
+  "source_history": "Bounded private source deliveries through1dfe4d1e5d02ffd71fb173b3b0cee9d42d563785 are verified on origin/main. Frozen five-View/one-file-QA delivery is recorded separately from its pending current runtime acceptance. GitHub billing remains parked; no passing remote CI, store upload, review or publication is implied.",
   "scope_limits": "Counts are separate overlapping evidence scopes, not a summed acceptance count. Historical failures/preimages/raw output and private credentials/builds remain local outside Git. Concurrent backend integration remains outside this native checkpoint; preserved older source hashes are explicit tested-snapshot provenance.",
   "external_provider_configuration": {
     "firebase": {
@@ -2707,6 +2707,63 @@
       "delivery_receipt": "/Volumes/PRO-G40/Projects/Lovelies/verification/android-connected-audience-source-checkpoint-20261025/delivery.json",
       "scope": "Connected teen instrumentation/runbook and release evidence only; no product or iOS source.",
       "ci_passed": false
+    },
+    "ios_grouped_ui_round5": {
+      "receipt": "/Volumes/PRO-G40/Projects/Lovelies/verification/ios-grouped-ui-round5-20261025/build-result.json",
+      "receipt_sha256": "b911b5d0c13adb92db0c8f9c8ad84c9ecb0a923f8217b5e4240f5339519773ba",
+      "document": "docs/release/ios-reference-ui-20261025.md",
+      "runtime_handoff": "/Volumes/PRO-G40/Projects/Lovelies/verification/ios-grouped-ui-round5-20261025/runtime-handoff.json",
+      "runtime_handoff_sha256": "947aec09a9ee54e3a99dbefdf53707e1508ac54ce0998e91b92e542f84aa375a",
+      "source_inputs": 205,
+      "source_unchanged": true,
+      "app_files": 181,
+      "runner_files": 13,
+      "simulator_dylib_sha256": "4dede123d5cea9827d3b032063e60676bd3ab6b0fde365f46a8204dda39b436d",
+      "unsigned_release_executable_sha256": "d145183e4fe7124deb82816a39649d63ffb426fbb73654e9349749e7e2082bee",
+      "runner_source_sha256": "cef012a6a4a9d373ec6e91e27dfc50c8c8dcf967de437eb9dc4ec64c6e3979da",
+      "frozen_views": 5,
+      "viewer_count_visual_counterexample": "Maximum12 b80d actualPNG64cd337f shows+3 as ellipsis despite passing automated audit; exact one-expression correction is included in4dede.",
+      "runtime_qualification": "pending_independent_install_and_fresh12_normal_largest_people_navigation",
+      "six_preflight_gates_open": true,
+      "highest_uploaded_build_14_is_23Oct_history": true,
+      "signed_store_acceptance": false
+    },
+    "ios_round4_retained_runtime": {
+      "artifact_sha256": "b80d8726370d6cb2b5e4b671f43e14483bc742854e9c4d1bd2a6ee80d36b80d2",
+      "qualification": {
+        "receipt": "/Users/jeanbosco/Documents/Lovelies/verification/accessibility-navigation-20261023/ios-isolated-simulator/grouped-ui-fix-20261025/round4/qualified-build/qualification.json",
+        "receipt_sha256": "87e454d27917fc48c48c95a4364b7c6eb3b99fd0f6e710aefa222ad9897f36d0"
+      },
+      "install": {
+        "receipt": "/Users/jeanbosco/Documents/Lovelies/verification/accessibility-navigation-20261023/ios-isolated-simulator/grouped-ui-fix-20261025/round4/qualified-install.json",
+        "receipt_sha256": "d7fab4a2383457905f6be3a84b8d0a734424e9224e2c0974898877910fdbfd2e"
+      },
+      "largest21_23": {
+        "receipt": "/Users/jeanbosco/Documents/Lovelies/verification/accessibility-navigation-20261023/ios-isolated-simulator/grouped-ui-fix-20261025/round4/b80d-largest21-23-reviewed.json",
+        "receipt_sha256": "d3db7dcb4dfcc2b59c24d2cf7bfd1f757e9bc2c525e8ac8581ec3cf57d53f8e5"
+      },
+      "normal21_23": {
+        "receipt": "/Users/jeanbosco/Documents/Lovelies/verification/accessibility-navigation-20261023/ios-isolated-simulator/grouped-ui-fix-20261025/round4/b80d-normal21-23-reviewed.json",
+        "receipt_sha256": "81fbf17faa9542b07de2bd85cb7cbd5b09d1ae30a53664016c0424b25e9ac880"
+      },
+      "keyboard": {
+        "receipt": "/Users/jeanbosco/Documents/Lovelies/verification/accessibility-navigation-20261023/ios-isolated-simulator/grouped-ui-fix-20261025/round4/b80d-keyboard-reviewed.json",
+        "receipt_sha256": "5c279badea03fbc0a9d8119f366a3c313088fc8d496d69c70acc8c74d1e1ae6b"
+      },
+      "largest21_23_native_custom_pass": true,
+      "all18_photo_targets44pt": true,
+      "normal23_raw_dynamic_type_warnings": 2,
+      "whole48_reference_pass": false,
+      "spoken_verified": false,
+      "scope": "Owner-reviewed source-bound artifacts; four R4Views unchanged inR5, Gallery viewer12 differs. No canonical205 equality after that correction and no blanket audit waiver."
+    },
+    "verified_backup_snapshot_delivery": {
+      "commit": "1dfe4d1e5d02ffd71fb173b3b0cee9d42d563785",
+      "verified_remote_main": "1dfe4d1e5d02ffd71fb173b3b0cee9d42d563785",
+      "files": 7,
+      "delivery_receipt": "/Volumes/PRO-G40/Projects/Lovelies/verification/encrypted-backup-snapshot-source-checkpoint-20261025/delivery.json",
+      "remote_ci_passed": false,
+      "billing_unchanged": true
     }
   }
 }

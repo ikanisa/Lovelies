@@ -509,6 +509,41 @@ enum SourceReferenceCatalog {
         if route == 30, let bright = layouts["29"]?.tiles.first(where: { $0.id == tile.id && $0.asset == tile.asset }) { return bright.peopleBadgeBounds }
         return tile.peopleBadgeBounds
     }
+    /// Screenshot fixtures contain UI markers. Reflow uses only an existing,
+    /// unobscured rectangle of that same asset, then adds bounded native markers.
+    static func reflowPresentation(_ photo: DemoPhoto) -> (crop: CGRect, ratio: CGFloat) {
+        let unit = CGRect(x: 0, y: 0, width: 1, height: 1)
+        // These continuation fixtures contain exactly the same JPEG bytes as
+        // their earlier tiles. Reuse their marker bounds, not their photo IDs.
+        let markerAsset = ["ref21_16": "ref21_10", "ref21_17": "ref21_11", "ref21_18": "ref21_12"][photo.asset] ?? photo.asset
+        for key in layouts.keys.sorted() {
+            guard let layout = layouts[key],
+                  let tile = layout.tiles.first(where: { ($0.asset as NSString).deletingPathExtension == markerAsset }) else { continue }
+            let image = UIImage(named: tile.asset) ?? UIImage(named: "Resources/\(tile.asset)")
+            let sourceWidth = max(1, image?.size.width ?? tile.width * (layout.sourceBounds[2] - layout.sourceBounds[0]))
+            let sourceHeight = max(1, image?.size.height ?? tile.height * (layout.sourceBounds[3] - layout.sourceBounds[1]))
+            let markers = [tile.controlBounds, tile.peopleBadgeBounds].compactMap { bounds -> CGRect? in
+                guard let bounds, bounds.count == 4 else { return nil }
+                let rect = CGRect(x: bounds[0], y: bounds[1], width: bounds[2], height: bounds[3])
+                    .insetBy(dx: -2 / sourceWidth, dy: -2 / sourceHeight).intersection(unit)
+                return rect.isNull || rect.isEmpty ? nil : rect
+            }
+            guard !markers.isEmpty else { return (unit, sourceHeight / sourceWidth) }
+            let xs = Array(Set([CGFloat(0), 1] + markers.flatMap { [$0.minX, $0.maxX] })).sorted()
+            let ys = Array(Set([CGFloat(0), 1] + markers.flatMap { [$0.minY, $0.maxY] })).sorted()
+            var best = CGRect.zero
+            for left in xs { for right in xs where right > left {
+                for top in ys { for bottom in ys where bottom > top {
+                    let candidate = CGRect(x: left, y: top, width: right - left, height: bottom - top)
+                    guard !markers.contains(where: { $0.intersects(candidate) }) else { continue }
+                    if candidate.width * candidate.height > best.width * best.height { best = candidate }
+                } }
+            } }
+            let crop = best.isEmpty ? unit : best
+            return (crop, sourceHeight / sourceWidth * crop.height / crop.width)
+        }
+        return (unit, photo.ratio) // A user-selected image has no reference UI baked into it.
+    }
     static func recentAsset(_ index: Int, route: Int) -> String? {
         guard let assets = layouts[String(route)]?.recentAssets, assets.indices.contains(index) else { return nil }
         return assets[index]
@@ -580,8 +615,10 @@ struct SourcePhotoGrid: View {
         MasonryLayout(columns: textSize.isAccessibilitySize ? 2 : 3, minimumTileSize: 96) {
             ForEach(visibleTiles(in: layout, unique: true)) { tile in
                 let photo = photoOverrides?[tile.id] ?? SourceReferenceCatalog.photo(tile, layout: layout)
+                let presentation = SourceReferenceCatalog.reflowPresentation(photo)
                 sourceTile(tile, photo: photo, reflow: true)
-                    .layoutValue(key: PhotoRatioKey.self, value: photo.ratio)
+                    // Partial screenshot fragments fit inside a useful photo target.
+                    .layoutValue(key: PhotoRatioKey.self, value: min(2, max(0.55, presentation.ratio)))
             }
         }
     }
@@ -591,16 +628,18 @@ struct SourcePhotoGrid: View {
         return GeometryReader { geometry in
             let width = geometry.size.width
             let height = geometry.size.height
-            // A shallow source crop fits inside the larger target instead of being cropped again.
-            let imageWidth = reflow ? min(width, height / max(0.001, photo.ratio)) : width
-            let imageHeight = reflow ? imageWidth * max(0.001, photo.ratio) : height
+            let presentation = reflow ? SourceReferenceCatalog.reflowPresentation(photo) : (crop: CGRect(x: 0, y: 0, width: 1, height: 1), ratio: photo.ratio)
+            let crop = presentation.crop
+            let cropRatio = max(0.001, presentation.ratio)
+            let imageWidth = reflow ? min(width, height / cropRatio) : width
+            let imageHeight = reflow ? imageWidth * cropRatio : height
             let imageX = (width - imageWidth) / 2
             let imageY = (height - imageHeight) / 2
-            let photoLabel = String(localized: "Photo \(photo.id), \(photo.tags)")
+            let photoLabel = String(localized: "Photo \(photo.id)")
             let accessiblePhotoLabel = tile.peopleBadge == true ? photoLabel + ", " + String(localized: "People in this photo") : photoLabel
             ZStack(alignment: .topLeading) {
                 Button { action(photo) } label: {
-                    AssetImage(name: photo.asset).scaledToFill().frame(width: imageWidth, height: imageHeight).clipped()
+                    tileImage(photo, crop: crop, width: imageWidth, height: imageHeight, reflow: reflow)
                         .frame(width: width, height: height).background(Color.black)
                         .overlay { if dimUnselected && !chosen { Color.black.opacity(0.35) } }
                         .clipShape(RoundedRectangle(cornerRadius: 9)).contentShape(Rectangle())
@@ -618,15 +657,15 @@ struct SourcePhotoGrid: View {
                             .frame(width: max(0, imageWidth - 3), height: max(0, imageHeight - 3)).position(x: width / 2, y: height / 2).allowsHitTesting(false)
                     }
                 }
-                if badge != .none, let bounds = SourceReferenceCatalog.bakedControlBounds(tile, route: route), bounds.count == 4 {
+                if !reflow, badge != .none, let bounds = SourceReferenceCatalog.bakedControlBounds(tile, route: route), bounds.count == 4 {
                     Ellipse().fill(Color.black).frame(width: imageWidth * bounds[2] + 1, height: imageHeight * bounds[3] + 1)
                         .position(x: imageX + imageWidth * (bounds[0] + bounds[2] / 2), y: imageY + imageHeight * (bounds[1] + bounds[3] / 2)).allowsHitTesting(false)
                 }
                 if badge != .none && (showUnselectedBadges || chosen || tile.selected == true) {
                     let sourceSize = tile.badgeSize.map { min(imageWidth, imageHeight) * $0 } ?? min(31, max(23, min(imageWidth, imageHeight) * 0.27))
                     let size = reflow ? min(31, max(23, sourceSize)) : sourceSize
-                    let x = imageX + (tile.badgeX.map { imageWidth * $0 } ?? (imageWidth - size / 2 - 5))
-                    let y = imageY + (tile.badgeY.map { imageHeight * $0 } ?? (size / 2 + 5))
+                    let x = imageX + (reflow ? imageWidth - size / 2 - 5 : tile.badgeX.map { imageWidth * $0 } ?? (imageWidth - size / 2 - 5))
+                    let y = imageY + (reflow ? size / 2 + 5 : tile.badgeY.map { imageHeight * $0 } ?? (size / 2 + 5))
                     let heart = tile.badgeKind.map { $0 == "heart" || $0 == "favorite" } ?? (badge == .heart)
                     if let badgeAction {
                         Button { badgeAction(photo) } label: {
@@ -639,12 +678,12 @@ struct SourcePhotoGrid: View {
                         SourceNativePhotoBadge(selected: chosen, heart: heart, outlined: tile.badgeOutlined == true, size: size).position(x: x, y: y).allowsHitTesting(false)
                     }
                 }
-                if let baked = SourceReferenceCatalog.bakedPeopleBounds(tile, route: route), baked.count == 4 {
+                if !reflow, let baked = SourceReferenceCatalog.bakedPeopleBounds(tile, route: route), baked.count == 4 {
                     Ellipse().fill(Color.black).frame(width: imageWidth * baked[2] + 1, height: imageHeight * baked[3] + 1)
                         .position(x: imageX + imageWidth * (baked[0] + baked[2] / 2), y: imageY + imageHeight * (baked[1] + baked[3] / 2)).allowsHitTesting(false)
                 }
                 if tile.peopleBadge == true {
-                    if let bounds = tile.peopleBadgeBounds, bounds.count == 4 {
+                    if !reflow, let bounds = tile.peopleBadgeBounds, bounds.count == 4 {
                         Image(systemName: "person.2.fill").accessibilityHidden(true).font(.system(size: min(imageWidth * bounds[2], imageHeight * bounds[3]) * 0.68)).foregroundStyle(.white)
                             .frame(width: imageWidth * bounds[2], height: imageHeight * bounds[3]).background(Color.black, in: Circle())
                             .position(x: imageX + imageWidth * (bounds[0] + bounds[2] / 2), y: imageY + imageHeight * (bounds[1] + bounds[3] / 2)).allowsHitTesting(false)
@@ -655,6 +694,18 @@ struct SourcePhotoGrid: View {
                     }
                 }
             }.frame(width: width, height: height)
+        }
+    }
+
+    @ViewBuilder private func tileImage(_ photo: DemoPhoto, crop: CGRect, width: CGFloat, height: CGFloat, reflow: Bool) -> some View {
+        if reflow {
+            ZStack(alignment: .topLeading) {
+                AssetImage(name: photo.asset).scaledToFill()
+                    .frame(width: width / crop.width, height: height / crop.height).clipped()
+                    .offset(x: -crop.minX * width / crop.width, y: -crop.minY * height / crop.height)
+            }.frame(width: width, height: height, alignment: .topLeading).clipped()
+        } else {
+            AssetImage(name: photo.asset).scaledToFill().frame(width: width, height: height).clipped()
         }
     }
 }

@@ -2,6 +2,7 @@ import SwiftUI
 
 struct SharingViews: View {
     @EnvironmentObject private var store: DemoStore
+    @Environment(\.dynamicTypeSize) private var textSize
     let screen: Screen
     @State private var reportSaved = false
 
@@ -37,7 +38,7 @@ struct SharingViews: View {
                             summaryPeople
                         }
                     }.padding(.vertical, 7)
-                    Text("Great matches!\nYour photos found people\nin your memories.").loveliesFont(size: 16).multilineTextAlignment(.center).foregroundStyle(LoveliesTheme.secondary).lineSpacing(2)
+                    Text("Great matches!\nYour photos found people\nin your memories.").loveliesFont(size: 16).multilineTextAlignment(.center).foregroundStyle(LoveliesTheme.secondary).lineSpacing(2).fixedSize(horizontal: false, vertical: true)
                     Spacer(minLength: 10)
                     PinkButton(title: String(localized: "View Matches")) { store.go(.matchedPhotos) }.padding(.bottom, 19)
                 }.padding(.horizontal, 23).frame(maxWidth: .infinity).foregroundStyle(.white)
@@ -74,6 +75,7 @@ struct SharingViews: View {
 
     private var photoPeople: some View {
         GeometryReader { geometry in
+            ScrollView {
             VStack(spacing: 0) {
                 ZStack(alignment: .top) {
                     AssetImage(name: store.currentPhoto.asset).scaledToFill().frame(width: geometry.size.width, height: geometry.size.height * 0.53).clipped()
@@ -95,7 +97,7 @@ struct SharingViews: View {
                             Button("Screen gallery", systemImage: "rectangle.grid.2x2") { store.showGallery = true }
                         } label: { Image(systemName: "ellipsis").frame(width: 44, height: 44).background(.white.opacity(0.08), in: Circle()) }.accessibilityLabel("Photo options")
                     }
-                    LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 15), count: 4), spacing: 17) {
+                    LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 15), count: textSize.isAccessibilitySize ? 2 : 4), spacing: 17) {
                         ForEach(Array(store.people.prefix(7))) { person in
                             Button { store.openPerson(person) } label: {
                                 VStack(spacing: 6) { Avatar(asset: person.asset, size: 60); Text(person.name).loveliesFont(size: 13) }
@@ -104,8 +106,11 @@ struct SharingViews: View {
                         Button { store.go(.allowedPeople) } label: { Text("+2").loveliesFont(size: 18).frame(width: 60, height: 60).background(LoveliesTheme.raised, in: Circle()).padding(.bottom, 23) }.accessibilityLabel("More people")
                     }.padding(.horizontal, 7)
                     Spacer(minLength: 0)
-                }.padding(.horizontal, 14).padding(.top, 6).frame(maxWidth: .infinity).background(LoveliesTheme.canvas, in: RoundedRectangle(cornerRadius: 24))
+                }.padding(.horizontal, 14).padding(.top, 6).frame(maxWidth: .infinity)
+                    .frame(minHeight: geometry.size.height * 0.47, alignment: .top)
+                    .background(LoveliesTheme.canvas, in: RoundedRectangle(cornerRadius: 24))
             }.foregroundStyle(.white)
+            }.scrollIndicators(.visible)
         }
     }
 
@@ -157,7 +162,7 @@ struct SharingViews: View {
                         Image(systemName: "arrow.right").font(.system(size: 25, weight: .light)).foregroundStyle(.black)
                             .frame(width: 57, height: 50).background(LoveliesTheme.pink.opacity(store.sharePhotoIDs.isEmpty ? 0.35 : 1), in: Capsule())
                     }.disabled(store.sharePhotoIDs.isEmpty).accessibilityLabel("Choose people to share with")
-                }.padding(11).background(.ultraThinMaterial, in: Capsule()).overlay(Capsule().stroke(LoveliesTheme.stroke)).padding(.horizontal, 12).padding(.bottom, 3)
+                }.padding(11).background(LoveliesTheme.surface, in: Capsule()).overlay(Capsule().stroke(LoveliesTheme.stroke)).padding(.horizontal, 12).padding(.bottom, 3)
             }
     }
 
@@ -194,42 +199,63 @@ struct SharingViews: View {
     private var review: some View {
         VStack(spacing: 10) {
             PageHeader(title: String(localized: "Review & Share"), trailing: false)
-            ScrollView {
-                VStack(alignment: .leading, spacing: 8) {
-                    reviewSectionHeader(String(localized: "Photos (\(store.sharePhotoIDs.count))")) { store.go(.shareSelection) }
-                    if let layout = SourceReferenceCatalog.layout(33) {
-                        if store.referenceReview33 {
-                            SourcePhotoGrid(route: 33, filterIDs: store.sharePhotoIDs) { store.openPhoto($0) }
-                            let extra = store.sharePhotoIDs.subtracting(Set(layout.tiles.map(\.id)))
-                            if !extra.isEmpty {
-                                MasonryPhotos(photos: store.sharingPhotos.filter { extra.contains($0.id) }) { store.openPhoto($0) }
-                            }
-                        } else {
-                            // Measured source slots retain the user's actual crop/ID.
-                            let photos = store.sharingPhotos
-                            let slots = Dictionary(uniqueKeysWithValues: Array(photos.prefix(6)).enumerated().map { ($0.offset + 1, $0.element) })
-                            SourcePhotoGrid(route: 33, photoOverrides: slots, requirePhotoOverrides: true) { store.openPhoto($0) }
-                            if photos.count > 6 { MasonryPhotos(photos: Array(photos.dropFirst(6))) { store.openPhoto($0) } }
-                        }
-                    } else {
-                        PhotoReviewMosaic(photos: store.sharingPhotos) { store.openPhoto($0) }.frame(height: 165)
+            if textSize.isAccessibilitySize {
+                ScrollView {
+                    VStack(spacing: 10) {
+                        reviewContent
+                        reviewConfirmation
+                        reviewShareButton
                     }
-                    reviewSectionHeader(String(localized: "People (\(store.sharingPeople.count))")) { store.go(.peopleSelection) }.padding(.top, 7)
-                    ScrollView(.horizontal) {
-                        HStack(spacing: 22) {
-                            ForEach(store.sharingPeople) { person in
-                                Button { store.openPerson(person) } label: { VStack(spacing: 6) { Avatar(asset: person.asset, size: 65, pink: true); Text(person.name).loveliesFont(size: 14) } }.buttonStyle(LoveliesPressStyle())
-                            }
-                        }.padding(.horizontal, 4).padding(.vertical, 2)
-                    }.scrollIndicators(.hidden).accessibilityIdentifier("lovelies.horizontal.review-people")
-                }.padding(.horizontal, 21)
-            }.scrollIndicators(.hidden)
-            Text("You're about to share \(store.sharePhotoIDs.count) photos\nwith \(store.sharingPeople.count) people.")
-                .loveliesFont(size: 15).multilineTextAlignment(.center).foregroundStyle(LoveliesTheme.secondary)
-                .frame(maxWidth: .infinity).padding(.vertical, 21).background(LoveliesTheme.raised, in: RoundedRectangle(cornerRadius: 15))
-                .overlay(RoundedRectangle(cornerRadius: 15).stroke(LoveliesTheme.stroke)).padding(.horizontal, 21)
-            PinkButton(title: String(localized: "Share Photos"), icon: "square.and.arrow.up", enabled: !store.sharePhotoIDs.isEmpty && !store.sharingPeople.isEmpty) { store.go(.sharingProgress) }.padding(.horizontal, 21).padding(.bottom, 15)
+                }.scrollIndicators(.visible)
+            } else {
+                ScrollView { reviewContent }.scrollIndicators(.hidden)
+                reviewConfirmation
+                reviewShareButton
+            }
         }.foregroundStyle(.white)
+    }
+
+    private var reviewContent: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            reviewSectionHeader(String(localized: "Photos (\(store.sharePhotoIDs.count))")) { store.go(.shareSelection) }
+            if let layout = SourceReferenceCatalog.layout(33) {
+                if store.referenceReview33 {
+                    SourcePhotoGrid(route: 33, filterIDs: store.sharePhotoIDs) { store.openPhoto($0) }
+                    let extra = store.sharePhotoIDs.subtracting(Set(layout.tiles.map(\.id)))
+                    if !extra.isEmpty {
+                        MasonryPhotos(photos: store.sharingPhotos.filter { extra.contains($0.id) }) { store.openPhoto($0) }
+                    }
+                } else {
+                    // Measured source slots retain the user's actual crop/ID.
+                    let photos = store.sharingPhotos
+                    let slots = Dictionary(uniqueKeysWithValues: Array(photos.prefix(6)).enumerated().map { ($0.offset + 1, $0.element) })
+                    SourcePhotoGrid(route: 33, photoOverrides: slots, requirePhotoOverrides: true) { store.openPhoto($0) }
+                    if photos.count > 6 { MasonryPhotos(photos: Array(photos.dropFirst(6))) { store.openPhoto($0) } }
+                }
+            } else {
+                PhotoReviewMosaic(photos: store.sharingPhotos) { store.openPhoto($0) }.frame(height: 165)
+            }
+            reviewSectionHeader(String(localized: "People (\(store.sharingPeople.count))")) { store.go(.peopleSelection) }.padding(.top, 7)
+            ScrollView(.horizontal) {
+                HStack(spacing: 22) {
+                    ForEach(store.sharingPeople) { person in
+                        Button { store.openPerson(person) } label: { VStack(spacing: 6) { Avatar(asset: person.asset, size: 65, pink: true); Text(person.name).loveliesFont(size: 14) } }.buttonStyle(LoveliesPressStyle())
+                    }
+                }.padding(.horizontal, 4).padding(.vertical, 2)
+            }.scrollIndicators(.hidden).accessibilityIdentifier("lovelies.horizontal.review-people")
+        }.padding(.horizontal, 21)
+    }
+
+    private var reviewConfirmation: some View {
+        Text("You're about to share \(store.sharePhotoIDs.count) photos\nwith \(store.sharingPeople.count) people.")
+            .loveliesFont(size: 15).multilineTextAlignment(.center).foregroundStyle(LoveliesTheme.secondary)
+            .fixedSize(horizontal: false, vertical: true)
+            .frame(maxWidth: .infinity).padding(.vertical, 21).background(LoveliesTheme.raised, in: RoundedRectangle(cornerRadius: 15))
+            .overlay(RoundedRectangle(cornerRadius: 15).stroke(LoveliesTheme.stroke)).padding(.horizontal, 21)
+    }
+
+    private var reviewShareButton: some View {
+        PinkButton(title: String(localized: "Share Photos"), icon: "square.and.arrow.up", enabled: !store.sharePhotoIDs.isEmpty && !store.sharingPeople.isEmpty) { store.go(.sharingProgress) }.padding(.horizontal, 21).padding(.bottom, 15)
     }
     private func reviewSectionHeader(_ title: String, action: @escaping () -> Void) -> some View {
         HStack {
@@ -258,7 +284,7 @@ struct SharingViews: View {
                         sharingStep(String(localized: "Finding your people"), index: 1)
                         sharingStep(String(localized: "Sending..."), index: 2)
                         sharingStep(String(localized: "Almost there!"), index: 3)
-                        QuietButton(title: String(localized: "Back to review")) { store.back() }
+                        QuietButton(title: String(localized: "Back to review")) { store.back() }.fixedSize(horizontal: false, vertical: true)
                     }.padding(.top, 13).padding(.horizontal, 20)
                     Spacer(minLength: 0)
                 }.padding(.horizontal, 29).frame(maxWidth: .infinity).foregroundStyle(.white)
@@ -277,6 +303,8 @@ struct SharingViews: View {
                 else { Circle().stroke(.white.opacity(0.5), lineWidth: 1.4); if index == 2 { Circle().trim(from: 0, to: CGFloat(max(0.2, store.progress))).stroke(LoveliesTheme.pink, lineWidth: 2).rotationEffect(.degrees(-90)) } }
             }.frame(width: 25, height: 25)
             Text(title).loveliesFont(size: 14).foregroundStyle(LoveliesTheme.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+                .accessibilityLabel(index == 2 ? Text("Sharing Photos") : Text(title))
         }
     }
 
@@ -298,21 +326,44 @@ struct SharingViews: View {
     }
     private func sharedRow(_ person: DemoPerson, photo: Int?, detail: String, status: String) -> some View {
         Button { store.openPerson(person) } label: {
-            HStack(spacing: 13) {
-                if let photo {
-                    HStack(spacing: -30) {
-                        AssetImage(name: DemoPhoto.all[photo - 1].asset).scaledToFill().frame(width: 45, height: 60).clipped().clipShape(RoundedRectangle(cornerRadius: 7))
-                        Avatar(asset: person.asset, size: 53)
-                    }.frame(width: 73)
-                } else { Avatar(asset: person.asset, size: 51) }
-                VStack(alignment: .leading, spacing: 6) { Text(person.name).loveliesFont(size: 17, weight: .medium); Text(detail).loveliesFont(size: 12).foregroundStyle(LoveliesTheme.secondary) }
-                Spacer(minLength: 0)
-                Label(LocalizedStringKey(status), systemImage: status == "Delivered" ? "circle.fill" : status == "Viewed" ? "eye" : "circle.fill")
-                    .loveliesFont(size: 11, weight: .medium).foregroundStyle(status == "Delivered" ? LoveliesTheme.pink : .black)
-                    .padding(.horizontal, 10).padding(.vertical, 7)
-                    .background(status == "Delivered" ? LoveliesTheme.pink.opacity(0.14) : status == "Sent" ? Color(red: 0.7, green: 0.56, blue: 1) : LoveliesTheme.pink, in: Capsule())
+            Group {
+                if textSize.isAccessibilitySize {
+                    VStack(alignment: .leading, spacing: 12) {
+                        sharedRowIdentity(person, photo: photo, detail: detail)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                        sharedRowStatus(status)
+                    }.fixedSize(horizontal: false, vertical: true)
+                } else {
+                    HStack(spacing: 13) {
+                        sharedRowIdentity(person, photo: photo, detail: detail)
+                        Spacer(minLength: 0)
+                        sharedRowStatus(status)
+                    }
+                }
             }.padding(.vertical, 14).contentShape(Rectangle())
         }.buttonStyle(LoveliesPressStyle()).overlay(alignment: .bottom) { Rectangle().fill(.white.opacity(0.08)).frame(height: 1) }
+    }
+
+    private func sharedRowIdentity(_ person: DemoPerson, photo: Int?, detail: String) -> some View {
+        HStack(spacing: 13) {
+            if let photo {
+                HStack(spacing: -30) {
+                    AssetImage(name: DemoPhoto.all[photo - 1].asset).scaledToFill().frame(width: 45, height: 60).clipped().clipShape(RoundedRectangle(cornerRadius: 7))
+                    Avatar(asset: person.asset, size: 53)
+                }.frame(width: 73)
+            } else { Avatar(asset: person.asset, size: 51) }
+            VStack(alignment: .leading, spacing: 6) {
+                Text(person.name).loveliesFont(size: 17, weight: .medium)
+                Text(detail).loveliesFont(size: 12).foregroundStyle(LoveliesTheme.secondary)
+            }
+        }
+    }
+
+    private func sharedRowStatus(_ status: String) -> some View {
+        Label(LocalizedStringKey(status), systemImage: status == "Delivered" ? "circle.fill" : status == "Viewed" ? "eye" : "circle.fill")
+            .loveliesFont(size: 11, weight: .medium).foregroundStyle(status == "Delivered" ? LoveliesTheme.pink : .black)
+            .padding(.horizontal, 10).padding(.vertical, 7)
+            .background(status == "Delivered" ? LoveliesTheme.pink.opacity(0.14) : status == "Sent" ? Color(red: 0.7, green: 0.56, blue: 1) : LoveliesTheme.pink, in: Capsule())
     }
 
     private var report: some View {
