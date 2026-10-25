@@ -11,6 +11,33 @@ they do not establish an iOS app build or physical Keychain behavior.
 
 Current replacement work is recorded in [the iOS release checkpoint](../docs/ios-release-progress.md). Lovelies updates the existing Memories App Store listing; the owner confirmed there are no real users, photos or subscriptions to migrate. The default production bundle is `com.lovelies.memories`, version `1.1.0` / build `18`, with the supplied Supabase Edge endpoint. Verify an unused higher version and the current signing team in App Store Connect before archive/upload. `LoveliesTests` is included in the shared scheme. Deployment target remains iOS 17. All older verification passages below are historical and do not establish current release acceptance.
 
+## Reproducible reference UI runner
+
+From the repository root, compile the frozen one-file UI runner into a new
+output directory whose parent already exists:
+
+```sh
+python3 scripts/build-ios-ui-audit.py \
+  --output /absolute/external/path/new-ui-runner \
+  --source-sha256 cef012a6a4a9d373ec6e91e27dfc50c8c8dcf967de437eb9dc4ec64c6e3979da
+```
+
+The default source is the tracked revision4 `LoveliesFrontendAudit.swift` under
+`verification/accessibility-navigation-20261023/ios-isolated-simulator/c9-candidate/`.
+A later reviewed source requires explicit `--source` and its exact SHA256. The
+command archives that file, generates a Simulator-only test project from the
+repository templates and compiles exactly that one archived Swift file. It uses
+the selected `--developer-dir` per process, preserving global Xcode selection.
+Existing output directories are refused. Source hashes, actual compiler inputs,
+products, the `.xctestrun` and retained raw diagnostics are in `result.json` and
+the output directory. No team or device provisioning profile is needed for this
+unsigned runner build.
+
+This command builds only the runner. Runtime execution and installation require
+the separately qualified app, named test device and preservation procedure.
+Current app/runtime findings are in the
+[source-bound UI checkpoint](../docs/release/ios-reference-ui-20261025.md).
+
 All 48 supplied reference screens are implemented as native SwiftUI views. Images are individual cropped photo, recipient, logo and illustration assets; no entire screenshot is used as an interactive background. The user's screenshot-specific layouts, black canvas, pink controls, masonry galleries and Lovelies identity drive these views.
 
 - Screens 01–09: welcome, sample sign-in and photo access, three guided sample selfie steps, retry, processing and setup completion.

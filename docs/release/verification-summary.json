@@ -2764,6 +2764,29 @@
       "delivery_receipt": "/Volumes/PRO-G40/Projects/Lovelies/verification/encrypted-backup-snapshot-source-checkpoint-20261025/delivery.json",
       "remote_ci_passed": false,
       "billing_unchanged": true
+    },
+    "ios_canonical_ui_runner_build": {
+      "receipt": "/Volumes/PRO-G40/Projects/Lovelies/verification/ios-ui-runner-canonical-20261025/result.json",
+      "receipt_sha256": "585e2c1fa1643a881d59c2621687ee89d695dd7418e29c1a8e9fdc26510df9b6",
+      "source_inputs": 4,
+      "source_unchanged": true,
+      "actual_compiler_sources": 1,
+      "products": 13,
+      "source_sha256": "cef012a6a4a9d373ec6e91e27dfc50c8c8dcf967de437eb9dc4ec64c6e3979da",
+      "guard_checks": "/Volumes/PRO-G40/Projects/Lovelies/verification/ios-ui-runner-canonical-20261025/guard-checks/result.json",
+      "guard_checks_sha256": "7519721c64057d7d3aa99e46d5402c506c7e0912712282a7913ea4e9d2a53c93",
+      "existing_output_and_wrong_pin_refused": true,
+      "app_rebuilt_or_installed": false,
+      "device_or_runtime_or_ci_acceptance": false
+    },
+    "verified_ios_reference_source_delivery": {
+      "commit": "11f8e7ee1aa121e98602271e3c032a07d2644849",
+      "verified_remote_main": "11f8e7ee1aa121e98602271e3c032a07d2644849",
+      "files": 10,
+      "source_seal_sha256": "4d42eca0c3235c2aefb14c626e74373a3a7e480add7831010e15ae5f99399486",
+      "delivery_receipt": "/Volumes/PRO-G40/Projects/Lovelies/verification/ios-reference-ui-source-checkpoint-20261025/delivery.json",
+      "runtime_or_release_acceptance": false,
+      "remote_ci_passed": false
     }
   }
 }

@@ -1,0 +1,20 @@
+// !$*UTF8*$!
+{
+ archiveVersion = 1; classes = {}; objectVersion = 56;
+ objects = {
+  000000000000000000000001 = {isa = PBXProject; attributes = {LastUpgradeCheck = 2700;}; buildConfigurationList = 00000000000000000000000A; compatibilityVersion = "Xcode 14.0"; developmentRegion = en; hasScannedForEncodings = 0; knownRegions = (en, Base); mainGroup = 000000000000000000000002; productRefGroup = 000000000000000000000003; projectDirPath = ""; projectRoot = ""; targets = (000000000000000000000004);};
+  000000000000000000000002 = {isa = PBXGroup; children = (000000000000000000000005, 000000000000000000000003); sourceTree = "<group>";};
+  000000000000000000000003 = {isa = PBXGroup; children = (000000000000000000000006); name = Products; sourceTree = "<group>";};
+  000000000000000000000004 = {isa = PBXNativeTarget; buildConfigurationList = 00000000000000000000000B; buildPhases = (000000000000000000000008, 000000000000000000000009); buildRules = (); dependencies = (); name = LoveliesFrontendAudit; productName = LoveliesFrontendAudit; productReference = 000000000000000000000006; productType = "com.apple.product-type.bundle.ui-testing";};
+  000000000000000000000005 = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = __LOVELIES_QA_SOURCE__; sourceTree = "<absolute>";};
+  000000000000000000000006 = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = LoveliesFrontendAudit.xctest; sourceTree = BUILT_PRODUCTS_DIR;};
+  000000000000000000000007 = {isa = PBXBuildFile; fileRef = 000000000000000000000005;};
+  000000000000000000000008 = {isa = PBXSourcesBuildPhase; buildActionMask = 2147483647; files = (000000000000000000000007); runOnlyForDeploymentPostprocessing = 0;};
+  000000000000000000000009 = {isa = PBXFrameworksBuildPhase; buildActionMask = 2147483647; files = (); runOnlyForDeploymentPostprocessing = 0;};
+  00000000000000000000000A = {isa = XCConfigurationList; buildConfigurations = (00000000000000000000000C); defaultConfigurationIsVisible = 0; defaultConfigurationName = Debug;};
+  00000000000000000000000B = {isa = XCConfigurationList; buildConfigurations = (00000000000000000000000D); defaultConfigurationIsVisible = 0; defaultConfigurationName = Debug;};
+  00000000000000000000000C = {isa = XCBuildConfiguration; name = Debug; buildSettings = {SDKROOT = iphonesimulator; IPHONEOS_DEPLOYMENT_TARGET = 17.0; SWIFT_VERSION = 5.0; CLANG_ENABLE_MODULES = YES; SWIFT_OPTIMIZATION_LEVEL = "-Onone";};};
+  00000000000000000000000D = {isa = XCBuildConfiguration; name = Debug; buildSettings = {PRODUCT_NAME = "$(TARGET_NAME)"; PRODUCT_BUNDLE_IDENTIFIER = com.lovelies.frontend.audit; SDKROOT = iphonesimulator; SUPPORTED_PLATFORMS = iphonesimulator; IPHONEOS_DEPLOYMENT_TARGET = 17.0; SWIFT_VERSION = 5.0; TARGETED_DEVICE_FAMILY = "1,2"; GENERATE_INFOPLIST_FILE = YES; CODE_SIGNING_ALLOWED = NO; SWIFT_EMIT_LOC_STRINGS = NO; LD_RUNPATH_SEARCH_PATHS = ("$(inherited)", "@executable_path/Frameworks", "@loader_path/Frameworks");};};
+ };
+ rootObject = 000000000000000000000001;
+}

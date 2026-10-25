@@ -37,6 +37,16 @@ The exact frozen Swift QA source is retained at
 (SHA256 `cef012a6a4a9d373ec6e91e27dfc50c8c8dcf967de437eb9dc4ec64c6e3979da`).
 Its strict target/scroll assertions and audit findings are preserved.
 
+`scripts/build-ios-ui-audit.py` now generates the runner project from tracked
+templates and compiles one archived, SHA256-pinned Swift source. The canonical
+command passed an actual runner-only compile with four unchanged inputs and13
+products. Black-box CLI probes reject an existing output directory and a wrong
+source pin without overwriting the preserved marker or creating the refused
+output. Receipts are in
+`/Volumes/PRO-G40/Projects/Lovelies/verification/ios-ui-runner-canonical-20261025/`.
+See the [runner command](../../ios/README.md). This closes the local project-source
+dependency; runtime/device and independent CI qualification remain separate.
+
 Round5 compile/staging receipts and recoverable source archive are under
 `/Volumes/PRO-G40/Projects/Lovelies/verification/ios-grouped-ui-round5-20261025/`.
 `build-result.json` SHA256:
