@@ -1,6 +1,10 @@
 # Remaining deployment inputs
 
-The approved Supabase schema is applied and read back at version 8. All63 tables
+Current integration evidence is in [audience-readiness-20261024.md](audience-readiness-20261024.md).
+The exact additive v9–v11 transaction is staged and locally tested, including
+unknown/test-account and hold preservation; it has not been applied hosted.
+
+The approved Supabase baseline is freshly read back at version8. All63 tables
 have forced RLS/backend-only policies; the three private buckets have exact 20 MiB
 limits/MIME restrictions and no client Storage policies. The existing RLS event
 trigger's client execution grants were restricted, and the post-change Security
@@ -59,25 +63,36 @@ exposed at inspection. No client schema grants were added.
   operator/location, retention/backup, audiences/territories and mailbox operation
   affect those notices and both store disclosures.
 - Supply verified Android Firebase/product/link properties and the observed upload
-  certificate/highest-code inputs. Apple needs production APNs/Associated Domains
-  capabilities and a matching distribution profile. Current inspected profiles do
-  not establish those production capabilities.
-- The owner completed the Apple Program License review. The original blocking banner is absent and Free Apps is Active, effective23 October2026. Paid Apps remains Active with New Agreement Available; review those new paid terms before final billing qualification. No agreement was accepted by this agent; substantive territory/trader declarations and actual purchases/providers remain unqualified.
+  certificate/highest-code inputs. Apple Push Notifications and Associated Domains were saved on the existing
+  identifier; matching App Store profile `Lovelies_AppStore_20261024` was generated,
+  independently decoded and matched to the existing distribution certificate.
+  This does not establish a signed archive, actual APNs delivery or live links.
+- The owner completed the Apple Program License review. After explicit review/approval of v127 and owner-completed two-factor verification, the updated Paid Apps Agreement was accepted and read back Active for24 October2026–21 June2027. The retained agreement receipt is in `verification/supabase-release-20261023/store-draft-20261024/`. Territory/trader declarations and actual purchase/provider behavior still require qualification.
 - The owner approved `easymoai`; Lovelies is registered and its matching client config is prepared in ignored `.release-secrets/android/firebase-public-client.properties`. Load its four values explicitly as `ORG_GRADLE_PROJECT_<property-name>` environment variables for the reviewed candidate build; do not source an unvalidated shell file or print values. Gradle already consumes those project properties, and the source template records the three public identifiers. The shared key has25 API restrictions/no Generative Language API, with application restrictions None; review that baseline without breaking existing Cool. FCM HTTP v1 is enabled. Private sender authentication, actual device delivery and APNs remain unqualified. No private key, billing/Analytics/IAM/restriction change or notification was created/sent.
 - Produce and inspect exact signed candidates, qualify store-installed in-place
   upgrades without uninstall/reset, run two-account hosted journeys and physical
   camera/storage/media/accessibility/performance/provider acceptance, and complete
   Play testing/TestFlight and reviewer access. No actual store upload occurred.
-- Google Play access is restored in Codex and its product/base plan/notification topic were read back; Apple is also authenticated in Codex and its approved monthly product/group/availability were read back. The intended canonical Git remote and approved private inference/push host/operator
-  have been requested from the owner. Source and historical evidence remain local;
-  no new repository, paid host, provider send or public release was created.
-- Reconcile the two manually applied migration versions through supported Supabase
+- Google Play access is restored in Codex and its product/base plan/notification topic were read back; Apple is also authenticated in Codex and its approved monthly product/group/availability were read back. On25 October the private `ikanisa/Lovelies` repository was created and verified as local `origin`, preserving `ikanisa/Memories`. No source push or CI run is established by repository creation. Qualified private inference/push operating inputs and
+  provider acceptance remain unresolved technical inputs. Earlier requests are
+  historical and do not revoke the owner’s authorization to complete readiness.
+  Temporary native-image build qualification is separate from an accepted release
+  host; no production service, provider send or store publication is established.
+- Preserve the two manually applied baseline versions and reconcile history through supported Supabase
   CLI history repair/readback before future `db push`; never blindly replay the
   fresh-schema DDL or directly edit Supabase-managed migration/Storage tables.
 
 Secrets must not be pasted into chat, committed, bundled in native clients or
 shown in submission evidence. This file requests configuration facts and secure
 setup, not a new authorization to repeat implementation work.
+
+Supabase CLI `2.122.0` is available through the exact npm runner pin. Its actual
+help confirms named-function deployment with `--project-ref`, `--use-api` and
+`--no-verify-jwt`; the required scoped capability is `edge_functions_write`.
+The prepared command targets only `lovelies-api`, with no `--prune`. CLI
+authentication, token creation, migration-history repair and deployment have
+not run. The current authenticated dashboard remains usable. The plugin was
+absent at the latest discovery; do not infer that a suggested connection exists.
 
 [Android public input template](android-public.properties.example) records the verified product/API/signing/version values without loading them automatically or inventing missing policy/Firebase/link inputs. The observed Google topic is `projects/easymoai/topics/lovelies-google-play-rtdn`; its receiver/OIDC/IAM and delivery still require qualification.
 

@@ -1,12 +1,14 @@
 # Store SDK artifact readback — 24 October 2026
 
+Current audience integration: [24 October checkpoint](audience-readiness-20261024.md). Its source-bound results and open regressions supersede earlier “current” descriptions below for modified API/native/operator/web files; earlier receipts retain their original scope. No release is accepted.
+
 The current local artifacts satisfy the inspected SDK/version thresholds within the scope below. Final signed store packages, device behavior and console validation remain open.
 
 | Artifact | Observed result | Scope |
 |---|---|---|
 | Android Debug APK `fcd89930…97ab0` | `com.lovelies.memories`, 2.0.0/code 18, minimum API 26, target/compile API 36; merged Billing metadata 9.1.0 | Actual packaged manifest |
 | Same APK | All eight native libraries have every `PT_LOAD` alignment at least 16384; `zipalign -c -P 16 -v 4` passes | Debug APK ELF/ZIP inspection. This does not qualify the final AAB/generated APK set or a 16 KiB runtime |
-| Unsigned iPhoneOS Release `317e0d67…71a5cf` | Xcode 27.1/build 27A9275, SDK iphoneos27.1/build 24A94232, minimum iOS 17 | Actual compiled Gallery0e/Upload23c checkpoint32; newer adopted Upload392b is unbuilt. Packaged `Info.plist`; distribution signature, archive validation and device support remain separate |
+| Unsigned iPhoneOS Release `bae3cb71…4c9a65` | Xcode27.1/build27A9275, SDKiphoneos27.1/build24A94232, minimum iOS17 | Actual compiled Gallery0e/Upload392b checkpoint;221 scoped inputs match. Packaged Info/privacy/8 locale bytes preserved. Six release preflight blockers, distribution archive/signature and device/store support remain separate. |
 
 Google requires API 36 for ordinary phone/tablet app updates from 31 August 2026. [Google target API requirements](https://developer.android.com/google/play/requirements/target-sdk).
 

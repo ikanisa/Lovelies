@@ -6,6 +6,8 @@ Publish only with verified native screenshots, hosted behavior and current links
 
 **Name:** Lovelies
 
+**Apple subtitle:** Your photos. Private sharing.
+
 **Short description:** Find your photos. Review who receives them. Keep sharing private.
 
 **Description:**

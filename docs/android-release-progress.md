@@ -1,5 +1,9 @@
 # Android replacement readiness — 24 October 2026
 
+Current audience integration: [24 October checkpoint](release/audience-readiness-20261024.md). Its source-bound results and open regressions supersede earlier “current” descriptions below for modified API/native/operator/web files; earlier receipts retain their original scope. No release is accepted.
+
+The separate OpenFace physical Pixel HTTP sharing lane now passes22 checks with product8bbcd66c/test80540c1d after transport repair. This does not replace or extend the fcd/7123 reference UI matrix below; no new signing, store-installed update or spoken/provider acceptance is inferred. Its source-bound receipt is under `verification/openface-integration-20261024/continuation/android-main-after-resource-repair/`.
+
 The existing157-case/14-suite XMLs and immutable fcd product/7123 test artifacts were preserved before the concurrent OpenFace native-test continuation. `post-localization-ui/native-caption-count-build/pre-openface-android-artifacts/preservation.json` binds the copies and exact historical scope. This preservation is not another unit run, build or qualification of the changing native HTTP/tests.
 
 ## 24 October 2026 — current product runtime and test-only correction

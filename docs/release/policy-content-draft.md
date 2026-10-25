@@ -1,5 +1,11 @@
 # Replacement policy content for the native Lovelies release
 
+24 October update: the selected age/guardian and retention decisions are in
+`retention-and-young-users.md`; their current review copy is in `web/`. The prose
+below preserves the 23 October source draft. Unknown audience/retention choices
+below are historical gaps, not new requests for owner approval. Production
+publication still requires verified implementation and operations.
+
 Prepared 23 October 2026 from the current implementation. This is a reviewable
 release draft; it is not a statement that the new backend is deployed or that the
 current website has been updated. Confirm the private inference operator/location,

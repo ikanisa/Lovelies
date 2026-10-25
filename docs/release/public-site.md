@@ -1,4 +1,15 @@
-# Lovelies public-information site — 23 October 2026
+# Lovelies public-information site — updated 24 October 2026
+
+The 24 October review edition applies the owner-selected 13+ audience, supported
+independent guardian review for ages 13–17, and the numerical retention decisions
+in `retention-and-young-users.md`. Enforcement and provider/operating
+qualification remain separate. The earlier preview was deployed only to
+`https://native-public-info-20261024.lovelies-web.pages.dev`; production and the
+shared admin/photo hosts were preserved. Terminal readback later returned
+Cloudflare 403/error1010, so that later attempt does not refresh hosted acceptance.
+Use `scripts/prepare-public-site.py` to stage the explicit 13-file allow-list;
+never upload review manifests or the repository root. The local-check section
+below records the prior edition and must not be treated as new-byte proof.
 
 The new `web/` directory is a **local review draft** for the next native release.
 It has not replaced the current published website, policy edition or store URLs.
