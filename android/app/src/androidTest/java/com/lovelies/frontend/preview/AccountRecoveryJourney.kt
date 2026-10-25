@@ -6,10 +6,10 @@ import kotlinx.coroutines.delay
 import org.json.JSONObject
 import java.io.File
 
-/** Independent installation vaults and actual Cloudflare responses; no key/capture seed or fabricated success. */
+/** Independent installation vaults and actual backend responses; no key/capture seed or fabricated success. */
 internal class AccountRecoveryJourney(private val sourceContext: Context,private val newContext: Context,private val origin: String,port: Int,
     private val selfies: List<String>,private val fresh: String,private val input: (String)->ByteArray,
-    private val pass: (String,WireObject)->Unit): AutoCloseable {
+    private val pass: (String,WireObject)->Unit,private val expectedDatabase: String="supabase_postgresql"): AutoCloseable {
     private val relay=EnrollmentReplyLossRelay(origin,port)
     val endpoint get()=relay.url
     private val checkpoint=AtomicFile(File(newContext.noBackupFilesDir,"account-recovery-checkpoint.json"))
@@ -67,11 +67,21 @@ internal class AccountRecoveryJourney(private val sourceContext: Context,private
         check(until in setOf("start","capture","completion","finish"));check(selfies.size==3)
         if(marker.isNotEmpty() && phase==until) { recover();pass("Requested account-recovery checkpoint already exists; no mutation repeated",mapOf("phase" to until));return null }
         if(marker.isEmpty()) {
-            val health=raw("/health");check(health["database"]=="cloudflare_durable_object_sqlite" && health["database_ready"]==true)
+            check(expectedDatabase in setOf("supabase_postgresql","cloudflare_durable_object_sqlite")) { "Unsupported declared account-recovery authority" }
+            val health=raw("/health")
+            check(health["database"]==expectedDatabase && health["database_ready"]==true) { "Account recovery API authority differs from the declared local target" }
+            var authority=health.filterKeys { it in setOf("service","database","database_ready","schema_version","verification","liveness_required") }
+            if(expectedDatabase=="supabase_postgresql") {
+                val ready=raw("/ready")
+                check(ready["service"]=="lovelies-supabase-api" && ready["database"]==expectedDatabase && ready["database_ready"]==true && ready["inference_ready"]==true) { "Account recovery requires the declared Supabase schema and loaded private inference" }
+                check(ready["verification"]=="registered_face_comparison" && ready["liveness_required"]==false) { "Account recovery verification policy differs from the current signed-still contract" }
+                authority=authority+mapOf("inference_ready" to true)
+            }
             try { raw("/auth/otp/start",method="POST",body=emptyMap());error("OTP unexpectedly available") }
             catch(problem: LiveFailure) { check(problem.status in setOf(404,410)) }
-            pass("Actual Cloudflare SQLite is ready and OTP is unavailable",emptyMap())
+            pass("Declared local account-recovery authority is ready and OTP is unavailable",authority)
             val source=CloudflareRepository(sourceContext,endpoint);source.bootstrap();val initial=source.credentials!!.account
+            admitFreshSyntheticAdult(source)
             source.faceChallenge();selfies.forEachIndexed { index,path -> check(capture(source,path).first==index+1) }
             check(source.credentials!!.account==initial && source.get("/me")["authenticated"]==true)
             val oldIdentity=source.identity ?: error("Original registered device missing")

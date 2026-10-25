@@ -659,3 +659,248 @@ physical capture/accessibility/provider/package evidence; obtain permissioned
 purpose-specific recognition acceptance; and perform the authorized staged
 distribution step. There is no added PAD/MOV certification, customer-data import,
 Flutter conversion, global index or blanket release-register restart.
+
+## 25 October 2026 — actual Edge and connected Android checkpoint
+
+The physical Pixel 4a main journey now passes **22 checks** through Supabase
+Edge Runtime **v1.74.3**, isolated PostgreSQL **schema 11**, actual private
+Storage and the native inference image pinned to manifest
+`982e2ed7bb66b17db17979495495892579f1b734c55d93516a2aeedbf70e1c6c`.
+The [runner receipt](../verification/openface-integration-20261024/continuation/android-edge-main-20261025-attempt3/result.json)
+and [actual journey result](../verification/openface-integration-20261024/continuation/android-edge-main-20261025-attempt3/main-result.json)
+bind three-still same-account enrollment, Keystore/HTTP and the review/access
+journey to the declared engineering images. They do not establish three optical
+captures or representative recognition acceptance.
+The [API receipt](../verification/openface-integration-20261024/continuation/isolated-edge-android-main-20261025-attempt5/runtime.json)
+records clean shutdown, unchanged source/fixtures, both owned containers absent,
+only the new database dropped, and **74 maintenance HTTP 200 calls/zero failures**.
+
+The [first](../verification/openface-integration-20261024/continuation/android-edge-main-20261025-attempt1/result.json)
+and [second](../verification/openface-integration-20261024/continuation/android-edge-main-20261025-attempt2/result.json)
+failed Android attempts remain preserved. The supervisor was corrected from a
+shared `per_worker` CPU budget to **`per_request`, still 2,000 ms CPU/256 MiB**;
+this is not a larger CPU allowance. The mechanical SSH relay's chunked-response
+parser was repaired and [nine parser cases passed](../verification/openface-integration-20261024/continuation/isolated-supabase-connected-20261025-attempt1/stream-relay/chunked-parser-proof.json).
+An earlier native host idled after a broken activity keeper; the replacement
+pinned generation started at **10:19:52 UTC**, with the
+[replacement keeper](../verification/openface-integration-20261024/continuation/isolated-supabase-connected-20261025-attempt2/native-activity-keeper.jsonl)
+renewing activity every 40 seconds through its bounded **11:10 UTC** window.
+
+The iPhone test artifact's [unsigned build](</Volumes/PRO-G40/Projects/Lovelies/verification/isolated-supabase-connected-20261025-attempt1/ios-physical-build-attempt2/build.json>)
+passed with **58 unchanged inputs**. A separate [signed staged copy](</Volumes/PRO-G40/Projects/Lovelies/verification/isolated-supabase-connected-20261025-attempt1/ios-physical-staged-attempt2/private-readback/readback.json>)
+was [installed in place](</Volumes/PRO-G40/Projects/Lovelies/verification/isolated-supabase-connected-20261025-attempt1/ios-physical-run-attempt1/install-receipt.json>).
+The [data reconciliation](</Volumes/PRO-G40/Projects/Lovelies/verification/isolated-supabase-connected-20261025-attempt1/ios-installed-data-postinstall-attempt1/reconciliation.json>)
+finds all **eight non-SplashBoard app files byte-identical**; the original
+[ten-file archive receipt](</Volumes/PRO-G40/Projects/Lovelies/verification/isolated-supabase-connected-20261025-attempt1/ios-installed-data-baseline-attempt1/receipt.json>)
+preserves the complete prior app-container copy. No Keychain export/reset is
+claimed. The connected XCTest is [parked before test-case start](</Volumes/PRO-G40/Projects/Lovelies/verification/isolated-supabase-connected-20261025-attempt1/ios-physical-run-attempt1/parked-preflight.json>):
+Xcode requested **“Unlock iPhone (2)”**. After the pending human unlock request,
+root interrupted only its owned test driver at **10:29:50 UTC**. The retained
+exit **75** is cancellation, not a test pass. Its
+[isolated API](../verification/openface-integration-20261024/continuation/isolated-edge-ios-physical-20261025-attempt1/runtime.json)
+closed cleanly with unchanged source/fixtures and **90 maintenance 200 calls/zero failures**.
+
+Four Android recovery/lifecycle scenarios and four Swift host HTTP suites remain
+pending completion in the serial batch at this checkpoint. Physical iPhone,
+optical capture, affected accessibility, hosted production and store acceptance
+remain separate. The native image still has **`final_image_accepted=false`**;
+its [raw security scan](../verification/openface-integration-20261024/continuation/native-consumer-grype-20261025-attempt1/receipt.json)
+retains the High-threshold **DENY/exit 2** result.
+
+## 25 October 2026 — physical iPhone and later connected-consumer checkpoint
+
+This append preserves the checkpoint above and its failed/parked attempts.
+Results below belong to their named execution and runtime; they are not one
+combined assertion count or a claim that every earlier suite was rerun on the
+latest runtime.
+
+The [physical acceptance receipt](</Volumes/PRO-G40/Projects/Lovelies/verification/isolated-supabase-connected-20261025-attempt1/ios-physical-run-attempt2/acceptance.json>),
+[xcresult summary](</Volumes/PRO-G40/Projects/Lovelies/verification/isolated-supabase-connected-20261025-attempt1/ios-physical-run-attempt2/xcresult-summary.json>)
+and [retained xcresult bundle](</Volumes/PRO-G40/Projects/Lovelies/verification/isolated-supabase-connected-20261025-attempt1/ios-physical-run-attempt2/physical-connected.xcresult>)
+now record **one passed test, zero failed and zero skipped** on the actual
+**iPhone 12 Pro / iOS 26.7.2**. Production `BackendRepository` and URLSession
+used a temporary HTTPS engineering origin, actual test-scoped Keychain storage
+and a Secure Enclave P256 key. The case exercised three signed declared JPEGs,
+same-anonymous-account registration, retained-key/device/profile returning
+comparison, consumed-challenge denial and final own-session/test-key cleanup.
+It did not use optical camera captures. The xcresult retains a UIKitToolbar
+runtime warning; this one test does not qualify the full UI or accessibility.
+
+Its [actual Edge API receipt](../verification/openface-integration-20261024/continuation/isolated-edge-ios-physical-20261025-attempt2/runtime.json)
+records **v1.77.8**, **two workers / 768 MiB**, PostgreSQL schema **11**,
+actual private Storage, exact
+loaded native-model readiness and **124 maintenance HTTP 200 calls/zero failures**.
+Shutdown completed with both exact owned API/relay containers absent, only the
+new database dropped, the service lock released and source/fixture deltas empty.
+The previous unlock-blocked/cancelled iPhone attempt remains a separate
+non-passing execution.
+
+The [earlier post-test preservation attempt](</Volumes/PRO-G40/Projects/Lovelies/verification/isolated-supabase-connected-20261025-attempt1/ios-physical-run-attempt2/posttest-preservation-pending.json>)
+recorded CoreDevice error 4016 and pending device reconnection; that failed copy
+attempt remains historical. After the owner reconnected and unlocked the phone,
+the [read-only complete app-container copy](</Volumes/PRO-G40/Projects/Lovelies/verification/isolated-supabase-connected-20261025-attempt1/ios-installed-data-posttest-20261025-attempt2/copy.json>)
+succeeded. The [post-test reconciliation](</Volumes/PRO-G40/Projects/Lovelies/verification/isolated-supabase-connected-20261025-attempt1/ios-installed-data-posttest-20261025-attempt2/reconciliation.json>)
+verified the original **nine-file pre-install manifest** against the **ten-file
+post-test copy**. The existing encrypted profile is byte-identical, with **four
+same-path files byte-identical**. The preference difference is confined to
+`SKTransactionUpdatesLastChecked`, with no added/removed preference keys; other
+differences are accounted for by iOS saved scenes/snapshots. Complete pre/post
+copies and the new hashed archive remain preserved. The post-test preservation
+readback is now **resolved**. No Keychain/Secure Enclave export, inventory or reset,
+post-test install, or app-data reset occurred.
+
+| Completed named consumer | Actual runtime and retained scope |
+| --- | --- |
+| Android main | v1.74.3, two workers / 768 MiB; the [completed 22-check result](../verification/openface-integration-20261024/continuation/connected-native-final-matrix-20261025-attempt1/01-android-main/check/main-result.json) and [79/0 maintenance API receipt](../verification/openface-integration-20261024/continuation/connected-native-final-matrix-20261025-attempt1/01-android-main/api/runtime.json) record unchanged inputs/fixtures and clean shutdown. |
+| Android camera recovery | v1.74.3, two workers / 768 MiB; [checker passed](../verification/openface-integration-20261024/continuation/connected-native-final-matrix-20261025-attempt1/02-android-camera-recovery/check/result.json), with [179/0 maintenance, unchanged inputs/fixtures and clean API shutdown](../verification/openface-integration-20261024/continuation/connected-native-final-matrix-20261025-attempt1/02-android-camera-recovery/api/runtime.json). This remains declared-JPEG recovery evidence. |
+| Swift host live HTTP | v1.74.3, two workers / 768 MiB; [checker passed](../verification/openface-integration-20261024/continuation/connected-swift-final-matrix-20261025-attempt1/01-ios-live/check/result.json), [169 assertions](../verification/openface-integration-20261024/continuation/connected-swift-final-matrix-20261025-attempt1/01-ios-live/check/NativeLiveHTTPJourney-result.json), [163/0 maintenance and clean API shutdown](../verification/openface-integration-20261024/continuation/connected-swift-final-matrix-20261025-attempt1/01-ios-live/api/runtime.json). |
+| Swift host enrollment recovery | v1.74.3, two workers / 768 MiB; [all four process phases and checker passed](../verification/openface-integration-20261024/continuation/connected-swift-final-matrix-20261025-attempt1/02-ios-enrollment/check/result.json), with [88/0 maintenance and clean API shutdown](../verification/openface-integration-20261024/continuation/connected-swift-final-matrix-20261025-attempt1/02-ios-enrollment/api/runtime.json). |
+| Swift host profile lifecycle | v1.77.8, two workers / 768 MiB; [all five process phases and checker passed](../verification/openface-integration-20261024/continuation/connected-native-short-channels-20261025-attempt1/01-ios-profile/check/result.json), with [130/0 maintenance and clean API shutdown](../verification/openface-integration-20261024/continuation/connected-native-short-channels-20261025-attempt1/01-ios-profile/api/runtime.json). |
+| Android enrollment recovery | v1.77.8, two workers / 768 MiB; [fresh checker passed](</Volumes/PRO-G40/Projects/Lovelies/verification/connected-final-checks-20261025-attempt2/01-android-enrollment-recovery/check/result.json>), with [96/0 maintenance, unchanged inputs/fixtures and clean API shutdown](</Volumes/PRO-G40/Projects/Lovelies/verification/connected-final-checks-20261025-attempt2/01-android-enrollment-recovery/api/runtime.json>) plus [close acknowledgement/SSH exit 0](</Volumes/PRO-G40/Projects/Lovelies/verification/connected-final-checks-20261025-attempt2/01-android-enrollment-recovery/ml-relay.json>). |
+| Android account recovery | v1.77.8, two workers / 768 MiB; [fresh checker passed](</Volumes/PRO-G40/Projects/Lovelies/verification/connected-final-checks-20261025-attempt3/01-android-account-recovery/check/result.json>), with [100/0 maintenance, unchanged inputs/fixtures and clean API shutdown](</Volumes/PRO-G40/Projects/Lovelies/verification/connected-final-checks-20261025-attempt3/01-android-account-recovery/api/runtime.json>) plus [close acknowledgement/SSH exit 0](</Volumes/PRO-G40/Projects/Lovelies/verification/connected-final-checks-20261025-attempt3/01-android-account-recovery/ml-relay.json>). |
+| Android lifecycle | v1.77.8, three-worker / 1,024 MiB local trial; [fresh checker passed](</Volumes/PRO-G40/Projects/Lovelies/verification/connected-final-checks-20261025-attempt5/01-android-lifecycle/check/result.json>), with [141/0 maintenance, unchanged inputs/fixtures and clean API shutdown](</Volumes/PRO-G40/Projects/Lovelies/verification/connected-final-checks-20261025-attempt5/01-android-lifecycle/api/runtime.json>) plus [22 relay requests/zero failures, close acknowledgement and SSH exit 0](</Volumes/PRO-G40/Projects/Lovelies/verification/connected-final-checks-20261025-attempt5/01-android-lifecycle/ml-relay.json>). |
+| Swift host account recovery | v1.77.8, three-worker / 1,024 MiB local trial; [all five process phases and checker passed](</Volumes/PRO-G40/Projects/Lovelies/verification/connected-final-checks-20261025-attempt5/02-ios-account/check/result.json>), with [99/0 maintenance, unchanged inputs/fixtures and clean API shutdown](</Volumes/PRO-G40/Projects/Lovelies/verification/connected-final-checks-20261025-attempt5/02-ios-account/api/runtime.json>) plus [14 relay requests/zero failures, close acknowledgement and SSH exit 0](</Volumes/PRO-G40/Projects/Lovelies/verification/connected-final-checks-20261025-attempt5/02-ios-account/ml-relay.json>). |
+
+The Android main/camera rows use completed cases from the
+[controlled-paused Android matrix](../verification/openface-integration-20261024/continuation/connected-native-final-matrix-20261025-attempt1/result.json),
+whose aggregate status remains failed. The
+[pause receipt](../verification/openface-integration-20261024/continuation/connected-native-final-matrix-20261025-attempt1/root-controlled-pause.json)
+and [pause reconciliation](../verification/openface-integration-20261024/continuation/connected-native-final-matrix-20261025-attempt1/root-controlled-pause-reconciliation.json)
+confirm that both cases completed and the third checker had not started.
+The earlier one-worker main/camera executions remain separate historical results.
+
+The v1.77.8 executions pin the official Edge image to
+`public.ecr.aws/supabase/edge-runtime:v1.77.8@sha256:178c041398a33ded8219344382d0672a90051d1babbf0af03425cafe20039a75`
+(ARM64 config
+`579ba74418194d156d5425609df02ed414fa7de42a791ef8a239345466632d1d`).
+Before the later capacity trial, the v1.77.8 executions used two workers,
+each still **256 MiB / 2,000 ms CPU per request**, inside the **768 MiB /
+one-CPU** container. The configured
+150,000 ms `per_request` worker timeout resets while requests remain active;
+it is not an absolute HTTP wall deadline. This supporting-runtime change
+preserves the corrected Linux AMD64 inference image
+`982e2ed7bb66b17db17979495495892579f1b734c55d93516a2aeedbf70e1c6c`
+and its separately bound artifact/fingerprint above.
+[Upstream #753](https://github.com/supabase/edge-runtime/pull/753) changes
+`per_worker` cleanup behavior; upgrading does not establish that it caused or
+fixed the preserved `per_request` pool waits or SSH disconnects.
+
+The mechanical relay now accepts bounded chunked **request** entities without
+altering their decoded bytes or Authorization. Its
+[nine parser cases](../verification/openface-integration-20261024/continuation/isolated-supabase-connected-20261025-attempt1/stream-relay/chunked-parser-proof.json)
+passed. The [three pure close-frame cases](../verification/openface-integration-20261024/continuation/isolated-supabase-connected-20261025-attempt1/stream-relay/close-frame-proof.json)
+passed with zero HTTP inference calls: a valid close is acknowledged and exits
+normally; an invalid nonce or mixed payload is rejected. Actual per-suite relay
+receipts separately record close acknowledgement and SSH exit status.
+The [socket proof](../verification/openface-integration-20261024/continuation/isolated-supabase-connected-20261025-attempt3/socket-rebind-proof.json)
+reproduced immediate-rebind errno 48 without address reuse and successful
+rebind with address reuse, while an occupied listener remained rejected.
+`SO_REUSEPORT` stays disabled. These bounded transport proofs do not identify
+every historical SSH exit 255, prove a session leak or qualify production TLS.
+
+The [older Swift matrix](../verification/openface-integration-20261024/continuation/connected-swift-final-matrix-20261025-attempt1/result.json)
+remains **failed overall** despite its live/enrollment passes: its first profile
+completion lost the private verifier transport, and its API retained a
+10-second pool-wait maintenance failure. Earlier cumulative-worker CPU failures,
+keeper-file/idle-host failures, SSH failures and cancelled runs remain preserved.
+Later passing rows are separate executions, not rewritten outcomes.
+
+The [pinned v1.77.8 pool default](https://github.com/supabase/edge-runtime/blob/v1.77.8/crates/base/src/worker/pool.rs#L88-L116)
+sets a configurable **10,000 ms admission wait**. Its
+[semaphore/wait branch](https://github.com/supabase/edge-runtime/blob/v1.77.8/crates/base/src/worker/pool.rs#L303-L365)
+can time out while waiting for a worker notification or creation permit. That
+supports an admission-wait interpretation of the observed ten-second failures;
+it does not establish the actual worker occupancy, identify each failure's cause
+or prove that upstream #753 fixes this `per_request` execution.
+
+The [deadline-interrupted final-checks attempt](</Volumes/PRO-G40/Projects/Lovelies/verification/connected-final-checks-20261025-attempt2/result.json>)
+also remains failed overall. Its Android enrollment passed, but the original
+Android account-recovery client's final outcome was **unconfirmed, not a pass**.
+The [retirement receipt](</Volumes/PRO-G40/Projects/Lovelies/verification/connected-final-checks-20261025-attempt2/account-attempt-retirement.json>)
+confirms no active device instrumentation, closed relay ACK/SSH exit 0, absent
+owned API containers and only the new database dropped. Original journals were
+preserved; the original operation was not resent and unknown/default app state
+was not reset. Any later qualification uses a fresh database, graph and run UUID.
+
+The [next lifecycle batch](</Volumes/PRO-G40/Projects/Lovelies/verification/connected-final-checks-20261025-attempt4/result.json>)
+remains **failed overall** even though the
+[Android lifecycle checker passed all phases](</Volumes/PRO-G40/Projects/Lovelies/verification/connected-final-checks-20261025-attempt4/01-android-lifecycle/check/result.json>).
+Its [API receipt](</Volumes/PRO-G40/Projects/Lovelies/verification/connected-final-checks-20261025-attempt4/01-android-lifecycle/api/runtime.json>)
+retains **two maintenance failures in 142 calls** and
+[two `InvalidWorkerCreation` events](</Volumes/PRO-G40/Projects/Lovelies/verification/connected-final-checks-20261025-attempt4/01-android-lifecycle/api/016-logs-lovelies-isolated-edge-17d5c9b858e5-api.log>).
+API shutdown still left both owned containers
+absent, dropped only the new database and released the lock, with no source or
+fixture delta. The [relay receipt](</Volumes/PRO-G40/Projects/Lovelies/verification/connected-final-checks-20261025-attempt4/01-android-lifecycle/ml-relay.json>)
+records 22 requests, zero relay failures, explicit close acknowledgement and SSH
+exit 0. Client success and clean teardown do not erase that integrated failure.
+
+The later local capacity trial raised the pool from two to **three workers**
+and the container from 768 MiB to **1,024 MiB**. Each worker remains **256 MiB /
+2,000 ms CPU per request**, with one container CPU and no request replay. Failure
+metadata now reports worker-acquisition versus fetch stage and a bounded count of
+requests awaiting response headers; it logs no URL, payload or exception message.
+That counter does not measure occupied worker lifetimes. Pool occupancy remains
+an unproven explanation for the earlier acquisition failures; the capacity change
+is not itself evidence of a fix.
+
+At the next native-fixture boundary, the inner-container stop returned zero but
+its helper's strict stdout guard failed before absence verification. The retained
+[reconciliation](../verification/openface-integration-20261024/continuation/isolated-supabase-connected-20261025-attempt3/native-stop-reconciliation.json)
+confirmed both exact container-ID/name references absent, then removed only the
+stopped service's owned private environment file and confirmed its absence,
+without reading that secret file or replaying the container stop.
+The [fresh-round boundary](../verification/openface-integration-20261024/continuation/isolated-supabase-connected-20261025-attempt4/clean-boundary.json)
+records the old keeper stopped, no active API or pending native operation, and an
+independent stopped-provider readback before starting the fresh generation.
+This renewal preserves the same immutable inference image; it does not replay an
+unknown inference operation.
+
+The [fresh final two-case batch](</Volumes/PRO-G40/Projects/Lovelies/verification/connected-final-checks-20261025-attempt5/result.json>)
+**passed both selected cases** at **12:19:27 UTC** with the three-worker / 1,024 MiB
+configuration: Android lifecycle and Swift host account recovery. Their API
+maintenance counts were **141/0** and **99/0**, respectively; both relay channels
+closed with acknowledgement, SSH exit 0 and no active or queued exchange.
+The table therefore records passing executions for **five Android journeys and
+four macOS-host Swift HTTP suites**, with runtime/pool scope retained per row,
+plus the separately scoped **one-test physical iPhone pass** above. These local
+passes do not establish that a capacity increase caused the earlier failures to
+disappear or that every case ran on v1.77.8/three workers.
+
+The [final source-baseline readback](../verification/openface-integration-20261024/continuation/isolated-supabase-connected-20261025-attempt4/final-api-baseline-readback.json)
+records **all 85 frozen source inputs unchanged** at connected completion
+(`changed=[]`, freeze
+`9162b3a1e6797c34ade62d94e7463822e9fa18135cea94667aa08adb406c4ca2`).
+The [native preserve-and-stop receipt](../verification/openface-integration-20261024/continuation/isolated-supabase-connected-20261025-attempt4/native-preserve-and-stop-receipt.json)
+retains the validated fixture-evidence archive, excludes the private environment
+file, and confirms the exact owned native container absent and its private
+environment file removed. Archive/cleanup SSH exited 0, with no SSH or inference
+retry. The [final provider readback](../verification/openface-integration-20261024/continuation/isolated-supabase-connected-20261025-attempt4/final-provider-stop.json)
+confirms the keeper stopped locally and the provider **inactive** at
+**12:22:26 UTC**: the HTTP 200 stop response was transitional, followed by a
+separate stopped-state readback and independent inactive-provider observation.
+These are scoped cleanup results; private Storage objects and owned service
+volumes were retained as the per-suite API receipts record.
+
+The [owned local-services cleanup](</Volumes/PRO-G40/Projects/Lovelies/verification/isolated-owned-services-stop-20261025-attempt1/cleanup-receipt.json>)
+records only the `lovelies-openface-fe1a2ccb0ac6` PostgreSQL/Storage containers
+stopped, with both owned data volumes, their network and original start evidence
+retained. Other-owner containers were not modified. The
+[owned quick-tunnel stop](</Volumes/PRO-G40/Projects/Lovelies/verification/isolated-supabase-connected-20261025-attempt1/quick-tunnel2-root-stop-request.json>)
+was recorded at **11:58:35 UTC** after the physical test. The
+[owned ADB cleanup](../verification/openface-integration-20261024/continuation/isolated-supabase-connected-20261025-attempt4/adb-reverse-cleanup.json)
+confirms the original reverse-map baseline was empty and only the owned
+`tcp:18887` mapping was removed after the API listener and target app process were
+absent, preserving other mappings. The
+[temporary controller closure](../verification/openface-integration-20261024/continuation/isolated-supabase-connected-20261025-attempt4/controller-window-closed.json)
+records deployment of the expired start/input window, changing only
+`BUILD_EXPIRES_AT` to **12:21:51 UTC**. It records no change to the production
+inference gateway.
+
+The native image remains **`final_image_accepted=false`**. Its
+[retained security receipt](../verification/openface-integration-20261024/continuation/native-consumer-grype-20261025-attempt1/receipt.json)
+still records the raw High-threshold **DENY/exit 2** result; the scoped engineering
+disposition does not erase or accept that scan. Connected results use declared
+engineering stills and the exact pinned inference image. Optical capture,
+representative recognition acceptance, hosted Supabase cutover, affected full-UI
+accessibility, store update qualification and release acceptance remain separate
+open gates.

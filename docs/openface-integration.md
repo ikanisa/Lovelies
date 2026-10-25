@@ -8,12 +8,15 @@ it remains **UNACCEPTED**. The corrected native-binary fingerprint consumer has
 now passed its 55-case service suite, separate 35 fixtures, real worker and six
 native modes plus exact minimization checks. Its fresh raw scan remains
 **exit 2 / DENY**. Exact High-row dispositions permit scoped local engineering
-use, and the current seven-case actual PostgreSQL/Storage/native-HTTP integration
-passed. The fresh Edge resource cases also passed. The temporary native builder
-is stopped and its start/input window has expired; evidence is preserved.
+use. The earlier seven-case PostgreSQL/Storage/native-HTTP integration and Edge
+resource cases passed. Current-source qualification also runs the actual
+Supabase Edge handler against isolated PostgreSQL schema 11, private Storage
+and the same pinned image, including connected Android and physical iPhone
+checks. The continuation checkpoint records each runtime version, completed
+scope, failed attempt and remaining readback separately.
 No inference traffic,
 Supabase function/schema or store distribution has been cut over. See the
-[continuation checkpoint](openface-integration-continuation.md#25-october-checkpoint).
+[continuation checkpoint](openface-integration-continuation.md).
 The original release register remains authoritative; these LOF IDs add no new
 blanket release requirements.
 
@@ -95,7 +98,8 @@ complete; this slice does not establish a seamless old-profile cutover. The
 initial opaque-template slice needed no migration. The later local schema-10
 generation migration binds new challenges/processing attempts to the exact
 space/artifact/fingerprint tuple without backfilling old rows. The separate
-Supabase owner is preparing schema 11 retention work; hosted schema 8 was last
+Supabase owner's schema 11 is exercised only in the disposable environment;
+hosted schema 8 was last
 observed on 24 October and has not been changed by this integration.
 
 Every private request and result binds `engine_space`, `engine_artifact_sha256`,

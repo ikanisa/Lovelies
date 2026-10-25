@@ -86,7 +86,7 @@ private actor LiveCameraReplyLossTransport: NativeTransport {
     private static var workspace = URL(fileURLWithPath: FileManager.default.currentDirectoryPath, isDirectory: true)
     private static var bindings: [LiveInputBinding] = []
     private static var configured: LiveInputBinding?
-    private static var scopeDescription = "Static reference fixtures over actual local Cloudflare HTTP"
+    private static var scopeDescription = "Static reference fixtures over actual local Lovelies HTTP"
     private static var candidateCount: Int?, approvedCount: Int?, recipientCount: Int?
     private static var strictIsolation = false
     private static func require(_ condition: @autoclosure () throws -> Bool, _ label: String) throws {
@@ -119,6 +119,21 @@ private actor LiveCameraReplyLossTransport: NativeTransport {
         if let body { request.httpBody = try body.encoded(); request.setValue("application/json", forHTTPHeaderField: "Content-Type") }
         return try await NativeURLTransport().send(request, limit: image ? 8 * 1024 * 1024 : 2 * 1024 * 1024)
     }
+    /// These declared engineering accounts represent adults; admission still uses
+    /// the public, journaled production operation on the original anonymous account.
+    private static func declareSyntheticAdult(_ repository: BackendRepository, accountID: String) async throws {
+        let unknown = try await repository.audience()
+        try require(unknown.accountID == accountID && unknown.ageBand == .unknown && unknown.status == .unknown && unknown.version == 0 && !unknown.capabilities.any, "Fresh synthetic account remains undeclared before explicit public admission")
+        let adult = try await repository.declareAudience(.adult, expectedVersion: 0)
+        try require(adult.accountID == accountID && adult.ageBand == .adult && adult.status == .eligible && adult.version == 1 && adult.policyVersion == NativeAudienceProjection.policy && adult.guardianRequest == nil, "Explicit synthetic adult declaration returns the current eligible projection for the same account")
+        try adult.require(.faceAuthentication)
+        try adult.require(.photoMatching)
+        try adult.require(.photoProcessing)
+        let pending = try await repository.pendingAudienceMutation()
+        try require(pending == nil, "Acknowledged public audience operation retires its original durable mutation journal")
+        let session = await repository.summary()
+        try require(session?.accountID == accountID && session?.authenticated == false, "Audience admission neither replaces the anonymous account nor authenticates it")
+    }
     private static func enroll(_ key: String, account: LiveFixtureAccount, config: LiveFixtureConfig, endpoint: URL) async throws -> LivePrincipal {
         stage = "enrollment:" + key
         let signer = LiveSoftwareSigner(), secrets = LiveMemorySecrets()
@@ -130,9 +145,11 @@ private actor LiveCameraReplyLossTransport: NativeTransport {
         let provisional = LivePrincipal(key: key, repository: repository, secrets: secrets, signer: signer, accountID: guest.accountID)
         let denial = try await raw("/community/action", origin: endpoint, principal: provisional, method: "POST", body: .object(["action": .string("photos"), "payload": .object(["source": .string("all")])]))
         try require(denial.status == 403, "Anonymous server gallery access must be denied")
+        try await declareSyntheticAdult(repository, accountID: guest.accountID)
         let policy = try await repository.policy()
         var challenge = try await repository.startFace(consentPolicy: policy, publicKey: signer.jwk)
         try require(challenge.accountID == guest.accountID && challenge.purpose == "registration" && challenge.poses == ["front", "left", "right"], "Initial enrollment must bind three ordinary poses to the anonymous account")
+        try require(challenge.wire["protocol"].string == "lovelies-face-auth-v1" && challenge.wire["maximum_capture_bytes"].integer == 8 * 1024 * 1024 && challenge.expiresAt > Date() && challenge.expiresAt <= Date().addingTimeInterval(125), "Integrated private engine retains the native still protocol, exact 8 MiB bound and short server challenge horizon")
         try require(account.selfies.count == 3, "Enrollment fixture must supply exactly three JPEGs")
         if exerciseCameraRecovery {
             stage = "camera-quality-recovery"
@@ -188,6 +205,7 @@ private actor LiveCameraReplyLossTransport: NativeTransport {
             try candidate.requireCurrent(challenge: challenge, receipts: receipts, publicationGeneration: index + 1, sessionEpoch: guest.epoch, camera: capturePolicy.snapshot, foreground: true)
             receipts.append(try await repository.capture(candidate.bytes, index: index, challenge: challenge)); candidate.retire()
         }
+        try require(receipts.count == 3 && receipts.enumerated().allSatisfy({ $0.element["index"].integer == $0.offset && $0.element["mime"].string == "image/jpeg" && $0.element["sha256"].string == hash(bytes[$0.offset]) && $0.element["byte_size"].integer == bytes[$0.offset].count }), "Signed still receipts retain exact submitted JPEG bytes, order and length through private inference")
         let authenticated = try await repository.completeFace(challenge, captures: receipts)
         try require(authenticated.authenticated && authenticated.accountID == guest.accountID, "Backend must automatically upgrade the same account")
         let current = try await repository.current()
@@ -394,12 +412,14 @@ private actor LiveCameraReplyLossTransport: NativeTransport {
         try require(final["status"].string == "access_available" && final["grants_created"].integer == approved.count && finalPairs == approved, "Final server result must report only actual approved access after acceptance")
         passed("Final original-key result confirms only current approved access")
         stage = "fresh-reference-authentication"
+        guard let registeredDevice = try await owner.repository.device() else { throw LiveJourneyFailure.check("Current registered reference is unavailable") }
         try await owner.repository.logout()
         let loggedOut = await owner.repository.summary()
         try require(loggedOut == nil && (try owner.secrets.read("credentials")) == nil, "Logout must retire session credentials")
         let policy = try await owner.repository.policy()
         let login = try await owner.repository.startFace(consentPolicy: policy, publicKey: owner.signer.jwk)
         try require(login.purpose == "login" && login.accountID == owner.accountID && login.poses == ["front"], "Retained opaque identity must challenge the original registered account")
+        try require(login.deviceID == registeredDevice.deviceID && login.wire["profile_id"].string == registeredDevice.profileID && login.wire["profile_revision"].string == registeredDevice.profileRevision && login.wire["model_id"].string == registeredDevice.modelID && login.wire["policy_version"].string == policy, "Returning comparison binds the exact retained device/profile/model and current policy without an OpenFace account")
         let fresh = try jpeg(config.owner.fresh_selfie, config: config, maximum: 8 * 1024 * 1024)
         let capture = try await owner.repository.capture(fresh, index: 0, challenge: login)
         let restored = try await owner.repository.completeFace(login, captures: [capture])
@@ -430,7 +450,7 @@ private actor LiveCameraReplyLossTransport: NativeTransport {
     private static func report(_ path: String, success: Bool, failure: Error? = nil) throws {
         guard let configured else { throw LiveJourneyFailure.check("Configuration could not be source-bound") }
         let value = LiveRunReport(schema: 1, verified_at: ISO8601DateFormatter().string(from: Date()), status: success ? "passed" : "failed", scope: scopeDescription,
-            transport: "Actual BackendRepository and NativeURLTransport / URLSession to explicit loopback Cloudflare API", model_authority: "Root-owned actual workerd/SQLite/R2/Queue/private ML service; no test verifier or processing replacement", device_proof: "Actual CryptoKit software P256 raw64 signature; in-memory credential storage on macOS host",
+            transport: "Actual BackendRepository and NativeURLTransport / URLSession to explicit loopback Lovelies API", model_authority: "Actual configured Lovelies API and private ML service; database, Storage and loaded engine identities are recorded separately by the runtime owner; no test verifier or processing replacement", device_proof: "Actual CryptoKit software P256 raw64 signature; in-memory credential storage on macOS host",
             checks: checks, assertions_passed: assertions, candidate_scope: strictIsolation ? "Complete isolated graph equality" : "Exact edges for principals created by this run; all other recipients excluded from final preview", candidate_pairs: candidateCount, approved_pairs: approvedCount, recipients: recipientCount,
             configuration: configured, inputs: bindings, failure_stage: success ? nil : stage, failure_code: failure.map(safeFailure), does_not_establish: ["iOS SDK app compilation or SwiftUI interaction", "Live camera input or sensor provenance", "Physical Keychain or Secure Enclave behavior", "Civil identity, liveness or camera attestation", "Hosted deployment, production store entitlement or release acceptance"])
         let encoder = JSONEncoder(); encoder.outputFormatting = [.prettyPrinted, .sortedKeys, .withoutEscapingSlashes]

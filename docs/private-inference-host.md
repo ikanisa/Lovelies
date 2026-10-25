@@ -7,8 +7,12 @@ native AMD64 minimized V1 is privately preserved with scoped runtime evidence.
 The corrected consumer now passed its native 55-case suite, separate 35 fixtures,
 worker lifecycle, six runtime modes and minimization scopes. Its fresh raw scan
 still denies the High threshold; exact technical dispositions permit scoped local
-engineering use. The current actual PostgreSQL/Storage/native-model HTTP journey
-passed 7/7. **No image is accepted and serving remains disabled.**
+engineering use. The earlier PostgreSQL/Storage/native-model HTTP journey passed
+7/7. Later qualification uses the actual Supabase Edge handler, isolated schema
+11 and private Storage with this same pinned image, including physical Android
+and iPhone execution. See the [continuation checkpoint](openface-integration-continuation.md)
+for source-bound results and remaining readback. **No image is accepted and
+production serving remains disabled.**
 
 ## Selected deployment
 

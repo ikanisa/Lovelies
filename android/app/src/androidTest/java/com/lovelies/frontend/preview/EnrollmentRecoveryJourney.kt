@@ -81,6 +81,7 @@ internal class EnrollmentRecoveryJourney(private val context: Context,private va
             val actor=repo.credentials ?: error("Anonymous credentials missing")
             check(actor.method=="anonymous" && me["authenticated"]==false)
             try { repo.get("/me/gallery");error("Anonymous gallery granted") } catch(problem: LiveFailure) { check(problem.code=="registered_face_required") }
+            admitFreshSyntheticAdult(repo)
             relay.beforeStart={
                 val j=EnrollmentJournal.restore(SecureSession(context,endpoint).load()["enrollment"],endpoint)
                 check(j.account==actor.account && j.state=="start");j.assertKey(SecureSession(context,endpoint).existingDevice(j.alias))
@@ -164,7 +165,7 @@ internal class EnrollmentRecoveryJourney(private val context: Context,private va
     suspend fun verifySafetyFailures() {
         val keyContext=NegativeContext(context,File(context.noBackupFilesDir,"missing-key-case"))
         val keyVault=SecureSession(keyContext,endpoint)
-        val keyRepo=CloudflareRepository(keyContext,endpoint);keyRepo.bootstrap();keyRepo.faceChallenge()
+        val keyRepo=CloudflareRepository(keyContext,endpoint);keyRepo.bootstrap();admitFreshSyntheticAdult(keyRepo);keyRepo.faceChallenge()
         val intent=keyRepo.enrollment ?: error("Missing-key setup intent absent")
         val calls=relay.anonymousCalls.get()
         keyVault.deleteDevice(intent.alias)
@@ -177,7 +178,7 @@ internal class EnrollmentRecoveryJourney(private val context: Context,private va
         } finally { keyVault.clear() }
         val revokedContext=NegativeContext(context,File(context.noBackupFilesDir,"revoked-device-case"))
         val revokedVault=SecureSession(revokedContext,endpoint)
-        val revoked=CloudflareRepository(revokedContext,endpoint);revoked.bootstrap();revoked.faceChallenge()
+        val revoked=CloudflareRepository(revokedContext,endpoint);revoked.bootstrap();admitFreshSyntheticAdult(revoked);revoked.faceChallenge()
         val original=revoked.enrollment ?: error("Revocation setup intent absent")
         capture(revoked,0);capture(revoked,1)
         val durable=revokedVault.load() // Encrypted-vault input held only in test memory, not a public seed route.

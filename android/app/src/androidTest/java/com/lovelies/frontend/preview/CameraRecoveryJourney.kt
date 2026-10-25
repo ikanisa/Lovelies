@@ -126,7 +126,7 @@ internal class CameraRecoveryJourney(private val context: Context,private val or
         val checkpointRelay=EnrollmentReplyLossRelay(origin,0)
         var stagedRepo=CloudflareRepository(isolated,checkpointRelay.url);var success=false
         try {
-            stagedRepo.bootstrap();stagedRepo.faceChallenge()
+            stagedRepo.bootstrap();admitFreshSyntheticAdult(stagedRepo);stagedRepo.faceChallenge()
             selfies.forEach { path->val data=input(path);try { stagedRepo.faceCapture(data) } finally { data.fill(0) } }
             val original=stagedRepo.identity ?: error("Original test device missing")
             val previous=stagedRepo.credentials ?: error("Original registered test credentials missing")

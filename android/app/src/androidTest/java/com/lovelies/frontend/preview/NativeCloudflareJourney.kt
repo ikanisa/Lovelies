@@ -4,7 +4,9 @@ import android.app.Activity
 import android.app.Instrumentation
 import android.content.Context
 import android.content.ContextWrapper
+import android.graphics.Bitmap
 import android.graphics.BitmapFactory
+import android.graphics.Color
 import android.os.Bundle
 import androidx.core.content.FileProvider
 import kotlinx.coroutines.delay
@@ -12,8 +14,26 @@ import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withTimeout
 import org.json.JSONObject
 import java.io.File
+import java.io.ByteArrayOutputStream
 import java.net.URI
 import java.util.UUID
+
+/** Declare only a newly created synthetic actor through the real audience API. */
+internal suspend fun admitFreshSyntheticAdult(repository: CloudflareRepository) {
+    val actor=repository.credentials ?: error("Fresh anonymous synthetic actor missing")
+    check(actor.method=="anonymous" && !repository.audienceOperationPending)
+    val unknown=repository.audienceStatus()
+    check(unknown.account==actor.account && unknown.band=="unknown" && unknown.status=="unknown" && unknown.version==0L &&
+        unknown.capabilities.values.none { it }) { "Fresh synthetic audience must start unknown" }
+    // Production declareAudience supplies the current AudienceProtocol.POLICY
+    // and durably journals its idempotency key before sending the real request.
+    val admitted=repository.declareAudience("18_plus",0).audience ?: error("Adult audience projection missing")
+    check(admitted.account==actor.account && admitted.band=="18_plus" && admitted.status=="eligible" && admitted.version==1L &&
+        admitted.request==null && AudienceProtocol.purposes.all { admitted.allows(it) }) { "Synthetic adult admission was not approved" }
+    check(repository.audienceStatus()==admitted && !repository.audienceOperationPending)
+    check(repository.credentials?.account==actor.account && repository.credentials?.token==actor.token &&
+        repository.credentials?.method=="anonymous") { "Audience declaration changed anonymous account/session authority" }
+}
 
 /** Real Android/Keystore/HTTP consumer. Image assets are declared fixtures, never camera evidence. */
 class NativeCloudflareJourney : Instrumentation() {
@@ -34,6 +54,7 @@ class NativeCloudflareJourney : Instrumentation() {
     private var recoveryCheckpoint: String?=null
     private var recoveryRun: String?=null
     private var approved: Map<String,List<String>> = emptyMap()
+    private var authority: WireObject=emptyMap()
     private data class Actor(val context: Context,val repository: CloudflareRepository,val account: String)
     private data class InputPhoto(val name: String,val path: String,val matches: List<String>)
     private data class Fixture(val wire: WireObject,val scope: String,val actorInputs: Map<String,List<String>>,val fresh: Map<String,String>,
@@ -56,6 +77,7 @@ class NativeCloudflareJourney : Instrumentation() {
         }
         var success=false
         var failure: String?=null
+        var failureLocation: WireObject?=null
         try {
             base=NativeProtocol.baseUrl(arguments.getString("lovelies_api") ?: "http://10.0.2.2:18887",true)
             val endpoint=URI(base)
@@ -81,7 +103,8 @@ class NativeCloudflareJourney : Instrumentation() {
                     fixture.actorInputs.getValue("owner"),fixture.fresh.getValue("owner"),::input,::pass)
                 else if(arguments.getString("scenario")=="account-recovery")accountRecoveryJourney=AccountRecoveryJourney(
                     IsolatedContext(targetContext,File(root,"recovery-source")),IsolatedContext(targetContext,File(root,"owner")),base,port,
-                    fixture.actorInputs.getValue("owner"),fixture.fresh.getValue("owner"),::input,::pass)
+                    fixture.actorInputs.getValue("owner"),fixture.fresh.getValue("owner"),::input,::pass,
+                    expectedDatabase=arguments.getString("expected_database") ?: "supabase_postgresql")
                 else recovery=EnrollmentRecoveryJourney(IsolatedContext(targetContext,File(root,"owner")),base,port,
                     fixture.actorInputs.getValue("owner"),fixture.fresh.getValue("owner"),::input,::pass)
             }
@@ -95,6 +118,9 @@ class NativeCloudflareJourney : Instrumentation() {
             success=true
         } catch(problem: Throwable) {
             failure=when(problem) { is LiveFailure -> "${problem.code} (${problem.status})";else->"${problem.javaClass.simpleName}: ${problem.message}" }
+            failureLocation=problem.stackTrace.firstOrNull { it.className.startsWith("com.lovelies.frontend.preview.") }?.let {
+                mapOf("class" to it.className,"file" to it.fileName,"method" to it.methodName,"line" to it.lineNumber)
+            }
         } finally {
             if(::base.isInitialized)runBlocking {
                 val preserveGraph=success && retainedOwner
@@ -112,8 +138,9 @@ class NativeCloudflareJourney : Instrumentation() {
             if(::uploadRoot.isInitialized)uploadRoot.deleteRecursively()
             if(::root.isInitialized && !retainedOwner && !retainedRecovery)root.deleteRecursively()
         }
-        val report=mapOf("status" to if(success)"passed" else "failed","checks" to checks,"passed" to checks.size,"failure" to failure,
-            "runtime" to "Actual Android CloudflareRepository / Android Keystore / workerd SQLite DO / R2 / Queue / real private face-service",
+        val report=mapOf("status" to if(success)"passed" else "failed","checks" to checks,"passed" to checks.size,"failure" to failure,"failure_location" to failureLocation,
+            "runtime" to "Actual Android CloudflareRepository / Android Keystore / declared loopback API / private face-service",
+            "authority" to authority,
             "input_scope" to if(::fixture.isInitialized)fixture.scope else "Declared test asset manifest",
             "api_origin" to if(::base.isInitialized)base else null,"camera_sensor_evidence" to false,"hosted" to false,
             "scenario" to (arguments.getString("scenario") ?: "sharing"),"recovery_checkpoint" to recoveryCheckpoint,
@@ -144,7 +171,9 @@ class NativeCloudflareJourney : Instrumentation() {
         val faces=if(actorLists!=null)actorLists.mapValues { (_,items) -> (items as? List<*>)?.map { NativeProtocol.text(it) }?.also { check(it.size==3) } ?: error("Three declared selfies required") }
             else legacyInputs.mapValues { (_,input) -> (input["selfies"] as? List<*>)?.map { NativeProtocol.text(it) }?.also { check(it.size==3) } ?: error("Three declared selfies required") }
         check(faces.keys==setOf("owner","aline","eric")) { "This bounded journey requires owner, Aline and Eric" }
-        val fresh=if(actorLists!=null)faces.mapValues { it.value.first() } else legacyInputs.mapValues { NativeProtocol.text(it.value["fresh_selfie"]) }
+        val fresh=if(actorLists!=null)value["fresh_selfies"]?.let(NativeProtocol::obj)?.mapValues { NativeProtocol.text(it.value) }
+            ?: faces.mapValues { it.value.first() } else legacyInputs.mapValues { NativeProtocol.text(it.value["fresh_selfie"]) }
+        check(fresh.keys==faces.keys) { "Every declared actor requires one returning-login input" }
         val pairs=if(value["expected_pairs"]!=null)NativeProtocol.rows(value["expected_pairs"],100) else emptyList()
         val photos=if(value["uploads"]!=null)NativeProtocol.rows(value["uploads"],12).map { row ->
             val id=NativeProtocol.text(row["id"]);InputPhoto(id,NativeProtocol.text(row["asset"]),pairs.filter { it["photo"]==id }.map { NativeProtocol.text(it["recipient"]) })
@@ -233,6 +262,7 @@ class NativeCloudflareJourney : Instrumentation() {
         val anonymous=repository.bootstrap()
         check(anonymous["authenticated"]==false && repository.credentials?.method=="anonymous")
         val account=repository.credentials!!.account;val oldToken=repository.credentials!!.token
+        admitFreshSyntheticAdult(repository)
         val initial=repository.faceChallenge()
         val challenge=if(name=="owner" && cameraRecoveryJourney!=null)cameraRecoveryJourney!!.rejectAndRecover() else initial
         check(challenge["account_id"]==account && challenge["purpose"]=="registration" && NativeProtocol.integer(challenge["required_captures"])==3L)
@@ -264,8 +294,17 @@ class NativeCloudflareJourney : Instrumentation() {
     }
     private suspend fun journey() {
         val health=raw("/health")
-        check(health["database"]=="cloudflare_durable_object_sqlite" && health["database_ready"]==true)
-        pass("Actual local Cloudflare SQLite authority is ready")
+        val expectedDatabase=arguments.getString("expected_database") ?: "supabase_postgresql"
+        check(expectedDatabase in setOf("supabase_postgresql","cloudflare_durable_object_sqlite")) { "Unsupported declared test authority" }
+        check(health["database"]==expectedDatabase && health["database_ready"]==true) { "API authority differs from the declared local target" }
+        authority=health.filterKeys { it in setOf("service","database","database_ready","schema_version","verification","liveness_required") }
+        if(expectedDatabase=="supabase_postgresql") {
+            val ready=raw("/ready")
+            check(ready["service"]=="lovelies-supabase-api" && ready["database"]==expectedDatabase && ready["database_ready"]==true && ready["inference_ready"]==true)
+            check(ready["verification"]=="registered_face_comparison" && ready["liveness_required"]==false)
+            authority=authority+mapOf("inference_ready" to true)
+        }
+        pass(if(expectedDatabase=="supabase_postgresql")"Declared local Supabase API and private inference readiness are confirmed" else "Declared historical local Cloudflare authority is ready",authority)
         denied(setOf(404,410)) { raw("/auth/otp/start",method="POST",body=emptyMap()) }
         pass("OTP endpoint is unavailable")
         val owner=enroll("owner");val aline=enroll("aline");val eric=enroll("eric")
@@ -289,7 +328,7 @@ class NativeCloudflareJourney : Instrumentation() {
         check(finished) { "Actual processing remained pending" }
         val photos=owner.repository.photos("contributions").filter { it.id in ids.values }
         check(photos.size==ids.size && photos.all { it.width!=null && it.height!=null })
-        pass("ContentResolver uploads run through real R2, Queue and private face/photo models",mapOf("assets" to ids.size))
+        pass("ContentResolver uploads complete through the declared API storage/job boundary and private face/photo service",mapOf("assets" to ids.size,"database" to expectedDatabase))
         noAccess(aline,photos);noAccess(eric,photos)
         pass("Processing candidates create no gallery or preview access")
         val source="personal"
@@ -369,8 +408,32 @@ class NativeCloudflareJourney : Instrumentation() {
         check(NativeProtocol.canonical(SecureSession(eric.context,base).existingDevice(originalIdentity.alias))==NativeProtocol.canonical(originalKey)) {
             "Post-logout bootstrap changed the original registered device key"
         }
+        var rejectedChallenge: String?=null
+        suspend fun rejectReturningInput(label: String,data: ByteArray,code: String,status: Int) {
+            val challenge=eric.repository.faceChallenge()
+            check(challenge["purpose"]=="login" && challenge["account_id"]==eric.account && challenge["device_id"]==originalIdentity.device &&
+                NativeProtocol.integer(challenge["required_captures"])==1L && challenge["challenge_id"]!=rejectedChallenge)
+            try { eric.repository.faceCapture(data);error("Invalid returning input authenticated") }
+            catch(problem: LiveFailure) { check(problem.code==code && problem.status==status && !problem.ambiguous) { "Unexpected rejection ${problem.code} (${problem.status})" } }
+            finally { data.fill(0) }
+            val held=CameraLoginJournal.restore(eric.repository.saved("camera_login"),base)
+            check(held.state=="rejected" && held.credentials==null && held.challenge==challenge && held.capture!=null && held.completion!=null)
+            check(eric.repository.credentials==null && eric.repository.identity==originalIdentity)
+            check(NativeProtocol.canonical(SecureSession(eric.context,base).existingDevice(originalIdentity.alias))==NativeProtocol.canonical(originalKey))
+            try { eric.repository.get("/me/gallery");error("Rejected comparison exposed private gallery") }
+            catch(problem: LiveFailure) { check(problem.code=="face_login_requires_status") }
+            rejectedChallenge=NativeProtocol.id(challenge["challenge_id"])
+            pass("Returning $label rejection retains the original account/device/key and grants no session",mapOf("code" to code,"status" to status,"capture_count" to 1,"optical_capture_evidence" to false))
+        }
+        rejectReturningInput("malformed-image",byteArrayOf(255.toByte(),216.toByte(),255.toByte(),224.toByte()),"face_capture_invalid_image",422)
+        val blank=Bitmap.createBitmap(64,64,Bitmap.Config.ARGB_8888)
+        val noFace=try { blank.eraseColor(Color.WHITE);ByteArrayOutputStream().use { out->check(blank.compress(Bitmap.CompressFormat.JPEG,90,out));out.toByteArray() } }
+            finally { blank.eraseColor(0);blank.recycle() }
+        rejectReturningInput("no-face",noFace,"face_capture_no_face",422)
+        rejectReturningInput("multiple-face",input(fixture.photos.first { it.matches.size>1 }.path),"face_capture_multiple_faces",422)
+        rejectReturningInput("wrong-person",input(fixture.fresh.getValue("owner")),"face_verification_failed",401)
         val login=eric.repository.faceChallenge()
-        check(login["purpose"]=="login" && login["account_id"]==eric.account && login["device_id"]==originalIdentity.device && NativeProtocol.integer(login["required_captures"])==1L) {
+        check(login["purpose"]=="login" && login["account_id"]==eric.account && login["device_id"]==originalIdentity.device && NativeProtocol.integer(login["required_captures"])==1L && login["challenge_id"]!=rejectedChallenge) {
             "Fresh login challenge did not bind the original account/device and one registered-reference selfie"
         }
         val bytes=input(fixture.fresh.getValue("eric"));val hash=NativeProtocol.sha256(bytes);val size=bytes.size

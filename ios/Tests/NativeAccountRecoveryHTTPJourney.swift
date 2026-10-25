@@ -168,7 +168,7 @@ private struct LiveRequestPair: Hashable { let photo: String, recipient: String 
     private static var workspace = URL(fileURLWithPath: FileManager.default.currentDirectoryPath, isDirectory: true)
     private static var bindings: [LiveInputBinding] = []
     private static var configured: LiveInputBinding?
-    private static var scopeDescription = "Static reference fixtures over actual local Cloudflare HTTP"
+    private static var scopeDescription = "Static reference fixtures over actual local Lovelies HTTP"
     private static var candidateCount: Int?, approvedCount: Int?, recipientCount: Int?
     private static var strictIsolation = false
     private static func require(_ condition: @autoclosure () throws -> Bool, _ label: String) throws {
@@ -201,6 +201,21 @@ private struct LiveRequestPair: Hashable { let photo: String, recipient: String 
         if let body { request.httpBody = try body.encoded(); request.setValue("application/json", forHTTPHeaderField: "Content-Type") }
         return try await NativeURLTransport().send(request, limit: image ? 8 * 1024 * 1024 : 2 * 1024 * 1024)
     }
+    /// These declared engineering accounts represent adults; admission still uses
+    /// the public, journaled production operation on the original anonymous account.
+    private static func declareSyntheticAdult(_ repository: BackendRepository, accountID: String) async throws {
+        let unknown = try await repository.audience()
+        try require(unknown.accountID == accountID && unknown.ageBand == .unknown && unknown.status == .unknown && unknown.version == 0 && !unknown.capabilities.any, "Fresh synthetic account remains undeclared before explicit public admission")
+        let adult = try await repository.declareAudience(.adult, expectedVersion: 0)
+        try require(adult.accountID == accountID && adult.ageBand == .adult && adult.status == .eligible && adult.version == 1 && adult.policyVersion == NativeAudienceProjection.policy && adult.guardianRequest == nil, "Explicit synthetic adult declaration returns the current eligible projection for the same account")
+        try adult.require(.faceAuthentication)
+        try adult.require(.photoMatching)
+        try adult.require(.photoProcessing)
+        let pending = try await repository.pendingAudienceMutation()
+        try require(pending == nil, "Acknowledged public audience operation retires its original durable mutation journal")
+        let session = await repository.summary()
+        try require(session?.accountID == accountID && session?.authenticated == false, "Audience admission neither replaces the anonymous account nor authenticates it")
+    }
     private static func enroll(_ key: String, account: LiveFixtureAccount, config: LiveFixtureConfig, endpoint: URL) async throws -> LivePrincipal {
         stage = "enrollment:" + key
         let signer = LiveSoftwareSigner(), secrets = LiveMemorySecrets()
@@ -210,6 +225,7 @@ private struct LiveRequestPair: Hashable { let photo: String, recipient: String 
         let provisional = LivePrincipal(key: key, repository: repository, secrets: secrets, signer: signer, accountID: guest.accountID)
         let denial = try await raw("/community/action", origin: endpoint, principal: provisional, method: "POST", body: .object(["action": .string("photos"), "payload": .object(["source": .string("all")])]))
         try require(denial.status == 403, "Anonymous server gallery access must be denied")
+        try await declareSyntheticAdult(repository, accountID: guest.accountID)
         let policy = try await repository.policy()
         let challenge = try await repository.startFace(consentPolicy: policy, publicKey: signer.jwk)
         try require(challenge.accountID == guest.accountID && challenge.purpose == "registration" && challenge.poses == ["front", "left", "right"], "Initial enrollment must bind three ordinary poses to the anonymous account")
@@ -446,6 +462,7 @@ private struct LiveRequestPair: Hashable { let photo: String, recipient: String 
             let repository = BackendRepository(origin: endpoint, transport: transport, secrets: ownerStore, signer: signer)
             guard let anonymous = try await repository.bootstrap() else { throw LiveJourneyFailure.check("Owner anonymous bootstrap unavailable") }
             try require(!anonymous.authenticated && anonymous.roles == ["user"], "Owner starts anonymously without roles upgrade")
+            try await declareSyntheticAdult(repository, accountID: anonymous.accountID)
             let policy = try await repository.policy(), challenge = try await repository.startFace(consentPolicy: policy, publicKey: signer.jwk)
             try require(challenge.poses == ["front", "left", "right"] && config.owner.selfies.count == 3, "Original account uses actual three signed enrollment fixtures")
             var captures: [WireValue] = []
@@ -556,7 +573,7 @@ private struct LiveRequestPair: Hashable { let photo: String, recipient: String 
     private static func report(_ path: String, success: Bool, failure: Error? = nil) throws {
         guard let configured else { throw LiveJourneyFailure.check("Configuration could not be source-bound") }
         let value = LiveRunReport(schema: 1, verified_at: ISO8601DateFormatter().string(from: Date()), status: success ? "passed" : "failed", scope: scopeDescription, process_phase: processPhase,
-            transport: "Actual BackendRepository and NativeURLTransport / URLSession to explicit loopback Cloudflare API", model_authority: "Root-owned actual workerd/SQLite/R2/Queue/private ML service; no test verifier or processing replacement", device_proof: "Actual CryptoKit software P256 raw64 signature; original-owner backup and new-device metadata/credentials/aliased keys retained in private encrypted0700/0600 host fixture files across separate processes; recipient stores in memory",
+            transport: "Actual BackendRepository and NativeURLTransport / URLSession to explicit loopback Lovelies API", model_authority: "Actual configured Lovelies API and private ML service; database, Storage and loaded engine identities are recorded separately by the runtime owner; no test verifier or processing replacement", device_proof: "Actual CryptoKit software P256 raw64 signature; original-owner backup and new-device metadata/credentials/aliased keys retained in private encrypted0700/0600 host fixture files across separate processes; recipient stores in memory",
             checks: checks, assertions_passed: assertions, candidate_scope: strictIsolation ? "Complete isolated graph equality" : "Exact edges for principals created by this run; all other recipients excluded from final preview", candidate_pairs: candidateCount, approved_pairs: approvedCount, recipients: recipientCount,
             configuration: configured, inputs: bindings, failure_stage: success ? nil : stage, failure_code: failure.map(safeFailure), does_not_establish: ["iOS SDK app compilation or SwiftUI interaction", "Live camera input or sensor provenance", "Physical Keychain or Secure Enclave behavior", "Civil identity, liveness or camera attestation", "Hosted deployment, production store entitlement or release acceptance"])
         let encoder = JSONEncoder(); encoder.outputFormatting = [.prettyPrinted, .sortedKeys, .withoutEscapingSlashes]

@@ -113,6 +113,7 @@ internal class FaceLifecycleJourney(private val context: Context,private val ori
         if(marker.isEmpty()) {
             val repo=CloudflareRepository(context,endpoint);val me=repo.bootstrap();val anonymous=repo.credentials ?: error("Anonymous actor missing")
             check(anonymous.method=="anonymous" && me["authenticated"]==false);account=anonymous.account
+            admitFreshSyntheticAdult(repo)
             repo.faceChallenge();repeat(3) { index->check(capture(repo,selfies[index]).first==index+1) }
             check(repo.credentials?.account==account && repo.credentials?.method=="registered_face")
             preferences(repo,true)
