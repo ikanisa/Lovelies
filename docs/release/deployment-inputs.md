@@ -4,6 +4,11 @@ Current integration evidence is in [audience-readiness-20261024.md](audience-rea
 The exact additive v9–v11 transaction is staged and locally tested, including
 unknown/test-account and hold preservation; it has not been applied hosted.
 
+Current console access is blocked because local browser use is disabled in Work
+settings. The existing Supabase connector also lacks project access. Enable the
+browser capability to resume the staged dashboard/store work; the owner's prior
+authorization remains in effect. GitHub billing remains parked.
+
 The approved Supabase baseline is freshly read back at version8. All63 tables
 have forced RLS/backend-only policies; the three private buckets have exact 20 MiB
 limits/MIME restrictions and no client Storage policies. The existing RLS event

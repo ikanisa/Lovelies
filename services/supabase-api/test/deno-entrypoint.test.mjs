@@ -45,6 +45,17 @@ test('actual Deno Edge entrypoint uses PostgreSQL ALS and current anonymous/refr
   const cancelled=await request('/auth/session/refresh/cancel',{body:delivery});assert.equal(cancelled.status,200);
   assert.deepEqual(cancelled.body,{protocol:delivery.protocol,rotation_key:delivery.rotation_key,account_id:guest.body.account_id,status:'cancelled'});
   assert.equal((await request('/me',{token:issued.body.access_token})).status,401);assert.equal((await request('/auth/session/refresh',{body:delivery})).status,401);
+  // A live isolate must stop serving after the database is replaced or its
+  // migration history changes; a failed health probe alone is insufficient.
+  const history=await local.engine.query('SELECT version,applied_at FROM lovelies_private.schema_versions ORDER BY version');
+  const before=(await local.engine.query('SELECT count(*)::int n FROM lovelies_private.accounts')).rows[0].n;
+  await local.engine.exec('DELETE FROM lovelies_private.schema_versions WHERE version>8');
+  assert.equal((await request('/health')).status,503);
+  const blocked=await request('/functions/v1/lovelies-api/auth/anonymous',{body:{}});
+  assert.deepEqual(blocked,{status:503,body:{error:{code:'database_schema_not_ready'}}});
+  assert.equal((await local.engine.query('SELECT count(*)::int n FROM lovelies_private.accounts')).rows[0].n,before);
+  for(const row of history.rows)await local.engine.query('INSERT INTO lovelies_private.schema_versions(version,applied_at) VALUES($1,$2) ON CONFLICT(version) DO NOTHING',[row.version,row.applied_at]);
+  assert.equal((await request('/health')).status,200);
  }catch(error){failed=true;failure=error;throw error;}finally{
   const cleanupErrors=[];
   if(reserve?.listening)try{await new Promise((resolve,reject)=>reserve.close(error=>error?reject(error):resolve()));}catch(error){cleanupErrors.push(error);}

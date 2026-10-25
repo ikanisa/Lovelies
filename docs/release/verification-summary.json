@@ -19,7 +19,7 @@
     "apple_paid_agreement": "Reviewedv127 accepted; Active effective2026-10-24 to2027-06-21. Separate billing/provider qualification remains.",
     "intended_audience": {
       "minimum_age": 13,
-      "guardian_consent_required_for": "13–17",
+      "guardian_consent_required_for": "13\u201317",
       "under13": "excluded",
       "implementation_status": "new_age_and_guardian_gate_required_not_yet_qualified",
       "retention_decision": "Ownerdelegated proportionate schedule and implementation to coordinator; currentdefaults are not policyacceptance."
@@ -387,7 +387,7 @@
         "debug_build_for_testing": "passed",
         "simulator_app_and_V4_runner": "passed",
         "source_inputs_unchanged": true,
-        "runtime": "Preserved35ca/c6 normal1–18 diagnostic checkpoint: all custom checks/exits pass; native failures retained, including shared banner later addressed. No newdc3 whole-matrix pass inferred.",
+        "runtime": "Preserved35ca/c6 normal1\u201318 diagnostic checkpoint: all custom checks/exits pass; native failures retained, including shared banner later addressed. No newdc3 whole-matrix pass inferred.",
         "runner_sha256": "c6e8536a13514b282cc2cd16b5fedfe0d9b7d34b6f180e58722a0aeac7da2711",
         "simulator_build_receipt": "verification/supabase-release-20261023/post-localization-ui/simulator-build.json"
       },
@@ -2151,16 +2151,15 @@
     "status": "in_progress_not_release_accepted",
     "current_checkpoint": "docs/release/audience-readiness-20261024.md",
     "api_aggregate": {
-      "receipt": "/Volumes/PRO-G40/Projects/Lovelies/verification/deletion-receipt-terminal-fix-20261025/full-api-attempt1/result.json",
-      "receipt_sha256": "c97a4c3f91b8d521618d54d1ae942553461c9ea354db5a67e20e0b556a798b69",
-      "tests": 293,
-      "passed": 292,
+      "receipt": "/Volumes/PRO-G40/Projects/Lovelies/verification/api-schema-request-gate-20261025/full-api/result.json",
+      "receipt_sha256": "459786826ef1fee0f3305ba762339781da6fc6ff8971339928209fda31c3aac2",
+      "tests": 296,
+      "passed": 295,
       "failed": 0,
       "skipped": 1,
-      "source_inputs": 86,
+      "source_inputs": 87,
       "source_unchanged": true,
-      "canonical_adoption": "/Volumes/PRO-G40/Projects/Lovelies/verification/deletion-receipt-terminal-fix-20261025/canonical-adoption.json",
-      "scope": "ActualPostgreSQL/currentcachedDeno/TypeScript regression in isolatedsourcecopy, adoptedbyexact86inputequality. No hosted/store or post-fix private-model integration acceptance."
+      "scope": "Canonical API current version-compatibility gate, actual owned PostgreSQL17/cached Deno/TypeScript. Optional actual-model HTTP skipped; no hosted/provider or native store acceptance."
     },
     "android_prior_collection_fix_snapshot": {
       "tests": 171,
@@ -2176,7 +2175,7 @@
     },
     "new_migration_applied_hosted": false,
     "whole_workspace_current_green": false,
-    "limits": "Current API293/292-pass+one optional model skip, Android197 JVM, iOS1020+101 guest+35 media host and operator94 scopes pass independently. Current6603 Debug has18 affected grid and12 controlled Supabase HTTP deletion checks; iOSround4 compile passes with runtime qualification ongoing. Hosted/providers, backup operation, independent restore suppression, signed stores and whole-workspace acceptance remain open. Do not sum overlapping snapshots.",
+    "limits": "Current API296/295-pass+one optional model skip, Android197 JVM/257-input compile, Swift audience HTTP6/26 and prior iOS1020+101+35/operator94 retain separate scopes. New99ed Android copy APK has no new runtime;6603 retains18-grid/12-HTTP/5-connected-teen scope. iOSR5 reference qualification continues. Hosted/providers, backup operation, independent suppression/quarantine and signed stores remain open; whole-workspace acceptance is false. Do not add overlapping counts.",
     "affected_api_operator": {
       "tests": 39,
       "passed": 36,
@@ -2249,8 +2248,8 @@
     },
     "deno_check": {
       "passed": true,
-      "receipt": "verification/supabase-release-20261023/audience-implementation/backend-aggregate-attempt8/result.json",
-      "scope": "Actual cached Deno graph and actual runtime entrypoint test; no hosted function deployment."
+      "receipt": "/Volumes/PRO-G40/Projects/Lovelies/verification/api-schema-request-gate-20261025/full-api/result.json",
+      "scope": "Current canonical cached Deno graph and actual running entrypoint drift test within296 API suite; no hosted function deployment."
     },
     "github_canonical": {
       "url": "https://github.com/ikanisa/Lovelies",
@@ -2836,6 +2835,98 @@
       "delivery_receipt": "/Volumes/PRO-G40/Projects/Lovelies/verification/ios-ui-runner-source-checkpoint-20261025/delivery.json",
       "app_205_inputs_still_match": true,
       "remote_ci_passed": false
+    },
+    "api_aggregate_before_schema_request_gate": {
+      "receipt": "/Volumes/PRO-G40/Projects/Lovelies/verification/deletion-receipt-terminal-fix-20261025/full-api-attempt1/result.json",
+      "receipt_sha256": "c97a4c3f91b8d521618d54d1ae942553461c9ea354db5a67e20e0b556a798b69",
+      "tests": 293,
+      "passed": 292,
+      "failed": 0,
+      "skipped": 1,
+      "source_inputs": 86,
+      "source_unchanged": true,
+      "canonical_adoption": "/Volumes/PRO-G40/Projects/Lovelies/verification/deletion-receipt-terminal-fix-20261025/canonical-adoption.json",
+      "scope": "ActualPostgreSQL/currentcachedDeno/TypeScript regression in isolatedsourcecopy, adoptedbyexact86inputequality. No hosted/store or post-fix private-model integration acceptance."
+    },
+    "api_schema_request_gate": {
+      "document": "docs/release/schema-request-gate-20261025.md",
+      "recorded_schema_version": 11,
+      "rechecked_each_request": true,
+      "controlled_bad_versions": [
+        8,
+        12,
+        null
+      ],
+      "all_private_tables_preserved_per_case": 68,
+      "counterexample_before": "/Volumes/PRO-G40/Projects/Lovelies/verification/api-schema-request-gate-20261025/counterexample-before.json",
+      "counterexample_before_sha256": "fad5227ea7040c0533c722f7d583cfab78107fa342bab2dbfd36f558fab7aa39",
+      "counterexample_after": "/Volumes/PRO-G40/Projects/Lovelies/verification/api-schema-request-gate-20261025/counterexample-after.json",
+      "counterexample_after_sha256": "f326a836f8783f8d9b83337581a21821a18e12900ce9ffc13ba098c2b488d1b3",
+      "actual_deno_running_listener_drift_check_passed": true,
+      "same_version_restoration_clearance": false,
+      "startup_restore_quarantine_implemented": false,
+      "independent_suppression_implemented": false,
+      "source_seal": "/Volumes/PRO-G40/Projects/Lovelies/verification/api-schema-request-gate-20261025/source-seal.json",
+      "source_seal_sha256": "0b47be913b6443ab8d150e7dafdeca2db8f588fed5501f44e28c2c7525421df4"
+    },
+    "android_schema_copy_snapshot": {
+      "receipt": "/Volumes/PRO-G40/Projects/Lovelies/verification/api-schema-request-gate-20261025/android-copy-build/result.json",
+      "receipt_sha256": "6c87a2faf4d883f7a80051cd1e3bd4b26bda6bf7863658688fbabd3a211a4fe6",
+      "tests": 197,
+      "passed": 197,
+      "failed": 0,
+      "source_inputs": 257,
+      "source_unchanged": true,
+      "apk_sha256": "99edd6638283cf6bc2c027bd386e475def73a942d86358d1a7434b237d6e6e49",
+      "android_test_apk_sha256": "53895d471452be85ce14e15a358e23e468f40758a5227a1a970aa6dd55d07429",
+      "native_packaging_readback": "/Volumes/PRO-G40/Projects/Lovelies/verification/api-schema-request-gate-20261025/android-copy-build/native-packaging-readback.json",
+      "native_packaging_readback_sha256": "06f654b462501f7a1b8e57f20c4b23d158ecfdc85d04c61020c119f6ce239abb",
+      "same_eight_native_payloads_as_6603": true,
+      "new_runtime_accepted": false,
+      "prior_6603_runtime_retains_own_scope": true
+    },
+    "ios_audience_http_snapshot": {
+      "document": "docs/release/ios-connected-audience-20261025.md",
+      "receipt": "/Volumes/PRO-G40/Projects/Lovelies/verification/api-schema-request-gate-20261025/ios-audience-http-attempt2/result.json",
+      "receipt_sha256": "f6c65cd4cff67f0fe738088b473051c54815325e25b0bdb074a458f6be85eb71",
+      "checks": 6,
+      "assertions": 26,
+      "source_inputs": 49,
+      "source_unchanged": true,
+      "database": "actual_isolated_PostgreSQL17",
+      "transport": "production_NativeURLTransport_URLSession",
+      "protected_storage": "host_memory_substitute",
+      "source_actor_reconstruction_is_process_death": false,
+      "database_readback": {
+        "accounts": 3,
+        "declared_accounts": 3,
+        "active_sessions": 0,
+        "consents": 0,
+        "guardian_approvals": 0,
+        "media_grants": 0,
+        "face_profiles": 0,
+        "auth_devices": 0,
+        "auth_challenges": 0,
+        "withdrawn_guardian_requests": 1
+      },
+      "cleanup": {
+        "listeners_closed": true,
+        "isolated_database_closed": true,
+        "failures": []
+      },
+      "owned_container_stopped_preserved": true,
+      "physical_hosted_guardian_approval_store_accepted": false
+    },
+    "native_schema_copy": {
+      "proposal": "/Volumes/PRO-G40/Projects/Lovelies/verification/api-schema-request-gate-20261025/native-copy-candidate/proposal.json",
+      "proposal_sha256": "28388afd64be817184287483aeca9b66f3ee17b179ff3ff738829e30e62d8079",
+      "android": "applied_compiled197_JVM_passed_runtime_unqualified",
+      "ios": "unapplied_until_R5_runtime_terminal_then_grouped_root_build",
+      "languages": [
+        "en",
+        "rw"
+      ],
+      "message": "Lovelies is temporarily unavailable. Please try again later."
     }
   }
 }

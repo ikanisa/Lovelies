@@ -7,10 +7,14 @@ Current audience integration: [24 October checkpoint](release/audience-readiness
 ## Current bounded update — 25 October 2026
 
 The [current integration checkpoint](release/audience-readiness-20261024.md)
-supersedes older current-source descriptions below. Final API293 tests/292pass/
+supersedes older current-source descriptions below. Final API296 tests/295pass/
 zero failures/one optional model-HTTP skip, current operator94, Android197 JVM,
 and iOS1,020 original+101 guest-deletion+35 private-media host checks pass in their
-separate scopes. The current6603 Android Debug app passes18 affected grid cases
+separate scopes. The new database compatibility gate blocks incompatible recorded
+schema history before API work. Six Swift audience HTTP cases/26 assertions now
+pass against the actual API/PostgreSQL, including retained503 authority and exact
+mutation retry. The later99ed Android copy package compiles and passes197 JVM
+tests; its runtime remains unqualified. The prior6603 Debug app passes18 affected grid cases
 and12 controlled Supabase HTTP deletion checks; see the
 [source-grid qualification](release/android-source-grids-20261025.md). Five
 [connected teen UI checks](release/android-connected-audience-20261025.md) now

@@ -49,6 +49,15 @@ async function maintenanceAuthorized(request:Request,env:SupabaseEnv):Promise<bo
   const candidate=request.headers.get('authorization')??'';
   return (await digest(candidate))===(await digest('Bearer '+secret));
 }
+async function databaseVersion(ctx:AppContext):Promise<number|null>{
+  const row=await ctx.db.one<{version:number|null}>('SELECT MAX(version) version FROM schema_versions');
+  return row?.version??null;
+}
+async function requireCurrentDatabase(ctx:AppContext):Promise<void>{
+  // Check each request: a running isolate must also stop after schema drift.
+  // This guards version compatibility; it is not a restore-suppression ledger.
+  if(await databaseVersion(ctx)!==currentSchemaVersion)throw new ApiError(503,'database_schema_not_ready');
+}
 export function normalizedRequest(request:Request):Request {
   const url=new URL(request.url);
   for(const prefix of ['/functions/v1/lovelies-api','/lovelies-api']){
@@ -69,20 +78,23 @@ export function createHandler(ctx:AppContext):(request:Request)=>Promise<Respons
         if(!origin)throw new ApiError(403,'origin_required');
         response=new Response(null,{status:204,headers:{'Access-Control-Allow-Methods':'GET,POST,PUT,PATCH,DELETE,OPTIONS','Access-Control-Allow-Headers':'Authorization,Content-Type,X-Lovelies-Capture-SHA256,X-Lovelies-Device-Signature,X-Lovelies-Capture-Bytes,X-Lovelies-Chunk-SHA256','Access-Control-Max-Age':'600'}});
       }else if(request.method==='GET'&&(path==='/health'||path==='/ready')){
-        const row=await ctx.db.one<{version:number}>('SELECT MAX(version) version FROM schema_versions'),ready=row?.version===currentSchemaVersion;
+        const version=await databaseVersion(ctx),ready=version===currentSchemaVersion;
         const missing=path==='/ready'?missingConfiguration(ctx.env):[];
         let inferenceReady:boolean|undefined;
         if(path==='/ready'){
-          try{inferenceReady=!!ctx.env.MODEL_SERVICE_READINESS&&await ctx.env.MODEL_SERVICE_READINESS(request.signal)===true;}catch{inferenceReady=false;}
+          inferenceReady=false;
+          if(ready)try{inferenceReady=!!ctx.env.MODEL_SERVICE_READINESS&&await ctx.env.MODEL_SERVICE_READINESS(request.signal)===true;}catch{inferenceReady=false;}
         }
         const available=ready&&!missing.length&&inferenceReady!==false;
-        response=ok({status:available?'ok':'unavailable',service:'lovelies-supabase-api',database:'supabase_postgresql',database_ready:ready,schema_version:row?.version,missing,
+        response=ok({status:available?'ok':'unavailable',service:'lovelies-supabase-api',database:'supabase_postgresql',database_ready:ready,schema_version:version,missing,
           ...(path==='/ready'?{inference_ready:inferenceReady}:{}),verification:'registered_face_comparison',liveness_required:false,hosted_provider_acceptance:false},available?200:503);
       }else if(path==='/_internal/maintenance'&&request.method==='POST'){
         if(!await maintenanceAuthorized(request,ctx.env))throw new ApiError(404,'route_not_found');
+        await requireCurrentDatabase(ctx);
         const result=await maintain(ctx);response=ok(result,result.maintenance_errors||result.failed?503:200);
       }else{
         if(path.startsWith('/_internal'))throw new ApiError(404,'route_not_found');
+        await requireCurrentDatabase(ctx);
         if(path==='/auth/anonymous'&&request.method==='POST')await limitAuth(request,ctx,'anonymous');
         if(path.startsWith('/auth/face/recovery/'))await limitAuth(request,ctx,'recovery');
         if(path.startsWith('/auth/face/profile/'))await limitAuth(request,ctx,'profile');

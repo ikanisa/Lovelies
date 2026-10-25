@@ -18,8 +18,9 @@ import or delete unknown/test data on that basis.
 4. Verify the package/bundle, compatible signing, unused upload numbers, product
    IDs, entitlements, data disclosures, policy/support/deletion URLs and reviewer
    flow. A build or configured listing is not store acceptance.
-5. Obtain approval of the concrete backend/release package and rollout before
-   deployment/upload/submission. Submit through the existing app records. Use
+5. Finish and verify the concrete backend/release package, then carry out the
+   already-authorized deployment/upload/submission through the existing app
+   records. Preserve any actual platform/account confirmation requirement. Use
    internal/TestFlight validation before staged/phased production rollout.
 6. Keep old installed clients' supporting services available during the compatibility
    window. New clients use the selected Supabase authority; do not split a single

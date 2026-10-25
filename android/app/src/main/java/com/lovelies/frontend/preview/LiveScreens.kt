@@ -1302,6 +1302,7 @@ internal fun displayedPhotoTitle(photo: LivePhoto,fallback: String): String = if
 @Composable private fun ScopeNotice() { BodyText(stringResource(R.string.copy_this_review_is_limited_to_the_photo_cdbe75a2),Modifier.padding(vertical=10.dp),center=false,size=12) }
 private fun receiptLabel(status: String?, context: android.content.Context)=when(status){"open"->context.getString(R.string.copy_open_538b10e9);"under_review"->context.getString(R.string.copy_under_review_07000a6f);"resolved"->context.getString(R.string.copy_resolved_503b5525);"closed"->context.getString(R.string.copy_closed_3201cae5);"requested"->context.getString(R.string.copy_awaiting_acceptance_383a8dc6);"accepted"->context.getString(R.string.copy_accepted_41d09a60);"declined"->context.getString(R.string.copy_declined_56d6cf67);"withdrawn"->context.getString(R.string.copy_withdrawn_a579599b);"revoked"->context.getString(R.string.copy_revoked_e58fe295);"expired"->context.getString(R.string.copy_expired_bca9f3d2);"failed"->context.getString(R.string.copy_failed_5579c3d4);else->context.getString(R.string.copy_unavailable_da4baaa9)}
 internal fun readableError(code: String, context: android.content.Context)=when(code) {
+    "database_schema_not_ready"->context.getString(R.string.service_temporarily_unavailable)
     "audience_required","audience_choice_required"->context.getString(R.string.audience_choose_age)
     "audience_status_required"->context.getString(R.string.audience_check_required)
     "age_not_supported"->context.getString(R.string.audience_under13_blocked)

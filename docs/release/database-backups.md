@@ -115,6 +115,11 @@ sessions/consents/grants and a startup restore quarantine before making any
 restored copy accessible. The isolated reconstruction above does not qualify
 that serving restore or prove the published erasure deadline.
 
+The separate [database request gate](schema-request-gate-20261025.md) prevents API
+work against an older, newer or missing schema history. It cannot identify an old
+backup that still reports the supported schema11, and does not complete the
+independent suppression or restore-quarantine obligations above.
+
 Supabase documents separate plan-dependent backup availability and explains that
 database backups do not contain Storage objects. Its Free plan guidance calls for
 regular exports with off-site custody. This local implementation does not change

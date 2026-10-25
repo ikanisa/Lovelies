@@ -99,4 +99,5 @@
     <string name="audience_operation_conflict">Ubusabe bwabitswe ntibuhuye n’icyemezo kiri kuri seriveri. Gumana ubu busabe maze usabe ubufasha mbere yo kugira ikindi uhindura.</string>
     <string name="audience_withdrawal_pending">Gukuraho uburenganzira bw’umubyeyi byabitswe, ariko ntibirarangira kwemezwa. Reba uko bihagaze cyangwa wongere wohereze ubwo busabe bwabitswe. Irindi hinduka ry’uburenganzira ntiribusimbura.</string>
     <string name="audience_retry_withdrawal">Ongera wohereze ubusabe bwabitswe bwo gukuraho uburenganzira</string>
+    <string name="service_temporarily_unavailable">Lovelies ntiboneka by\'agateganyo. Nyamuneka ongera ugerageze nyuma.</string>
 </resources>

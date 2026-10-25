@@ -93,4 +93,5 @@
     <string name="audience_operation_conflict">The saved request conflicts with the server receipt. Keep this request and get help before making another change.</string>
     <string name="audience_withdrawal_pending">Guardian withdrawal is saved, but completion is not confirmed. Check status or retry the same saved withdrawal. Other permission changes will not replace it.</string>
     <string name="audience_retry_withdrawal">Retry saved withdrawal</string>
+    <string name="service_temporarily_unavailable">Lovelies is temporarily unavailable. Please try again later.</string>
 </resources>
