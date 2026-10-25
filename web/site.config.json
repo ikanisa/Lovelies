@@ -1,8 +1,8 @@
 {
   "content_status": "local_review_draft",
-  "prepared_on": "2026-10-23",
+  "prepared_on": "2026-10-24",
   "document_root": ".",
-  "canonical_origin": null,
+  "canonical_origin": "https://lovelies.ikanisa.com",
   "existing_public_origin_reference": "https://lovelies.ikanisa.com",
   "routes": [
     "/",
@@ -13,13 +13,17 @@
   ],
   "support_email": "info@ikanisa.com",
   "controller": "IKANISA LTD",
-  "publish_authorized": false,
+  "publish_authorized": true,
   "required_review": [
-    "private inference operator and location",
-    "active retention schedule and backup expiry",
-    "audience and territories",
-    "final legal/controller review",
+    "qualified actual EU/WEUR private inference processing and processors",
+    "verified retention cleanup, backup expiry and restore suppression",
+    "operated guardian review and supported territories",
+    "final legal/controller notice accuracy",
     "support mailbox and ownership-check operation",
-    "approved host/routes and HTTPS/header validation"
-  ]
+    "preserve existing public/admin/photo hosts and validate HTTPS/routes/headers"
+  ],
+  "production_published": false,
+  "audience_decision": "13+; independently reviewed guardian authorization for 13-17",
+  "retention_decision_source": "docs/release/retention-and-young-users.md",
+  "preview_origin": "https://native-public-info-20261024.lovelies-web.pages.dev"
 }

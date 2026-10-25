@@ -1,6 +1,6 @@
-# Lovelies public-information site — updated 24 October 2026
+# Lovelies public-information site — checked 25 October 2026
 
-The 24 October review edition applies the owner-selected 13+ audience, supported
+The unchanged 24 October review edition applies the owner-selected 13+ audience, supported
 independent guardian review for ages 13–17, and the numerical retention decisions
 in `retention-and-young-users.md`. Enforcement and provider/operating
 qualification remain separate. The earlier preview was deployed only to
@@ -9,7 +9,7 @@ shared admin/photo hosts were preserved. Terminal readback later returned
 Cloudflare 403/error1010, so that later attempt does not refresh hosted acceptance.
 Use `scripts/prepare-public-site.py` to stage the explicit 13-file allow-list;
 never upload review manifests or the repository root. The local-check section
-below records the prior edition and must not be treated as new-byte proof.
+below distinguishes the refreshed local source check from prior HTTP/browser proof.
 
 The new `web/` directory is a **local review draft** for the next native release.
 It has not replaced the current published website, policy edition or store URLs.
@@ -45,12 +45,21 @@ introduce OTP or automate deletion from an unverified message.
 All pages visibly say Review draft, give a preparation date rather than an
 effective policy date, and retain the unresolved inference operator/location,
 retention/backup, audience/territory, controller/legal and support-operation gates.
-Supabase Ireland and the private inference architecture are described from the
-provided implementation draft; no unverified inference operator/location is named.
+Supabase Ireland and the selected private Cloudflare EU/WEUR inference service
+are described as the selected architecture. Production qualification, actual
+operation, enabled processors and their retention remain explicit publication inputs.
 
 ## Local checks completed
 
-`web/local-checks.json` records:
+The current source check at
+`verification/supabase-release-20261023/audience-implementation/public-source-checkpoint-20261025/local-validation.json`
+rechecks all five HTML pages,95 references and11 mail links. All13 public-source
+files match the exact v2 preview manifest
+`91b55ac6b5bd86ce930b2a7711c90660d837d8ac09e5c8e1ae8c7c300e0a77fc`.
+This is file/HTML/link identity proof; no fresh HTTP, browser, header, mailbox or
+publication pass is inferred.
+
+The preserved prior-edition `web/local-checks.json` records:
 
 - Five HTML pages and **95 local/fragment/asset/mail links checked**, with no
   broken or out-of-package path.

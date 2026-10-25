@@ -2342,7 +2342,7 @@
       "receipt_sha256": "9ee4f6f270088c5e529a0d78835d0c15e812809d8395ab5b94eec5157dbff243",
       "source_inputs": 205,
       "simulator_dylib_sha256": "a7145ac3bde82c7c3eeeef6d4e51429dc834a42abcfba11849240190fcb082da",
-      "scope": "Compiled app/c7r2 runner; installed reference smoke and three keyboard cases pass separately. Current proposed UI changes require their own grouped rebuild/runtime. No signed release acceptance."
+      "scope": "Prior a714/c7r2 artifact: compiled app/runner, installed smoke and three keyboard cases pass separately; retains matrix failures. Superseded for changed UI by separately scoped6638/c8r5 receipts; no signed release acceptance."
     },
     "inactive_profile": {
       "implemented": true,
@@ -2358,6 +2358,48 @@
       "independent_restore_suppression_implemented": false,
       "startup_restore_quarantine_implemented": false
     },
-    "current_code_source_seal": "verification/supabase-release-20261023/audience-implementation/current-source-seal-20261025/source-seal.json"
+    "current_code_source_seal": "verification/supabase-release-20261023/audience-implementation/current-source-seal-20261025/source-seal.json",
+    "ios_physical_connected_snapshot": {
+      "acceptance_receipt": "/Volumes/PRO-G40/Projects/Lovelies/verification/isolated-supabase-connected-20261025-attempt1/ios-physical-run-attempt2/acceptance.json",
+      "acceptance_sha256": "513a9a34bff90b8695ed73a974cfc5bc6f52e2d066c7ff0160d14fb62e612a17",
+      "xcresult_summary": "/Volumes/PRO-G40/Projects/Lovelies/verification/isolated-supabase-connected-20261025-attempt1/ios-physical-run-attempt2/xcresult-summary.json",
+      "xcresult_summary_sha256": "886546ce70e3b74f136d156eb50c47e9d9d9c42351ed0ad49096feb1263db77c",
+      "tests": 1,
+      "passed": 1,
+      "failed": 0,
+      "skipped": 0,
+      "device": "iPhone 12 Pro / iOS26.7.2",
+      "test_source_sha256": "9be599861cd41e3a14dd523e5df6b942ddfe3669660b7a92697afe3c4b4ff4b9",
+      "scope": "Actual test-scoped Keychain/SecureEnclave, same-account three-declared-still enrollment, logout/retained-key return login, replay denial and owned namespace cleanup; isolated stack only.",
+      "post_test_existing_app_data_equality_verified": false,
+      "limits": [
+        "Phone disconnected after test; exact post-test persistent-file readback pending.",
+        "No optical camera, representative recognition, Apple authentication-policy or store-installed update acceptance."
+      ]
+    },
+    "android_16k_native_snapshot": {
+      "receipt": "/Volumes/PRO-G40/Projects/Lovelies/verification/android-16k-runtime-20261025-attempt3/result.json",
+      "receipt_sha256": "f8f3b7ef2f65be981da167ebd7cf0d2706b8a318794fa4439b858a2237b30577",
+      "mapping_reconciliation": "/Volumes/PRO-G40/Projects/Lovelies/verification/android-16k-runtime-20261025-attempt3/mapping-reconciliation.json",
+      "mapping_reconciliation_sha256": "8b6805942c61f5a3cc5879a104dfba8153950fb0cc16f7357352a29849168821",
+      "apk_sha256": "8afcc86047f955fb781e04c6bb47c553ef80506c5b0da6b531d904636629d6e5",
+      "kernel_page_size": 16384,
+      "compatibility_disabled": true,
+      "raw_instrumentation_result_ok": true,
+      "libraries_exercised": 2,
+      "gnu_relro_end_formula_flags_preserved": true,
+      "relro_readonly_and_separate_writable_data_verified": true,
+      "scope": "Selected exact Debug ARM64 native graphics conic/counter operations; no signed AAB/generated APK, other ABI runtime or whole app/store acceptance.",
+      "document": "docs/release/android-16k-readback-20261025.md"
+    },
+    "ios_grouped_ui_round2": {
+      "receipt": "verification/supabase-release-20261023/audience-implementation/ios-grouped-ui-round2-20261025/build-result.json",
+      "receipt_sha256": "7e9d94321fc12282f632428e268507ff2687b1a5834f16a9e64bfa46329bb145",
+      "source_inputs": 205,
+      "simulator_dylib_sha256": "66380fcd238b3ebbf0ebc3187a1f00de47efc7e3d45e9a83443fffc29d514be2",
+      "scope": "Grouped Simulator app/c8r5runner and unsignedRelease compile. Separate smoke/normal40-42 pass, largest40/42 pass; largest41 retains two unwaived native contrast flags. Full current-source matrix incomplete.",
+      "later_settings_candidate_sha256": "08840043df514c878b9987ca6a4e3b44ccd220076bd919b4f41effdff0fc5f02",
+      "later_settings_candidate_runtime_verified": false
+    }
   }
 }
