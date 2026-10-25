@@ -14,6 +14,7 @@
     "backend:schema:check": "node --experimental-transform-types --test services/supabase-api/test/supabase-boundaries.test.mjs",
     "backend:smoke": "node scripts/smoke-supabase-backend.mjs",
     "backend:sql:test": "pnpm --filter @lovelies/supabase-api test",
+    "backup:test": "node --test scripts/test/*backup*.test.mjs",
     "backend:ml:typecheck": "pnpm --filter @lovelies/ml-container-worker typecheck",
     "backend:ml:build": "pnpm --filter @lovelies/ml-container-worker build",
     "backend:cloudflare:dev": "node scripts/dev-cloudflare.mjs",

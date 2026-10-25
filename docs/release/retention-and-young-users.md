@@ -214,13 +214,14 @@ the old address or issuing credentials. Source classes take bounded alternating
 turns. The current API regression and its exact receipts are recorded in the
 linked integration checkpoint.
 
-Backup/restore remains a concrete implementation and operating gap: there is no
-qualified backup producer/catalog, independent current suppression ledger and
-replay operation, or startup restore quarantine guard. A privacy export is not a
-database backup, and a deletion fact restored from the same database snapshot is
-not an independent anti-resurrection record. No local erasure fixture closes this
-gap. The chosen seven-day backup expiry and restored-data suppression must be
-implemented and rehearsed before publishing those guarantees.
+[The encrypted database producer/catalog](database-backups.md) now passes local
+operator checks and actual PostgreSQL dump/isolated reconstruction, including
+seven-day expiry. Hosted scheduling, independent off-site custody, a current
+suppression ledger and replay operation, and startup restore quarantine remain
+unimplemented or unqualified. A privacy export is not a database backup, and a
+deletion fact restored from the same database snapshot is not an independent
+anti-resurrection record. Actual backup operation and restored-data suppression
+must be implemented and rehearsed before publishing those guarantees.
 
 The source inventory is independently detailed in the source-bound
 `guardian-retention-gap.json` receipt. This table preserves the initial inspected snapshot. Implementation has since advanced; see

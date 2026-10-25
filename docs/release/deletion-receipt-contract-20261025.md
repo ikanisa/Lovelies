@@ -63,3 +63,22 @@ The earlier five Android/four Swift HTTP journeys and physical iPhone test retai
 their exact pre-correction API85/native artifact scope. These new local results do
 not silently requalify hosted operation, the final signed app, store-installed
 updates, optical capture, operated deletion/backup or store review.
+
+The current fdb Debug APK separately passes12 anonymous-deletion checks over HTTP
+against the production Supabase handler and isolated embedded PostgreSQL. Both
+before-dispatch and after-commit reply loss preserve the original intent; actual
+Android Keystore/vault rehydration, pending status and protected-access fences are
+exercised. This is repository rehydration within one instrumentation process,
+not a killed-process or final operator-completion test. The two actual pending
+requests are preserved in a private database archive and independently read back.
+
+The wrapper's original failure remains: its full-byte preservation assertion saw
+WorkManager SHM/WAL changes. Separate readback confirms unchanged main database
+and lock bytes, no added/removed files, equal empty logical SQLite tables and
+integrity checks. Original and later app-data copies are preserved; overall byte
+equality is false. The qualified bounded receipt is
+`/Volumes/PRO-G40/Projects/Lovelies/verification/android-deletion-connected-20261025-attempt3/reconciliation.json`,
+SHA-256 `9932c3a46db684cf959dfb6d964127fb91b7da51148f8f9e0c19909219eb7b13`.
+Earlier setup/shell-quoting and post-copy guard failures are retained. The raw
+preexisting test text says Cloudflare/workerd; the pinned bridge and recovered
+schema11 database independently establish Supabase-handler/PostgreSQL authority.

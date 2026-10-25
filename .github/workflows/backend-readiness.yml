@@ -43,6 +43,7 @@ jobs:
       - run: pnpm backend:build
       - run: pnpm backend:test
       - run: pnpm backend:client:test
+      - run: pnpm backup:test
       - run: pnpm admin:test
       - run: pnpm preview:test
       - run: pnpm push:check

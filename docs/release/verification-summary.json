@@ -2352,9 +2352,10 @@
       "minimal_fact_grants_credentials": false,
       "holds_writers_recovery_preserved": true,
       "untrusted_writer_clock_preserved": true,
-      "backup_producer_catalog_implemented": false,
+      "backup_producer_catalog_implemented": true,
       "independent_restore_suppression_implemented": false,
-      "startup_restore_quarantine_implemented": false
+      "startup_restore_quarantine_implemented": false,
+      "backup_producer_catalog_hosted_qualified": false
     },
     "current_code_source_seal": "verification/supabase-release-20261023/audience-implementation/current-source-seal-20261025/source-seal.json",
     "ios_physical_connected_snapshot": {
@@ -2485,6 +2486,47 @@
       "files": 20,
       "document": "docs/openface-integration-continuation.md",
       "scope": "FiveAndroid/fourSwiftHTTP namedpasses andonephysicaliPhonetest inexactprefixed85/API/runtime/poolscopes; subsequentTTL/nativeconsumerchanges notsilentlyincluded."
+    },
+    "database_backup_operator_snapshot": {
+      "document": "docs/release/database-backups.md",
+      "actual_postgres_receipt": "/Volumes/PRO-G40/Projects/Lovelies/verification/encrypted-backup-20261025-attempt2/result.json",
+      "actual_postgres_receipt_sha256": "745b41d49e349e67110e0e9fd25e682db625f30815dee11fe2ce20ee57a6ca59",
+      "operator_checks": "/Volumes/PRO-G40/Projects/Lovelies/verification/encrypted-backup-20261025-attempt2/operator-checks.json",
+      "operator_checks_sha256": "bc634b9695fc1cbb089d4ff9c678535d9274a760d871281764ddc23d5cc077fb",
+      "tests": 13,
+      "passed": 13,
+      "failed": 0,
+      "skipped": 0,
+      "actual_pg17_checks": 9,
+      "source_unchanged": true,
+      "restored_private_tables": 68,
+      "restored_forced_rls": 68,
+      "restored_client_table_grants": 0,
+      "expiry_days": 7,
+      "producer_and_catalog_local_qualified": true,
+      "hosted_schedule_or_offsite_custody_qualified": false,
+      "independent_current_suppression_implemented": false,
+      "startup_restore_quarantine_implemented": false,
+      "serving_restore_qualified": false,
+      "ci_workflow_local_actionlint_passed": true,
+      "remote_ci_passed": false
+    },
+    "android_deletion_connected_snapshot": {
+      "receipt": "/Volumes/PRO-G40/Projects/Lovelies/verification/android-deletion-connected-20261025-attempt3/reconciliation.json",
+      "receipt_sha256": "9932c3a46db684cf959dfb6d964127fb91b7da51148f8f9e0c19909219eb7b13",
+      "checks": 12,
+      "scenarios": 2,
+      "source_inputs": 188,
+      "source_unchanged_at_qualification": true,
+      "apk_sha256": "fdbf644bfc4c833d39e91454aa2a0876bdb9811d73b3b7ae1f1744f91c2159af",
+      "test_apk_sha256": "6084079169bd3ec02850fc4ea942543fbd8bb42f36fae26c998dc945889c43ba",
+      "runtime": "Owned API36 ARM64 16KB emulator / actual Supabase handler HTTP / embedded PostgreSQL",
+      "original_wrapper_failure_preserved": true,
+      "existing_data_logically_reconciled": true,
+      "overall_file_byte_equality": false,
+      "actual_separate_process_recovery": false,
+      "final_terminal_outcome_or_operator_workflow_qualified": false,
+      "hosted_or_signed_store_acceptance": false
     }
   }
 }
