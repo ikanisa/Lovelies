@@ -1,7 +1,9 @@
+import { assertAudienceCapability, audienceChallengeAuthority } from './audience.ts';
 import { ApiError, digest, jsonBody, ok, record, stable, uuid, type Actor, type AppContext } from './types.ts';
 import { accountRoles, assertEnrollmentActor, authenticate, base64url, decodeBase64url, insertPreparedSession, opaque, prepareSession, type AccountRow } from './auth.ts';
 import { beginFaceChallengeMediaWrite, settleMediaWrite } from './operations.ts';
 import { lifecycleOperation, lifecycleAuthority, commitLifecycle } from './face-profile.ts';
+import { selectedGeneration, assertGeneration } from './inference-generation.ts';
 const MAX_CAPTURE_BYTES = 8 * 1024 * 1024;
 const MAX_TEMPLATE_BYTES = 64 * 1024;
 const CHALLENGE_MS = 120000;
@@ -58,6 +60,7 @@ export type Challenge = {
     profile_revision: string | null;
     profile_id: string | null;
     model_id: string | null;
+    engine_identity: string | null;
     profile_auth_epoch: number | null;
     reference_digest: string | null;
     policy_version: string;
@@ -207,7 +210,7 @@ export async function getChallenge(id: string, ctx: AppContext): Promise<Challen
 async function assertNoEnrollmentDeletion(accountId: string, ctx: AppContext): Promise<void> {
     if ((await ctx.db.one(`SELECT id FROM privacy_requests WHERE subject_id=? AND request_type='delete'
     AND status IN('pending_approval','approved','queued','processing','failed')
-    AND (expires_at>? OR metadata_erased_at IS NOT NULL) LIMIT 1`, accountId, ctx.now())))
+    LIMIT 1`, accountId)))
         throw new ApiError(409, 'enrollment_deletion_pending');
 }
 async function assertChallenge(challenge: Challenge, ctx: AppContext, expectedStatus: 'pending' | 'verifying' = 'pending'): Promise<void> {
@@ -241,6 +244,9 @@ async function assertChallenge(challenge: Challenge, ctx: AppContext, expectedSt
         throw new ApiError(409, 'registered_reference_changed');
     if (lifecycle) {
         (await lifecycleAuthority(lifecycle, ctx));
+        await assertAudienceCapability(ctx, current.account_id, 'face_authentication');
+        assertGeneration(current.engine_identity, ctx.env);
+        assertGeneration(challenge.engine_identity, ctx.env);
         return;
     }
     if (current.purpose === 'registration') {
@@ -263,9 +269,14 @@ async function assertChallenge(challenge: Challenge, ctx: AppContext, expectedSt
         if (recovery)
             (await recoveryAuthority(recovery, ctx));
     }
+    await assertAudienceCapability(ctx, current.account_id, 'face_authentication');
+    assertGeneration(current.engine_identity, ctx.env);
+    assertGeneration(challenge.engine_identity, ctx.env);
 }
-export function challengeResponse(challenge: Challenge): Record<string, unknown> {
-    return { protocol: PROTOCOL, challenge_id: challenge.id, account_id: challenge.account_id,
+export async function challengeResponse(challenge: Challenge, ctx: AppContext): Promise<Record<string, unknown>> {
+    const audience = await audienceChallengeAuthority(ctx, challenge);
+    assertGeneration(challenge.engine_identity, ctx.env);
+    return { audience_authority: audience, protocol: PROTOCOL, challenge_id: challenge.id, account_id: challenge.account_id,
         device_id: challenge.device_id, device_revision: challenge.device_revision, nonce: challenge.nonce,
         purpose: challenge.purpose, profile_id: challenge.profile_id, profile_revision: challenge.profile_revision,
         model_id: challenge.model_id, policy_version: challenge.policy_version,
@@ -329,15 +340,19 @@ async function registrationChallenge(request: Request, ctx: AppContext): Promise
     const jwk = await publicKey(input.device_public_jwk);
     (await assertEnrollmentActor(actor, ctx));
     (await assertNoEnrollmentDeletion(actor.accountId, ctx));
+    await assertAudienceCapability(ctx, actor.accountId, 'face_authentication');
     if (recoverable)
         return (await startEnrollment(input, jwk, actor, ctx));
     const handle = opaque('lfh_'), handleHash = await digest(handle);
     (await assertEnrollmentActor(actor, ctx));
+    (await assertNoEnrollmentDeletion(actor.accountId, ctx));
+    await assertAudienceCapability(ctx, actor.accountId, 'face_authentication');
     const id = crypto.randomUUID(), deviceId = crypto.randomUUID(), consentId = crypto.randomUUID();
     const now = ctx.now(), revision = crypto.randomUUID(), nonce = opaque('lfn_');
     (await ctx.db.transaction(async () => {
         (await assertEnrollmentActor(actor, ctx));
         (await assertNoEnrollmentDeletion(actor.accountId, ctx));
+        await assertAudienceCapability(ctx, actor.accountId, 'face_authentication');
         const pending = (await ctx.db.one<{
             n: number;
         }>(`SELECT COUNT(*) n FROM auth_challenges WHERE account_id=?
@@ -356,9 +371,9 @@ async function registrationChallenge(request: Request, ctx: AppContext): Promise
       VALUES(?,?,?,?,'pending',?,?)`, deviceId, actor.accountId, stable(jwk), revision, now, handleHash));
         (await ctx.db.run(`INSERT INTO auth_challenges(id,account_id,device_id,purpose,nonce,profile_revision,profile_id,
       policy_version,expires_at,created_at,session_id,auth_epoch,consent_id,device_revision,model_id,
-      profile_auth_epoch,reference_digest,required_captures) VALUES(?,?,?,'registration',?,?,?,?,?,?,?,?,?,?,?,?,?,?)`, id, actor.accountId, deviceId, nonce, profile?.revision ?? null, profile?.id ?? null, policy(ctx), now + CHALLENGE_MS, now, actor.sessionId, actor.authEpoch, consentId, revision, profile?.model_id ?? null, profile?.auth_epoch ?? null, profile?.template_digest ?? null, profile ? 1 : 3));
+      profile_auth_epoch,reference_digest,required_captures,engine_identity) VALUES(?,?,?,'registration',?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`, id, actor.accountId, deviceId, nonce, profile?.revision ?? null, profile?.id ?? null, policy(ctx), now + CHALLENGE_MS, now, actor.sessionId, actor.authEpoch, consentId, revision, profile?.model_id ?? null, profile?.auth_epoch ?? null, profile?.template_digest ?? null, profile ? 1 : 3, selectedGeneration(ctx.env)));
     }));
-    return ok({ ...challengeResponse((await getChallenge(id, ctx))), face_handle: handle }, 201);
+    return ok({ ...await challengeResponse((await getChallenge(id, ctx)), ctx), face_handle: handle }, 201);
 }
 function faceHandle(value: unknown): string {
     if (typeof value !== 'string' || !/^lfh_[A-Za-z0-9_-]{43}$/.test(value))
@@ -366,7 +381,7 @@ function faceHandle(value: unknown): string {
     return value;
 }
 async function enrollmentResponse(row: Enrollment, handle: string, ctx: AppContext): Promise<Record<string, unknown>> {
-    return { ...challengeResponse((await getChallenge(row.challenge_id, ctx))), face_handle: handle,
+    return { ...await challengeResponse((await getChallenge(row.challenge_id, ctx)), ctx), face_handle: handle,
         enrollment_key: row.enrollment_key, public_key_digest: row.public_key_digest,
         enrollment_generation: row.generation };
 }
@@ -375,11 +390,16 @@ async function getEnrollment(account: string, key: string, ctx: AppContext): Pro
 }
 async function enrollmentAuthority(row: Enrollment, ctx: AppContext, expectedPublicKey?: string): Promise<Enrollment> {
     const current = (await getEnrollment(row.account_id, row.enrollment_key, ctx)), now = ctx.now();
-    if (!current || current.revoked_at !== null || current.expires_at <= now || current.policy_version !== policy(ctx) ||
+    if (!current)
+        throw new ApiError(404, 'enrollment_recovery_unavailable');
+    const account = (await ctx.db.one<AccountRow>('SELECT * FROM accounts WHERE id=?', current.account_id));
+    if (!account || account.disabled_at !== null)
+        throw new ApiError(404, 'enrollment_recovery_unavailable');
+    (await assertNoEnrollmentDeletion(current.account_id, ctx));
+    if (current.revoked_at !== null || current.expires_at <= now || current.policy_version !== policy(ctx) ||
         current.device_id !== row.device_id || current.device_revision !== row.device_revision ||
         current.public_key_digest !== row.public_key_digest || current.handle_hash !== row.handle_hash || current.start_hash !== row.start_hash)
         throw new ApiError(404, 'enrollment_recovery_unavailable');
-    const account = (await ctx.db.one<AccountRow>('SELECT * FROM accounts WHERE id=?', current.account_id));
     const device = (await ctx.db.one<Device>('SELECT * FROM auth_devices WHERE id=? AND account_id=?', current.device_id, current.account_id));
     const consent = (await ctx.db.one<{
         profile_revision: string | null;
@@ -405,6 +425,8 @@ async function enrollmentAuthority(row: Enrollment, ctx: AppContext, expectedPub
     else if (device.status !== 'pending' || account.identity_state !== 'anonymous' || account.auth_epoch !== current.auth_epoch ||
         profile || challenge.profile_id !== null || challenge.auth_epoch !== current.auth_epoch || challenge.required_captures !== 3)
         throw new ApiError(404, 'enrollment_recovery_unavailable');
+    await assertAudienceCapability(ctx, current.account_id, 'face_authentication');
+    assertGeneration(challenge.engine_identity, ctx.env);
     return current;
 }
 async function enrollmentLimit(account: string, ctx: AppContext): Promise<void> {
@@ -432,6 +454,7 @@ async function startEnrollment(input: Record<string, unknown>, jwk: JsonWebKey, 
     return (await ctx.db.transaction(async () => {
         (await assertEnrollmentActor(actor, ctx));
         (await assertNoEnrollmentDeletion(accountId, ctx));
+        await assertAudienceCapability(ctx, actor.accountId, 'face_authentication');
         const existing = (await getEnrollment(accountId, enrollmentKey, ctx));
         if (existing) {
             if (existing.start_hash !== startHash || existing.public_key_digest !== publicDigest || existing.handle_hash !== handleHash)
@@ -449,8 +472,8 @@ async function startEnrollment(input: Record<string, unknown>, jwk: JsonWebKey, 
         (await ctx.db.run(`INSERT INTO auth_devices(id,account_id,public_jwk,revision,status,created_at,face_handle)
       VALUES(?,?,?,?,'pending',?,?)`, deviceId, accountId, stable(jwk), deviceRevision, now, handleHash));
         (await ctx.db.run(`INSERT INTO auth_challenges(id,account_id,device_id,purpose,nonce,policy_version,expires_at,
-      created_at,session_id,auth_epoch,consent_id,device_revision,required_captures)
-      VALUES(?,?,?,'registration',?,?,?,?,?,?,?,?,3)`, challengeId, accountId, deviceId, opaque('lfn_'), policy(ctx), now + CHALLENGE_MS, now, actor.sessionId, actor.authEpoch, consentId, deviceRevision));
+      created_at,session_id,auth_epoch,consent_id,device_revision,required_captures,engine_identity)
+      VALUES(?,?,?,'registration',?,?,?,?,?,?,?,?,3,?)`, challengeId, accountId, deviceId, opaque('lfn_'), policy(ctx), now + CHALLENGE_MS, now, actor.sessionId, actor.authEpoch, consentId, deviceRevision, selectedGeneration(ctx.env)));
         (await ctx.db.run(`INSERT INTO face_enrollment_intents(account_id,enrollment_key,device_id,device_revision,public_key_digest,
       handle_hash,start_hash,consent_id,policy_version,auth_epoch,challenge_id,created_at,expires_at)
       VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?)`, accountId, enrollmentKey, deviceId, deviceRevision, publicDigest, handleHash, startHash, consentId, policy(ctx), actor.authEpoch, challengeId, now, now + ENROLLMENT_MS));
@@ -485,6 +508,7 @@ async function signedEnrollment(request: Request, step: 'status' | 'resume', ctx
         if (step === 'status' && request.headers.has('authorization')) {
             const actor = await authenticate(request, ctx);
             (await assertEnrollmentActor(actor, ctx));
+    await assertAudienceCapability(ctx, actor.accountId, 'face_authentication');
             recoveryDeadline(input, ctx);
             if (actor.accountId === accountId && actor.authMethod === 'anonymous' &&
                 !(await getEnrollment(accountId, key, ctx)) && !(await ctx.db.one('SELECT id FROM auth_devices WHERE face_handle=?', handleHash)))
@@ -529,7 +553,7 @@ async function recoverEnrollment(request: Request, ctx: AppContext): Promise<Res
         device_id: row.device_id, device_revision: row.device_revision, public_key_digest: row.public_key_digest,
         policy_version: row.policy_version, enrollment_generation: row.generation, challenge_id: row.challenge_id, request_nonce: input.request_nonce,
         expires_at: new Date(row.expires_at).toISOString(), authenticated: false, state,
-        challenge: usable ? challengeResponse(challenge) : null,
+        challenge: usable ? await challengeResponse(challenge, ctx) : null,
         captures: state === 'registered' ? [] : manifest((await captures(challenge, ctx))),
         profile: state === 'registered' ? { id: row.completed_profile_id, revision: row.completed_profile_revision, model_id: row.completed_model_id } : null });
 }
@@ -540,6 +564,7 @@ async function resumeEnrollment(request: Request, ctx: AppContext): Promise<Resp
     return (await ctx.db.transaction(async () => {
         (await assertEnrollmentActor(actor, ctx));
         (await assertNoEnrollmentDeletion(row.account_id, ctx));
+        await assertAudienceCapability(ctx, actor.accountId, 'face_authentication');
         recoveryDeadline(input, ctx);
         const current = (await enrollmentAuthority(row, ctx));
         if (actor.accountId !== current.account_id || actor.authMethod !== 'anonymous' || current.completed_profile_id !== null)
@@ -558,8 +583,8 @@ async function resumeEnrollment(request: Request, ctx: AppContext): Promise<Resp
         const now = ctx.now(), id = crypto.randomUUID();
         (await ctx.db.run(`UPDATE auth_challenges SET status='cancelled',used_at=coalesce(used_at,?) WHERE id=?`, now, current.challenge_id));
         (await ctx.db.run(`INSERT INTO auth_challenges(id,account_id,device_id,purpose,nonce,policy_version,expires_at,
-      created_at,session_id,auth_epoch,consent_id,device_revision,required_captures)
-      VALUES(?,?,?,'registration',?,?,?,?,?,?,?,?,3)`, id, current.account_id, current.device_id, opaque('lfn_'), current.policy_version, now + CHALLENGE_MS, now, actor.sessionId, actor.authEpoch, current.consent_id, current.device_revision));
+      created_at,session_id,auth_epoch,consent_id,device_revision,required_captures,engine_identity)
+      VALUES(?,?,?,'registration',?,?,?,?,?,?,?,?,3,?)`, id, current.account_id, current.device_id, opaque('lfn_'), current.policy_version, now + CHALLENGE_MS, now, actor.sessionId, actor.authEpoch, current.consent_id, current.device_revision, selectedGeneration(ctx.env)));
         (await ctx.db.run(`UPDATE face_enrollment_intents SET challenge_id=?,generation=generation+1,last_resume_key=?,
       previous_challenge_id=?,previous_generation=? WHERE account_id=? AND enrollment_key=?`, id, input.resume_key as string, current.challenge_id, current.generation, current.account_id, current.enrollment_key));
         return ok((await enrollmentResponse((await getEnrollment(current.account_id, current.enrollment_key, ctx))!, input.face_handle as string, ctx)), 201);
@@ -572,6 +597,9 @@ async function recoveryKeyAuthority(key: RecoveryKey, ctx: AppContext, completed
     if (stored)
         key = stored;
     const now = ctx.now(), account = (await ctx.db.one<AccountRow>('SELECT * FROM accounts WHERE id=?', key.account_id));
+    if (!account || account.disabled_at !== null || account.identity_state !== 'registered_face')
+        throw new ApiError(401, 'account_recovery_unavailable');
+    (await assertNoEnrollmentDeletion(key.account_id, ctx));
     const profile = (await ctx.db.one<Profile>('SELECT * FROM face_profiles WHERE account_id=?', key.account_id));
     const consent = (await ctx.db.one<{
         id: string;
@@ -588,7 +616,7 @@ async function recoveryKeyAuthority(key: RecoveryKey, ctx: AppContext, completed
         (completed ? completed.key_id !== key.id || completed.completed_at === null ||
             completed.completed_at !== key.consumed_at : key.consumed_at !== null))
         throw new ApiError(401, 'account_recovery_unavailable');
-    (await assertNoEnrollmentDeletion(key.account_id, ctx));
+    await assertAudienceCapability(ctx, key.account_id, 'face_authentication');
     return profile;
 }
 async function recoveryAuthority(intent: RecoveryIntent, ctx: AppContext): Promise<RecoveryKey> {
@@ -603,6 +631,8 @@ async function recoveryAuthority(intent: RecoveryIntent, ctx: AppContext): Promi
         device.face_handle !== current.handle_hash || device.status !== (current.completed_at === null ? 'pending' : 'active'))
         throw new ApiError(401, 'account_recovery_unavailable');
     (await recoveryKeyAuthority(key, ctx, current.completed_at === null ? undefined : current));
+    const challenge = (await getChallenge(current.challenge_id, ctx));
+    assertGeneration(challenge.engine_identity, ctx.env);
     return key;
 }
 function recoveryKeyResponse(key: RecoveryKey): Record<string, unknown> {
@@ -752,7 +782,7 @@ async function signedRecovery(request: Request, step: 'start' | 'status' | 'resu
     return { input, base, key, intent, jwk, keyDigest, handleHash, startHash };
 }
 async function recoveryChallenge(intent: RecoveryIntent, ctx: AppContext): Promise<Record<string, unknown>> {
-    return { ...challengeResponse((await getChallenge(intent.challenge_id, ctx))), recovery_request_id: intent.recovery_request_id,
+    return { ...await challengeResponse((await getChallenge(intent.challenge_id, ctx)), ctx), recovery_request_id: intent.recovery_request_id,
         recovery_generation: intent.generation };
 }
 async function insertRecoveryChallenge(intent: RecoveryIntent, key: RecoveryKey, ctx: AppContext): Promise<void> {
@@ -768,7 +798,7 @@ async function insertRecoveryChallenge(intent: RecoveryIntent, key: RecoveryKey,
         throw new ApiError(429, 'face_attempt_limit');
     (await ctx.db.run(`INSERT INTO auth_challenges(id,account_id,device_id,purpose,nonce,profile_revision,profile_id,
     policy_version,expires_at,created_at,auth_epoch,consent_id,device_revision,model_id,profile_auth_epoch,
-    reference_digest,required_captures) VALUES(?,?,?,'login',?,?,?,?,?,?,?,?,?,?,?,?,1)`, intent.challenge_id, key.account_id, intent.device_id, opaque('lfn_'), key.profile_revision, key.profile_id, key.policy_version, now + CHALLENGE_MS, now, key.auth_epoch, key.consent_id, intent.device_revision, key.model_id, key.profile_epoch, key.reference_digest));
+    reference_digest,required_captures,engine_identity) VALUES(?,?,?,'login',?,?,?,?,?,?,?,?,?,?,?,?,1,?)`, intent.challenge_id, key.account_id, intent.device_id, opaque('lfn_'), key.profile_revision, key.profile_id, key.policy_version, now + CHALLENGE_MS, now, key.auth_epoch, key.consent_id, intent.device_revision, key.model_id, key.profile_epoch, key.reference_digest, selectedGeneration(ctx.env)));
 }
 async function startAccountRecovery(request: Request, ctx: AppContext): Promise<Response> {
     verifierAvailable(ctx);
@@ -872,6 +902,7 @@ async function loginChallenge(request: Request, ctx: AppContext): Promise<Respon
         throw new ApiError(401, 'face_handle_unavailable');
     const id = crypto.randomUUID(), now = ctx.now();
     (await ctx.db.transaction(async () => {
+        await assertAudienceCapability(ctx, device.account_id, 'face_authentication');
         const account = (await ctx.db.one<AccountRow>(`SELECT * FROM accounts WHERE id=? AND disabled_at IS NULL AND identity_state='registered_face'`, device.account_id));
         const profile = (await ctx.db.one<Profile>(`SELECT * FROM face_profiles WHERE account_id=? AND status='active' AND auth_enabled=1`, device.account_id));
         const currentDevice = (await ctx.db.one<Device>(`SELECT * FROM auth_devices WHERE id=? AND face_handle=? AND status='active'`, deviceId, handleHash));
@@ -887,10 +918,10 @@ async function loginChallenge(request: Request, ctx: AppContext): Promise<Respon
             throw new ApiError(429, 'face_attempt_limit');
         (await ctx.db.run(`INSERT INTO auth_challenges(id,account_id,device_id,purpose,nonce,profile_revision,profile_id,
       policy_version,expires_at,created_at,auth_epoch,consent_id,device_revision,model_id,profile_auth_epoch,
-      reference_digest,required_captures) VALUES(?,?,?,'login',?,?,?,?,?,?,?,?,?,?,?,?,1)`, id, account.id, device.id, opaque('lfn_'), profile.revision, profile.id, policy(ctx), now + CHALLENGE_MS, now, account.auth_epoch, profile.auth_consent_id, device.revision, profile.model_id, profile.auth_epoch, profile.template_digest));
+      reference_digest,required_captures,engine_identity) VALUES(?,?,?,'login',?,?,?,?,?,?,?,?,?,?,?,?,1,?)`, id, account.id, device.id, opaque('lfn_'), profile.revision, profile.id, policy(ctx), now + CHALLENGE_MS, now, account.auth_epoch, profile.auth_consent_id, device.revision, profile.model_id, profile.auth_epoch, profile.template_digest, selectedGeneration(ctx.env)));
         (await assertChallenge((await getChallenge(id, ctx)), ctx));
     }));
-    return ok(challengeResponse((await getChallenge(id, ctx))), 201);
+    return ok(await challengeResponse((await getChallenge(id, ctx)), ctx), 201);
 }
 async function readBounded(body: ReadableStream<Uint8Array> | null, maximum: number, afterRead: () => void | Promise<void> = () => { }): Promise<Uint8Array> {
     if (!body)
@@ -1026,7 +1057,9 @@ async function retireOrphan(bucketName: 'PHOTOS' | 'QUARANTINE', key: string, ac
 }
 async function privateVerdict(challenge: Challenge, rows: Capture[], ctx: AppContext): Promise<Record<string, any>> {
     verifierAvailable(ctx);
+    (await assertChallenge(challenge, ctx, 'verifying'));
     const body = new FormData(), envelope = { ...deviceEnvelope(challenge), protocol: VERDICT_PROTOCOL,
+        engine_identity: challenge.engine_identity,
         protocol_device: DEVICE_PROTOCOL, required_captures: challenge.required_captures,
         poses: challenge.required_captures === 3 ? ['front', 'left', 'right'] : ['front'],
         reference_mode: challenge.purpose === 'replacement' ? 'replace_reference' : challenge.profile_id === null ? 'first_registration' : 'existing_reference',
@@ -1049,6 +1082,7 @@ async function privateVerdict(challenge: Challenge, rows: Capture[], ctx: AppCon
         }
         if (challenge.profile_id !== null) {
             const profile = (await ctx.db.one<Profile>('SELECT * FROM face_profiles WHERE account_id=?', challenge.account_id))!;
+            (await assertChallenge(challenge, ctx, 'verifying'));
             const reference = await ctx.env.PHOTOS.get(profile.template_key);
             (await assertChallenge(challenge, ctx, 'verifying'));
             if (!reference || reference.size > MAX_TEMPLATE_BYTES)
@@ -1064,8 +1098,30 @@ async function privateVerdict(challenge: Challenge, rows: Capture[], ctx: AppCon
         let timer: ReturnType<typeof setTimeout> | undefined;
         const deadline = new Promise<never>((_, reject) => { timer = setTimeout(() => { controller.abort(); reject(new ApiError(503, 'face_verifier_unavailable')); }, PROVIDER_MS); });
         try {
+            (await assertChallenge(challenge, ctx, 'verifying'));
             const response = await Promise.race([ctx.env.FACE_AUTH_VERIFIER!.fetch(new Request('https://face-auth.internal/v1/face-auth/verify', { method: 'POST', body, signal: controller.signal, redirect: 'manual' })), deadline]);
             (await assertChallenge(challenge, ctx, 'verifying'));
+            if (response.status === 409 && !response.redirected && /^application\/json(?:;|$)/i.test(response.headers.get('content-type') ?? '')) {
+                let failure: Uint8Array | undefined;
+                try {
+                    try {
+                        failure = await Promise.race([readBounded(response.body, 1024, async () => (await assertChallenge(challenge, ctx, 'verifying'))), deadline]);
+                    }
+                    catch (error) {
+                        if (error instanceof ApiError && !['capture_required', 'capture_too_large', 'capture_timeout'].includes(error.code))
+                            throw error;
+                        throw new ApiError(503, 'face_verifier_unavailable');
+                    }
+                    let value: string | undefined;
+                    try { value = new TextDecoder('utf-8', { fatal: true }).decode(failure); }
+                    catch { /* Only an exact known bounded failure crosses this private boundary. */ }
+                    const code = ['registered_reference_space_incompatible', 'inference_generation_changed']
+                        .find(code => value === JSON.stringify({ error: { code } }));
+                    if (code)
+                        throw new ApiError(409, code);
+                }
+                finally { failure?.fill(0); }
+            }
             if (!response.ok || response.redirected || !/^application\/json(?:;|$)/i.test(response.headers.get('content-type') ?? ''))
                 throw new ApiError(503, 'face_verifier_unavailable');
             const bytes = await Promise.race([readBounded(response.body, 128 * 1024, async () => (await assertChallenge(challenge, ctx, 'verifying'))), deadline]);
@@ -1095,7 +1151,9 @@ async function privateVerdict(challenge: Challenge, rows: Capture[], ctx: AppCon
     }
 }
 function validateVerdict(verdict: Record<string, any>, challenge: Challenge, rows: Capture[], ctx: AppContext): void {
+    assertGeneration(challenge.engine_identity, ctx.env);
     const expected = { protocol: VERDICT_PROTOCOL, challenge_id: challenge.id, nonce: challenge.nonce,
+        engine_identity: challenge.engine_identity,
         purpose: challenge.purpose, account_id: challenge.account_id, device_id: challenge.device_id,
         device_revision: challenge.device_revision, profile_id: challenge.profile_id,
         profile_revision: challenge.profile_revision, model_id: challenge.model_id,
@@ -1278,7 +1336,9 @@ async function complete(request: Request, purpose: 'registration' | 'login' | 'l
                 (await ctx.db.run(`UPDATE auth_challenges SET status='cancelled',used_at=? WHERE account_id=? AND id<>? AND used_at IS NULL`, now, account.id, challenge.id));
             }
             (await ctx.db.run(`UPDATE auth_challenges SET status='used',used_at=? WHERE id=?`, ctx.now(), challenge.id));
+            assertGeneration(challenge.engine_identity, ctx.env);
             (await insertPreparedSession(prepared, ctx));
+            assertGeneration(challenge.engine_identity, ctx.env);
         }));
         committed = true;
         return ok({ ...prepared.credentials, protocol: PROTOCOL, status: 'authenticated',
@@ -1320,11 +1380,14 @@ export async function cleanupFaceProofs(ctx: AppContext): Promise<void> {
     ORDER BY p.created_at LIMIT 100`, ctx.now()));
     for (const row of rows) {
         try {
+            const writerPending = () => ctx.db.one("SELECT id FROM media_write_intents WHERE bucket='QUARANTINE' AND object_key=? AND status='pending' LIMIT 1",row.object_key);
+            if (activeFaceVerifiers(ctx).has(row.challenge_id) || await writerPending()) continue;
             await ctx.env.QUARANTINE.delete(row.object_key);
-            if (await ctx.env.QUARANTINE.head(row.object_key))
+            if (await writerPending() || await ctx.env.QUARANTINE.head(row.object_key))
                 continue;
             (await ctx.db.transaction(async () => {
                 const challenge = (await getChallenge(row.challenge_id, ctx));
+                if (await writerPending() || activeFaceVerifiers(ctx).has(row.challenge_id)) return;
                 if (challenge.expires_at > ctx.now() && challenge.used_at === null && !['failed', 'cancelled', 'used'].includes(challenge.status))
                     return;
                 (await ctx.db.run('DELETE FROM auth_capture_proofs WHERE challenge_id=? AND capture_index=? AND object_key=?', row.challenge_id, row.capture_index, row.object_key));

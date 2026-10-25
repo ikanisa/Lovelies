@@ -1,9 +1,11 @@
+import { assertAudienceCapability } from './audience.ts';
 import { ApiError, digest, jsonBody, ok, record, stable, uuid, type AppContext } from './types.ts';
 import { authenticate, opaque, type AccountRow } from './auth.ts';
 import { assertRegisteredActor } from './operations.ts';
 import { hasConsent } from './gallery.ts';
 import { flushPrivacyCleanup } from './privacy.ts';
 import { policy, verifyKey, challengeResponse, getChallenge, captures, manifest, activeFaceVerifiers, type Profile, type Challenge, type Device } from './face-auth.ts';
+import { selectedGeneration, assertGeneration } from './inference-generation.ts';
 const PROTOCOL = 'lovelies-face-profile-v1';
 const DEVICE_PROTOCOL = 'lovelies-face-profile-device-v1';
 const CONTROL_MS = 365 * 86400000;
@@ -54,7 +56,7 @@ function photoPolicy(ctx: AppContext): string {
     return value;
 }
 async function noDeletion(account: string, ctx: AppContext): Promise<void> {
-    if ((await ctx.db.one("SELECT id FROM privacy_requests WHERE subject_id=? AND request_type='delete' AND status IN('pending_approval','approved','queued','processing','failed') AND (expires_at>? OR metadata_erased_at IS NOT NULL) LIMIT 1", account, ctx.now())))
+    if ((await ctx.db.one("SELECT id FROM privacy_requests WHERE subject_id=? AND request_type='delete' AND status IN('pending_approval','approved','queued','processing','failed') LIMIT 1", account)))
         throw new ApiError(409, 'enrollment_deletion_pending');
 }
 async function state(account: string, ctx: AppContext): Promise<State> {
@@ -130,6 +132,7 @@ async function operation(account: string, key: string, ctx: AppContext): Promise
     return (await ctx.db.one<LifecycleOperation>('SELECT * FROM face_profile_operations WHERE account_id=? AND operation_key=?', account, key));
 }
 export async function lifecycleAuthority(op: LifecycleOperation, ctx: AppContext): Promise<void> {
+    await assertAudienceCapability(ctx, op.account_id, 'face_authentication');
     const row = (await operation(op.account_id, op.operation_key, ctx));
     const control = (await ctx.db.one<Control>('SELECT * FROM face_profile_controls WHERE account_id=? AND device_id=?', op.account_id, op.control_device_id));
     const account = (await ctx.db.one<AccountRow>('SELECT * FROM accounts WHERE id=?', op.account_id));
@@ -152,6 +155,7 @@ export async function lifecycleAuthority(op: LifecycleOperation, ctx: AppContext
         throw new ApiError(409, 'registered_reference_changed');
     if (!(await ctx.db.one("SELECT id FROM consents WHERE id=? AND account_id=? AND purpose='face_authentication' AND status='granted' AND revoked_at IS NULL AND policy_version=? AND (expires_at IS NULL OR expires_at>?)", op.consent_id, op.account_id, policy(ctx), ctx.now())))
         throw new ApiError(409, 'face_profile_operation_changed');
+    assertGeneration(c.engine_identity, ctx.env);
 }
 async function cleanupState(id: string | null, account: string, ctx: AppContext): Promise<string> {
     if (!id)
@@ -180,7 +184,7 @@ async function operationMetadata(op: LifecycleOperation, ctx: AppContext): Promi
         else {
             const proof = (await captures(c, ctx));
             status = (await ctx.db.one("SELECT id FROM media_write_intents WHERE account_id=? AND status='pending' LIMIT 1", op.account_id)) ? 'capture_pending' : 'pending';
-            challenge = { ...challengeResponse(c), lifecycle_operation_key: op.operation_key, lifecycle_generation: op.generation };
+            challenge = { ...await challengeResponse(c, ctx), lifecycle_operation_key: op.operation_key, lifecycle_generation: op.generation };
             progress = manifest(proof);
         }
     }
@@ -199,8 +203,8 @@ export async function lifecycleMetadata(account: string, deviceId: string, ctx: 
         device_revision: device?.revision, public_key_digest: control?.public_key_digest, version: s.version,
         auth_policy_version: policy(ctx), photo_policy_version: photoPolicy(ctx),
         profile: profile?.status === 'active' ? { id: profile.id, revision: profile.revision, model_id: profile.model_id } : null,
-        authentication_enabled: profile?.status === 'active' && profile.auth_enabled === 1 && !!(await ctx.db.one("SELECT id FROM consents WHERE id=? AND account_id=? AND purpose='face_authentication' AND status='granted' AND revoked_at IS NULL AND policy_version=? AND (expires_at IS NULL OR expires_at>?)", profile.auth_consent_id, account, policy(ctx), ctx.now())),
-        matching_enabled: profile?.status === 'active' && s.matching_paused === 0 && !!(await ctx.db.one("SELECT id FROM consents WHERE id=? AND account_id=? AND purpose='photo_matching' AND status='granted' AND revoked_at IS NULL AND policy_version=? AND (expires_at IS NULL OR expires_at>?)", profile.consent_id, account, photoPolicy(ctx), ctx.now())),
+        authentication_enabled: profile?.status === 'active' && profile.auth_enabled === 1 && await hasConsent(ctx, account, 'face_authentication'),
+        matching_enabled: profile?.status === 'active' && s.matching_paused === 0 && await hasConsent(ctx, account, 'photo_matching'),
         processing_enabled: (await hasConsent(ctx, account, 'photo_processing')), receive_matches: preferences?.receive_matches === 1,
         matching_paused: s.matching_paused === 1, removal_state: removal ? (await cleanupState(removal.cleanup_id, account, ctx)) : 'none',
         operation: op ? (await operationMetadata(op, ctx)) : null, ...(requestNonce ? { request_nonce: requestNonce } : {}) };
@@ -395,6 +399,7 @@ async function action(request: Request, ctx: AppContext): Promise<Response> {
             (await invalidateRecipientProfile(row.account_id, ctx));
         }
         if (input.action === 'resume') {
+            await assertAudienceCapability(ctx, row.account_id, 'photo_matching');
             (await ctx.db.run("UPDATE consents SET status='revoked',revoked_at=? WHERE account_id=? AND purpose='photo_matching' AND status='granted'", ctx.now(), row.account_id));
             const id = crypto.randomUUID();
             (await ctx.db.run("INSERT INTO consents(id,account_id,purpose,policy_version,status,created_at,profile_revision) VALUES(?,?,'photo_matching',?,'granted',?,?)", id, row.account_id, photoPolicy(ctx), ctx.now(), profile.revision));
@@ -447,10 +452,11 @@ async function cancel(request: Request, ctx: AppContext): Promise<Response> {
     return ok((await lifecycleMetadata(row.account_id, row.device_id, ctx, result, uuid(input.request_nonce))));
 }
 async function insertChallenge(op: LifecycleOperation, ctx: AppContext): Promise<Challenge> {
+    await assertAudienceCapability(ctx, op.account_id, 'face_authentication');
     const profile = (await ctx.db.one<Profile>('SELECT * FROM face_profiles WHERE account_id=?', op.account_id));
     const purpose = op.action === 'replace' ? 'replacement' : 'registration', required = op.action === 'restore_authentication' ? 1 : 3;
     const id = crypto.randomUUID(), now = ctx.now();
-    (await ctx.db.run("INSERT INTO auth_challenges(id,account_id,device_id,purpose,nonce,profile_revision,profile_id,policy_version,expires_at,created_at,session_id,auth_epoch,consent_id,device_revision,model_id,profile_auth_epoch,reference_digest,required_captures) VALUES(?,?,?,?,?,?,?,?,?,?,NULL,?,?,?,?,?,?,?)", id, op.account_id, op.control_device_id, purpose, opaque('lfn_'), profile?.revision ?? null, profile?.id ?? null, policy(ctx), now + CHALLENGE_MS, now, op.auth_epoch, op.consent_id, op.control_revision, profile?.model_id ?? null, profile?.auth_epoch ?? null, profile?.template_digest ?? null, required));
+    (await ctx.db.run("INSERT INTO auth_challenges(id,account_id,device_id,purpose,nonce,profile_revision,profile_id,policy_version,expires_at,created_at,session_id,auth_epoch,consent_id,device_revision,model_id,profile_auth_epoch,reference_digest,required_captures,engine_identity) VALUES(?,?,?,?,?,?,?,?,?,?,NULL,?,?,?,?,?,?,?,?)", id, op.account_id, op.control_device_id, purpose, opaque('lfn_'), profile?.revision ?? null, profile?.id ?? null, policy(ctx), now + CHALLENGE_MS, now, op.auth_epoch, op.consent_id, op.control_revision, profile?.model_id ?? null, profile?.auth_epoch ?? null, profile?.template_digest ?? null, required, selectedGeneration(ctx.env)));
     (await ctx.db.run('UPDATE face_profile_operations SET challenge_id=?,generation=generation+1 WHERE account_id=? AND operation_key=?', id, op.account_id, op.operation_key));
     return (await getChallenge(id, ctx));
 }
@@ -460,6 +466,7 @@ async function challenge(request: Request, ctx: AppContext): Promise<Response> {
     const row = await signed(input, 'challenge', ctx), hash = await inputHash(input);
     if (!['replace', 'restore_authentication', 'enroll'].includes(input.action))
         throw new ApiError(400, 'face_profile_action_invalid');
+    await assertAudienceCapability(ctx, row.account_id, 'face_authentication');
     authConsent(input.consent, ctx, 'face_authentication');
     const response = (await ctx.db.transaction(async () => {
         nonce(input, ctx);
@@ -472,8 +479,9 @@ async function challenge(request: Request, ctx: AppContext): Promise<Response> {
             const c = (await getChallenge(old.challenge_id!, ctx));
             if (c.status !== 'pending' || c.expires_at <= ctx.now() || c.used_at !== null)
                 throw new ApiError(409, 'face_profile_restart_required');
-            return { ...challengeResponse(c), lifecycle_operation_key: old.operation_key, lifecycle_generation: old.generation };
+            return { ...await challengeResponse(c, ctx), lifecycle_operation_key: old.operation_key, lifecycle_generation: old.generation };
         }
+        await assertAudienceCapability(ctx, row.account_id, 'face_authentication');
         const profile = (await ctx.db.one<Profile>('SELECT * FROM face_profiles WHERE account_id=?', row.account_id)), s = (await state(row.account_id, ctx));
         if (input.action === 'enroll') {
             const removal = s.removal_operation_key ? (await operation(row.account_id, s.removal_operation_key, ctx)) : null;
@@ -488,7 +496,7 @@ async function challenge(request: Request, ctx: AppContext): Promise<Response> {
         const consentId = crypto.randomUUID();
         (await ctx.db.run("INSERT INTO consents(id,account_id,purpose,policy_version,status,created_at,profile_revision) VALUES(?,?,'face_authentication',?,'granted',?,?)", consentId, row.account_id, policy(ctx), ctx.now(), profile?.revision ?? null));
         const op = (await storeOperation(input, hash, row, input.action, ctx, consentId)), c = (await insertChallenge(op, ctx));
-        return { ...challengeResponse(c), lifecycle_operation_key: op.operation_key, lifecycle_generation: 1 };
+        return { ...await challengeResponse(c, ctx), lifecycle_operation_key: op.operation_key, lifecycle_generation: 1 };
     }));
     return ok(response, 201);
 }
@@ -507,7 +515,7 @@ async function resume(request: Request, ctx: AppContext): Promise<Response> {
             if (op.previous_challenge_id !== predecessor || op.previous_generation !== generation)
                 throw new ApiError(409, 'operation_key_conflict');
             const c = (await getChallenge(op.challenge_id!, ctx));
-            return { ...challengeResponse(c), lifecycle_operation_key: op.operation_key, lifecycle_generation: op.generation };
+            return { ...await challengeResponse(c, ctx), lifecycle_operation_key: op.operation_key, lifecycle_generation: op.generation };
         }
         if (op.challenge_id !== predecessor || op.generation !== generation)
             throw new ApiError(409, 'face_profile_operation_changed');
@@ -518,7 +526,7 @@ async function resume(request: Request, ctx: AppContext): Promise<Response> {
         (await ctx.db.run("UPDATE auth_challenges SET status='cancelled',used_at=COALESCE(used_at,?) WHERE id=?", ctx.now(), old.id));
         const c = (await insertChallenge(op, ctx));
         (await ctx.db.run('UPDATE face_profile_operations SET last_resume_key=?,previous_challenge_id=?,previous_generation=? WHERE account_id=? AND operation_key=?', resumeKey, predecessor, generation, row.account_id, key));
-        return { ...challengeResponse(c), lifecycle_operation_key: op.operation_key, lifecycle_generation: op.generation + 1 };
+        return { ...await challengeResponse(c, ctx), lifecycle_operation_key: op.operation_key, lifecycle_generation: op.generation + 1 };
     }));
     return ok(response, 201);
 }
@@ -548,6 +556,7 @@ export async function commitLifecycle(op: LifecycleOperation, challenge: Challen
     (await ctx.db.run('UPDATE face_profile_states SET version=version+1 WHERE account_id=?', op.account_id));
     (await ctx.db.run("UPDATE face_profile_operations SET state='completed' WHERE account_id=? AND operation_key=?", op.account_id, op.operation_key));
     (await ctx.db.run('INSERT INTO audit_events(id,actor_id,subject_id,action,entity_id,details_json,created_at) VALUES(?,?,?,?,?,?,?)', crypto.randomUUID(), op.account_id, op.account_id, 'face_profile.' + op.action, newProfile.id, '{}', ctx.now()));
+    assertGeneration(challenge.engine_identity, ctx.env);
 }
 export async function nextLifecycleAt(ctx: AppContext): Promise<number | null> {
     const pending = (await ctx.db.one("SELECT cleanup_id FROM face_profile_retirements r JOIN cleanup_intents c ON c.id=r.cleanup_id WHERE c.status<>'verified' LIMIT 1"));

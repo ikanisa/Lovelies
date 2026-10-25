@@ -1,3 +1,4 @@
+import { audienceProjection } from './audience.ts';
 import { accountRoles, base64url, decodeBase64url } from './auth.ts';
 import { cancelDeviceLifecycle } from './face-profile.ts';
 import { executeOperation, prepareOperation } from './operations.ts';
@@ -63,7 +64,7 @@ const summaryFields = `${accountFields},
     AND r.status IN('open','under_review')) open_reports,
   (SELECT count(*) FROM privacy_requests r WHERE r.subject_id=a.id
     AND r.status IN('pending_approval','approved','queued','processing','failed')
-    AND (r.expires_at>clock.now OR r.metadata_erased_at IS NOT NULL)) pending_privacy`;
+    AND (r.request_type='delete' OR r.expires_at>clock.now OR r.metadata_erased_at IS NOT NULL)) pending_privacy`;
 const clockSql = 'WITH clock AS (SELECT ? AS now,? AS policy,? AS photo_policy)';
 const clockValues = (ctx: AppContext): [
     number,
@@ -169,7 +170,7 @@ async function userDetail(id: string, ctx: AppContext, actor: Actor): Promise<Re
         SELECT id FROM privacy_requests WHERE subject_id=? UNION ALL
         SELECT id FROM sessions WHERE account_id=?) ORDER BY created_at DESC,id LIMIT ?`, id, id, id, id, id, id, id, limits.history + 1));
         (await audit(ctx, actor, 'admin.user.read', id, id));
-        return { user: summary(account), sessions: sessions.slice(0, limits.sessions),
+        return { user: summary(account), audience: await audienceProjection(ctx, id), sessions: sessions.slice(0, limits.sessions),
             cases: { support: support.slice(0, limits.cases_per_kind), safety: safety.slice(0, limits.cases_per_kind), privacy: privacy.slice(0, limits.cases_per_kind) },
             history: history.slice(0, limits.history), limits,
             has_more: { sessions: sessions.length > limits.sessions, support: support.length > limits.cases_per_kind,

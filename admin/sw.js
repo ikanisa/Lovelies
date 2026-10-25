@@ -4,7 +4,7 @@
  */
 'use strict';
 
-const VERSION = '20261023-6';
+const VERSION = '20261024-7';
 const CACHE_PREFIX = 'lovelies-admin-shell-';
 const CACHE_NAME = `${CACHE_PREFIX}${VERSION}`;
 const SHELL_PATHS = [
@@ -19,6 +19,7 @@ const SHELL_PATHS = [
   '/admin/live-app.mjs',
   '/admin/live-workspace.css',
   '/admin/operator-session.mjs',
+  '/admin/audience.mjs',
   '/admin/runtime-config.mjs',
   '/clients/backend/face-contracts.mjs',
   '/clients/backend/contracts.mjs',

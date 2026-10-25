@@ -32,6 +32,9 @@ if(inferenceUrl&&inferenceSecret){
     ENGINE_ARTIFACT_SHA256:value('ML_INFERENCE_ARTIFACT_SHA256'),PROCESSING_FINGERPRINT:value('ML_INFERENCE_PROCESSING_SHA256'),
     INFERENCE:new AuthenticatedService(inferenceUrl,inferenceSecret)});
   env.FACE_AUTH_VERIFIER=model.face;env.PHOTO_PROCESSOR=model.photo;env.MODEL_SERVICE_READINESS=model.ready;
+  // Invalid or absent inference pins leave biometric operations unavailable;
+  // anonymous application access still uses the existing handler.
+  try{env.INFERENCE_ENGINE_IDENTITY=model.generation();}catch{}
 }
 for(const [urlName,secretName,binding] of [['STORE_VERIFIER_URL','STORE_VERIFIER_SECRET','STORE_VERIFIER'],['PUSH_SERVICE_URL','PUSH_SERVICE_SECRET','PUSH_SERVICE']] as const){
   const url=value(urlName),secret=value(secretName);if(url&&secret)env[binding]=new AuthenticatedService(url,secret);

@@ -1,3 +1,4 @@
+import { audienceContext } from './audience.ts';
 import { ApiError, jsonBody, ok, stable, digest, uuid, record, type Actor, type AppContext, type Database } from './types.ts';
 import { assertRegisteredActor, executeOperation, prepareOperation } from './operations.ts';
 export const notificationsSchemaStatements: readonly string[] = [
@@ -16,6 +17,7 @@ async function settings(ctx: AppContext, account: string): Promise<Record<string
 }
 async function permitted(ctx: AppContext, account: string, kind: string, epoch?: number): Promise<boolean> {
     const row = (await ctx.db.one<any>('SELECT identity_state,disabled_at,auth_epoch FROM accounts WHERE id=?', account));
+    if (kind !== 'support' && !await audienceContext(ctx, account, kind === 'match' ? 'photo_matching' : 'face_authentication')) return false;
     return !!row && row.identity_state === 'registered_face' && row.disabled_at === null && (epoch == null || row.auth_epoch === epoch) && (await settings(ctx, account))[kind + '_alerts'] === true;
 }
 /** Internal producer only. Titles contain no photos, tokens, counterpart names

@@ -5,6 +5,11 @@ import {PostgresDatabase,connectPostgres} from '../src/database.ts';
 import {isolatedPostgres} from './postgres-harness.mjs';
 import {createApp,createHandler} from '../src/index.ts';
 import {PostgresJobQueue,drainJobs,maintain} from '../src/jobs.ts';
+import {INFERENCE_ENGINE_SPACE} from '../src/inference-contract.ts';
+import {encodeGeneration} from '../src/inference-generation.ts';
+
+export const fixtureInferenceGeneration=encodeGeneration({engine_space:INFERENCE_ENGINE_SPACE,
+  engine_artifact_sha256:'a'.repeat(64),processing_fingerprint:'b'.repeat(64)});
 
 const instances=new Set();
 const numberRows=rows=>rows.map(row=>Object.fromEntries(Object.entries(row).map(([k,v])=>[k,typeof v==='bigint'?Number(v):v])));
@@ -23,12 +28,17 @@ export class MemoryBucket {
   async delete(key){for(const item of typeof key==='string'?[key]:key)this.rows.delete(item);}
   async list(){return {objects:await Promise.all([...this.rows.keys()].map(key=>this.head(key))),truncated:false};}
 }
-export async function startHarness({faceVerifier,photoProcessor,storeVerifier,pushService,mediaWriteGate,vars={},consumeQueue=true}={}){
+export async function startHarness({faceVerifier,photoProcessor,storeVerifier,pushService,mediaWriteGate,buckets,vars={},consumeQueue=true}={}){
   const localDatabase=process.env.TEST_DATABASE_URL?await isolatedPostgres(process.env.TEST_DATABASE_URL):null;
   const engine=localDatabase?.engine??await PGlite.create();
-  if(!localDatabase)await engine.exec('CREATE ROLE anon; CREATE ROLE authenticated;');
-  const migrations=fs.readdirSync(new URL('../../../supabase/migrations/',import.meta.url)).filter(x=>/_lovelies_private_core\.sql$|_refresh_delivery\.sql$/.test(x)).sort();
-  for(const migration of migrations)await engine.exec(fs.readFileSync(new URL('../../../supabase/migrations/'+migration,import.meta.url),'utf8'));
+  try{
+    if(!localDatabase)await engine.exec('CREATE ROLE anon; CREATE ROLE authenticated;');
+    const migrations=fs.readdirSync(new URL('../../../supabase/migrations/',import.meta.url)).filter(x=>/_lovelies_private_core\.sql$|_refresh_delivery\.sql$|_audience_retention\.sql$|_inference_generation\.sql$|_retention_scan_cursors\.sql$/.test(x)).sort();
+    for(const migration of migrations)await engine.exec(fs.readFileSync(new URL('../../../supabase/migrations/'+migration,import.meta.url),'utf8'));
+  }catch(error){
+    if(localDatabase)try{await engine.close();}catch(cleanupError){try{if(error instanceof Error&&Object.isExtensible(error))Object.defineProperty(error,'cleanupErrors',{value:[cleanupError],configurable:true});}catch{}}
+    throw error;
+  }
   // PGlite embeds PostgreSQL itself but has no multiple backend processes. The
   // test harness serializes connections and substitutes its unsupported lock
   // function. Hosted/multi-connection advisory-lock qualification stays open.
@@ -42,8 +52,8 @@ export async function startHarness({faceVerifier,photoProcessor,storeVerifier,pu
     tail=operation.catch(()=>{});return operation;
   }};
   const db=localDatabase?connectPostgres(localDatabase.url):new PostgresDatabase(connection);
-  const env={APP_ENV:'test',AUTH_SIGNING_SECRET:'local-fixture-only-auth-key-32-characters',MEDIA_SIGNING_SECRET:'local-fixture-only-media-key-32-characters',INTERNAL_MAINTENANCE_SECRET:'local-fixture-only-maintenance-key-32-characters',FACE_AUTH_POLICY_VERSION:'face-policy-fixture-v1',PHOTO_MODEL_VERSION:'face-model-fixture-v1',PHOTO_CONSENT_POLICY_VERSION:'photo-policy-fixture-v1',PUBLIC_API_BASE_URL:'http://localhost/functions/v1/lovelies-api',ALLOWED_ORIGINS:'http://127.0.0.1:8765',PUBLIC_APP_BASE_URL:'http://127.0.0.1:8765',...vars,
-    PHOTOS:new MemoryBucket(),QUARANTINE:new MemoryBucket(mediaWriteGate),PRIVACY_EXPORTS:new MemoryBucket(),PHOTO_JOBS:new PostgresJobQueue(db)};
+  const env={INFERENCE_ENGINE_IDENTITY:fixtureInferenceGeneration,APP_ENV:'test',AUTH_SIGNING_SECRET:'local-fixture-only-auth-key-32-characters',MEDIA_SIGNING_SECRET:'local-fixture-only-media-key-32-characters',INTERNAL_MAINTENANCE_SECRET:'local-fixture-only-maintenance-key-32-characters',FACE_AUTH_POLICY_VERSION:'face-policy-fixture-v1',PHOTO_MODEL_VERSION:'face-model-fixture-v1',PHOTO_CONSENT_POLICY_VERSION:'photo-policy-fixture-v1',PUBLIC_API_BASE_URL:'http://localhost/functions/v1/lovelies-api',ALLOWED_ORIGINS:'http://127.0.0.1:8765',PUBLIC_APP_BASE_URL:'http://127.0.0.1:8765',...vars,
+    PHOTOS:buckets?.PHOTOS??new MemoryBucket(),QUARANTINE:buckets?.QUARANTINE??new MemoryBucket(mediaWriteGate),PRIVACY_EXPORTS:buckets?.PRIVACY_EXPORTS??new MemoryBucket(),PHOTO_JOBS:new PostgresJobQueue(db)};
   const response=value=>value instanceof Response?value:Response.json(value);
   if(faceVerifier)env.FACE_AUTH_VERIFIER={fetch:async request=>{const form=await request.formData();return response(await faceVerifier(JSON.parse(String(form.get('envelope'))),form));}};
   if(photoProcessor)env.PHOTO_PROCESSOR={fetch:async request=>response(await photoProcessor(await request.json()))};
@@ -59,7 +69,7 @@ export async function startHarness({faceVerifier,photoProcessor,storeVerifier,pu
     return result;
   };
   const json=async(path,options={},expected=200)=>{const res=await request(path,options),value=await res.json();assert.equal(res.status,expected,`${options.method??'request'} ${path}: ${value?.error?.code??value?.status??'unexpected_response'}`);return value;};
-  const harness={engine,db,app,env,request,json,databaseUrl:localDatabase?.url,storage:{exec:(sql,...bindings)=>db.all(sql,...bindings)},anonymous:()=>json('/auth/anonymous',{body:{}},201),community:(token,action,payload={},expected=200)=>json('/community/action',{token,body:{action,payload}},expected),alarm:()=>maintain(app),mf:{getR2Bucket:async name=>env[name]},close:async()=>{instances.delete(harness);await Promise.allSettled([...pendingJobs]);await tail;await db.close?.();await engine.close();}};
+  const harness={engine,db,app,env,request,json,databaseUrl:localDatabase?.url,storage:{exec:(sql,...bindings)=>db.all(sql,...bindings)},anonymous:async({adult=false}={})=>{const guest=await json('/auth/anonymous',{body:{}},201);if(adult)await json('/me/audience',{token:guest.access_token,method:'PUT',body:{age_band:'18_plus',policy_version:'audience-2026-10-24-v1',expected_version:0,operation_key:crypto.randomUUID()}});return guest;},community:(token,action,payload={},expected=200)=>json('/community/action',{token,body:{action,payload}},expected),alarm:()=>maintain(app),mf:{getR2Bucket:async name=>env[name]},close:async()=>{instances.delete(harness);await Promise.allSettled([...pendingJobs]);await tail;await db.close?.();await engine.close();}};
   instances.add(harness);return harness;
 }
 export async function closeHarnesses(){await Promise.all([...instances].map(h=>h.close()));}
@@ -123,7 +133,7 @@ export async function captureProofs(h, challenge, privateKey, { token, seed = cr
     { ...deviceEnvelope(challenge), step: 'complete', capture_manifest: captureManifest }) };
 }
 export async function prepareEnrollment(h) {
-  const anonymous = await h.anonymous();
+  const anonymous = await h.anonymous({adult:true});
   const keys = await crypto.subtle.generateKey({ name: 'ECDSA', namedCurve: 'P-256' }, true, ['sign','verify']);
   const challenge = await h.json('/auth/face/registration/challenge', { token: anonymous.access_token, body: {
     device_public_jwk: await crypto.subtle.exportKey('jwk', keys.publicKey),

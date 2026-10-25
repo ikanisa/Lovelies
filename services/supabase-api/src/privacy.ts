@@ -1,6 +1,7 @@
+import { audiencePrivacyRows, eraseAudienceSubject, revokeAudienceAuthority } from './audience.ts';
 import { ApiError, digest, jsonBody, ok, record, stable, uuid, type Actor, type AppContext } from './types.ts';
-import { assertRegisteredActor, executeOperation, executeAccountDeletionOperation, prepareOperation, settleMediaWrite } from './operations.ts';
-import { assertEnrollmentActor } from './auth.ts';
+import { assertOperationReceiptAvailable, assertRegisteredActor, executeOperation, executeAccountDeletionOperation, executeRestrictedOperation, prepareOperation, settleMediaWrite } from './operations.ts';
+import { assertPrivacyActor } from './auth.ts';
 import { entitlementPrivacyRows, eraseEntitlementSubject } from './entitlements.ts';
 import { operatorPrivacyRows, eraseOperatorSubject } from './operators.ts';
 import { notificationPrivacyRows, eraseNotificationSubject } from './notifications.ts';
@@ -57,7 +58,7 @@ function deletionStatus(row: PrivacyRequest, receipt: DeletionReceipt, now: numb
             completed_at: row.completed_at === null ? null : new Date(row.completed_at).toISOString(), failure_code: row.failure_code },
         deletion_status: { expires_at: new Date(receipt.expires_at).toISOString() }, deletion_completed: row.status === 'completed',
         request_expires_at: new Date(row.expires_at).toISOString(),
-        request_expired: row.expires_at <= now && row.metadata_erased_at === null && !['completed', 'rejected', 'cancelled'].includes(row.status) };
+        request_expired: row.request_type !== 'delete' && row.expires_at <= now && row.metadata_erased_at === null && !['completed', 'rejected', 'cancelled'].includes(row.status) };
 }
 const exportTtl = 24 * 60 * 60 * 1000;
 const exportBudget = 20 * 1024 * 1024;
@@ -81,7 +82,7 @@ async function requireAdmin(ctx: AppContext, actor: ExecutionAuthority): Promise
         }>('SELECT roles_json,identity_state,disabled_at FROM accounts WHERE id=?', request.reviewed_by));
         const continuingErasure = request.request_type === 'delete' && request.metadata_erased_at !== null && (await ctx.db.one('SELECT id FROM accounts WHERE id=? AND disabled_at IS NOT NULL', request.subject_id)) !== null;
         if (!request.reviewed_by || request.reviewed_by === request.subject_id || request.reviewed_at === null || !['queued', 'processing', 'failed'].includes(request.status) ||
-            (!continuingErasure && (request.expires_at <= ctx.now() || !reviewer || reviewer.identity_state !== 'registered_face' || reviewer.disabled_at !== null || !JSON.parse(reviewer.roles_json).includes('admin'))))
+            (!continuingErasure && (request.request_type !== 'delete' && request.expires_at <= ctx.now() || !reviewer || reviewer.identity_state !== 'registered_face' || reviewer.disabled_at !== null || !JSON.parse(reviewer.roles_json).includes('admin'))))
             throw new ApiError(403, 'privacy_approved_job_required');
         return;
     }
@@ -111,10 +112,8 @@ function exact(body: Record<string, unknown>, allowed: readonly string[]): void 
         throw new ApiError(400, 'privacy_input_invalid');
 }
 export async function createPrivacyRequest(ctx: AppContext, actor: Actor, kind: 'export' | 'delete', body: Record<string, unknown>): Promise<Record<string, unknown>> {
-    if (kind === 'delete')
-        (await assertEnrollmentActor(actor, ctx));
-    else
-        (await assertRegisteredActor(ctx, actor));
+    await assertPrivacyActor(actor, ctx);
+    if (kind === 'export' && actor.authMethod !== 'registered_face') throw new ApiError(403, 'registered_face_required');
     exact(body, kind === 'delete' ? ['reason', 'operation_key', 'status_token'] : ['reason', 'operation_key']);
     const rationale = reason(body), normalized = { ...body };
     let tokenHash: string | null = null;
@@ -132,11 +131,12 @@ export async function createPrivacyRequest(ctx: AppContext, actor: Actor, kind: 
     else if (kind === 'delete' && actor.authMethod === 'anonymous')
         throw new ApiError(400, 'deletion_status_token_required');
     const intent = await prepareOperation('privacy.request.' + kind, normalized, 'privacy');
-    const execute = kind === 'delete' ? executeAccountDeletionOperation : executeOperation;
+    const execute = kind === 'delete' ? executeAccountDeletionOperation : executeRestrictedOperation;
     return execute(ctx, actor, intent, async () => {
         const id = crypto.randomUUID(), now = ctx.now();
-        (await ctx.db.run('INSERT INTO privacy_requests(id,subject_id,requested_by,request_type,status,reason,created_at,expires_at) VALUES(?,?,?,?,?,?,?,?)', id, actor.accountId, actor.accountId, kind, 'pending_approval', rationale, now, now + requestTtl));
-        if (kind === 'delete' && actor.authMethod === 'anonymous') {
+        (await ctx.db.run('INSERT INTO privacy_requests(id,subject_id,requested_by,request_type,status,reason,created_at,expires_at) VALUES(?,?,?,?,?,?,?,?)', id, actor.accountId, actor.accountId, kind, 'pending_approval', rationale, now, now + (kind === 'delete' ? 30 * 86400000 : requestTtl)));
+        if (kind === 'delete') {
+            await revokeAudienceAuthority(ctx, actor.accountId, id);
             // Serialize guest deletion with the final enrollment transaction. Any
             // verifier/writer already awaited must fail its next authority recheck.
             (await ctx.db.run(`UPDATE auth_challenges SET status='cancelled',used_at=? WHERE account_id=?
@@ -167,7 +167,7 @@ async function retrieveDeletionStatus(request: Request, ctx: AppContext): Promis
     return (await ctx.db.transaction(async () => {
         const receipt = (await ctx.db.one<DeletionReceipt>('SELECT * FROM privacy_deletion_status_receipts WHERE token_hash=?', tokenHash));
         const row = receipt && (await ctx.db.one<PrivacyRequest>('SELECT * FROM privacy_requests WHERE id=?', receipt.request_id));
-        if (!receipt || !row || row.request_type !== 'delete' || receipt.revoked_at !== null || receipt.expires_at <= ctx.now()) {
+        if (!receipt || !row || row.request_type !== 'delete' || receipt.revoked_at !== null || receipt.expires_at <= ctx.now() && ['completed','rejected','cancelled'].includes(row.status)) {
             throw new ApiError(404, 'deletion_status_unavailable');
         }
         const response = ok(deletionStatus(row, receipt, ctx.now()));
@@ -176,6 +176,8 @@ async function retrieveDeletionStatus(request: Request, ctx: AppContext): Promis
     }));
 }
 export async function reviewPrivacyRequest(ctx: AppContext, actor: Actor, id: string, decision: 'approve' | 'reject', body: Record<string, unknown>): Promise<Record<string, unknown>> {
+    await assertPrivacyActor(actor, ctx);
+    if ((await currentRequest(ctx,id)).subject_id === actor.accountId) throw new ApiError(403, 'independent_privacy_review_required');
     (await requireAdmin(ctx, actor));
     exact(body, ['reason', 'operation_key']);
     const rationale = reason(body, decision === 'reject');
@@ -183,7 +185,7 @@ export async function reviewPrivacyRequest(ctx: AppContext, actor: Actor, id: st
     return (await executeOperation(ctx, actor, intent, async () => {
         (await requireAdmin(ctx, actor));
         const request = (await currentRequest(ctx, id));
-        if (request.status !== 'pending_approval' || request.expires_at <= ctx.now())
+        if (request.status !== 'pending_approval' || request.request_type !== 'delete' && request.expires_at <= ctx.now())
             throw new ApiError(409, 'privacy_review_conflict');
         if (request.subject_id === actor.accountId)
             throw new ApiError(403, 'independent_privacy_review_required');
@@ -233,7 +235,7 @@ export async function collectPrivacyExport(ctx: AppContext, subject: string): Pr
             financial.status = data.status;
         return { ...row, data: financial };
     });
-    for (const hook of [entitlementPrivacyRows, operatorPrivacyRows, notificationPrivacyRows, retentionPrivacyRows]) {
+    for (const hook of [entitlementPrivacyRows, operatorPrivacyRows, notificationPrivacyRows, retentionPrivacyRows, audiencePrivacyRows]) {
         const additional = await hook(ctx, subject);
         for (const [name, value] of Object.entries(additional)) {
             const data = Array.isArray(value) ? value : [value];
@@ -251,7 +253,7 @@ async function authorizedProcess(ctx: AppContext, actor: ExecutionAuthority, id:
         throw new ApiError(403, 'privacy_job_scope_invalid');
     const request = (await currentRequest(ctx, id));
     if (request.request_type !== kind || !request.reviewed_by || request.reviewed_at === null || request.reviewed_by === request.subject_id ||
-        !['queued', 'processing', 'failed'].includes(request.status) || request.expires_at <= ctx.now() && !(kind === 'delete' && request.metadata_erased_at !== null))
+        !['queued', 'processing', 'failed'].includes(request.status) || kind !== 'delete' && request.expires_at <= ctx.now())
         throw new ApiError(409, 'privacy_execution_unavailable');
     if (kind === 'delete' && request.legal_hold)
         throw new ApiError(409, 'privacy_legal_hold');
@@ -266,6 +268,16 @@ async function authorizedProcess(ctx: AppContext, actor: ExecutionAuthority, id:
     return request;
 }
 async function cleanup(ctx: AppContext, request: PrivacyRequest, bucket: 'PHOTOS' | 'QUARANTINE' | 'PRIVACY_EXPORTS', key: string, reset = false): Promise<void> {
+    if(request.request_type==='delete'&&request.reviewed_by&&request.reviewed_by!==request.subject_id&&request.reviewed_at!==null){
+        // Adopt the existing exact-key obligation before creating a duplicate.
+        // Preserve its ID/attempt history and retirement references, but require
+        // a new DELETE + absent HEAD under this reviewed erasure authority.
+        const target=await ctx.db.one('SELECT id FROM cleanup_intents WHERE request_id=? AND bucket=? AND object_key=?',request.id,bucket,key);
+        if(!target){
+            const orphan=await ctx.db.one<{id:string}>('SELECT c.id FROM cleanup_intents c WHERE c.request_id IS NULL AND c.subject_id=? AND c.bucket=? AND c.object_key=? ORDER BY CASE WHEN EXISTS(SELECT 1 FROM face_profile_retirements r WHERE r.cleanup_id=c.id) THEN 0 ELSE 1 END,c.created_at,c.id LIMIT 1',request.subject_id,bucket,key);
+            if(orphan)await ctx.db.run("UPDATE cleanup_intents SET request_id=?,status='pending',verified_at=NULL WHERE id=? AND request_id IS NULL",request.id,orphan.id);
+        }
+    }
     (await ctx.db.run('INSERT OR IGNORE INTO cleanup_intents(id,request_id,subject_id,bucket,object_key,status,attempts,created_at) VALUES(?,?,?,?,?,?,?,?)', crypto.randomUUID(), request.id, request.subject_id, bucket, key, 'pending', 0, ctx.now()));
     if (reset)
         (await ctx.db.run("UPDATE cleanup_intents SET status='pending',verified_at=NULL WHERE request_id=? AND bucket=? AND object_key=?", request.id, bucket, key));
@@ -367,6 +379,7 @@ export async function beginAccountErasure(ctx: AppContext, actor: ExecutionAutho
         // Retire grants, preserving their managed marker; do not grant legacy access.
         (await ctx.db.run('UPDATE media_grants SET active=0,revoked_at=coalesce(revoked_at,?) WHERE owner_id=? OR recipient_id=?', now, subject, subject));
         (await ctx.db.run('DELETE FROM media_grants WHERE owner_id=? OR recipient_id=?', subject, subject));
+        await eraseAudienceSubject(ctx, subject);
         (await ctx.db.run('DELETE FROM sharing_approvals WHERE owner_id=? OR recipient_id=?', subject, subject));
         (await ctx.db.run('DELETE FROM sharing_requests WHERE sender_id=? OR recipient_id=?', subject, subject));
         (await ctx.db.run('DELETE FROM candidates WHERE owner_id=? OR recipient_id=?', subject, subject));
@@ -477,6 +490,19 @@ type CleanupRow = {
     object_key: string;
 };
 async function cleanupAuthority(ctx: AppContext, row: CleanupRow, actor?: ExecutionAuthority): Promise<void> {
+    const current=await ctx.db.one<CleanupRow>('SELECT id,request_id,subject_id,bucket,object_key FROM cleanup_intents WHERE id=?',row.id);
+    if(!current||current.subject_id!==row.subject_id||current.bucket!==row.bucket||current.object_key!==row.object_key)throw new ApiError(409,'cleanup_authority_changed');
+    row=current;
+    // Historical duplicate NULL-request rows keep their own IDs/history. Their
+    // exact subject/bucket/key can inherit only a durable matching, independently
+    // reviewed erasure inventory entry; unrelated unknown intents remain denied.
+    if(!row.request_id){
+        const linked=await ctx.db.one<{request_id:string}>(`SELECT c.request_id FROM cleanup_intents c JOIN privacy_requests r ON r.id=c.request_id
+          WHERE c.subject_id=? AND c.bucket=? AND c.object_key=? AND r.subject_id=c.subject_id AND r.request_type='delete'
+          AND r.reviewed_by IS NOT NULL AND r.reviewed_by<>r.subject_id AND r.reviewed_at IS NOT NULL AND r.metadata_erased_at IS NOT NULL
+          ORDER BY r.created_at DESC,r.id LIMIT 1`,row.subject_id,row.bucket,row.object_key);
+        if(linked)row={...row,request_id:linked.request_id};
+    }
     if (actor && !jobAuthority(actor))
         (await requireAdmin(ctx, actor));
     if (actor && jobAuthority(actor) && actor.requestId !== row.request_id)
@@ -494,7 +520,7 @@ async function cleanupAuthority(ctx: AppContext, row: CleanupRow, actor?: Execut
         const retirement = row.bucket === 'PHOTOS' && (await ctx.db.one('SELECT cleanup_id FROM face_profile_retirements WHERE cleanup_id=? AND account_id=? AND template_key=?', row.id, row.subject_id, row.object_key));
         if (!retirement && !(await ctx.db.one("SELECT id FROM media_write_intents WHERE account_id=? AND bucket=? AND object_key=? LIMIT 1", row.subject_id, row.bucket, row.object_key)))
             throw new ApiError(403, 'cleanup_authority_invalid');
-        if (retirement && (await ctx.db.one('SELECT id FROM moderation_holds WHERE active=1 AND subject_id=? LIMIT 1', row.subject_id)))
+        if (retirement && ((await ctx.db.one("SELECT id FROM retention_settings WHERE id='default' AND legal_hold=1")) || (await ctx.db.one('SELECT id FROM moderation_holds WHERE active=1 AND subject_id=? LIMIT 1', row.subject_id))))
             throw new ApiError(409, 'face_profile_cleanup_blocked');
         // Transfer cancellation revokes publication immediately, but cannot erase
         // evidence protected by an existing retention or moderation hold. Include
@@ -657,10 +683,10 @@ async function createVerifiedExport(ctx: AppContext, actor: ExecutionAuthority, 
     }
 }
 async function exportGrant(ctx: AppContext, actor: Actor, id: string): Promise<Record<string, unknown>> {
-    (await assertRegisteredActor(ctx, actor));
+    (await assertPrivacyActor(actor, ctx));
     const token = crypto.randomUUID() + crypto.randomUUID(), tokenHash = await digest(token);
     return (await ctx.db.transaction(async () => {
-        (await assertRegisteredActor(ctx, actor));
+        (await assertPrivacyActor(actor, ctx));
         const request = (await currentRequest(ctx, id));
         if (request.subject_id !== actor.accountId || request.request_type !== 'export' || request.status !== 'completed' || !request.export_key || !request.export_expires_at || request.export_expires_at <= ctx.now())
             throw new ApiError(404, 'privacy_export_unavailable');
@@ -689,15 +715,16 @@ export async function processPrivacyJob(payload: unknown, ctx: AppContext): Prom
 }
 /** Durable at-least-once dispatch. Original request identity is reused. */
 export async function flushPrivacyCleanup(ctx: AppContext): Promise<void> {
-    (await ctx.db.transaction(async () => (await ctx.db.run('DELETE FROM privacy_deletion_status_receipts WHERE request_id IN(SELECT request_id FROM privacy_deletion_status_receipts WHERE expires_at<=? OR revoked_at IS NOT NULL LIMIT 100)', ctx.now()))));
-    (await ctx.db.transaction(async () => (await ctx.db.run("UPDATE privacy_requests SET status='cancelled',failure_code='privacy_request_expired' WHERE expires_at<=? AND status IN('pending_approval','approved','queued') AND metadata_erased_at IS NULL", ctx.now()))));
+    await ctx.db.run("UPDATE privacy_deletion_status_receipts SET expires_at=(SELECT coalesce(r.completed_at,r.reviewed_at)+? FROM privacy_requests r WHERE r.id=request_id) WHERE request_id IN(SELECT id FROM privacy_requests WHERE request_type='delete' AND status IN('completed','rejected','cancelled') AND coalesce(completed_at,reviewed_at) IS NOT NULL)", deletionReceiptTtl);
+    (await ctx.db.transaction(async () => (await ctx.db.run("DELETE FROM privacy_deletion_status_receipts WHERE request_id IN(SELECT d.request_id FROM privacy_deletion_status_receipts d JOIN privacy_requests r ON r.id=d.request_id WHERE (d.expires_at<=? AND r.status IN('completed','rejected','cancelled')) OR d.revoked_at IS NOT NULL LIMIT 100)", ctx.now()))));
+    (await ctx.db.transaction(async () => (await ctx.db.run("UPDATE privacy_requests SET status='cancelled',failure_code='privacy_request_expired' WHERE request_type<>'delete' AND expires_at<=? AND status IN('pending_approval','approved','queued') AND metadata_erased_at IS NULL", ctx.now()))));
     for (const row of (await ctx.db.all<{
         id: string;
         entity_id: string;
         payload_json: string;
     }>("SELECT id,entity_id,payload_json FROM outbox WHERE category='privacy' AND delivered_at IS NULL AND cancelled_at IS NULL ORDER BY created_at,id LIMIT 25"))) {
         const request = (await currentRequest(ctx, row.entity_id));
-        if (!['queued', 'processing', 'failed'].includes(request.status) || request.expires_at <= ctx.now()) {
+        if (!['queued', 'processing', 'failed'].includes(request.status) || request.request_type !== 'delete' && request.expires_at <= ctx.now()) {
             (await ctx.db.run("UPDATE outbox SET cancelled_at=?,payload_json='{}' WHERE id=?", ctx.now(), row.id));
             continue;
         }
@@ -727,7 +754,7 @@ export async function flushPrivacyCleanup(ctx: AppContext): Promise<void> {
     }
     for (const row of (await ctx.db.all<{
         id: string;
-    }>("SELECT id FROM privacy_requests WHERE status IN('processing','failed') AND (lease_until IS NULL OR lease_until<=?) AND (expires_at>? OR (request_type='delete' AND metadata_erased_at IS NOT NULL)) ORDER BY created_at,id LIMIT 10", ctx.now(), ctx.now()))) {
+    }>("SELECT id FROM privacy_requests WHERE status IN('processing','failed') AND (lease_until IS NULL OR lease_until<=?) AND (expires_at>? OR request_type='delete') ORDER BY created_at,id LIMIT 10", ctx.now(), ctx.now()))) {
         try {
             await processPrivacyJob({ request_id: row.id }, ctx);
         }
@@ -738,12 +765,12 @@ async function retrieveExport(request: Request, ctx: AppContext): Promise<Respon
     // A capability is additionally account/session bound; it never substitutes for
     // current account authority or becomes a public Storage URL.
     const actor = await ctx.authenticate(request), token = new URL(request.url).searchParams.get('grant');
-    (await assertRegisteredActor(ctx, actor));
+    (await assertPrivacyActor(actor, ctx));
     if (!token || token.length > 200)
         throw new ApiError(401, 'privacy_export_grant_invalid');
     const tokenHash = await digest(token);
     const publication = (await ctx.db.transaction(async () => {
-        (await assertRegisteredActor(ctx, actor));
+        (await assertPrivacyActor(actor, ctx));
         const grant = (await ctx.db.one<{
             id: string;
             request_id: string;
@@ -763,21 +790,21 @@ async function retrieveExport(request: Request, ctx: AppContext): Promise<Respon
     let bytes: Uint8Array | undefined;
     try {
         const object = await ctx.env.PRIVACY_EXPORTS.get(publication.export_key!);
-        (await assertRegisteredActor(ctx, actor));
+        (await assertPrivacyActor(actor, ctx));
         if (!object || object.size !== publication.export_bytes || object.size > exportBudget)
             throw new ApiError(503, 'privacy_export_unverified');
         bytes = new Uint8Array(await object.arrayBuffer());
         if (bytes.byteLength !== publication.export_bytes || await digest(bytes) !== publication.export_sha256)
             throw new ApiError(503, 'privacy_export_unverified');
-        (await assertRegisteredActor(ctx, actor));
+        (await assertPrivacyActor(actor, ctx));
         if (ctx.now() >= publication.export_expires_at!)
             throw new ApiError(410, 'privacy_export_expired');
         await ctx.env.PRIVACY_EXPORTS.delete(publication.export_key!);
-        (await assertRegisteredActor(ctx, actor));
+        (await assertPrivacyActor(actor, ctx));
         if (await ctx.env.PRIVACY_EXPORTS.head(publication.export_key!))
             throw new ApiError(503, 'privacy_cleanup_unconfirmed');
         (await ctx.db.transaction(async () => {
-            (await assertRegisteredActor(ctx, actor));
+            (await assertPrivacyActor(actor, ctx));
             const row = (await currentRequest(ctx, publication.id));
             if (row.status !== 'completed' || row.export_key !== publication.export_key || row.export_sha256 !== publication.export_sha256 || !row.export_expires_at || row.export_expires_at <= ctx.now())
                 throw new ApiError(409, 'privacy_publication_changed');
@@ -802,6 +829,17 @@ async function retrieveExport(request: Request, ctx: AppContext): Promise<Respon
 }
 export async function handlePrivacy(request: Request, ctx: AppContext): Promise<Response | null> {
     const path = new URL(request.url).pathname;
+    const operationReceipt = /^\/privacy\/operations\/([A-Za-z0-9._:-]{16,128})$/.exec(path);
+    if (operationReceipt) {
+        if (request.method !== 'GET') throw new ApiError(405,'method_not_allowed');
+        const actor = await ctx.authenticate(request);
+        return ctx.db.transaction(async()=>{
+            await assertPrivacyActor(actor,ctx);
+            const receipt = await ctx.db.one<{payload_json:string;response_json:string}>("SELECT payload_json,response_json FROM operations WHERE actor_id=? AND source='privacy' AND operation_key=? AND action IN('privacy.request.export','privacy.request.delete')",actor.accountId,operationReceipt[1]);
+            if (receipt) assertOperationReceiptAvailable(receipt);
+            return ok(receipt ? JSON.parse(receipt.response_json) : {status:'unknown'});
+        });
+    }
     if (path === '/privacy/account-deletion/status') {
         if (request.method !== 'POST')
             throw new ApiError(405, 'method_not_allowed');
@@ -842,9 +880,9 @@ export async function handlePrivacy(request: Request, ctx: AppContext): Promise<
         throw new ApiError(405, 'method_not_allowed');
     return (await ctx.db.transaction(async () => {
         if (path === '/privacy/center' || status)
-            (await assertEnrollmentActor(actor, ctx));
+            (await assertPrivacyActor(actor, ctx));
         else
-            (await assertRegisteredActor(ctx, actor));
+            (await assertPrivacyActor(actor, ctx));
         if (status) {
             const row = (await currentRequest(ctx, uuid(status[1])));
             if (row.subject_id !== actor.accountId && !actor.roles.includes('admin') || actor.authMethod === 'anonymous' && row.request_type !== 'delete')

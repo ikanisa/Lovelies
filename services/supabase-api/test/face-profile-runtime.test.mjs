@@ -191,7 +191,7 @@ async function preferences(h, person, extra = {}) {
 function processorResult(envelope) {
   return { attempt_id: envelope.attempt_id, nonce: envelope.nonce, asset_id: envelope.asset_id,
     source_version: envelope.source_version, source_checksum_sha256: envelope.source_checksum_sha256,
-    model_version: envelope.model_version,
+    model_version: envelope.model_version, engine_identity: envelope.engine_identity,
     preview: { bytes_base64: Buffer.from(fixturePng(envelope.asset_id)).toString('base64'), content_type: 'image/png', width: 1, height: 1 },
     matches: envelope.profiles.map(person => ({ recipient_id: person.account_id,
       profile_id: person.profile_id, profile_version: person.revision, model_version: person.model_id })) };
@@ -255,7 +255,7 @@ test('A03 original registered device creates one hash-only lifecycle control; st
 });
 
 test('A03 creation requires the current original device and rejects anonymous, foreign, unsigned or conflicting controls', async t => {
-  const h = await harness(t), person = await enroll(h), other = await enroll(h), guest = await h.anonymous();
+  const h = await harness(t), person = await enroll(h), other = await enroll(h), guest = await h.anonymous({adult:true});
   const control = await controlIntent(h, person);
   const body = await signed(control, 'control', { control_operation_key: control.creationKey }, { nonce: false });
   await h.json('/auth/face/profile/control', { token: guest.access_token, body }, 403);
@@ -743,7 +743,8 @@ for (const fault of ['profile-revision', 'profile-model', 'profile-digest', 'pro
     assert([401, 409].includes(response.status), fault + ' produced ' + response.status); await response.arrayBuffer();
     assert.equal(await count(h, 'sessions', 'WHERE account_id=?', person.accountId), sessions);
     assert.equal((await profile(h, person)).template_key, before.template_key);
-    assert.equal(await count(h, 'face_profile_retirements', 'WHERE account_id=?', person.accountId), 0);
+    assert.equal(await count(h, 'face_profile_retirements', 'WHERE account_id=?', person.accountId), fault === 'deletion' ? 1 : 0);
+    if(fault==='deletion'){const current=await profile(h,person);assert.equal(current.status,'revoked');assert.equal(current.auth_enabled,0);}
     assert(await (await h.mf.getR2Bucket('PHOTOS')).head(before.template_key));
   });
 
@@ -814,12 +815,15 @@ test('A03 deletion holds fence existing capture and management without consuming
   await action(h, control, 'pause', { expectedVersion: control.metadata.version, expected: 409 });
   await complete(h, pending, { completion, expected: 409 });
   const proof = await capture(h, pending, 0); assert.equal(proof.response.status, 409); await proof.response.arrayBuffer();
-  assert.equal(await count(h, 'face_profile_operations'), 1); assert.equal(await count(h, 'face_profile_retirements'), 0);
+  assert.equal(await count(h, 'face_profile_operations'), 1); assert.equal(await count(h, 'face_profile_retirements'), 1);
+  const retirement=(await h.storage.exec('SELECT template_key FROM face_profile_retirements WHERE account_id=?',person.accountId))[0];
+  assert.equal(retirement.template_key,(await profile(h,person)).template_key);
+  assert.equal((await profile(h,person)).status,'revoked');
   assert.equal(await count(h, 'sessions'), sessions); assert.equal(await count(h, 'accounts'), 1);
 });
 
 test('A03 terminal authority invalidates completed A01 recovery metadata without replacing its original account', async t => {
-  const h = await harness(t), anonymous = await h.anonymous();
+  const h = await harness(t), anonymous = await h.anonymous({adult:true});
   const keys = await crypto.subtle.generateKey({ name: 'ECDSA', namedCurve: 'P-256' }, true, ['sign', 'verify']);
   const jwk = await crypto.subtle.exportKey('jwk', keys.publicKey), saved = { account_id: anonymous.account_id,
     enrollment_key: uuid(), face_handle: secret('lfh_') };

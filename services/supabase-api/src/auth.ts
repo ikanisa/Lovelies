@@ -1,3 +1,4 @@
+import { assertAudienceCapability, audienceContext } from './audience.ts';
 import { cancelDeviceLifecycle } from './face-profile.ts';
 import { cancelRefreshDelivery, refreshWithDelivery } from './refresh-delivery.ts';
 import { ApiError, digest, jsonBody, ok, uuid, type Actor, type AppContext } from './types.ts';
@@ -120,8 +121,10 @@ async function hmacKey(ctx: AppContext): Promise<CryptoKey> {
         bytes.fill(0);
     }
 }
-/** Durable account/session checks. This explicit weaker guard is enrollment-only. */
-export async function assertEnrollmentActor(actor: Actor, ctx: AppContext, allowExpired = false): Promise<void> {
+/** Own status/privacy authority keeps the exact current session and device.
+ * Loss of a biometric purpose does not confer product authority or prevent
+ * access to the account's own restriction, erasure and security controls. */
+export async function assertPrivacyActor(actor: Actor, ctx: AppContext, allowExpired = false): Promise<void> {
     const account = (await ctx.db.one<AccountRow>('SELECT * FROM accounts WHERE id=?', actor.accountId));
     const session = (await ctx.db.one<SessionRow>('SELECT * FROM sessions WHERE id=? AND account_id=?', actor.sessionId, actor.accountId));
     const now = ctx.now();
@@ -138,6 +141,17 @@ export async function assertEnrollmentActor(actor: Actor, ctx: AppContext, allow
     }
     if (actor.authMethod !== 'registered_face' || account.identity_state !== 'registered_face')
         throw new ApiError(401, 'session_invalid');
+    const device=await ctx.db.one("SELECT id FROM auth_devices WHERE id=? AND account_id=? AND status='active' AND revision=?",session.device_id,account.id,session.device_revision);
+    if(!device)throw new ApiError(401,'session_invalid');
+}
+/** Product/enrollment authority includes the still-current face reference. Own
+ * privacy/status/revocation deliberately use assertPrivacyActor instead. */
+export async function assertEnrollmentActor(actor: Actor, ctx: AppContext, allowExpired = false): Promise<void> {
+    await assertPrivacyActor(actor, ctx, allowExpired);
+    if (actor.authMethod === 'anonymous') return;
+    const session = (await ctx.db.one<SessionRow>('SELECT * FROM sessions WHERE id=? AND account_id=?', actor.sessionId, actor.accountId))!;
+    const account = (await ctx.db.one<AccountRow>('SELECT * FROM accounts WHERE id=?', actor.accountId))!;
+    const now = ctx.now();
     const valid = (await ctx.db.one<{
         id: string;
     }>(`SELECT p.id FROM face_profiles p JOIN consents c ON c.id=p.auth_consent_id
@@ -151,8 +165,19 @@ export async function assertEnrollmentActor(actor: Actor, ctx: AppContext, allow
     if (!valid)
         throw new ApiError(401, 'registered_face_session_invalid');
 }
+/** Refresh never repairs a changed registered reference or consent. A current
+ * audience restriction is the explicit exception: the exact still-current
+ * device/session may renew only the credential used by weak own controls.
+ * Every product route continues to require current audience + face authority. */
+export async function assertRefreshActor(actor: Actor, ctx: AppContext, allowExpired = false): Promise<void> {
+    await assertPrivacyActor(actor,ctx,allowExpired);
+    if(actor.authMethod==='registered_face'&&await audienceContext(ctx,actor.accountId,'face_authentication'))
+        await assertEnrollmentActor(actor,ctx,allowExpired);
+}
 /** All protected product capabilities require a current verified face session. */
 export async function assertActor(actor: Actor, ctx: AppContext): Promise<void> {
+    await assertPrivacyActor(actor, ctx);
+    await assertAudienceCapability(ctx, actor.accountId, 'face_authentication');
     (await assertEnrollmentActor(actor, ctx));
     if (actor.authMethod !== 'registered_face')
         throw new ApiError(403, 'registered_face_required');
@@ -196,7 +221,7 @@ export async function authenticate(request: Request, ctx: AppContext): Promise<A
     }
     const actor: Actor = { accountId, sessionId, roles, expiresAt: (claims.exp as number) * 1000,
         authEpoch: claims.auth_epoch as number, authMethod: claims.auth_method as Actor['authMethod'] };
-    (await assertEnrollmentActor(actor, ctx)); // Re-read durable authority after every crypto await.
+    (await assertPrivacyActor(actor, ctx)); // Re-read durable authority after every crypto await.
     return actor;
 }
 /** Cryptography is prepared before a PostgreSQL transaction; no session yet exists. */
@@ -219,7 +244,7 @@ export async function prepareSession(spec: SessionSpec, ctx: AppContext): Promis
             token_type: 'Bearer', roles: [...spec.roles], auth_method: spec.authMethod, account_id: spec.accountId } };
 }
 /** Caller must recheck its current authority in the same transaction before insertion. */
-export async function insertPreparedSession(prepared: PreparedSession, ctx: AppContext): Promise<void> {
+export async function insertPreparedSession(prepared: PreparedSession, ctx: AppContext, restrictedRefresh = false): Promise<void> {
     const { spec } = prepared;
     const account = (await ctx.db.one<AccountRow>('SELECT * FROM accounts WHERE id=?', spec.accountId));
     if (!account || account.disabled_at !== null || account.auth_epoch !== spec.authEpoch ||
@@ -229,7 +254,7 @@ export async function insertPreparedSession(prepared: PreparedSession, ctx: AppC
     (await ctx.db.run(`INSERT INTO sessions(id,account_id,refresh_hash,expires_at,refresh_expires_at,auth_epoch,
     auth_method,face_profile_revision,face_consent_id,device_id,created_at,face_profile_epoch,device_revision)
     VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?)`, prepared.id, spec.accountId, prepared.refreshHash, prepared.expiresAt, prepared.refreshExpiresAt, spec.authEpoch, spec.authMethod, spec.profileRevision ?? null, spec.consentId ?? null, spec.deviceId ?? null, prepared.createdAt, spec.profileEpoch ?? null, spec.deviceRevision ?? null));
-    (await assertEnrollmentActor({ accountId: spec.accountId, sessionId: prepared.id, roles: spec.roles,
+    (await (restrictedRefresh ? assertPrivacyActor : assertEnrollmentActor)({ accountId: spec.accountId, sessionId: prepared.id, roles: spec.roles,
         expiresAt: prepared.expiresAt, authEpoch: spec.authEpoch, authMethod: spec.authMethod }, ctx));
 }
 function actorForSession(session: SessionRow, account: AccountRow): Actor {
@@ -256,13 +281,13 @@ export async function handleAuth(request: Request, ctx: AppContext): Promise<Res
         (await ctx.db.transaction(async () => {
             (await ctx.db.run(`INSERT INTO accounts(id,name,roles_json,auth_epoch,identity_state,created_at) VALUES(?,'','["user"]',1,'anonymous',?)`, accountId, ctx.now()));
             (await ctx.db.run('INSERT INTO account_preferences(account_id,updated_at) VALUES(?,?)', accountId, ctx.now()));
-            (await insertPreparedSession(prepared, ctx));
+            (await insertPreparedSession(prepared, ctx, true));
         }));
         return ok(prepared.credentials, 201);
     }
     if (request.method === 'GET' && path === '/me') {
         const actor = await authenticate(request, ctx);
-        (await assertEnrollmentActor(actor, ctx));
+        (await assertPrivacyActor(actor, ctx));
         const account = (await ctx.db.one<AccountRow>('SELECT * FROM accounts WHERE id=?', actor.accountId))!;
         const profile = (await ctx.db.one<{
             id: string;
@@ -287,25 +312,25 @@ export async function handleAuth(request: Request, ctx: AppContext): Promise<Res
         if (!old || !account || old.refresh_consumed_at !== null)
             throw new ApiError(401, 'refresh_invalid');
         const actor = actorForSession(old, account);
-        (await assertEnrollmentActor(actor, ctx, true));
+        (await assertRefreshActor(actor, ctx, true));
         const prepared = await prepareSession({ accountId: actor.accountId, roles: actor.roles,
             authEpoch: actor.authEpoch, authMethod: old.auth_method, profileRevision: old.face_profile_revision ?? undefined,
             profileEpoch: old.face_profile_epoch ?? undefined, consentId: old.face_consent_id ?? undefined,
             deviceId: old.device_id ?? undefined, deviceRevision: old.device_revision ?? undefined }, ctx);
         (await ctx.db.transaction(async () => {
-            (await assertEnrollmentActor(actor, ctx, true));
+            (await assertRefreshActor(actor, ctx, true));
             const current = (await ctx.db.one<SessionRow>('SELECT * FROM sessions WHERE id=? AND refresh_hash=?', old.id, hash));
             if (!current || current.refresh_consumed_at !== null)
                 throw new ApiError(401, 'refresh_invalid');
             (await ctx.db.run('UPDATE sessions SET revoked_at=?,refresh_consumed_at=? WHERE id=?', ctx.now(), ctx.now(), old.id));
-            (await insertPreparedSession(prepared, ctx));
+            (await insertPreparedSession(prepared, ctx, true));
         }));
         return ok(prepared.credentials);
     }
     if (request.method === 'POST' && path === '/auth/logout') {
         const actor = await authenticate(request, ctx);
         (await ctx.db.transaction(async () => {
-            (await assertEnrollmentActor(actor, ctx));
+            (await assertPrivacyActor(actor, ctx));
             await revokeSessionAuthority(actor.sessionId,actor.accountId,ctx);
         }));
         return ok({ status: 'logged_out' });

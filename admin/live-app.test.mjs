@@ -2,8 +2,12 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import {previewAllowed} from './entry.mjs';
 import {parseRoute,reviewIntent,recordTable,startWorkspace} from './live-app.mjs';
+import {AUDIENCE_POLICY} from './audience.mjs';
 
 const id=n=>`00000000-0000-4000-8000-${String(n).padStart(12,'0')}`;
+const unknownAudience=account=>({protocol:'lovelies-audience-v1',policy_version:AUDIENCE_POLICY,account_id:account,
+ audience:{age_band:'unknown',status:'unknown',version:0,policy_version:null,next_review_at:null},
+ capabilities:{face_authentication:false,photo_matching:false,photo_processing:false},guardian_request:null});
 test('production entry never enables sample mode outside an explicit loopback preview',()=>{
   for(const href of ['https://lovelies.app/admin/?preview=1','https://evil-localhost.example/admin/?preview=1','http://localhost/admin/','http://localhost/admin/?preview=true'])assert.equal(previewAllowed({href}),false,href);
   for(const href of ['http://127.0.0.1/admin/?preview=1','http://localhost/admin/?preview=1','http://[::1]/admin/?preview=1'])assert.equal(previewAllowed({href}),true,href);
@@ -85,6 +89,55 @@ test('account detail reply cannot reopen a dialog after navigation changes',asyn
  h.session.request=async path=>path==='/admin/users/'+id(1)?new Promise(resolve=>release=resolve):{users:[{id:id(1),name:'Protected account',status:'active'}]};
  await app.refresh();h.events.get('click')({target:{closest:()=>({dataset:{live:'detail',kind:'users',id:id(1)}})}});
  h.window.location.hash='#overview';h.windowEvents.get('hashchange')();
- release({user:{id:id(1),name:'Protected account'},sessions:[],cases:{},history:[]});
+ release({user:{id:id(1),name:'Protected account'},audience:unknownAudience(id(1)),sessions:[],cases:{},history:[]});
  await new Promise(resolve=>setImmediate(resolve));assert.equal(h.get('#detail-dialog').open,false);assert(!h.get('#detail-dialog').innerHTML.includes('Protected account'));
+});
+test('guardian review shows exact requested purposes without raw evidence or private media',async()=>{
+ const h=harness({operator:true,hash:'#guardians'}),app=await startWorkspace(h);
+ const row={id:id(1),child_account_id:id(2),guardian_account_id:id(3),revision:2,state:'under_review',policy_version:AUDIENCE_POLICY,
+   requested_purposes:['face_authentication'],evidence_recorded:false,evidence_reference:'private-evidence-record',photo_url:'https://private.example/image'};
+ h.session.request=async()=>({guardian_requests:[row]});await app.refresh();
+ h.events.get('click')({target:{closest:()=>({dataset:{live:'detail',kind:'guardians',id:id(1)}})}});
+ await new Promise(resolve=>setImmediate(resolve));const dialog=h.get('#detail-dialog');
+ assert.equal(dialog.open,true);assert(dialog.innerHTML.includes('face_authentication'));assert(dialog.innerHTML.includes('live-guardian-form'));
+ assert(dialog.innerHTML.includes('<option value="reject">Reject</option>'));assert(!dialog.innerHTML.includes('private-evidence-record'));assert(!dialog.innerHTML.includes('private.example'));
+});
+
+test('a known product denial removes guardian records and detail DOM while preserving weak credentials and the exact saved action',async()=>{
+ const h=harness({operator:true,hash:'#guardians'}),app=await startWorkspace(h);
+ const row={id:id(1),child_account_id:id(2),guardian_account_id:id(3),revision:2,state:'under_review',policy_version:AUDIENCE_POLICY,requested_purposes:['face_authentication']};
+ h.session.request=async()=>({guardian_requests:[row]});await app.refresh();
+ h.events.get('click')({target:{closest:()=>({dataset:{live:'detail',kind:'guardians',id:id(1)}})}});
+ await new Promise(resolve=>setImmediate(resolve));assert(h.get('#detail-dialog').innerHTML.includes(id(2)));
+ const credentials=h.session.credentials,reference=h.session.state.reference,pending={path:`/admin/guardian-requests/${id(1)}/review`,body:{operation_key:id(4)},accountId:id(9)};
+ h.session.state.pendingAction=pending;
+ h.session.request=async()=>{h.session.operator=null;throw Object.assign(new Error('audience_restricted'),{code:'audience_restricted',status:403});};
+ await app.refresh();
+ assert.equal(h.get('#detail-dialog').open,false);assert.equal(h.get('#detail-dialog').innerHTML,'');
+ assert(!h.get('#main').innerHTML.includes(id(2)));assert(h.get('#main').innerHTML.includes('Verify my face'));
+ assert.equal(h.session.credentials,credentials);assert.equal(h.session.state.reference,reference);assert.equal(h.session.state.pendingAction,pending);
+});
+
+test('authority expiry, cancellation or challenge replacement during encoding prevents reading the encoded photo bytes',async t=>{
+ for(const change of ['expiry','cancel','replacement'])await t.test(change,async()=>{
+  const h=harness();await startWorkspace(h);let clock=Date.now(),encoded,finishEncoding,playing,reads=0,urls=0,stopped=0;
+  const ready=new Promise(resolve=>encoded=resolve),cameraReady=new Promise(resolve=>playing=resolve);
+  const challenge={account_id:id(1),challenge_id:id(2),device_id:id(3),purpose:'login',required_captures:1,expires_at:new Date(clock+60000).toISOString(),
+   audience_authority:{protocol:'lovelies-audience-challenge-v1',policy_version:AUDIENCE_POLICY,account_id:id(1),challenge_id:id(2),device_id:id(3),purpose:'login',audience_version:1,expires_at:new Date(clock+1000).toISOString()}};
+  h.session.challenge=challenge;h.session.epoch=0;h.session.now=()=>clock;
+  h.session.cancelCapture=()=>{h.session.epoch++;h.session.challenge=null;h.session.captures=[];h.session.cancelled++;};
+  h.window.navigator.mediaDevices={async getUserMedia(){return {getTracks:()=>[{stop(){stopped++;}}]};}};
+  const video=h.get('#operator-camera');video.videoWidth=640;video.videoHeight=480;video.play=async()=>{playing();};
+  const canvas={width:0,height:0,getContext:()=>({drawImage(){}}),toBlob(callback){finishEncoding=callback;encoded();}};
+  h.document.createElement=kind=>{assert.equal(kind,'canvas');return canvas;};
+  h.window.URL.createObjectURL=()=>{urls++;return 'blob:unsent-review';};
+  h.events.get('click')({target:{closest:()=>({dataset:{live:'resume-camera'}})}});await cameraReady;await new Promise(resolve=>setImmediate(resolve));
+  h.events.get('click')({target:{closest:()=>({dataset:{live:'shutter'}})}});await ready;
+  if(change==='expiry')clock+=1001;
+  else if(change==='cancel')h.events.get('click')({target:{closest:()=>({dataset:{live:'cancel-camera'}})}});
+  else h.session.challenge={...challenge};
+  finishEncoding({async arrayBuffer(){reads++;return new Uint8Array([1,2,3]).buffer;}});
+  await new Promise(resolve=>setImmediate(resolve));
+  assert.equal(reads,0);assert.equal(urls,0);assert(stopped>0);assert.equal(canvas.width,1);assert.equal(canvas.height,1);
+ });
 });

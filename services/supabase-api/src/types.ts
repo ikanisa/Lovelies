@@ -20,11 +20,17 @@ export interface PrivateBucket {
 export interface ServiceFetcher {
     fetch(input:string|Request|URL,init?:RequestInit):Promise<Response>;
 }
+export type PhotoAuthorityStage = 'before_source' | 'after_source' | 'before_template' | 'after_template' | 'before_dispatch';
+export type PhotoAuthorityProfile = Readonly<{ account_id:string; profile_id:string; revision:string; model_id:string }>;
+export interface PhotoProcessorFetcher extends ServiceFetcher {
+    fetch(input:string|Request|URL,init?:RequestInit,assertAuthority?:(stage:PhotoAuthorityStage,profile?:PhotoAuthorityProfile)=>Promise<void>):Promise<Response>;
+}
 export interface SupabaseEnv {
     PHOTOS: PrivateBucket; QUARANTINE: PrivateBucket; PRIVACY_EXPORTS: PrivateBucket;
     PHOTO_JOBS: {send(body:unknown):Promise<void>};
-    FACE_AUTH_VERIFIER?: ServiceFetcher; PHOTO_PROCESSOR?: ServiceFetcher;
+    FACE_AUTH_VERIFIER?: ServiceFetcher; PHOTO_PROCESSOR?: PhotoProcessorFetcher;
     MODEL_SERVICE_READINESS?: (signal?:AbortSignal)=>Promise<boolean>;
+    INFERENCE_ENGINE_IDENTITY?: string;
     APP_ENV: string; AUTH_SIGNING_SECRET?:string; MEDIA_SIGNING_SECRET?:string;
     FACE_AUTH_POLICY_VERSION?:string; PHOTO_MODEL_VERSION?:string; PHOTO_CONSENT_POLICY_VERSION?:string;
     STORE_VERIFIER?:ServiceFetcher; PUSH_SERVICE?:ServiceFetcher;

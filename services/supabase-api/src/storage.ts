@@ -1,5 +1,28 @@
 import { ApiError, type PrivateBucket, type PrivateObject } from './types.ts';
 
+const MAX_STORAGE_ERROR_BYTES=2048;
+const STORAGE_ERROR_TIMEOUT_MS=1000;
+
+/** storage-api v1.68.10 uses HTTP 400 for this specific missing-key error.
+ * An arbitrary 400, denied credential or malformed error is never absence. */
+async function missingObjectEnvelope(response:Response):Promise<boolean>{
+  const type=response.headers.get('content-type')??'',length=response.headers.get('content-length');
+  if(!/^application\/json(?:;|$)/i.test(type)||length!==null&&(!/^\d+$/.test(length)||Number(length)>MAX_STORAGE_ERROR_BYTES)||!response.body)return false;
+  const reader=response.body.getReader(),chunks:Uint8Array[]=[];let bytes=0,timer:ReturnType<typeof setTimeout>|undefined;
+  const expired=new Promise<never>((_,reject)=>{timer=setTimeout(()=>reject(new Error('storage_error_body_timeout')),STORAGE_ERROR_TIMEOUT_MS);});
+  try{
+    for(;;){
+      const next=await Promise.race([reader.read(),expired]);if(next.done)break;
+      bytes+=next.value.byteLength;if(bytes>MAX_STORAGE_ERROR_BYTES)return false;chunks.push(next.value);
+    }
+    const buffer=new Uint8Array(bytes);let offset=0;for(const chunk of chunks){buffer.set(chunk,offset);offset+=chunk.byteLength;}
+    const value=JSON.parse(new TextDecoder('utf-8',{fatal:true}).decode(buffer)) as Record<string,unknown>;
+    return !!value&&typeof value==='object'&&!Array.isArray(value)&&Object.keys(value).length===4&&
+      value.statusCode==='404'&&value.error==='not_found'&&value.code==='NoSuchKey'&&value.message==='Object not found';
+  }catch{return false;}
+  finally{clearTimeout(timer);void reader.cancel().catch(()=>{});reader.releaseLock();}
+}
+
 /** Storage credentials remain server-only. All end-user reads pass the app's
  * current-session/grant checks; no public or signed Storage URL escapes. */
 export class SupabasePrivateBucket implements PrivateBucket {
@@ -18,12 +41,14 @@ export class SupabasePrivateBucket implements PrivateBucket {
     // New sb_secret keys are apikeys, not JWTs; legacy service_role is a JWT.
     if(this.secret.split('.').length===3)headers.set('Authorization','Bearer '+this.secret);
     const response=await this.fetcher(this.base+path,{...init,headers,redirect:'manual'});
-    if(response.redirected||response.status>=300&&response.status<400)throw new ApiError(503,'storage_redirect_denied');
-    if(!response.ok&&response.status!==404){await response.body?.cancel();throw new ApiError(503,'private_storage_unavailable');}
+    if(response.redirected||response.status>=300&&response.status<400){void response.body?.cancel().catch(()=>{});throw new ApiError(503,'storage_redirect_denied');}
+    const objectRead=(init.method??'GET')==='GET'&&(path.startsWith('/object/info/')||path.startsWith('/object/authenticated/'));
+    if(response.status===400&&objectRead&&await missingObjectEnvelope(response))return new Response(null,{status:404});
+    if(!response.ok&&response.status!==404){void response.body?.cancel().catch(()=>{});throw new ApiError(503,'private_storage_unavailable');}
     return response;
   }
   async head(key:string):Promise<Omit<PrivateObject,'body'|'arrayBuffer'>|null>{
-    const response=await this.request('/object/info/'+this.path(key));if(response.status===404){await response.body?.cancel();return null;}
+    const response=await this.request('/object/info/'+this.path(key));if(response.status===404){void response.body?.cancel().catch(()=>{});return null;}
     const object=await response.json() as Record<string,any>;
     const metadata=object.metadata??{},user=object.user_metadata??object.userMetadata??object.metadata??{};
     const size=Number(object.size??metadata.size),etag=String(object.etag??object.eTag??metadata.eTag??metadata.etag??object.version??'');
@@ -32,7 +57,7 @@ export class SupabasePrivateBucket implements PrivateBucket {
   }
   async get(key:string):Promise<PrivateObject|null>{
     const initial=await this.head(key);if(!initial)return null;
-    const response=await this.request('/object/authenticated/'+this.path(key));if(response.status===404){await response.body?.cancel();return null;}
+    const response=await this.request('/object/authenticated/'+this.path(key));if(response.status===404){void response.body?.cancel().catch(()=>{});return null;}
     const downloadEtag=response.headers.get('etag')?.replace(/^W\//,'').replace(/^"|"$/g,'');
     if(downloadEtag&&downloadEtag!==initial.etag){await response.body?.cancel();throw new ApiError(409,'private_object_changed');}
     return {...initial,body:response.body,arrayBuffer:()=>response.arrayBuffer()};

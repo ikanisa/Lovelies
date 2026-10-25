@@ -17,7 +17,7 @@ const cancel=(h,body,expected=200)=>h.json('/auth/session/refresh/cancel',{body}
 
 test('v2 refresh loss returns one encrypted exact credential result under the retained delivery capability',async()=>{
  const h=await startHarness({consumeQueue:false});try{
-  const old=await h.anonymous(),body=intent(old);
+  const old=await h.anonymous({adult:true}),body=intent(old);
   const committed=await h.request('/auth/session/refresh',{body}),originalText=await committed.text();assert.equal(committed.status,200);
   // Simulate response loss: a different handler has only the durable old body.
   const response=await request(createHandler(createApp(h.db,h.env)))('/auth/session/refresh',structuredClone(body));
@@ -37,7 +37,7 @@ test('v2 refresh loss returns one encrypted exact credential result under the re
 
 test('v2 validates canonical independent secrets and exact fields before consuming authority',async()=>{
  const h=await startHarness({consumeQueue:false});try{
-  const old=await h.anonymous(),body=intent(old);
+  const old=await h.anonymous({adult:true}),body=intent(old);
   const malformed=[{...body,protocol:'v0'},{...body,rotation_key:'bad'},{...body,delivery_secret:'a'.repeat(42)},
    {...body,delivery_secret:'_'.repeat(43)},{...body,delivery_secret:body.delivery_secret+'='},{...body,extra:'field'},
    {...body,refresh_token:'bad'},Object.fromEntries(Object.entries(body).filter(([k])=>k!=='delivery_secret'))];
@@ -45,14 +45,14 @@ test('v2 validates canonical independent secrets and exact fields before consumi
   assert.equal((await h.db.one('SELECT count(*) n FROM sessions')).n,1);assert.equal((await h.db.one('SELECT count(*) n FROM refresh_delivery_receipts')).n,0);
   const issued=await rotate(h,body);assert.equal(issued.account_id,old.account_id);
   await rotate(h,{...body,rotation_key:key()},401);await rotate(h,{...body,delivery_secret:secret()},401);
-  const other=await h.anonymous();await rotate(h,{...body,refresh_token:other.refresh_token},401);
+  const other=await h.anonymous({adult:true});await rotate(h,{...body,refresh_token:other.refresh_token},401);
   assert.equal((await h.db.one('SELECT count(*) n FROM sessions WHERE account_id=?',other.account_id)).n,1);
  }finally{await h.close();}
 });
 
 test('expired access can be delivered exactly then its still-current successor refresh can rotate',async()=>{
  const h=await startHarness({consumeQueue:false});try{
-  const old=await h.anonymous(),body=intent(old),issued=await rotate(h,body);
+  const old=await h.anonymous({adult:true}),body=intent(old),issued=await rotate(h,body);
   const app=createApp(h.db,h.env,()=>Date.parse(issued.access_expires_at)+1000),send=request(createHandler(app));
   const delivered=await send('/auth/session/refresh',body);assert.equal(delivered.status,200);assert.deepEqual(delivered.body,issued);
   const next=await send('/auth/session/refresh',intent(delivered.body));assert.equal(next.status,200);assert.notEqual(next.body.refresh_token,issued.refresh_token);
@@ -63,7 +63,7 @@ test('expired access can be delivered exactly then its still-current successor r
 
 test('receipt deadline is capped, matching expiry fails closed and bounded pruning never rotates',async()=>{
  const h=await startHarness({consumeQueue:false});try{
-  const old=await h.anonymous(),deadline=Date.now()+3600000;
+  const old=await h.anonymous({adult:true}),deadline=Date.now()+3600000;
   await h.db.run('UPDATE sessions SET refresh_expires_at=? WHERE account_id=?',deadline,old.account_id);
   const body=intent(old),issued=await rotate(h,body);assert.equal(Date.parse(issued.delivery_expires_at),deadline);
   const app=createApp(h.db,h.env,()=>deadline+1),send=request(createHandler(app));
@@ -95,7 +95,7 @@ test('delivery rechecks account, role, epoch, registered reference, consent and 
 test('ciphertext, IV and authenticated metadata corruption release no credentials and never rotate',async t=>{
  const h=await startHarness({consumeQueue:false});try{
   for(const column of ['ciphertext','iv','expires_at'])await t.test(column,async()=>{
-   const a=await h.anonymous(),body=intent(a),issued=await rotate(h,body),receipt=await h.db.one('SELECT * FROM refresh_delivery_receipts WHERE account_id=?',a.account_id);
+   const a=await h.anonymous({adult:true}),body=intent(a),issued=await rotate(h,body),receipt=await h.db.one('SELECT * FROM refresh_delivery_receipts WHERE account_id=?',a.account_id);
    const value=column==='expires_at'?receipt.expires_at-1:column==='iv'?Buffer.from(crypto.getRandomValues(new Uint8Array(12))).toString('base64url'):(receipt.ciphertext[0]==='A'?'B':'A')+receipt.ciphertext.slice(1);
    await h.db.run('UPDATE refresh_delivery_receipts SET '+column+'=? WHERE account_id=?',value,a.account_id);
    const result=await rotate(h,body,503);assert.equal(result.error.code,'refresh_delivery_unavailable');assert(!JSON.stringify(result).includes(issued.refresh_token));
@@ -106,7 +106,7 @@ test('ciphertext, IV and authenticated metadata corruption release no credential
 
 test('unavailable or rotated encryption secret releases no receipt or replacement authority',async()=>{
  const h=await startHarness({consumeQueue:false});try{
-  const a=await h.anonymous(),body=intent(a),original=h.env.AUTH_SIGNING_SECRET;h.env.AUTH_SIGNING_SECRET='short';
+  const a=await h.anonymous({adult:true}),body=intent(a),original=h.env.AUTH_SIGNING_SECRET;h.env.AUTH_SIGNING_SECRET='short';
   assert.equal((await rotate(h,body,503)).error.code,'refresh_delivery_unavailable');assert.equal((await h.db.one('SELECT count(*) n FROM sessions')).n,1);
   h.env.AUTH_SIGNING_SECRET=original;const issued=await rotate(h,body);h.env.AUTH_SIGNING_SECRET='a-different-server-signing-secret-'+key();
   assert.equal((await rotate(h,body,503)).error.code,'refresh_delivery_unavailable');assert.equal((await h.db.one('SELECT count(*) n FROM sessions')).n,2);
@@ -116,10 +116,10 @@ test('unavailable or rotated encryption secret releases no receipt or replacemen
 
 test('cancellation fences a first dispatch, revokes committed successors and preserves exact binding',async()=>{
  const h=await startHarness({consumeQueue:false});try{
-  const a=await h.anonymous(),body=intent(a),expected={protocol,rotation_key:body.rotation_key,account_id:a.account_id,status:'cancelled'};
+  const a=await h.anonymous({adult:true}),body=intent(a),expected={protocol,rotation_key:body.rotation_key,account_id:a.account_id,status:'cancelled'};
   assert.deepEqual(await cancel(h,body),expected);assert.deepEqual(await cancel(h,body),expected);
   await rotate(h,body,401);await rotate(h,{refresh_token:a.refresh_token},401);assert.equal((await h.db.one('SELECT count(*) n FROM sessions')).n,1);
-  const b=await h.anonymous(),operation=intent(b),issued=await rotate(h,operation);
+  const b=await h.anonymous({adult:true}),operation=intent(b),issued=await rotate(h,operation);
   await cancel(h,{...operation,delivery_secret:secret()},401);await cancel(h,{...operation,rotation_key:key()},401);assert.deepEqual(await rotate(h,operation),issued);
   const ack=await cancel(h,operation);assert.equal(ack.account_id,b.account_id);assert(!('access_token' in ack));assert.deepEqual(await cancel(h,operation),ack);
   await h.json('/me',{token:issued.access_token},401);await rotate(h,operation,401);await rotate(h,{refresh_token:issued.refresh_token},401);
@@ -131,7 +131,7 @@ test('cancellation fences a first dispatch, revokes committed successors and pre
 
 test('pre-dispatch cancellation remains effective after its tombstone is pruned',async()=>{
  const h=await startHarness({consumeQueue:false});try{
-  const a=await h.anonymous(),body=intent(a);await cancel(h,body);const app=createApp(h.db,h.env,()=>Date.now()+86400001);
+  const a=await h.anonymous({adult:true}),body=intent(a);await cancel(h,body);const app=createApp(h.db,h.env,()=>Date.now()+86400001);
   await pruneRefreshDeliveries(app);assert.equal((await h.db.one('SELECT count(*) n FROM refresh_delivery_receipts')).n,0);
   assert.equal((await request(createHandler(app))('/auth/session/refresh',body)).status,401);assert.equal((await h.db.one('SELECT count(*) n FROM sessions')).n,1);
  }finally{await h.close();}
@@ -147,7 +147,7 @@ test('cancelling an already rotated receipt cannot retire its newer sessions dev
 
 test('bounded pruning removes at most 100 expired receipts and preserves active delivery',async()=>{
  const h=await startHarness({consumeQueue:false});try{
-  const a=await h.anonymous(),body=intent(a),issued=await rotate(h,body),prefix='prune-'+key(),now=Date.now();
+  const a=await h.anonymous({adult:true}),body=intent(a),issued=await rotate(h,body),prefix='prune-'+key(),now=Date.now();
   await h.db.run(`INSERT INTO sessions(id,account_id,refresh_hash,expires_at,refresh_expires_at,revoked_at,auth_epoch,auth_method,created_at,refresh_consumed_at)
    SELECT ?||g::text,?,?||g::text,?,?,?,1,'anonymous',?,? FROM generate_series(1,105) g`,prefix,a.account_id,prefix,now+900000,now+86400000,now-3000,now-3000,now-3000);
   await h.db.run(`INSERT INTO refresh_delivery_receipts(original_session_id,account_id,rotation_key,secret_hash,state,created_at,expires_at)
@@ -181,14 +181,14 @@ test('real three-pool delivery replay, competing keys and cancellation have one 
  const h=await startHarness({consumeQueue:false}),pools=[connectPostgres(h.databaseUrl),connectPostgres(h.databaseUrl)];
  try{
   const clients=[request(createHandler(h.app)),...pools.map(db=>request(createHandler(createApp(db,h.env))))];
-  const a=await h.anonymous(),body=intent(a),replies=await Promise.all(Array.from({length:12},(_,i)=>clients[i%3]('/auth/session/refresh',body)));
+  const a=await h.anonymous({adult:true}),body=intent(a),replies=await Promise.all(Array.from({length:12},(_,i)=>clients[i%3]('/auth/session/refresh',body)));
   for(const reply of replies){assert.equal(reply.status,200);assert.deepEqual(reply.body,replies[0].body);}
   assert.equal((await h.db.one('SELECT count(*) n FROM sessions WHERE account_id=?',a.account_id)).n,2);
   const connections=(await h.engine.query("SELECT count(*)::int n FROM pg_stat_activity WHERE datname=current_database()")).rows[0].n;assert(connections>=4);
-  const b=await h.anonymous(),competing=Array.from({length:9},()=>intent(b));
+  const b=await h.anonymous({adult:true}),competing=Array.from({length:9},()=>intent(b));
   const races=await Promise.all(competing.map((item,i)=>clients[i%3]('/auth/session/refresh',item)));assert.equal(races.filter(x=>x.status===200).length,1);assert.equal(races.filter(x=>x.status===401).length,8);
   assert.equal((await h.db.one('SELECT count(*) n FROM sessions WHERE account_id=?',b.account_id)).n,2);
-  const c=await h.anonymous(),held=intent(c),outcomes=await Promise.all([clients[0]('/auth/session/refresh',held),clients[1]('/auth/session/refresh/cancel',held),clients[2]('/auth/session/refresh',held)]);
+  const c=await h.anonymous({adult:true}),held=intent(c),outcomes=await Promise.all([clients[0]('/auth/session/refresh',held),clients[1]('/auth/session/refresh/cancel',held),clients[2]('/auth/session/refresh',held)]);
   assert.equal(outcomes[1].status,200);assert(outcomes.every(x=>[200,401].includes(x.status)));
   assert.equal((await clients[0]('/auth/session/refresh',held)).status,401);
   const final=await h.db.one('SELECT count(*) n FROM sessions WHERE account_id=? AND revoked_at IS NULL',c.account_id);assert.equal(final.n,0);
@@ -200,8 +200,30 @@ test('frozen v7 baseline remains byte-identical and v8 receipt alone adds forced
  const folder=new URL('../../../supabase/migrations/',import.meta.url),source=fs.readFileSync(new URL('20261023162016_lovelies_private_core.sql',folder));
  assert.equal(createHash('sha256').update(source).digest('hex'),'ccd7d4b23b21bc65088fce436ade9019f0513e622140eb4e89c0048793bd9a6b');
  const h=await startHarness({consumeQueue:false});try{
-  assert.equal((await h.db.one('SELECT max(version) version FROM schema_versions')).version,8);
+  assert.equal((await h.db.one('SELECT max(version) version FROM schema_versions')).version,11);
   const rls=(await h.engine.query("SELECT relrowsecurity,relforcerowsecurity FROM pg_class WHERE oid='lovelies_private.refresh_delivery_receipts'::regclass")).rows[0];assert.deepEqual(rls,{relrowsecurity:true,relforcerowsecurity:true});
   for(const role of ['anon','authenticated'])assert.equal((await h.engine.query("SELECT has_table_privilege($1,'lovelies_private.refresh_delivery_receipts','SELECT') permitted",[role])).rows[0].permitted,false);
+ }finally{await h.close();}
+});
+
+test('restricted refresh keeps only own controls while revoked or revised exact devices deny every credential lane',async t=>{
+ const h=await startHarness({faceVerifier:faceVerifierFixture,consumeQueue:false});try{
+  for(const change of ['revoked','revised'])await t.test(change,async()=>{
+   const person=await enroll(h),body=intent(person),issued=await rotate(h,body);
+   await h.json('/privacy/account-deletion',{token:issued.access_token,body:{operation_key:key()}},201);
+   // An actual audience restriction permits reconciliation of that same saved
+   // credential, but never repairs the now-revoked biometric/product authority.
+   assert.deepEqual(await rotate(h,body),issued);
+   await h.json('/privacy/center',{token:issued.access_token});
+   assert.equal((await h.json('/me/gallery',{token:issued.access_token},403)).error.code,'audience_restricted');
+   const count=(await h.db.one('SELECT count(*) n FROM sessions WHERE account_id=?',person.accountId)).n;
+   if(change==='revoked')await h.db.run("UPDATE auth_devices SET status='revoked' WHERE id=?",person.deviceId);
+   else await h.db.run('UPDATE auth_devices SET revision=? WHERE id=?',key(),person.deviceId);
+   await rotate(h,body,401);
+   await h.json('/auth/session/refresh',{body:{refresh_token:issued.refresh_token}},401);
+   await h.json('/privacy/center',{token:issued.access_token},401);
+   await h.json('/me/audience',{token:issued.access_token},401);
+   assert.equal((await h.db.one('SELECT count(*) n FROM sessions WHERE account_id=?',person.accountId)).n,count);
+  });
  }finally{await h.close();}
 });

@@ -1,113 +1,29 @@
-/** Actual authenticated private HTTP + native OpenCV inference through the
- * Supabase application engine. PGlite/memory Storage are declared test adapters;
- * this never establishes hosted Storage, camera or recognition acceptance. */
+/** Real public API + authenticated model HTTP. With the explicit Storage flag,
+ * actual disposable PostgreSQL and Supabase Storage HTTP are mandatory. */
 import assert from 'node:assert/strict';
 import {test} from 'node:test';
-import {spawn,spawnSync} from 'node:child_process';
-import {createServer} from 'node:net';
-import {mkdtemp,readFile,rm} from 'node:fs/promises';
-import {tmpdir} from 'node:os';
-import {join,resolve} from 'node:path';
-import {fileURLToPath} from 'node:url';
-import {randomBytes} from 'node:crypto';
-import {startHarness,deviceEnvelope,sign,sha256} from './runtime-harness.mjs';
-import {AuthenticatedService} from '../src/service-fetcher.ts';
-import {createModelServices} from '../src/model-services.ts';
-import {INFERENCE_MODEL_ID} from '../src/inference-contract.ts';
+import {sha256} from './runtime-harness.mjs';
+import {createOpenFaceRuntime,enrollReal,loginReal,sendRealCaptures,pause} from './openface-runtime.mjs';
+import {processPhotoJob} from '../src/processing.ts';
 
-const root=fileURLToPath(new URL('../../../',import.meta.url));
 const enabled=process.env.RUN_OPENFACE_HTTP_TESTS==='1';
+const actualStorage=process.env.RUN_OPENFACE_STORAGE_HTTP_TESTS==='1';
 const key=()=>crypto.randomUUID();
-const pause=ms=>new Promise(done=>setTimeout(done,ms));
-async function unusedPort(){
- const listener=createServer();await new Promise((done,fail)=>{listener.once('error',fail);listener.listen(0,'127.0.0.1',done);});
- const port=listener.address().port;await new Promise(done=>listener.close(done));return port;
-}
-async function stop(child){
- if(child.exitCode!==null||child.signalCode)return;
- const ended=new Promise(done=>child.once('exit',done));child.kill('SIGTERM');
- await Promise.race([ended,pause(5000)]);
- if(child.exitCode===null&&!child.signalCode){child.kill('SIGKILL');await ended;}
-}
+function deferred(){let resolve;const promise=new Promise(done=>{resolve=done;});return {promise,resolve};}
+async function reached(signal){let timer;try{await Promise.race([signal.promise,new Promise((_,fail)=>{
+ timer=setTimeout(()=>fail(new Error('Real inference reply was not reached')),30_000);
+})]);}finally{clearTimeout(timer);}}
 
-test('real OpenFace HTTP service verifies signed same-account enrollment/login and approved photo delivery',
- {skip:!enabled,timeout:120_000},async t=>{
- const directory=await mkdtemp(join(tmpdir(),'lovelies-openface-http-'));
- t.after(()=>rm(directory,{recursive:true,force:true}));
- const python=resolve(root,'services/ml-face/.venv/bin/python');
- const generated=spawnSync(python,['-c',[
-  'from pathlib import Path',
-  'from PIL import Image, ImageEnhance',
-  'import sys',
-  'source, output = Path(sys.argv[1]), Path(sys.argv[2])',
-  'for label, filename in (("a","person02.jpg"),("b","portrait.jpg")):',
-  ' with Image.open(source / filename) as original:',
-  '  for index in range(6):',
-  '   image=ImageEnhance.Brightness(original.convert("RGB")).enhance(1+index*0.025)',
-  '   image.save(output / (label+str(index)+".jpg"),format="JPEG",quality=93-index)',
- ].join('\n'),join(root,'shared/assets'),directory],{encoding:'utf8'});
- assert.equal(generated.status,0,'Could not generate declared engineering stills');
- const [captures,otherCaptures]=await Promise.all(['a','b'].map(label=>Promise.all(
-  [0,1,2,3,4,5].map(index=>readFile(join(directory,label+index+'.jpg'))))));
- t.after(()=>[...captures,...otherCaptures].forEach(bytes=>bytes.fill(0)));
- const port=await unusedPort(),secret=randomBytes(32).toString('base64url');
- const origin=`http://127.0.0.1:${port}`;
- const child=spawn(python,['-m','uvicorn','lovelies_ml_face.app:app','--host','127.0.0.1','--port',String(port),'--no-access-log'],{
-  cwd:join(root,'services/ml-face'),env:{...process.env,PYTHONPATH:join(root,'services/ml-face/src'),
-   APP_ENV:'local',ML_USE_DETERMINISTIC_SIMULATOR:'false',ML_DEPLOYMENT_TRANSPORT:'https_service',ML_INFERENCE_SECRET:secret},
-  stdio:['ignore','ignore','pipe'],
- });
- let diagnostic='';child.stderr.on('data',chunk=>{if(diagnostic.length<32768)diagnostic+=chunk.toString();});
- t.after(()=>stop(child));
- let loaded;
- const deadline=Date.now()+60_000;
- while(Date.now()<deadline){
-  if(child.exitCode!==null)throw new Error('Private inference startup failed: '+diagnostic);
-  try{const response=await fetch(origin+'/ready',{headers:{Authorization:'Bearer '+secret},signal:AbortSignal.timeout(1000)});
-   if(response.ok){loaded=await response.json();break;}}
-  catch{}
-  await pause(50);
- }
- assert(loaded,'Private inference did not become ready');
- assert.equal((await fetch(origin+'/ready')).status,401);
- assert.equal((await fetch(origin+'/ready',{headers:{Authorization:'Bearer invalid'}})).status,401);
- const h=await startHarness({vars:{PHOTO_MODEL_VERSION:INFERENCE_MODEL_ID}});t.after(()=>h.close());
- const service=new AuthenticatedService(origin,secret);
- const models=createModelServices({PHOTOS:h.env.PHOTOS,QUARANTINE:h.env.QUARANTINE,
-  MODEL_VERSION:INFERENCE_MODEL_ID,FACE_AUTH_POLICY_VERSION:h.env.FACE_AUTH_POLICY_VERSION,
-  ENGINE_ARTIFACT_SHA256:loaded.engine_artifact_sha256,PROCESSING_FINGERPRINT:loaded.processing_fingerprint,INFERENCE:service});
- Object.assign(h.env,{FACE_AUTH_VERIFIER:models.face,PHOTO_PROCESSOR:models.photo,MODEL_SERVICE_READINESS:models.ready});
+test('real OpenFace signed enrollment/login, exact grants and stale-state/privacy fences through the selected transports',
+ {skip:!enabled,timeout:240_000},async t=>{
+ const h=await createOpenFaceRuntime({consumeQueue:false,requireActualStorage:actualStorage});t.after(()=>h.close());
+ const {captures,otherCaptures,loaded}=h;
  assert.equal((await h.json('/ready')).inference_ready,true);
- const sendCaptures=async(person,challenge,stills,token)=>{
-  const manifest=[];
-  for(let index=0;index<stills.length;index++){
-   const bytes=stills[index],hash=await sha256(bytes);
-   manifest.push({index,sha256:hash,mime:'image/jpeg',byte_size:bytes.length});
-   await h.json(`/auth/face/proof/${challenge.challenge_id}/${index}`,{method:'PUT',token,raw:bytes,
-    headers:{'content-type':'image/jpeg','x-lovelies-capture-sha256':hash,'x-lovelies-capture-bytes':String(bytes.length),
-     'x-lovelies-device-signature':await sign(person.privateKey,{...deviceEnvelope(challenge),step:'capture',capture_index:index,
-      capture_sha256:hash,mime:'image/jpeg',byte_size:bytes.length})}});
-  }
-  return {challenge_id:challenge.challenge_id,device_signature:await sign(person.privateKey,
-   {...deviceEnvelope(challenge),step:'complete',capture_manifest:manifest})};
- };
- const enroll=async stills=>{
-  const anonymous=await h.anonymous(),keys=await crypto.subtle.generateKey({name:'ECDSA',namedCurve:'P-256'},true,['sign','verify']);
-  const challenge=await h.json('/auth/face/registration/challenge',{token:anonymous.access_token,body:{
-   device_public_jwk:await crypto.subtle.exportKey('jwk',keys.publicKey),
-   consent:{purpose:'face_authentication',granted:true,policy_version:h.env.FACE_AUTH_POLICY_VERSION}}},201);
-  const person={privateKey:keys.privateKey,deviceId:challenge.device_id,faceHandle:challenge.face_handle};
-  const completion=await sendCaptures(person,challenge,stills.slice(0,3),anonymous.access_token);
-  const result=await h.json('/auth/face/registration/complete',{token:anonymous.access_token,body:completion});
-  assert.equal(result.account_id,anonymous.account_id);assert.equal(result.auth_method,'registered_face');
-  await h.json('/me',{token:anonymous.access_token},401);
-  // Stored still encodings are fixtures, not separate optical captures.
-  return {...person,...result,token:result.access_token};
- };
- const owner=await enroll(otherCaptures),recipient=await enroll(captures);
- for(const actor of [owner,recipient])await h.json('/me/photo-preferences',{token:actor.token,body:{
-  policy_version:h.env.PHOTO_CONSENT_POLICY_VERSION,receive_matches:true,processing_consent:true,
-  photo_matching_consent:true,operation_key:key()}});
+ let owner=await enrollReal(h,otherCaptures),recipient=await enrollReal(h,captures);
+ const preferences=(person,enabled=true)=>h.json('/me/photo-preferences',{token:person.token,body:{
+  policy_version:h.env.PHOTO_CONSENT_POLICY_VERSION,receive_matches:enabled,processing_consent:true,
+  photo_matching_consent:enabled,operation_key:key()}});
+ for(const actor of [owner,recipient])await preferences(actor);
  const templateRows=await h.storage.exec('SELECT template_key,template_digest FROM face_profiles');
  assert.equal(templateRows.length,2);
  for(const row of templateRows){
@@ -116,17 +32,27 @@ test('real OpenFace HTTP service verifies signed same-account enrollment/login a
   const template=JSON.parse(new TextDecoder().decode(bytes));
   assert.equal(template.protocol,'lovelies-face-template-v2');
   assert.equal(template.processing_fingerprint,loaded.processing_fingerprint);
+  if(h.storageOrigin){
+   const unauthenticated=await fetch(h.storageOrigin+'/storage/v1/object/authenticated/'+h.storageNames.PHOTOS+'/'+row.template_key);
+   assert([400,401,403,404].includes(unauthenticated.status),'Actual private Storage must deny a request without bearer authority');
+   await unauthenticated.body?.cancel();
+   const publicRead=await fetch(h.storageOrigin+'/storage/v1/object/public/'+h.storageNames.PHOTOS+'/'+row.template_key);
+   assert([400,401,403,404].includes(publicRead.status),'A private biometric object must not become a public Storage object');
+   await publicRead.body?.cancel();
+  }
  }
  const photo=captures[4],upload=await h.json('/uploads/session',{token:owner.token,body:{source:'personal',content_type:'image/jpeg',
   byte_size:photo.length,title:'Declared engineering portrait fixture',operation_key:key()}},201);
  await h.json(upload.upload_url,{method:'PUT',token:owner.token,raw:photo,headers:{'content-type':'image/jpeg'}});
- await h.json(upload.complete_url,{token:owner.token,body:{operation_key:key()}},202);
+ const completed=await h.json(upload.complete_url,{token:owner.token,body:{operation_key:key()}},202);
+ await processPhotoJob({attempt_id:completed.attempt_id},h.app);
  let state;const processingDeadline=Date.now()+20_000;
  do{state=await h.json(`/uploads/${upload.asset_id}/status`,{token:owner.token});
   if(['ready','failed'].includes(state.status))break;await pause(20);
  }while(Date.now()<processingDeadline);
  assert.equal(state.status,'ready',state.error_code);
  assert.equal((await h.json('/me/gallery',{token:recipient.token})).gallery_items.length,0);
+ await h.json('/community/media/'+upload.asset_id+'/preview',{token:recipient.token},403);
  const snapshot=(await h.community(owner.token,'sharing.snapshot',{asset_ids:[upload.asset_id],operation_key:key()})).snapshot;
  assert.equal(snapshot.pairs.length,1);
  const preview=(await h.community(owner.token,'sharing.preview',{snapshot_id:snapshot.id,snapshot_version:snapshot.version,
@@ -138,19 +64,103 @@ test('real OpenFace HTTP service verifies signed same-account enrollment/login a
  assert.equal((await h.storage.exec('SELECT COUNT(*) n FROM media_grants'))[0].n,0);
  const inbox=await h.community(recipient.token,'inbox'),request=inbox.items.find(item=>item.person.id===owner.account_id);
  assert(request);
- await h.community(recipient.token,'request.decide',{request_id:request.id,decision:'accept',operation_key:key()});
+ const acceptance={request_id:request.id,decision:'accept',operation_key:key()};
+ const accepted=await h.community(recipient.token,'request.decide',acceptance);
+ assert.deepEqual(await h.community(recipient.token,'request.decide',acceptance),accepted);
  assert.equal((await h.storage.exec('SELECT COUNT(*) n FROM media_grants'))[0].n,1);
  assert.equal((await h.json('/me/gallery',{token:recipient.token})).gallery_items.length,1);
+ const actualPreview=await h.request('/community/media/'+upload.asset_id+'/preview',{token:recipient.token});
+ assert.equal(actualPreview.status,200);assert.equal(actualPreview.headers.get('content-type'),'image/jpeg');
+ assert((await actualPreview.arrayBuffer()).byteLength>0);
  await h.json('/downloads/sign',{token:recipient.token,body:{asset_id:upload.asset_id,operation_key:key()}},403);
  await h.json('/auth/logout',{token:recipient.token,body:{}});
  const wrongChallenge=await h.json('/auth/face/challenge',{body:{face_handle:recipient.faceHandle,device_id:recipient.deviceId}},201);
- const wrongProof=await sendCaptures(recipient,wrongChallenge,[otherCaptures[5]]);
+ const wrongProof=await sendRealCaptures(h,recipient,wrongChallenge,[otherCaptures[5]]);
  const wrong=await h.json('/auth/face/complete',{body:wrongProof},401);
  assert.equal(wrong.error.code,'face_verification_failed');
  const challenge=await h.json('/auth/face/challenge',{body:{face_handle:recipient.faceHandle,device_id:recipient.deviceId}},201);
- const proof=await sendCaptures(recipient,challenge,[captures[5]]);
+ const proof=await sendRealCaptures(h,recipient,challenge,[captures[5]]);
  const signedIn=await h.json('/auth/face/complete',{body:proof});
  assert.equal(signedIn.account_id,recipient.account_id);
  await h.json('/auth/face/complete',{body:proof},409);
- t.diagnostic('Real HTTP/OpenFace registration, photo proposals, exact approval/acceptance, idempotent grant and fresh returning comparison passed; PGlite and memory Storage; no hosted/device/accuracy acceptance.');
+ recipient={...recipient,...signedIn,token:signedIn.access_token};
+
+ // A barrier holds an already completed real inference reply. State changes below
+ // use the actual PostgreSQL pool when configured; no verdict is fabricated.
+ const uploadForRace=async()=>{
+  const still=captures[4],reserved=await h.json('/uploads/session',{token:owner.token,body:{source:'personal',
+   content_type:'image/jpeg',byte_size:still.length,title:'Declared pending authority fixture',operation_key:key()}},201);
+  await h.json(reserved.upload_url,{method:'PUT',token:owner.token,raw:still,headers:{'content-type':'image/jpeg'}});
+  const result=await h.json(reserved.complete_url,{token:owner.token,body:{operation_key:key()}},202);
+  return {...reserved,attempt_id:result.attempt_id};
+ };
+ const assertUnpublished=async item=>{
+  for(const table of ['candidates','match_origins','renditions','media_grants'])
+   assert.equal((await h.storage.exec('SELECT COUNT(*) n FROM '+table+' WHERE asset_id=?',item.asset_id))[0].n,0,
+    table+' must not publish a stale inference reply');
+ };
+ for(const scenario of ['profile','consent','session','source','lease'])await t.test('pending real inference fences changed '+scenario,async()=>{
+  const item=await uploadForRace(),entered=deferred(),release=deferred();let calls=0;
+  const original=h.env.PHOTO_PROCESSOR;
+  h.env.PHOTO_PROCESSOR={fetch:async request=>{
+   const response=await original.fetch(request);
+   if(++calls===1){assert.equal(response.status,200);entered.resolve();await release.promise;}
+   return response;
+  }};
+  const pending=processPhotoJob({attempt_id:item.attempt_id},h.app).then(()=>({}),error=>({error}));
+  let previous;
+  try{
+   await reached(entered);
+   if(scenario==='profile'){
+    previous=(await h.storage.exec('SELECT revision FROM face_profiles WHERE account_id=?',recipient.account_id))[0].revision;
+    await h.storage.exec('UPDATE face_profiles SET revision=? WHERE account_id=?',key(),recipient.account_id);
+   }else if(scenario==='consent')await preferences(recipient,false);
+   else if(scenario==='session')await h.json('/auth/logout',{token:owner.token,body:{}});
+   else if(scenario==='source'){
+    const source=(await h.storage.exec('SELECT object_key FROM assets WHERE id=?',item.asset_id))[0];
+    await h.env.QUARANTINE.delete(source.object_key);assert.equal(await h.env.QUARANTINE.head(source.object_key),null);
+   }else{
+    // A known later lease wins; the held worker may not publish after takeover.
+    await h.storage.exec('UPDATE processing_attempts SET lease_token=?,lease_until=0 WHERE id=?',key(),item.attempt_id);
+    await processPhotoJob({attempt_id:item.attempt_id},h.app);
+   }
+   release.resolve();const result=await pending;assert(result.error,'Held stale worker must reject publication');
+   if(scenario==='lease'){
+    assert.equal((await h.storage.exec('SELECT status FROM processing_attempts WHERE id=?',item.attempt_id))[0].status,'completed');
+    assert.equal((await h.storage.exec('SELECT COUNT(*) n FROM renditions WHERE asset_id=?',item.asset_id))[0].n,1);
+    assert.equal((await h.storage.exec('SELECT COUNT(*) n FROM candidates WHERE asset_id=?',item.asset_id))[0].n,1);
+    await processPhotoJob({attempt_id:item.attempt_id},h.app);
+    assert.equal((await h.storage.exec('SELECT COUNT(*) n FROM renditions WHERE asset_id=?',item.asset_id))[0].n,1);
+    assert.equal((await h.storage.exec('SELECT COUNT(*) n FROM media_grants WHERE asset_id=?',item.asset_id))[0].n,0);
+   }else await assertUnpublished(item);
+  }finally{
+   release.resolve();await pending;h.env.PHOTO_PROCESSOR=original;
+   if(scenario==='profile'&&previous)await h.storage.exec('UPDATE face_profiles SET revision=? WHERE account_id=?',previous,recipient.account_id);
+   if(scenario==='consent')await preferences(recipient);
+   if(scenario==='session')owner=await loginReal(h,owner,otherCaptures[5]);
+  }
+ });
+ await t.test('actual private media cleanup requires DELETE and confirmed absence',async()=>{
+  // Test-only provisioning creates an independent local operator; the actual
+  // signed fresh-face login is what receives that operator role claim.
+  await h.storage.exec('UPDATE accounts SET roles_json=? WHERE id=?',JSON.stringify(['user','admin']),recipient.account_id);
+  recipient=await loginReal(h,recipient,captures[5]);assert(recipient.roles.includes('admin'));
+  const objects=[
+   ...await h.storage.exec("SELECT 'PHOTOS' bucket,template_key object_key FROM face_profiles WHERE account_id=?",owner.account_id),
+   ...await h.storage.exec("SELECT 'QUARANTINE' bucket,object_key FROM assets WHERE owner_id=?",owner.account_id),
+   ...await h.storage.exec("SELECT 'PHOTOS' bucket,r.object_key FROM renditions r JOIN assets a ON a.id=r.asset_id WHERE a.owner_id=?",owner.account_id),
+  ];
+  assert(objects.length>=4,'Reference, original and preview cleanup must be exercised');
+  const requested=(await h.json('/privacy/account-deletion',{token:owner.token,body:{operation_key:key()}},201)).privacy_request;
+  await h.json('/privacy-requests/'+requested.id+'/approve',{token:recipient.token,body:{operation_key:key()}});
+  const completed=await h.json('/privacy-requests/'+requested.id+'/process',{token:recipient.token,body:{}});
+  assert.equal(completed.privacy_request.status,'completed');
+  for(const object of objects)assert.equal(await h.env[object.bucket].head(object.object_key),null,'Owned private object must be absent after cleanup');
+  assert.equal((await h.storage.exec("SELECT COUNT(*) n FROM cleanup_intents WHERE request_id=? AND status<>'verified'",requested.id))[0].n,0);
+  assert.equal((await h.storage.exec('SELECT COUNT(*) n FROM sessions WHERE account_id=?',owner.account_id))[0].n,0);
+  assert.equal((await h.storage.exec('SELECT COUNT(*) n FROM face_profiles WHERE account_id=?',owner.account_id))[0].n,0);
+  await h.json('/me',{token:owner.token},401);
+ });
+ t.diagnostic('Selected transport scope: '+JSON.stringify(h.transportScope)+
+  '; transformed supplied portrait fixtures; no hosted, physical-device, camera, representative accuracy or release acceptance.');
 });

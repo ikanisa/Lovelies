@@ -136,10 +136,11 @@ const APPLICATION_TABLES = new Set([
   'job_queue', 'privacy_deletion_status_receipts', 'privacy_export_grants',
   'privacy_exports', 'privacy_redaction_context', 'privacy_requests', 'processing_attempts',
   'push_devices', 'renditions', 'request_limits', 'retention_jobs', 'retention_objects',
-  'retention_settings', 'safety_reports', 'schema_versions', 'sessions', 'sharing_approvals',
+  'retention_settings', 'retention_scan_cursors', 'safety_reports', 'schema_versions', 'sessions', 'sharing_approvals',
   'sharing_previews', 'sharing_requests', 'sharing_snapshots', 'store_notifications',
   'store_subscriptions', 'store_transactions', 'support_requests',
   'upload_transfers', 'upload_chunks', 'refresh_delivery_receipts',
+  'account_audience', 'guardian_requests', 'guardian_purpose_approvals', 'audience_adult_reviews',
 ]);
 async function assertSecretNotStored(h, secret) {
   const tables = await h.storage.exec("SELECT table_name AS name FROM information_schema.tables WHERE table_schema='lovelies_private' AND table_type='BASE TABLE'");
@@ -160,7 +161,7 @@ async function arrived(signal) {
 }
 
 test('A02 key management requires its own registered-face account, persists only a hash, and never returns the key', async t => {
-  const h = await harness(t), anonymous = await h.anonymous(), person = await enroll(h), other = await enroll(h);
+  const h = await harness(t), anonymous = await h.anonymous({adult:true}), person = await enroll(h), other = await enroll(h);
   await h.json('/auth/face/recovery/key', { token: anonymous.access_token, body: { operation_key: operation(), recovery_key: randomSecret('lfr_') } }, 403);
   await h.json('/auth/face/recovery/key', { body: { operation_key: operation(), recovery_key: randomSecret('lfr_') } }, 401);
   const unavailable = await h.json('/auth/face/recovery/key', { token: person.token }); assert.equal(unavailable.state, 'unavailable');
@@ -543,7 +544,7 @@ test('A02 restores exact account/profile/roles while revoking old devices/sessio
   let recipientId;
   const h = await harness(t, { consumeQueue: true, photoProcessor: envelope => ({
     attempt_id: envelope.attempt_id, nonce: envelope.nonce, asset_id: envelope.asset_id,
-    source_version: envelope.source_version, source_checksum_sha256: envelope.source_checksum_sha256, model_version: envelope.model_version,
+    source_version: envelope.source_version, source_checksum_sha256: envelope.source_checksum_sha256, model_version: envelope.model_version, engine_identity: envelope.engine_identity,
     preview: { bytes_base64: Buffer.from(fixturePng(envelope.asset_id)).toString('base64'), content_type: 'image/png', width: 1, height: 1 },
     matches: envelope.profiles.filter(profile => profile.account_id === recipientId).map(profile => ({
       recipient_id: profile.account_id, profile_id: profile.profile_id, profile_version: profile.revision, model_version: profile.model_id,

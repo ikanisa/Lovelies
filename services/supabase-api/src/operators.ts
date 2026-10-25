@@ -18,11 +18,16 @@ export async function requireOperator(ctx: AppContext, actor: Actor, fresh = fal
     if (!actor.roles.includes('admin'))
         throw new ApiError(403, 'admin_required');
     if (fresh) {
-        const session = (await ctx.db.one<{
-            created_at: number;
-        }>('SELECT created_at FROM sessions WHERE id=?', actor.sessionId));
-        if (!session || session.created_at < ctx.now() - 300000)
-            throw new ApiError(403, 'fresh_face_authentication_required');
+        // Refresh changes session creation time without another face comparison.
+        // Only an actual completed login bound to this exact session can satisfy
+        // fresh operator review; another device's recent login cannot be borrowed.
+        const proof = await ctx.db.one(`SELECT c.id FROM auth_challenges c JOIN sessions s ON s.id=?
+          WHERE c.account_id=s.account_id AND c.device_id=s.device_id AND c.device_revision=s.device_revision
+          AND c.profile_revision=s.face_profile_revision AND c.profile_auth_epoch=s.face_profile_epoch
+          AND c.auth_epoch=s.auth_epoch AND c.consent_id=s.face_consent_id
+          AND c.purpose='login' AND c.status='used' AND c.used_at>=? AND c.used_at<=?
+          AND c.created_at<=s.created_at AND c.used_at>=s.created_at LIMIT 1`,actor.sessionId,ctx.now()-300000,ctx.now());
+        if (!proof) throw new ApiError(403, 'fresh_face_authentication_required');
     }
 }
 function text(value: unknown, max: number, min = 0): string | null {

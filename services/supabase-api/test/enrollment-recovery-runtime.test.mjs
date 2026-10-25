@@ -11,7 +11,7 @@ async function harness(t, options = {}) {
   t.after(() => h.close()); return h;
 }
 async function intent(h) {
-  const anonymous = await h.anonymous(), keys = await crypto.subtle.generateKey({ name: 'ECDSA', namedCurve: 'P-256' }, true, ['sign','verify']);
+  const anonymous = await h.anonymous({adult:true}), keys = await crypto.subtle.generateKey({ name: 'ECDSA', namedCurve: 'P-256' }, true, ['sign','verify']);
   const jwk = await crypto.subtle.exportKey('jwk', keys.publicKey), handle = 'lfh_' + encode(crypto.getRandomValues(new Uint8Array(32)));
   const saved = { account_id: anonymous.account_id, enrollment_key: crypto.randomUUID(), face_handle: handle };
   const body = { ...saved, device_public_jwk: jwk, consent: { purpose: 'face_authentication', policy_version: policy, granted: true } };
@@ -97,7 +97,7 @@ test('lost initial reply reconciles and replays the same account/device/consent 
 });
 
 test('authoritative absent start needs current same-account anonymous authority and never grants credentials', async t => {
-  const h = await harness(t), i = await intent(h), other = await h.anonymous();
+  const h = await harness(t), i = await intent(h), other = await h.anonymous({adult:true});
   assert.equal((await status(h, i, 404)).error.code, 'enrollment_not_found');
   const body = await recoveryBody(i);
   assert.equal((await h.json('/auth/face/registration/recovery', { body }, 404)).error.code, 'enrollment_recovery_unavailable');
@@ -263,7 +263,7 @@ for (const [name,sql] of [
   assert.equal((await status(h, i, 404, null)).error.code, 'enrollment_recovery_unavailable');
 });
 
-test('guest deletion cancels registration atomically and rejected deletion resumes the original device/consent', async t => {
+test('guest deletion cancels registration and rejection requires fresh explicit authority without reviving the old consent', async t => {
   const h = await harness(t), i = await started(h);
   const deletion = await h.json('/privacy/account-deletion', { token: i.anonymous.access_token,
     body: { operation_key: 'delete-' + crypto.randomUUID(), status_token: 'lvd_' + 'b'.repeat(64) } }, 201);
@@ -271,8 +271,20 @@ test('guest deletion cancels registration atomically and rejected deletion resum
   assert.equal((await h.json('/auth/face/registration/challenge', { token: i.anonymous.access_token, body: i.body }, 409)).error.code, 'enrollment_deletion_pending');
   assert.equal((await resume(h, i, successor(i), 409)).error.code, 'enrollment_deletion_pending');
   await h.storage.exec("UPDATE privacy_requests SET status='rejected' WHERE id=?", deletion.privacy_request.id);
-  const next = await resume(h, i, successor(i)); assert.equal(next.device_id, i.challenge.device_id); assert.equal(next.enrollment_generation, 2);
-  i.challenge = next; assert.equal((await finish(h, i)).result.account_id, i.saved.account_id);
+  assert.equal((await resume(h,i,successor(i),404)).error.code,'enrollment_recovery_unavailable');
+  const oldConsent=(await h.storage.exec('SELECT consent_id FROM auth_challenges WHERE id=?',i.challenge.challenge_id))[0].consent_id;
+  assert.equal((await h.storage.exec('SELECT status FROM consents WHERE id=?',oldConsent))[0].status,'revoked');
+  assert.equal((await h.storage.exec('SELECT count(*) n FROM face_profiles'))[0].n,0);
+  assert.equal((await h.storage.exec("SELECT count(*) n FROM sessions WHERE auth_method='registered_face'"))[0].n,0);
+  const audience=await h.json('/me/audience',{token:i.anonymous.access_token});
+  await h.json('/me/audience',{token:i.anonymous.access_token,method:'PUT',body:{age_band:'18_plus',expected_version:audience.audience.version,policy_version:'audience-2026-10-24-v1',operation_key:crypto.randomUUID()}});
+  i.saved={...i.saved,enrollment_key:crypto.randomUUID(),face_handle:'lfh_'+encode(crypto.getRandomValues(new Uint8Array(32)))};
+  i.body={...i.saved,device_public_jwk:i.jwk,consent:{purpose:'face_authentication',policy_version:policy,granted:true}};
+  i.body.device_signature=await sign(i.keys.privateKey,{protocol,step:'start',...i.saved,policy_version:policy,device_public_jwk:i.jwk});
+  i.challenge=await h.json('/auth/face/registration/challenge',{token:i.anonymous.access_token,body:i.body},201);
+  const nextConsent=(await h.storage.exec('SELECT consent_id FROM auth_challenges WHERE id=?',i.challenge.challenge_id))[0].consent_id;
+  assert.notEqual(nextConsent,oldConsent);assert.equal((await finish(h,i)).result.account_id,i.saved.account_id);
+  assert.equal((await h.storage.exec('SELECT count(*) n FROM accounts'))[0].n,1);
 });
 
 test('guest deletion created during verifier await prevents the final account/profile/session upgrade', async t => {

@@ -128,7 +128,7 @@ test('updates activate only after an explicit message from an admin client on th
   await worker.message({ type: 'ACTIVATE_UPDATE' }, `${origin}/administrator/`);
   assert.equal(worker.skipWaitingCalls, 0, 'Install, status reads and other clients cannot force activation');
   assert.equal(worker.messages[0].type, 'ADMIN_SW_STATUS');
-  assert.equal(worker.messages[0].version, '20261023-6');
+  assert.equal(worker.messages[0].version, '20261024-7');
 
   await worker.message({ type: 'ACTIVATE_UPDATE' }, `${origin}/admin/#privacy`);
   assert.equal(worker.skipWaitingCalls, 1);

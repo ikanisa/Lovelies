@@ -15,6 +15,9 @@ function client(handler){return async(path,{token,body}={})=>{
 
 test('real PostgreSQL advisory lock serializes independent pools while rollback and roles stay isolated',options,async t=>{
  const h=await startHarness({consumeQueue:false}),other=connectPostgres(h.databaseUrl);t.after(()=>other.close());
+ const inspector=(await h.engine.query('SELECT current_user role,session_user login')).rows[0];
+ assert.equal(inspector.role,inspector.login);
+ assert.notEqual(inspector.role,'lovelies_api');
  const entered=deferred(),release=deferred(),first=key(),second=key();let secondEntered=false;
  const failing=h.db.transaction(async()=>{
   const authority=await h.db.one("SELECT current_user role,(SELECT rolbypassrls FROM pg_roles WHERE rolname=current_user) bypass");
@@ -34,13 +37,13 @@ test('real PostgreSQL advisory lock serializes independent pools while rollback 
   assert.equal(await h.db.one('SELECT id FROM accounts WHERE id=?',first),null);
   assert.deepEqual(await h.db.all('SELECT id FROM accounts WHERE id=?',first),[]);
   assert.equal((await other.one('SELECT id FROM accounts WHERE id=?',second)).id,second);
-  assert.equal((await h.engine.query('SELECT current_user role')).rows[0].role,'postgres');
+  assert.deepEqual((await h.engine.query('SELECT current_user role,session_user login')).rows[0],inspector);
  }finally{release.resolve();await rolledBack;}
 });
 
 test('real independent API pools consume one refresh credential exactly once under twelve simultaneous requests',options,async t=>{
  const h=await startHarness({consumeQueue:false}),other=connectPostgres(h.databaseUrl);t.after(()=>other.close());
- const second=client(createHandler(createApp(other,h.env))),anonymous=await h.anonymous();
+ const second=client(createHandler(createApp(other,h.env))),anonymous=await h.anonymous({adult:true});
  const replies=await Promise.all(Array.from({length:12},async(_,index)=>index%2?second('/auth/session/refresh',{body:{refresh_token:anonymous.refresh_token}}):(async()=>{const response=await h.request('/auth/session/refresh',{body:{refresh_token:anonymous.refresh_token}});return {status:response.status,body:await response.json()};})()));
  assert.equal(replies.filter(reply=>reply.status===200).length,1);
  assert.equal(replies.filter(reply=>reply.status===401).length,11);

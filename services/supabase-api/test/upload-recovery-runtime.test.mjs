@@ -106,7 +106,7 @@ test('expiry cancels only unfinished transfers while uploaded and ready sources 
   assert.equal((await status(h,owner,b.receipt.asset_id)).status,'uploaded');
 });
 test('cross-account, anonymous, revoked session and withdrawn processing consent cannot access/resume someone else\'s transfer',async t=>{
-  const {h,owner}=await setup(t),peer=await enroll(h),anonymous=await h.anonymous(),bytes=image(),{receipt:r}=await reserve(h,owner,bytes);
+  const {h,owner}=await setup(t),peer=await enroll(h),anonymous=await h.anonymous({adult:true}),bytes=image(),{receipt:r}=await reserve(h,owner,bytes);
   await h.json(`/uploads/${r.asset_id}/status`,{token:peer.token},404);await h.json(`/uploads/${r.asset_id}/status`,{token:anonymous.access_token},403);
   await h.json('/me/photo-preferences',{token:owner.token,body:{policy_version:'photo-policy-fixture-v1',processing_consent:false,operation_key:key()}});
   assert.equal((await status(h,owner,r.asset_id)).status,'uploading');
@@ -157,7 +157,7 @@ test('retention and moderation holds preserve cancelled source bytes while cance
   const {h,owner}=await setup(t),bytes=image(200),{receipt:r}=await reserve(h,owner,bytes);await put(h,owner,r.asset_id,bytes);
   const object=(await h.storage.exec('SELECT object_key FROM assets WHERE id=?',r.asset_id))[0].object_key;
   // A global retention hold has the same persisted operator representation.
-  await h.storage.exec("INSERT INTO retention_settings(id,version,raw_days,preview_days,face_crop_days,free_cache_days,audit_days,legal_hold,updated_at) VALUES('default',1,60,60,14,2,2555,1,?)",Date.now());
+  await h.storage.exec("INSERT INTO retention_settings(id,version,raw_days,preview_days,face_crop_days,free_cache_days,audit_days,legal_hold,updated_at) VALUES('default',1,60,60,14,2,30,1,?)",Date.now());
   await h.json(`/uploads/${r.asset_id}/cancel`,{token:owner.token,body:{operation_key:key()}});await h.alarm();
   const bucket=await h.mf.getR2Bucket('QUARANTINE');assert(await bucket.head(object));assert.equal((await status(h,owner,r.asset_id)).cleanup_pending,true);
   await h.storage.exec("UPDATE retention_settings SET legal_hold=0 WHERE id='default'");

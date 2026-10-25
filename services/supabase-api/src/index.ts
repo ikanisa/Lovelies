@@ -1,3 +1,4 @@
+import { handleAudience } from './audience.ts';
 import { authenticate, assertActor, handleAuth } from './auth.ts';
 import { handleFaceAuth } from './face-auth.ts';
 import { handleFaceProfile } from './face-profile.ts';
@@ -86,7 +87,7 @@ export function createHandler(ctx:AppContext):(request:Request)=>Promise<Respons
         if(path.startsWith('/auth/face/recovery/'))await limitAuth(request,ctx,'recovery');
         if(path.startsWith('/auth/face/profile/'))await limitAuth(request,ctx,'profile');
         let handled:Response|null=null;
-        for(const handler of [handleAuth,handleFaceProfile,handleFaceAuth,handleIdentity,handleProfile,handleProcessing,handleSharing,handleGallery,handleEntitlements,handleOperators,handleAdminUsers,handleNotifications,handleRetention,handlePrivacy]){
+        for(const handler of [handleAuth,handleAudience,handleFaceProfile,handleFaceAuth,handleIdentity,handleProfile,handleProcessing,handleSharing,handleGallery,handleEntitlements,handleOperators,handleAdminUsers,handleNotifications,handleRetention,handlePrivacy]){
           handled=await handler(request,ctx);if(handled)break;
         }
         if(!handled)throw new ApiError(404,'route_not_found');response=handled;

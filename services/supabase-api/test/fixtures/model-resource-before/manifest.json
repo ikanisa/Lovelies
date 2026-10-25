@@ -1,0 +1,34 @@
+{
+  "scope": "Frozen pre-optimization comparator, executable only for the explicit transport-resource test; not application authority",
+  "origin_manifest_sha256": "8099e72382dc583201fb84968bc8cb505daad8b02b20a10f84318d36051daa9f",
+  "files": [
+    {
+      "source": "services/supabase-api/src/model-services.ts",
+      "fixture": "services/supabase-api/test/fixtures/model-resource-before/model-services.ts",
+      "original_preimage": "verification/openface-integration-20261024/continuation/resource-before/model-services.ts",
+      "sha256": "f814b2dc2d405ace315ab003d4bb006942df713a795d107c83e950fe6c54b9a3",
+      "bytes": 18788
+    },
+    {
+      "source": "services/supabase-api/src/service-fetcher.ts",
+      "fixture": "services/supabase-api/test/fixtures/model-resource-before/service-fetcher.ts",
+      "original_preimage": "verification/openface-integration-20261024/continuation/resource-before/service-fetcher.ts",
+      "sha256": "414f751785fadbbe1cbf8fde6719601242996448d219a396aaf8540c3cc4c246",
+      "bytes": 5160
+    },
+    {
+      "source": "services/supabase-api/src/types.ts",
+      "fixture": "services/supabase-api/test/fixtures/model-resource-before/types.ts",
+      "original_preimage": "verification/openface-integration-20261024/continuation/resource-before/types.ts",
+      "sha256": "7fa462c8a35e110746711b3e27daeb2557866189f0f9d1f8864331bb7c9d0120",
+      "bytes": 5573
+    },
+    {
+      "source": "services/supabase-api/src/inference-contract.ts",
+      "fixture": "services/supabase-api/test/fixtures/model-resource-before/inference-contract.ts",
+      "original_preimage": "verification/openface-integration-20261024/continuation/resource-before/inference-contract.ts",
+      "sha256": "cb6ade97aedc066c920624330a51b9b710aa9261a3bf6f888b18f531339b9b7c",
+      "bytes": 2505
+    }
+  ]
+}

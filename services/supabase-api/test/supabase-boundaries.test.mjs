@@ -34,7 +34,7 @@ test('PostgreSQL placeholders skip strings/comments, bind data separately and re
 test('every application table has forced RLS and anon/authenticated cannot use the private schema',async()=>{
  const h=await startHarness({consumeQueue:false});
  const tables=(await h.engine.query("SELECT count(*)::int total,count(*) FILTER(WHERE relrowsecurity AND relforcerowsecurity)::int protected FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace WHERE n.nspname='lovelies_private' AND c.relkind='r'")).rows[0];
- assert.equal(tables.total,63);assert.equal(tables.protected,63);
+ assert.equal(tables.total,68);assert.equal(tables.protected,68);
  for(const role of ['anon','authenticated']){
   const result=(await h.engine.query('SELECT has_schema_privilege($1,$2,$3) permitted',[role,'lovelies_private','USAGE'])).rows[0];assert.equal(result.permitted,false);
   await h.engine.exec('BEGIN; SET LOCAL ROLE '+role);
@@ -58,7 +58,7 @@ test('transaction rollback cannot capture a simultaneous unrelated request throu
 });
 
 test('concurrent refresh consumes its old credential exactly once and keeps account isolation',async()=>{
- const h=await startHarness({consumeQueue:false}),anonymous=await h.anonymous();
+ const h=await startHarness({consumeQueue:false}),anonymous=await h.anonymous({adult:true});
  const responses=await Promise.all([0,1].map(()=>h.request('/auth/session/refresh',{body:{refresh_token:anonymous.refresh_token}})));
  assert.deepEqual(responses.map(x=>x.status).sort(),[200,401]);
  const values=await Promise.all(responses.map(x=>x.json()));const issued=values.find(x=>x.access_token);

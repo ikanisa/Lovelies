@@ -1,11 +1,12 @@
 import { asyncSome } from './async-collections.ts';
-import { ApiError, jsonBody, ok, stable, uuid, type AppContext, type Database } from './types.ts';
-import { executeOperation, prepareOperation } from './operations.ts';
+import { ApiError, digest, jsonBody, ok, stable, uuid, type AppContext, type Binding, type Database } from './types.ts';
+import { executeOperation, prepareOperation, retiredOperationInput, retiredOperationResponse } from './operations.ts';
 import { hasConsent } from './gallery.ts';
 import { mediaHeld, requireOperator } from './operators.ts';
+import { AUDIENCE_POLICY } from './audience.ts';
 const DAY = 86400000;
 export const retentionSchemaStatements: readonly string[] = [
-    `CREATE TABLE IF NOT EXISTS retention_settings(id TEXT PRIMARY KEY CHECK(id='default'),version INTEGER NOT NULL CHECK(version>0),raw_days INTEGER NOT NULL CHECK(raw_days BETWEEN 1 AND 3650),preview_days INTEGER NOT NULL CHECK(preview_days BETWEEN 1 AND 3650),face_crop_days INTEGER NOT NULL CHECK(face_crop_days BETWEEN 1 AND 3650),free_cache_days INTEGER NOT NULL CHECK(free_cache_days BETWEEN 1 AND 3650),audit_days INTEGER NOT NULL CHECK(audit_days BETWEEN 2555 AND 36500),legal_hold INTEGER NOT NULL DEFAULT 0 CHECK(legal_hold IN(0,1)),updated_at INTEGER NOT NULL)`,
+    `CREATE TABLE IF NOT EXISTS retention_settings(id TEXT PRIMARY KEY CHECK(id='default'),version INTEGER NOT NULL CHECK(version>0),raw_days INTEGER NOT NULL CHECK(raw_days BETWEEN 1 AND 3650),preview_days INTEGER NOT NULL CHECK(preview_days BETWEEN 1 AND 3650),face_crop_days INTEGER NOT NULL CHECK(face_crop_days BETWEEN 1 AND 3650),free_cache_days INTEGER NOT NULL CHECK(free_cache_days BETWEEN 1 AND 3650),audit_days INTEGER NOT NULL CHECK(audit_days BETWEEN 1 AND 30),legal_hold INTEGER NOT NULL DEFAULT 0 CHECK(legal_hold IN(0,1)),updated_at INTEGER NOT NULL)`,
     `CREATE TABLE IF NOT EXISTS asset_retention(asset_id TEXT PRIMARY KEY REFERENCES assets(id) ON DELETE CASCADE,raw_expires_at INTEGER NOT NULL,preview_expires_at INTEGER NOT NULL,legal_hold INTEGER NOT NULL DEFAULT 0 CHECK(legal_hold IN(0,1)),version INTEGER NOT NULL DEFAULT 1,updated_at INTEGER NOT NULL)`,
     `CREATE TABLE IF NOT EXISTS retention_jobs(id TEXT PRIMARY KEY,subject_id TEXT NOT NULL REFERENCES accounts(id),asset_id TEXT REFERENCES assets(id) ON DELETE CASCADE,kind TEXT NOT NULL CHECK(kind IN('raw','preview','profile')),binding_json TEXT NOT NULL CHECK(json_valid(binding_json)),policy_version INTEGER NOT NULL,object_version TEXT NOT NULL,status TEXT NOT NULL CHECK(status IN('pending','processing','failed','verified','blocked')),lease_token TEXT,lease_until INTEGER,created_at INTEGER NOT NULL,verified_at INTEGER,error_code TEXT,CHECK((asset_id IS NULL)=(kind='profile')))`,
     `CREATE UNIQUE INDEX IF NOT EXISTS retention_asset_job ON retention_jobs(asset_id,kind,object_version,policy_version) WHERE asset_id IS NOT NULL`,
@@ -43,7 +44,7 @@ type PrivateObject = {
     object_key: string;
 };
 async function policy(ctx: AppContext): Promise<Policy> {
-    (await ctx.db.run('INSERT OR IGNORE INTO retention_settings(id,version,raw_days,preview_days,face_crop_days,free_cache_days,audit_days,legal_hold,updated_at) VALUES(?,1,60,60,14,2,2555,0,?)', 'default', ctx.now()));
+    (await ctx.db.run('INSERT OR IGNORE INTO retention_settings(id,version,raw_days,preview_days,face_crop_days,free_cache_days,audit_days,legal_hold,updated_at) VALUES(?,1,60,60,14,2,30,0,?)', 'default', ctx.now()));
     return (await ctx.db.one<Policy>('SELECT * FROM retention_settings WHERE id=?', 'default'))!;
 }
 async function assetPolicy(ctx: AppContext, asset: any, p: Policy): Promise<any> {
@@ -158,7 +159,7 @@ export async function runRetention(ctx: AppContext, maximum = 50): Promise<{
 }> {
     if (!Number.isInteger(maximum) || maximum < 1 || maximum > 200)
         throw new ApiError(400, 'retention_limit_invalid');
-    (await ctx.db.transaction(async () => (await snapshotExpired(ctx, maximum))));
+    (await ctx.db.transaction(async () => { await pruneRetainedMetadata(ctx, maximum); await snapshotExpired(ctx, maximum); }));
     let verified = 0, failed = 0;
     for (const row of (await ctx.db.all<Job>("SELECT * FROM retention_jobs WHERE status IN('pending','failed','processing') AND (lease_until IS NULL OR lease_until<=?) ORDER BY created_at,id LIMIT ?", ctx.now(), maximum))) {
         const lease = crypto.randomUUID();
@@ -192,6 +193,10 @@ export async function runRetention(ctx: AppContext, maximum = 50): Promise<{
                     return;
                 // Keep a non-sensitive asset tombstone for exact immutable sharing and
                 // financial receipt references. Profile templates have no foreign graph access.
+                if (row.kind === 'raw') {
+                    await ctx.db.run('UPDATE assets SET title=NULL,captured_at=NULL,width=NULL,height=NULL WHERE id=?',row.asset_id);
+                    await ctx.db.run("UPDATE processing_attempts SET profiles_json='[]',matches_json='[]',processor_nonce=NULL,rendition_key=NULL WHERE asset_id=? AND status<>'running'",row.asset_id);
+                }
                 if (row.kind === 'profile')
                     (await ctx.db.run('DELETE FROM face_profiles WHERE account_id=? AND revision=?', row.subject_id, row.object_version));
                 (await ctx.db.run("UPDATE retention_jobs SET status='verified',lease_token=NULL,lease_until=NULL,verified_at=? WHERE id=?", ctx.now(), row.id));
@@ -272,7 +277,7 @@ export async function handleRetention(request: Request, ctx: AppContext): Promis
             throw new ApiError(409, 'retention_version_changed');
         for (const name of ['raw_days', 'preview_days', 'face_crop_days', 'free_cache_days', 'audit_days'])
             if (Object.hasOwn(body, name)) {
-                if (!Number.isInteger(body[name]) || body[name] < (name === 'audit_days' ? 2555 : 1) || body[name] > (name === 'audit_days' ? 36500 : 3650))
+                if (!Number.isInteger(body[name]) || body[name] < 1 || body[name] > (name === 'audit_days' ? 30 : 3650))
                     throw new ApiError(400, 'invalid_retention_days');
                 (await ctx.db.run('UPDATE retention_settings SET ' + name + '=? WHERE id=?', body[name], 'default'));
             }
@@ -317,4 +322,278 @@ export async function nextRetentionAt(ctx: AppContext): Promise<number | null> {
     const pending = (await ctx.db.one("SELECT id FROM retention_jobs WHERE status IN('pending','failed','processing') LIMIT 1"));
     const deadlines = [asset?.deadline, profile?.deadline, pending ? ctx.now() + 60000 : null].filter((value): value is number => value !== null && value !== undefined);
     return deadlines.length ? Math.max(ctx.now() + 60000, Math.min(...deadlines)) : null;
+}
+
+type StoredOperation = {
+    actor_id: string; source: string; operation_key: string; action: string;
+    payload_hash: string; payload_json: string; response_json: string; created_at: number;
+};
+type OperationLink = {
+    sql: string; bindings: string[]; subjects: string[]; entity: string;
+    valid: (row: StoredOperation, input: Record<string, unknown>, result: Record<string, any>) => boolean | 'other' | Promise<boolean | 'other'>;
+    continuation?: { generation: string; currentGeneration: () => Promise<string | null> };
+};
+function object(value: unknown): value is Record<string, any> {
+    return value !== null && typeof value === 'object' && !Array.isArray(value);
+}
+const shape = (value: Record<string, unknown>, required: string[], optional: string[] = []) => required.every(key => Object.hasOwn(value, key)) && Object.keys(value).every(key => required.includes(key) || optional.includes(key));
+const integer = (value: unknown, minimum = 0) => typeof value === 'number' && Number.isSafeInteger(value) && value >= minimum;
+const textValue = (value: unknown, maximum: number, minimum = 0) => typeof value === 'string' && value.trim().length >= minimum && value.trim().length <= maximum && !/[\u0000-\u0008\u000b\u000c\u000e-\u001f]/.test(value);
+const optionalText = (value: Record<string, unknown>, key: string, maximum: number) => !Object.hasOwn(value, key) || value[key] === null || textValue(value[key], maximum);
+const normalizedText = (value: unknown) => typeof value === 'string' ? value.trim() || null : null;
+const dateText = (value: unknown) => typeof value === 'string' && value.length <= 40 && /^\d{4}-\d\d-\d\dT/.test(value) && Number.isFinite(Date.parse(value));
+const evidence = (input: Record<string, unknown>) => typeof input.evidence_method === 'string' && ['independent_live_review', 'independent_document_review'].includes(input.evidence_method) && typeof input.evidence_reference === 'string' && /^[A-Za-z0-9._:-]{16,128}$/.test(input.evidence_reference);
+function supportOperation(row: StoredOperation, input: Record<string, unknown>, result: Record<string, any>, support: any): boolean {
+    if (row.action === 'support.create') return shape(input, ['subject', 'details', 'operation_key']) && textValue(input.subject, 160, 3) && textValue(input.details, 4000, 5) &&
+        normalizedText(input.subject) === support.subject && normalizedText(input.details) === support.details &&
+        row.actor_id === support.account_id && shape(result, ['id', 'status', 'revision']) && result.id === support.id && result.status === 'open' && result.revision === 1;
+    if (!['support.start', 'support.approve', 'support.reject', 'support.close'].includes(row.action) ||
+        !shape(input, ['expected_revision', 'operation_key', 'request_id'], ['review_notes', 'sla_due_at']) || !integer(input.expected_revision, 1) || input.request_id !== support.id ||
+        !optionalText(input, 'review_notes', 4000) || Object.hasOwn(input, 'sla_due_at') && input.sla_due_at !== null && (typeof input.sla_due_at !== 'string' || !Number.isFinite(Date.parse(input.sla_due_at))) ||
+        !shape(result, ['support_request']) || !object(result.support_request)) return false;
+    const saved = result.support_request, start = row.action === 'support.start', close = row.action === 'support.close';
+    return shape(saved, ['id', 'account_id', 'subject', 'details', 'status', 'category', 'assigned_to', 'sla_due_at', 'review_outcome', 'review_notes', 'reviewed_by', 'reviewed_at', 'created_at', 'updated_at', 'revision']) &&
+        saved.id === support.id && saved.account_id === support.account_id && saved.subject === support.subject && saved.details === support.details && textValue(saved.subject, 160, 3) && textValue(saved.details, 4000, 5) && saved.category === 'general_support' &&
+        saved.status === (start ? 'under_review' : close ? 'closed' : 'resolved') && saved.assigned_to === row.actor_id && saved.reviewed_by === (start ? null : row.actor_id) &&
+        saved.review_outcome === (start || close ? null : row.action === 'support.approve' ? 'approved' : 'rejected') &&
+        saved.review_notes === normalizedText(input.review_notes) && integer(saved.sla_due_at) && integer(saved.created_at) && integer(saved.updated_at) && saved.created_at <= saved.updated_at &&
+        (start ? saved.reviewed_at === null : integer(saved.reviewed_at)) && saved.revision === Number(input.expected_revision) + 1;
+}
+function guardianOperation(row: StoredOperation, input: Record<string, unknown>, result: Record<string, any>, guardian: any): boolean {
+    if (!shape(result, ['request_id']) || result.request_id !== guardian.id) return false;
+    if (row.action === 'guardian.create') return row.actor_id === guardian.child_account_id && shape(input, ['expected_version', 'policy_version', 'operation_key']) && integer(input.expected_version, 1) && input.policy_version === guardian.policy_version;
+    if (input.target_id !== guardian.id || !integer(input.expected_revision, 1)) return false;
+    if (row.action === 'guardian.withdraw') return [guardian.child_account_id, guardian.guardian_account_id].includes(row.actor_id) && shape(input, ['expected_revision', 'operation_key', 'target_id']);
+    if (input.policy_version !== guardian.policy_version) return false;
+    if (row.action === 'guardian.claim') return row.actor_id === guardian.guardian_account_id && shape(input, ['expected_revision', 'policy_version', 'relationship_attested', 'purposes', 'operation_key', 'target_id']) && input.relationship_attested === true &&
+        Array.isArray(input.purposes) && input.purposes.length > 0 && input.purposes.length <= 3 && new Set(input.purposes).size === input.purposes.length && input.purposes.every(value => ['face_authentication', 'photo_matching', 'photo_processing'].includes(value));
+    return row.action === 'guardian.review' && row.actor_id === guardian.reviewed_by && row.actor_id !== guardian.child_account_id && row.actor_id !== guardian.guardian_account_id &&
+        shape(input, ['expected_revision', 'policy_version', 'decision', 'evidence_method', 'evidence_reference', 'operation_key', 'target_id'], ['adult_verified', 'parental_responsibility_verified']) &&
+        evidence(input) && typeof input.decision === 'string' && ['approve', 'reject'].includes(input.decision) &&
+        (!Object.hasOwn(input, 'adult_verified') || typeof input.adult_verified === 'boolean') && (!Object.hasOwn(input, 'parental_responsibility_verified') || typeof input.parental_responsibility_verified === 'boolean') &&
+        (input.decision !== 'approve' || input.adult_verified === true && input.parental_responsibility_verified === true);
+}
+function adultOperation(input: Record<string, unknown>, result: Record<string, any>, review: any): boolean {
+    return shape(input, ['expected_version', 'policy_version', 'evidence_method', 'evidence_reference', 'adult_verified', 'operation_key', 'target_id']) && integer(input.expected_version, 1) &&
+        input.policy_version === AUDIENCE_POLICY && input.adult_verified === true && evidence(input) && input.evidence_method === review.evidence_method && input.evidence_reference === review.evidence_reference && input.target_id === review.account_id &&
+        shape(result, ['account_id']) && result.account_id === review.account_id;
+}
+async function adultOperationLink(ctx: AppContext, input: Record<string, unknown>, result: Record<string, any>, review: any): Promise<boolean | 'other'> {
+    if (adultOperation(input, result, review)) return true;
+    if (!evidence(input)) return false;
+    // A supported adult/minor/adult cycle can create a different review for the
+    // same account and reviewer. Its intact receipt belongs to that exact unique
+    // tuple, even when it is too recent for retention. Never retire it here.
+    const others = await ctx.db.all<any>('SELECT * FROM audience_adult_reviews WHERE account_id=? AND reviewed_by=? AND evidence_method=? AND evidence_reference=? LIMIT 2',
+        review.account_id, review.reviewed_by, String(input.evidence_method), String(input.evidence_reference));
+    return others.length === 1 && others[0].id !== review.id && adultOperation(input, result, others[0]) ? 'other' : false;
+}
+async function adultReceiptGeneration(ctx: AppContext, id: string): Promise<string | null> {
+    const review = await ctx.db.one<any>('SELECT id,account_id,reviewed_by,evidence_method,evidence_reference,created_at FROM audience_adult_reviews WHERE id=?', id);
+    if (!review) return null;
+    const audience = await ctx.db.one<{ version: number }>('SELECT version FROM account_audience WHERE account_id=?', review.account_id);
+    return digest(stable({ review, audience_version: audience?.version ?? null }));
+}
+function privacyOperation(row: StoredOperation, input: Record<string, unknown>, result: Record<string, any>, request: any): boolean {
+    if (!object(result.privacy_request) || result.privacy_request.id !== request.id || result.privacy_request.request_type !== request.request_type) return false;
+    const saved = result.privacy_request;
+    if (row.action === 'privacy.request.' + request.request_type) {
+        if (!shape(input, ['operation_key'], request.request_type === 'delete' ? ['reason', 'status_token_hash'] : ['reason']) || !optionalText(input, 'reason', 1000) || row.actor_id !== request.requested_by ||
+            saved.subject_user_id !== request.subject_id || saved.requested_by !== request.requested_by || saved.status !== 'pending_approval' || saved.reason !== normalizedText(input.reason)) return false;
+        if (!Object.hasOwn(input, 'status_token_hash')) return shape(result, ['privacy_request']) && shape(saved, ['id', 'request_type', 'subject_user_id', 'requested_by', 'status', 'reason']);
+        return typeof input.status_token_hash === 'string' && /^[0-9a-f]{64}$/.test(input.status_token_hash) &&
+            shape(result, ['protocol', 'source', 'operation_key', 'privacy_request', 'deletion_status', 'deletion_completed', 'request_expires_at', 'request_expired']) &&
+            result.protocol === 'lovelies-account-deletion-v1' && result.source === 'privacy' && result.operation_key === row.operation_key && result.deletion_completed === false && result.request_expired === false && dateText(result.request_expires_at) &&
+            object(result.deletion_status) && shape(result.deletion_status, ['expires_at']) && dateText(result.deletion_status.expires_at) &&
+            shape(saved, ['id', 'request_type', 'status', 'created_at', 'reviewed_at', 'completed_at', 'failure_code', 'subject_user_id', 'requested_by', 'reason']) && dateText(saved.created_at) && saved.reviewed_at === null && saved.completed_at === null && saved.failure_code === null;
+    }
+    return ['privacy.review.approve', 'privacy.review.reject'].includes(row.action) && shape(input, ['operation_key', 'request_id'], ['reason']) && input.request_id === request.id &&
+        optionalText(input, 'reason', 1000) && (row.action !== 'privacy.review.reject' || textValue(input.reason, 1000, 1)) && row.actor_id === request.reviewed_by &&
+        shape(result, ['privacy_request', 'delivery_confirmed']) && result.delivery_confirmed === false && shape(saved, ['id', 'request_type', 'status', 'reviewed_by', 'reviewed_at']) &&
+        saved.status === (row.action === 'privacy.review.approve' ? 'queued' : 'rejected') && saved.reviewed_by === row.actor_id && dateText(saved.reviewed_at);
+}
+/** A terminal source is not permission to erase an outstanding writer, cleanup,
+ * hold or delivery obligation. No external object or queue row is changed here. */
+async function operationRetirementBlocked(ctx: AppContext, subjects: string[], entity: string): Promise<boolean> {
+    for (const subject of new Set(subjects)) {
+        if (await ctx.db.one('SELECT id FROM moderation_holds WHERE active=1 AND subject_id=? LIMIT 1', subject) ||
+            await ctx.db.one("SELECT id FROM media_write_intents WHERE account_id=? AND status='pending' LIMIT 1", subject) ||
+            await ctx.db.one("SELECT id FROM cleanup_intents WHERE subject_id=? AND status<>'verified' LIMIT 1", subject) ||
+            await ctx.db.one('SELECT id FROM outbox WHERE account_id=? AND delivered_at IS NULL AND cancelled_at IS NULL LIMIT 1', subject)) return true;
+    }
+    return !!(await ctx.db.one('SELECT id FROM outbox WHERE entity_id=? AND delivered_at IS NULL AND cancelled_at IS NULL LIMIT 1', entity) ||
+        await ctx.db.one("SELECT id FROM job_queue WHERE category='privacy' AND json_extract(payload_json,'$.request_id')=? AND state<>'completed' LIMIT 1", entity) ||
+        await ctx.db.one("SELECT j.notification_id FROM notification_jobs j JOIN notifications n ON n.id=j.notification_id WHERE n.entity_id=? AND j.status IN('queued','dispatched','ambiguous') LIMIT 1", entity) ||
+        await ctx.db.one("SELECT d.id FROM notification_deliveries d JOIN notifications n ON n.id=d.notification_id WHERE n.entity_id=? AND d.status IN('queued','dispatching','ambiguous') LIMIT 1", entity));
+}
+/** Retire only positively bound, intact receipts. The caller owns the source
+ * transaction and retains that source until all matching full copies are gone.
+ * A shared budget bounds updates across every record class in this invocation. */
+async function retireLinkedOperations(ctx: AppContext, link: OperationLink, budget: { left: number }): Promise<boolean> {
+    if (await operationRetirementBlocked(ctx, link.subjects, link.entity)) return false;
+    const allowance = Math.min(budget.left, 20);
+    if (!allowance) return false;
+    let after: { at: number; key: string } | null = null;
+    if (link.continuation) {
+        const cursor = await ctx.db.one<{ last_at: number | null; last_id: string | null }>('SELECT last_at,last_id FROM retention_scan_cursors WHERE scan=? AND entity_id=?', 'adult', link.entity);
+        if (cursor && (cursor.last_at !== null || cursor.last_id !== null)) {
+            let checkpoint: unknown;
+            try { checkpoint = JSON.parse(cursor.last_id ?? ''); } catch { throw new ApiError(503, 'retention_cursor_invalid'); }
+            if (!integer(cursor.last_at) || !object(checkpoint) || !shape(checkpoint, ['protocol', 'generation', 'operation_key']) || checkpoint.protocol !== 'lovelies-retention-receipts-v1' ||
+                typeof checkpoint.generation !== 'string' || !/^[0-9a-f]{64}$/.test(checkpoint.generation) || typeof checkpoint.operation_key !== 'string' || !/^[A-Za-z0-9._:-]{16,128}$/.test(checkpoint.operation_key))
+                throw new ApiError(503, 'retention_cursor_invalid');
+            if (checkpoint.generation === link.continuation.generation) after = { at: Number(cursor.last_at), key: checkpoint.operation_key };
+        }
+    }
+    const rows = await ctx.db.all<StoredOperation>(`SELECT o.actor_id,o.source,o.operation_key,o.action,o.payload_hash,o.payload_json,o.response_json,o.created_at
+      FROM operations o WHERE (${link.sql}) AND (o.payload_json<>? OR o.response_json<>?)
+      ${after ? 'AND (o.created_at>? OR (o.created_at=? AND o.operation_key>?))' : ''}
+      ORDER BY o.created_at,o.actor_id,o.source,o.operation_key LIMIT ?`, ...link.bindings, retiredOperationInput, retiredOperationResponse, ...(after ? [after.at, after.at, after.key] : []), allowance + 1);
+    const selected = rows.slice(0, allowance);
+    const retire: StoredOperation[] = [];
+    for (const row of selected) {
+        let input: unknown, result: unknown;
+        try { input = JSON.parse(row.payload_json); result = JSON.parse(row.response_json); } catch { return false; }
+        if (!integer(row.created_at) || !object(input) || !object(result) || typeof input.operation_key !== 'string' || !/^[A-Za-z0-9._:-]{16,128}$/.test(input.operation_key) || input.operation_key !== row.operation_key ||
+            await digest(stable({ action: row.action, source: row.source, payload: input })) !== row.payload_hash) return false;
+        const classification = await link.valid(row, input, result);
+        if (!classification) return false;
+        const related = await ctx.db.all<{ subject_id: string }>('SELECT subject_id FROM operation_subjects WHERE actor_id=? AND source=? AND operation_key=? LIMIT 201', row.actor_id, row.source, row.operation_key);
+        if (related.length > 200 || !link.subjects.some(subject => related.some(item => item.subject_id === subject)) ||
+            await operationRetirementBlocked(ctx, [row.actor_id, ...related.map(item => item.subject_id)], link.entity)) return false;
+        if (classification !== 'other') retire.push(row);
+    }
+    for (const row of retire) {
+        await ctx.db.run('UPDATE operations SET payload_json=?,response_json=? WHERE actor_id=? AND source=? AND operation_key=? AND payload_hash=? AND payload_json=? AND response_json=?',
+            retiredOperationInput, retiredOperationResponse, row.actor_id, row.source, row.operation_key, row.payload_hash, row.payload_json, row.response_json);
+        const current = await ctx.db.one<{payload_json: string; response_json: string}>('SELECT payload_json,response_json FROM operations WHERE actor_id=? AND source=? AND operation_key=?', row.actor_id, row.source, row.operation_key);
+        if (current?.payload_json !== retiredOperationInput || current.response_json !== retiredOperationResponse)
+            throw new ApiError(409, 'retention_operation_changed');
+        budget.left--;
+    }
+    const complete = rows.length === selected.length;
+    if (link.continuation) {
+        // Other intact review receipts remain unchanged. Save our proof of that
+        // bounded prefix instead of repeatedly scanning the same recent copies.
+        // All adult-review publications increment the account audience version
+        // atomically with source+receipt, invalidating even a backdated prefix.
+        if (await link.continuation.currentGeneration() !== link.continuation.generation) return false;
+        if (!complete) {
+            const last = selected.at(-1)!;
+            await ctx.db.run('INSERT INTO retention_scan_cursors(scan,entity_id,last_at,last_id) VALUES(?,?,?,?) ON CONFLICT(scan,entity_id) DO UPDATE SET last_at=excluded.last_at,last_id=excluded.last_id',
+                'adult', link.entity, last.created_at, stable({ protocol: 'lovelies-retention-receipts-v1', generation: link.continuation.generation, operation_key: last.operation_key }));
+        }
+    }
+    return complete;
+}
+type RetentionScan = 'support' | 'guardian' | 'adult' | 'privacy';
+/** Persist the last examined source, including blocked records, across isolates.
+ * An empty bounded query proves exhaustion; only then does that class wrap.
+ * Cursor and source/receipt work commit or roll back in the same transaction. */
+async function terminalScan(ctx: AppContext, scan: RetentionScan, fromWhere: string, order: string, bindings: Binding[], maximum: number): Promise<any[]> {
+    const cursor = await ctx.db.one<{ last_at: number | null; last_id: string | null }>("SELECT last_at,last_id FROM retention_scan_cursors WHERE scan=? AND entity_id=''", scan);
+    const lastAt = cursor?.last_at ?? null, lastID = cursor?.last_id ?? null, continuation = lastAt !== null;
+    if (continuation && (!integer(lastAt) || typeof lastID !== 'string' || !lastID.length) || !continuation && lastID !== null)
+        throw new ApiError(503, 'retention_cursor_invalid');
+    const rows = await ctx.db.all<any>(`SELECT r.*,${order} retention_scan_at FROM ${fromWhere}
+      ${continuation ? `AND (${order}>? OR (${order}=? AND r.id>?))` : ''}
+      ORDER BY ${order},r.id LIMIT ?`, ...bindings, ...(continuation ? [lastAt, lastAt, lastID] : []), maximum);
+    const last = rows.at(-1);
+    await ctx.db.run("INSERT INTO retention_scan_cursors(scan,entity_id,last_at,last_id) VALUES(?,'',?,?) ON CONFLICT(scan,entity_id) DO UPDATE SET last_at=excluded.last_at,last_id=excluded.last_id", scan, last?.retention_scan_at ?? null, last?.id ?? null);
+    return rows;
+}
+async function pruneTerminalOperationCopies(ctx: AppContext, maximum: number): Promise<void> {
+    const budget = { left: maximum };
+    for (const support of await terminalScan(ctx, 'support', `support_requests r WHERE r.status IN('closed','resolved')
+      AND r.category='general_support' AND r.updated_at<=?
+      AND NOT EXISTS(SELECT 1 FROM moderation_holds h WHERE h.active=1 AND h.subject_id=r.account_id)`, 'r.updated_at', [ctx.now() - 90 * DAY], maximum)) {
+        const complete = await retireLinkedOperations(ctx, {
+            entity: support.id, subjects: [support.account_id],
+            sql: "o.source='support' AND (json_extract(o.payload_json,'$.request_id')=? OR json_extract(o.response_json,'$.id')=? OR json_extract(CASE WHEN json_valid(json_extract(o.response_json,'$.support_request')) THEN json_extract(o.response_json,'$.support_request') ELSE '{}' END,'$.id')=?)",
+            bindings: [support.id, support.id, support.id],
+            valid: (row, input, result) => supportOperation(row, input, result, support),
+        }, budget);
+        if (complete) await ctx.db.run('DELETE FROM support_requests WHERE id=?', support.id);
+    }
+    for (const guardian of await terminalScan(ctx, 'guardian', `guardian_requests r
+      WHERE r.state IN('rejected','withdrawn','expired') AND r.terminated_at IS NOT NULL AND r.terminated_at<=?
+      AND NOT EXISTS(SELECT 1 FROM moderation_holds h WHERE h.active=1 AND (h.subject_id=r.child_account_id OR h.subject_id=r.guardian_account_id))`, 'r.terminated_at', [ctx.now() - 365 * DAY], maximum)) {
+        const complete = await retireLinkedOperations(ctx, {
+            entity: guardian.id, subjects: [guardian.child_account_id, guardian.guardian_account_id, guardian.reviewed_by].filter((id): id is string => typeof id === 'string'),
+            sql: "o.source='guardian' AND (json_extract(o.payload_json,'$.target_id')=? OR json_extract(o.response_json,'$.request_id')=?)",
+            bindings: [guardian.id, guardian.id],
+            valid: (row, input, result) => guardianOperation(row, input, result, guardian),
+        }, budget);
+        if (complete) await ctx.db.run('DELETE FROM guardian_requests WHERE id=?', guardian.id);
+    }
+    for (const review of await terminalScan(ctx, 'adult', `audience_adult_reviews r WHERE r.created_at<=?
+      AND NOT EXISTS(SELECT 1 FROM moderation_holds h WHERE h.active=1 AND h.subject_id=r.account_id)`, 'r.created_at', [ctx.now() - 365 * DAY], maximum)) {
+        // Old receipts contain no review-row ID. Only an unambiguous exact tuple
+        // is a positive binding; absence, reused evidence and orphans are not.
+        const matches = await ctx.db.one<{ n: number }>('SELECT count(*) n FROM audience_adult_reviews WHERE account_id=? AND reviewed_by=? AND evidence_method=? AND evidence_reference=?', review.account_id, review.reviewed_by, review.evidence_method, review.evidence_reference);
+        if (matches?.n !== 1) continue;
+        const generation = await adultReceiptGeneration(ctx, review.id);
+        if (!generation) continue;
+        const complete = await retireLinkedOperations(ctx, {
+            entity: review.id, subjects: [review.account_id, review.reviewed_by],
+            sql: "o.source='audience' AND o.action='audience.adult-review' AND o.actor_id=? AND (json_extract(o.payload_json,'$.target_id')=? OR json_extract(o.response_json,'$.account_id')=?)",
+            bindings: [review.reviewed_by, review.account_id, review.account_id],
+            valid: (_row, input, result) => adultOperationLink(ctx, input, result, review),
+            continuation: { generation, currentGeneration: () => adultReceiptGeneration(ctx, review.id) },
+        }, budget);
+        if (complete) {
+            await ctx.db.run('DELETE FROM audience_adult_reviews WHERE id=?', review.id);
+            await ctx.db.run('DELETE FROM retention_scan_cursors WHERE scan=? AND entity_id=?', 'adult', review.id);
+        }
+    }
+    // Only operation copies are minimized here. Minimal privacy request/status
+    // facts and their separate retention/restore-suppression lifecycle remain.
+    for (const request of await terminalScan(ctx, 'privacy', `privacy_requests r WHERE r.status IN('completed','rejected','cancelled')
+      AND coalesce(r.completed_at,r.reviewed_at) IS NOT NULL AND coalesce(r.completed_at,r.reviewed_at)<=?
+      AND NOT EXISTS(SELECT 1 FROM privacy_exports e WHERE e.request_id=r.id AND e.status<>'retired')
+      AND NOT EXISTS(SELECT 1 FROM privacy_export_grants g WHERE g.request_id=r.id AND g.consumed_at IS NULL AND g.expires_at>?)`, 'coalesce(r.completed_at,r.reviewed_at)', [ctx.now() - 365 * DAY, ctx.now()], maximum)) {
+        await retireLinkedOperations(ctx, {
+            entity: request.id, subjects: [request.subject_id],
+            sql: "o.source='privacy' AND (json_extract(o.payload_json,'$.request_id')=? OR json_extract(CASE WHEN json_valid(json_extract(o.response_json,'$.privacy_request')) THEN json_extract(o.response_json,'$.privacy_request') ELSE '{}' END,'$.id')=?)",
+            bindings: [request.id, request.id],
+            valid: (row, input, result) => privacyOperation(row, input, result, request),
+        }, budget);
+    }
+}
+
+/** Bounded, class-specific metadata erasure. This never touches financial records,
+ * unresolved cleanup/writer obligations, or a scoped/global hold. Provider logs
+ * and backups are separately configured and cannot be qualified by this job. */
+export async function pruneRetainedMetadata(ctx: AppContext, maximum = 100): Promise<void> {
+    if (!Number.isInteger(maximum) || maximum < 1 || maximum > 200) throw new ApiError(400, 'retention_limit_invalid');
+    await ctx.db.transaction(async () => {
+    const p = await policy(ctx);
+    if (p.legal_hold) return;
+    await pruneTerminalOperationCopies(ctx, maximum);
+    const events = await ctx.db.all<{id:string}>(`SELECT e.id FROM audit_events e
+      WHERE e.created_at <= ? - CASE
+        WHEN e.action LIKE 'privacy.%' OR e.action LIKE 'guardian.%' OR e.action LIKE 'audience.%' OR e.action LIKE 'consent.%'
+          OR e.action LIKE 'face_profile.%' OR e.action LIKE 'admin.%' OR e.action LIKE 'support.%' OR e.action LIKE 'moderation.%'
+          OR EXISTS(SELECT 1 FROM accounts admin_actor WHERE admin_actor.id=e.actor_id AND instr(admin_actor.roles_json,'"admin"')>0) THEN ?
+        WHEN e.action LIKE 'face.%' OR e.action LIKE 'auth.%' OR e.action LIKE 'session.%' OR e.action LIKE 'device.%' OR e.action LIKE 'security.%' THEN ?
+        ELSE ? END
+      AND NOT EXISTS(SELECT 1 FROM moderation_holds h WHERE h.active=1 AND (h.subject_id=e.subject_id OR h.subject_id=e.actor_id))
+      AND NOT EXISTS(SELECT 1 FROM cleanup_intents c WHERE c.subject_id=e.subject_id AND c.status<>'verified')
+      ORDER BY e.created_at,e.id LIMIT ?`,ctx.now(),365*DAY,p.audit_days*DAY,7*DAY,maximum);
+    for (const event of events) await ctx.db.run('DELETE FROM audit_events WHERE id=?',event.id);
+    // These rows contain minimal consent facts already. References held by an
+    // active or unresolved operation prevent premature deletion; no FK bypass.
+    await ctx.db.run(`DELETE FROM consents WHERE id IN(SELECT c.id FROM consents c
+      WHERE (c.revoked_at IS NOT NULL OR c.expires_at IS NOT NULL AND c.expires_at<=?)
+      AND coalesce(c.revoked_at,c.expires_at,c.created_at)<=?
+      AND NOT EXISTS(SELECT 1 FROM face_profiles f WHERE f.consent_id=c.id OR f.auth_consent_id=c.id)
+      AND NOT EXISTS(SELECT 1 FROM sessions s WHERE s.face_consent_id=c.id)
+      AND NOT EXISTS(SELECT 1 FROM auth_challenges a WHERE a.consent_id=c.id)
+      AND NOT EXISTS(SELECT 1 FROM face_enrollment_intents i WHERE i.consent_id=c.id)
+      AND NOT EXISTS(SELECT 1 FROM face_recovery_keys k WHERE k.consent_id=c.id)
+      AND NOT EXISTS(SELECT 1 FROM face_profile_operations o WHERE o.consent_id=c.id)
+      AND NOT EXISTS(SELECT 1 FROM match_origins o WHERE o.matching_consent_id=c.id)
+      AND NOT EXISTS(SELECT 1 FROM moderation_holds h WHERE h.active=1 AND h.subject_id=c.account_id)
+      ORDER BY c.created_at,c.id LIMIT ?)`,ctx.now(),ctx.now()-365*DAY,maximum);
+    });
 }

@@ -1,6 +1,6 @@
 import { asyncFilter, asyncMap } from './async-collections.ts';
 import { ApiError, jsonBody, ok, record, stable, uuid, type Actor, type AppContext } from './types.ts';
-import { executeOperation, prepareOperation } from './operations.ts';
+import { assertOperationReceiptAvailable, executeOperation, prepareOperation } from './operations.ts';
 import { enqueueNotification } from './notifications.ts';
 import { assertMediaActor, assetMetadata, availableGrant, currentAsset, currentPair, eligibleBindings, galleryAction, idList, mediaSource, protectedRendition, sameBinding, sourceAllowed, type MatchBinding, type MediaSource, type Asset } from './gallery.ts';
 const PROTOCOL = 'reviewed-sharing-v1';
@@ -345,13 +345,15 @@ export async function handleSharing(request: Request, ctx: AppContext): Promise<
                 throw new ApiError(400, 'invalid_operation_key');
             const rows = (await ctx.db.all<{
                 action: string;
+                payload_json: string;
                 response_json: string;
                 source: MediaSource;
-            }>('SELECT action,response_json,source FROM operations WHERE actor_id=? AND operation_key=?', actor.accountId, payload.operation_key));
+            }>('SELECT action,payload_json,response_json,source FROM operations WHERE actor_id=? AND operation_key=?', actor.accountId, payload.operation_key));
             if (rows.length > 1)
                 throw new ApiError(409, 'operation_source_ambiguous');
             if (!rows.length)
                 return { status: 'unknown' };
+            assertOperationReceiptAvailable(rows[0]);
             const stored = JSON.parse(rows[0].response_json);
             const result = rows[0].action === 'sharing.commit' && stored.status !== 'changed' && stored.preview_id
                 ? (await outcome(ctx, actor, stored.preview_id, payload.operation_key)) : stored;

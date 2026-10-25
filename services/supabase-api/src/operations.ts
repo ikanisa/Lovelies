@@ -1,5 +1,6 @@
+import { assertAudienceCapability } from './audience.ts';
 import { ApiError, digest, stable, type Actor, type AppContext } from './types.ts';
-import { assertEnrollmentActor } from './auth.ts';
+import { assertEnrollmentActor, assertPrivacyActor } from './auth.ts';
 export type PreparedOperation = Readonly<{
     key: string;
     action: string;
@@ -7,6 +8,16 @@ export type PreparedOperation = Readonly<{
     hash: string;
     payloadJson: string;
 }>;
+// Prepared inputs are always JSON objects. JSON null is reserved for a retired
+// receipt, while its original action/hash/key continue preventing re-execution.
+export const retiredOperationInput = 'null';
+export const retiredOperationResponse = stable({ protocol: 'lovelies-operation-retired-v1', status: 'retired' });
+export function assertOperationReceiptAvailable(row: { payload_json: string; response_json: string }): void {
+    if (row.payload_json !== retiredOperationInput && row.response_json !== retiredOperationResponse) return;
+    if (row.payload_json !== retiredOperationInput || row.response_json !== retiredOperationResponse)
+        throw new ApiError(503, 'operation_receipt_unavailable');
+    throw new ApiError(410, 'operation_receipt_retired');
+}
 /** Anonymous credentials can enroll, but do not authorize private data mutation
  * or release. The durable row is checked in addition to the signed credential. */
 export async function assertRegisteredActor(ctx: AppContext, actor: Actor): Promise<void> {
@@ -23,8 +34,10 @@ export async function assertRegisteredActor(ctx: AppContext, actor: Actor): Prom
  * unresolved; current-session guards still control metadata publication. */
 async function mediaWrite(ctx: AppContext, actor: Actor, bucket: 'PHOTOS' | 'QUARANTINE' | 'PRIVACY_EXPORTS', objectKey: string, enrollment: boolean): Promise<string> {
     return (await ctx.db.transaction(async () => {
-        if (enrollment)
+        if (enrollment) {
             (await assertEnrollmentActor(actor, ctx));
+            await assertAudienceCapability(ctx, actor.accountId, 'face_authentication');
+        }
         else
             (await assertRegisteredActor(ctx, actor));
         const account = (await ctx.db.one<{
@@ -64,6 +77,7 @@ export async function beginFaceChallengeMediaWrite(ctx: AppContext, challengeId:
             !['pending', 'verifying'].includes(challenge.status) || challenge.used_at !== null || challenge.expires_at <= ctx.now()) {
             throw new ApiError(401, 'face_challenge_unavailable');
         }
+        await assertAudienceCapability(ctx, challenge.account_id, 'face_authentication');
         if (guard) {
             await guard();
         }
@@ -121,9 +135,14 @@ async function executeAuthorizedOperation<T extends Record<string, unknown>>(ctx
             response_json: string;
         }>('SELECT action,payload_hash,payload_json,response_json FROM operations WHERE actor_id=? AND source=? AND operation_key=?', actor.accountId, intent.source, intent.key));
         if (previous) {
-            if (previous.action !== intent.action || previous.payload_hash !== intent.hash || previous.payload_json !== intent.payloadJson) {
+            if (previous.action !== intent.action || previous.payload_hash !== intent.hash) {
                 throw new ApiError(409, 'operation_key_conflict');
             }
+            if (previous.payload_json === retiredOperationInput || previous.response_json === retiredOperationResponse) {
+                (await assertAuthority());
+                assertOperationReceiptAvailable(previous);
+            }
+            if (previous.payload_json !== intent.payloadJson) throw new ApiError(409, 'operation_key_conflict');
             (await assertAuthority());
             return JSON.parse(previous.response_json) as T;
         }
@@ -157,5 +176,11 @@ export async function executeOperation<T extends Record<string, unknown>>(ctx: A
 export async function executeAccountDeletionOperation<T extends Record<string, unknown>>(ctx: AppContext, actor: Actor, intent: PreparedOperation, callback: () => T | Promise<T>): Promise<T> {
     if (intent.action !== 'privacy.request.delete' || intent.source !== 'privacy')
         throw new ApiError(400, 'operation_scope_invalid');
-    return (await executeAuthorizedOperation(ctx, actor, intent, callback, [], async () => (await assertEnrollmentActor(actor, ctx))));
+    return (await executeAuthorizedOperation(ctx, actor, intent, callback, [], async () => (await assertPrivacyActor(actor, ctx))));
+}
+
+/** Restricted account controls never grant a product capability. */
+export async function executeRestrictedOperation<T extends Record<string, unknown>>(ctx: AppContext, actor: Actor, intent: PreparedOperation, callback: () => T | Promise<T>, subjectIds: readonly string[] = []): Promise<T> {
+    if (!['audience', 'guardian', 'privacy'].includes(intent.source)) throw new ApiError(400, 'operation_scope_invalid');
+    return executeAuthorizedOperation(ctx, actor, intent, callback, subjectIds, () => assertPrivacyActor(actor, ctx));
 }

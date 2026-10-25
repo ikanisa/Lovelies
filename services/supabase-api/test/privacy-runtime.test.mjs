@@ -34,7 +34,7 @@ async function waitFor(read,predicate,timeout=10_000) {
 test('actual anonymous authority cannot export; ownership and independent review remain enforced',async()=>{
   const h=await startHarness({faceVerifier:faceVerifierFixture,consumeQueue:false});
   try {
-    const anonymous=await h.anonymous();
+    const anonymous=await h.anonymous({adult:true});
     assert.equal((await h.json('/privacy/center',{token:anonymous.access_token})).consent_granted,false);
     const denied=await h.json('/privacy/export',{token:anonymous.access_token,body:{operation_key:key('anonymous')}},403);
     assert.equal(denied.error.code,'registered_face_required');
@@ -47,7 +47,9 @@ test('actual anonymous authority cannot export; ownership and independent review
     const own=await requestPrivacy(h,admin,'delete');
     const self=await h.json(`/privacy-requests/${own.id}/approve`,{token:admin.token,body:{operation_key:key('self-approval')}},403);
     assert.equal(self.error.code,'independent_privacy_review_required');
-    await approve(h,admin,requested.id);
+    assert.equal((await h.json(`/privacy-requests/${requested.id}/approve`,{token:admin.token,body:{operation_key:key('restricted-admin')}},403)).error.code,'audience_restricted');
+    await h.json('/privacy/center',{token:admin.token});
+    const independent=await administrator(h);await approve(h,independent,requested.id);
     const queued=(await h.json(`/privacy-requests/${requested.id}`,{token:owner.token})).privacy_request;
     assert.equal(queued.status,'queued');
     const outbox=await h.storage.exec("SELECT payload_json FROM outbox WHERE category='privacy' AND entity_id=?",requested.id);
@@ -131,7 +133,7 @@ test('a legal hold prevents account disable and a pending private writer prevent
 
 function processorFixture(envelope) {
   return {attempt_id:envelope.attempt_id,nonce:envelope.nonce,asset_id:envelope.asset_id,
-    source_version:envelope.source_version,source_checksum_sha256:envelope.source_checksum_sha256,model_version:envelope.model_version,
+    source_version:envelope.source_version,source_checksum_sha256:envelope.source_checksum_sha256,model_version:envelope.model_version,engine_identity:envelope.engine_identity,
     preview:{bytes_base64:Buffer.from(fixturePng(envelope.asset_id)).toString('base64'),content_type:'image/png',width:1,height:1},
     matches:envelope.profiles.map(profile=>({recipient_id:profile.account_id,profile_id:profile.profile_id,profile_version:profile.revision,model_version:profile.model_id}))};
 }
@@ -249,7 +251,7 @@ test('lost creation reply reconciles after actual pending-selfie R2 cleanup and 
 test('guest receipt stays failed while a private writer is unresolved and becomes complete only after absent HEAD',async()=>{
   const h=await startHarness({faceVerifier:faceVerifierFixture,consumeQueue:false});
   try {
-    const guest=await h.anonymous(),admin=await administrator(h),token=deletionToken();
+    const guest=await h.anonymous({adult:true}),admin=await administrator(h),token=deletionToken();
     const requested=await h.json('/privacy/account-deletion',{token:guest.access_token,body:{operation_key:key('guest-writer'),status_token:token}},201);
     const id=requested.privacy_request.id,writer=crypto.randomUUID(),objectKey='private/guest-pending/'+crypto.randomUUID();
     await h.storage.exec('INSERT INTO media_write_intents(id,account_id,bucket,object_key,status,created_at) VALUES(?,?,?,?,?,?)',writer,guest.account_id,'QUARANTINE',objectKey,'pending',Date.now());
@@ -263,13 +265,13 @@ test('guest receipt stays failed while a private writer is unresolved and become
   } finally {await h.close();}
 });
 
-test('valid guest receipt distinguishes expired/rejected/cancelled requests and returns uniform expiry/unavailable',async()=>{
+test('valid guest receipt survives internal review deadline and distinguishes rejected/cancelled final outcomes',async()=>{
   const h=await startHarness({faceVerifier:faceVerifierFixture,consumeQueue:false});
   try {
-    const guest=await h.anonymous(),admin=await administrator(h),token=deletionToken();
+    const guest=await h.anonymous({adult:true}),admin=await administrator(h),token=deletionToken();
     const creation=await h.json('/privacy/account-deletion',{token:guest.access_token,body:{operation_key:key('guest-expiry'),status_token:token}},201),id=creation.privacy_request.id;
     await h.storage.exec('UPDATE privacy_requests SET expires_at=? WHERE id=?',Date.now()-1,id);
-    const expired=await deletionStatus(h,token);assert.equal(expired.request_expired,true);assert.equal(expired.deletion_completed,false);
+    const expired=await deletionStatus(h,token);assert.equal(expired.request_expired,false);assert.equal(expired.deletion_completed,false);
     assert.equal((await h.json('/me',{token:guest.access_token})).auth_method,'anonymous');
     await h.storage.exec("UPDATE privacy_requests SET status='cancelled' WHERE id=?",id);
     const cancelled=await deletionStatus(h,token);assert.equal(cancelled.privacy_request.status,'cancelled');assert.equal(cancelled.deletion_completed,false);

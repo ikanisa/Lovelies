@@ -17,7 +17,7 @@ async function until(read, predicate, timeout = 10_000) {
 function processorResult(envelope, recipients = envelope.profiles.map(profile => profile.account_id)) {
   return { attempt_id: envelope.attempt_id, nonce: envelope.nonce, asset_id: envelope.asset_id,
     source_version: envelope.source_version, source_checksum_sha256: envelope.source_checksum_sha256,
-    model_version: envelope.model_version,
+    model_version: envelope.model_version, engine_identity: envelope.engine_identity,
     preview: { bytes_base64: Buffer.from(fixturePng(envelope.asset_id)).toString('base64'), content_type: 'image/png', width: 1, height: 1 },
     matches: envelope.profiles.filter(profile => recipients.includes(profile.account_id)).map(profile => ({
       recipient_id: profile.account_id, profile_id: profile.profile_id, profile_version: profile.revision, model_version: profile.model_id })) };

@@ -10,18 +10,30 @@ export async function isolatedPostgres(url){
   const number=Number(value);if(!Number.isSafeInteger(number))throw new Error('Unsafe test database integer');return number;
  }}}};
  const administrator=postgres(url,options),name='lovelies_test_'+crypto.randomUUID().replaceAll('-','');
- let sql;
+ let sql,databaseCreated=false;
+ const cleanup=async()=>{
+  const errors=[];
+  try{await sql?.end({timeout:5});}catch(error){errors.push(error);}
+  try{if(databaseCreated){await administrator.unsafe('DROP DATABASE '+name);databaseCreated=false;}}catch(error){errors.push(error);}
+  try{await administrator.end({timeout:5});}catch(error){errors.push(error);}
+  return errors;
+ };
  try{
   // Roles are cluster-scoped; sequential test harnesses reuse the validated
   // private backend role while their account/media tables remain isolated.
   await administrator.unsafe("DO $roles$ BEGIN IF NOT EXISTS(SELECT FROM pg_roles WHERE rolname='anon') THEN CREATE ROLE anon NOLOGIN; END IF; IF NOT EXISTS(SELECT FROM pg_roles WHERE rolname='authenticated') THEN CREATE ROLE authenticated NOLOGIN; END IF; END $roles$");
   await administrator.unsafe('CREATE DATABASE '+name);
+  databaseCreated=true;
   const databaseUrl=new URL(url);databaseUrl.pathname='/'+name;
   sql=postgres(databaseUrl.href,options);
   return {url:databaseUrl.href,engine:{
    query:async(source,bindings=[])=>({rows:await sql.unsafe(source,bindings)}),
    exec:source=>sql.unsafe(source),
-   close:async()=>{await sql.end({timeout:5});await administrator.unsafe('DROP DATABASE '+name);await administrator.end({timeout:5});},
+   close:async()=>{const errors=await cleanup();if(errors.length)throw new AggregateError(errors,'Disposable PostgreSQL cleanup failed');},
   }};
- }catch(error){await sql?.end({timeout:5});await administrator.end({timeout:5});throw error;}
+ }catch(error){
+  const cleanupErrors=await cleanup();
+  try{if(cleanupErrors.length&&error instanceof Error&&Object.isExtensible(error))Object.defineProperty(error,'cleanupErrors',{value:cleanupErrors,configurable:true});}catch{}
+  throw error;
+ }
 }

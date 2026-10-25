@@ -1,3 +1,4 @@
+import { audienceContext, audiencePurposes, type AudiencePurpose } from './audience.ts';
 import { asyncSome, asyncFilter, asyncMap } from './async-collections.ts';
 import { accountRoles } from './auth.ts';
 import { ApiError, jsonBody, ok, record, uuid, type Actor, type AppContext } from './types.ts';
@@ -90,6 +91,7 @@ export function currentPhotoPolicy(ctx: AppContext): string {
     return value;
 }
 export async function hasConsent(ctx: AppContext, accountId: string, purpose: string): Promise<boolean> {
+    if (audiencePurposes.includes(purpose as AudiencePurpose) && !await audienceContext(ctx, accountId, purpose as AudiencePurpose)) return false;
     const required = purpose === 'face_authentication' ? ctx.env.FACE_AUTH_POLICY_VERSION :
         ['photo_matching', 'photo_processing'].includes(purpose) ? currentPhotoPolicy(ctx) : null;
     return !!(await ctx.db.one(`SELECT id FROM consents WHERE account_id=? AND purpose=? AND status='granted'
@@ -134,10 +136,13 @@ const BINDING_SELECT = `SELECT a.id asset_id,c.recipient_id,c.version,c.id candi
 export async function eligibleBindings(ctx: AppContext, ownerId: string, assetIds: string[], limit = 1001): Promise<MatchBinding[]> {
     if (!assetIds.length)
         return [];
-    return (await ctx.db.all<MatchBinding>(`${BINDING_SELECT}${ELIGIBLE} AND a.owner_id=? AND a.id IN (SELECT value FROM json_each(?))
+    if (!await audienceContext(ctx, ownerId, 'photo_processing')) return [];
+    const rows = (await ctx.db.all<MatchBinding>(`${BINDING_SELECT}${ELIGIBLE} AND a.owner_id=? AND a.id IN (SELECT value FROM json_each(?))
     AND o.expires_at>? ORDER BY c.recipient_id,a.id LIMIT ?`, currentPhotoPolicy(ctx), ctx.now(), currentPhotoPolicy(ctx), ctx.now(), ownerId, JSON.stringify(assetIds), ctx.now(), limit));
+    return asyncFilter(rows, async binding => !!await audienceContext(ctx, binding.recipient_id, 'photo_matching'));
 }
 export async function currentPair(ctx: AppContext, ownerId: string, assetId: string, recipientId: string, requireFresh = true): Promise<MatchBinding | null> {
+    if (!await audienceContext(ctx, ownerId, 'photo_processing') || !await audienceContext(ctx, recipientId, 'photo_matching')) return null;
     return (await ctx.db.one<MatchBinding>(`${BINDING_SELECT}${ELIGIBLE} AND a.owner_id=? AND a.id=? AND c.recipient_id=?
     ${requireFresh ? 'AND o.expires_at>?' : ''}`, currentPhotoPolicy(ctx), ctx.now(), currentPhotoPolicy(ctx), ctx.now(), ownerId, assetId, recipientId, ...(requireFresh ? [ctx.now()] : [])));
 }

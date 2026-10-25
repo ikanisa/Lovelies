@@ -1,5 +1,5 @@
 import { cancelDeviceLifecycle } from './face-profile.ts';
-import { assertRegisteredActor } from './operations.ts';
+import { assertPrivacyActor } from './auth.ts';
 import { ApiError, jsonBody, ok, uuid, type AppContext } from './types.ts';
 /** Private account-security controls. Never return refresh hashes, public keys
  * or opaque face handles. Revocation can only remove existing authority. */
@@ -8,10 +8,10 @@ export async function handleIdentity(request: Request, ctx: AppContext): Promise
     if (!['/me/sessions', '/me/devices', '/auth/session/revoke', '/auth/device/revoke'].includes(path))
         return null;
     const actor = await ctx.authenticate(request);
-    (await assertRegisteredActor(ctx, actor));
+    (await assertPrivacyActor(actor, ctx));
     if (request.method === 'GET' && path === '/me/sessions')
         return ok((await ctx.db.transaction(async () => {
-            (await assertRegisteredActor(ctx, actor));
+            (await assertPrivacyActor(actor, ctx));
             const sessions = (await ctx.db.all<{
                 id: string;
                 device_id: string;
@@ -22,7 +22,7 @@ export async function handleIdentity(request: Request, ctx: AppContext): Promise
         })));
     if (request.method === 'GET' && path === '/me/devices')
         return ok((await ctx.db.transaction(async () => {
-            (await assertRegisteredActor(ctx, actor));
+            (await assertPrivacyActor(actor, ctx));
             const current = (await ctx.db.one<{
                 device_id: string;
             }>('SELECT device_id FROM sessions WHERE id=?', actor.sessionId))?.device_id;
@@ -41,7 +41,7 @@ export async function handleIdentity(request: Request, ctx: AppContext): Promise
         throw new ApiError(400, 'revocation_input_invalid');
     const id = uuid(input[field]);
     return ok((await ctx.db.transaction(async () => {
-        (await assertRegisteredActor(ctx, actor));
+        (await assertPrivacyActor(actor, ctx));
         const currentDevice = (await ctx.db.one<{
             device_id: string;
         }>('SELECT device_id FROM sessions WHERE id=?', actor.sessionId))?.device_id;

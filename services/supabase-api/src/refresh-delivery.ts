@@ -1,4 +1,4 @@
-import { accountRoles, assertEnrollmentActor, base64url, decodeBase64url, insertPreparedSession, prepareSession, revokeSessionAuthority,
+import { accountRoles, assertRefreshActor, assertPrivacyActor, base64url, decodeBase64url, insertPreparedSession, prepareSession, revokeSessionAuthority,
     type AccountRow, type SessionRow } from './auth.ts';
 import { ApiError, digest, ok, stable, type Actor, type AppContext } from './types.ts';
 
@@ -62,8 +62,10 @@ async function replay(row: Receipt, old: SessionRow, account: AccountRow, reques
     const next=await ctx.db.one<SessionRow>('SELECT * FROM sessions WHERE id=? AND account_id=?',row.successor_session_id,row.account_id);
     if(!next || next.refresh_consumed_at!==null)invalid();
     // Expired access is permissible for delivery only; the successor refresh,
-    // account, epoch, reference, consent and device must remain current.
-    await assertEnrollmentActor(actor(next,account),ctx,true);
+    // account, epoch and exact device must remain current. Reference/consent
+    // are additionally required unless audience restriction limits this session
+    // to weak own status/privacy controls; no product guard is bypassed.
+    await assertRefreshActor(actor(next,account),ctx,true);
     if(row.expires_at<=ctx.now())throw new ApiError(410,'refresh_delivery_expired');
     let plain: Uint8Array;
     try {plain=new Uint8Array(await crypto.subtle.decrypt({name:'AES-GCM',iv:new Uint8Array(decodeBase64url(row.iv,12)).buffer,additionalData:aad(row)},key,new Uint8Array(decodeBase64url(row.ciphertext,12288)).buffer));}
@@ -84,7 +86,7 @@ async function replay(row: Receipt, old: SessionRow, account: AccountRow, reques
         value.refresh_expires_at!==new Date(next.refresh_expires_at).toISOString() ||
         value.delivery_expires_at!==new Date(row.expires_at).toISOString() ||
         typeof value.refresh_token!=='string' || await digest(value.refresh_token)!==next.refresh_hash)invalid();
-    await assertEnrollmentActor(actor(next,account,value.roles),ctx,true);
+    await assertRefreshActor(actor(next,account,value.roles),ctx,true);
     return ok(value);
 }
 /** Delivery reconciliation never consumes an old token twice or authenticates
@@ -99,7 +101,7 @@ export async function refreshWithDelivery(body: Record<string, unknown>, ctx: Ap
         const prior=await ctx.db.one<Receipt>('SELECT * FROM refresh_delivery_receipts WHERE original_session_id=?',old.id);
         if(prior)return replay(prior,old,account,request,key,ctx);
         if(old.refresh_consumed_at!==null || await ctx.db.one('SELECT original_session_id FROM refresh_delivery_receipts WHERE rotation_key=?',request.rotation_key))invalid();
-        const authority=actor(old,account);await assertEnrollmentActor(authority,ctx,true);
+        const authority=actor(old,account);await assertRefreshActor(authority,ctx,true);
         const prepared=await prepareSession({accountId:account.id,roles:authority.roles,authEpoch:authority.authEpoch,authMethod:old.auth_method,
             profileRevision:old.face_profile_revision??undefined,profileEpoch:old.face_profile_epoch??undefined,
             consentId:old.face_consent_id??undefined,deviceId:old.device_id??undefined,deviceRevision:old.device_revision??undefined},ctx);
@@ -111,9 +113,9 @@ export async function refreshWithDelivery(body: Record<string, unknown>, ctx: Ap
         const iv=crypto.getRandomValues(new Uint8Array(12)),plain=encoder.encode(JSON.stringify(value));let ciphertext;
         try {ciphertext=base64url(new Uint8Array(await crypto.subtle.encrypt({name:'AES-GCM',iv,additionalData:aad(row)},key,plain)));}
         finally {plain.fill(0);}
-        await assertEnrollmentActor(authority,ctx,true);
+        await assertRefreshActor(authority,ctx,true);
         await ctx.db.run('UPDATE sessions SET revoked_at=?,refresh_consumed_at=? WHERE id=?',ctx.now(),ctx.now(),old.id);
-        await insertPreparedSession(prepared,ctx);
+        await insertPreparedSession(prepared,ctx,true);
         await ctx.db.run(`INSERT INTO refresh_delivery_receipts(original_session_id,account_id,rotation_key,secret_hash,successor_session_id,state,ciphertext,iv,created_at,expires_at)
             VALUES(?,?,?,?,?,'active',?,?,?,?)`,old.id,old.account_id,request.rotation_key,request.secretHash,prepared.id,ciphertext,base64url(iv),row.created_at,row.expires_at);
         return ok(value);
@@ -140,7 +142,7 @@ export async function cancelRefreshDelivery(body: Record<string, unknown>, ctx: 
             }
         }else{
             if(old.refresh_consumed_at!==null||await ctx.db.one('SELECT original_session_id FROM refresh_delivery_receipts WHERE rotation_key=?',request.rotation_key))invalid();
-            await assertEnrollmentActor(actor(old,account),ctx,true);
+            await assertPrivacyActor(actor(old,account),ctx,true);
             await revokeSessionAuthority(old.id,account.id,ctx);
             await ctx.db.run(`INSERT INTO refresh_delivery_receipts(original_session_id,account_id,rotation_key,secret_hash,state,created_at,expires_at)
                 VALUES(?,?,?,?,'cancelled',?,?)`,old.id,account.id,request.rotation_key,request.secretHash,ctx.now(),Math.min(ctx.now()+DELIVERY_MS,old.refresh_expires_at));

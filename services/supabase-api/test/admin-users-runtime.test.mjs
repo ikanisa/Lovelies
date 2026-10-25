@@ -23,7 +23,7 @@ const revoke = (h, admin, account, session, extra = {}, expected = 200) => h.jso
 test('user management requires current registered-face administrator authority for every route', async () => {
   const h = await startHarness({ faceVerifier: faceVerifierFixture, consumeQueue: false });
   try {
-    const anonymous = await h.anonymous(), person = await enroll(h), admin = await administrator(h);
+    const anonymous = await h.anonymous({adult:true}), person = await enroll(h), admin = await administrator(h);
     const paths = ['/admin/users', `/admin/users/${person.accountId}`];
     for (const path of paths) {
       assert.equal((await h.json(path, {}, 401)).error.code, 'authentication_required');
@@ -138,7 +138,7 @@ test('single-session revocation is reasoned, audited and replay-safe without dis
 test('matching metadata distinguishes enabled, explicit pause, absent reference and authentication-only profile', async () => {
   const h = await startHarness({ faceVerifier: faceVerifierFixture, consumeQueue: false });
   try {
-    const admin = await administrator(h), person = await enroll(h), anonymous = await h.anonymous();
+    const admin = await administrator(h), person = await enroll(h), anonymous = await h.anonymous({adult:true});
     const detail = () => h.json(`/admin/users/${person.accountId}`, { token: admin.token });
     assert.equal((await detail()).user.matching_status, null);
     assert.equal((await h.json(`/admin/users/${anonymous.account_id}`, { token: admin.token })).user.matching_status, 'absent');

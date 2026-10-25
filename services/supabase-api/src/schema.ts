@@ -4,14 +4,16 @@ import { notificationsSchemaStatements } from './notifications.ts';
 import { retentionSchemaStatements } from './retention.ts';
 import { uploadSchemaStatements } from './upload-schema.ts';
 import { refreshDeliverySchemaStatements } from './refresh-delivery.ts';
-export const currentSchemaVersion = 8;
+import { audienceSchemaStatements } from './audience.ts';
+export const currentSchemaVersion = 11;
 export const extensionSchemaStatements: readonly string[] = [
-    ...entitlementsSchemaStatements, ...operatorsSchemaStatements, ...notificationsSchemaStatements, ...retentionSchemaStatements, ...refreshDeliverySchemaStatements,
+    ...entitlementsSchemaStatements, ...operatorsSchemaStatements, ...notificationsSchemaStatements, ...retentionSchemaStatements, ...refreshDeliverySchemaStatements, ...audienceSchemaStatements,
 ];
 /** Logical engine schema used by the migration generator. Never execute these
  * source definitions at runtime: generate-schema emits reviewed PostgreSQL DDL. */
 export const schemaStatements: readonly string[] = [
     `CREATE TABLE IF NOT EXISTS schema_versions(version INTEGER PRIMARY KEY, applied_at INTEGER NOT NULL)`,
+    `CREATE TABLE IF NOT EXISTS retention_scan_cursors(scan TEXT NOT NULL CHECK(scan IN('support','guardian','adult','privacy')),entity_id TEXT NOT NULL DEFAULT '',last_at INTEGER,last_id TEXT,PRIMARY KEY(scan,entity_id),CHECK((last_at IS NULL)=(last_id IS NULL)))`,
     `CREATE TABLE IF NOT EXISTS accounts(
     id TEXT PRIMARY KEY, name TEXT NOT NULL DEFAULT '',
     roles_json TEXT NOT NULL DEFAULT '["user"]' CHECK(json_valid(roles_json) AND json_type(roles_json)='array'),
@@ -56,7 +58,7 @@ export const schemaStatements: readonly string[] = [
     attempts INTEGER NOT NULL DEFAULT 0 CHECK(attempts BETWEEN 0 AND 20), capture_digest TEXT,
     created_at INTEGER NOT NULL, session_id TEXT, auth_epoch INTEGER, consent_id TEXT,
     proof_key TEXT, proof_sha256 TEXT, proof_mime TEXT, proof_size INTEGER, used_at INTEGER,
-    device_revision TEXT, model_id TEXT, profile_auth_epoch INTEGER, reference_digest TEXT,
+    device_revision TEXT, model_id TEXT, profile_auth_epoch INTEGER, reference_digest TEXT, engine_identity TEXT,
     required_captures INTEGER NOT NULL DEFAULT 1 CHECK(required_captures IN(1,3)),
     CHECK(expires_at>created_at), CHECK(proof_size IS NULL OR proof_size>0)
   )`,
@@ -187,7 +189,7 @@ export const schemaStatements: readonly string[] = [
     profiles_json TEXT CHECK(profiles_json IS NULL OR json_valid(profiles_json)),
     matches_json TEXT CHECK(matches_json IS NULL OR json_valid(matches_json)), processor_nonce TEXT,
     completed_at INTEGER, error_code TEXT, owner_session_id TEXT, owner_auth_epoch INTEGER,
-    lease_token TEXT, lease_until INTEGER
+    lease_token TEXT, lease_until INTEGER, engine_identity TEXT
   )`,
     `CREATE TABLE IF NOT EXISTS photo_job_outbox(
     id TEXT PRIMARY KEY, attempt_id TEXT NOT NULL UNIQUE REFERENCES processing_attempts(id), asset_id TEXT NOT NULL REFERENCES assets(id),
