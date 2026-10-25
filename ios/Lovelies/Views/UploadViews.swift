@@ -142,7 +142,7 @@ struct UploadViews: View {
                 if SourceReferenceCatalog.layout(21) != nil {
                     SourcePhotoGrid(route: 21, selection: store.uploadIDs, badge: .check, badgeAction: { store.toggleUpload($0) }) { store.toggleUpload($0) }.padding(.horizontal, 11).padding(.bottom, 12)
                 } else {
-                    MasonryPhotos(photos: uploadOrder, columns: 4, selected: store.uploadIDs, showOnlySelectedBadges: true) { store.toggleUpload($0.id) }
+                    MasonryPhotos(photos: uploadOrder, columns: 4, selected: store.uploadIDs, primaryActionSelectsPhoto: true, showOnlySelectedBadges: true) { store.toggleUpload($0.id) }
                         .padding(.horizontal, 11).padding(.bottom, 12)
                 }
             }.scrollIndicators(.hidden)

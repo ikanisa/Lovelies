@@ -19,21 +19,31 @@ and12 controlled Supabase HTTP deletion checks; see the
 [source-grid qualification](release/android-source-grids-20261025.md). Five
 [connected teen UI checks](release/android-connected-audience-20261025.md) now
 qualify pending guardian gating, withdrawal and privacy access on that same app;
-actual independent guardian approval and hosted operation remain open. Round6
-iOS app/revision7runner/unsignedRelease compilation passes205 inputs, including
-Favorites/read-contrast corrections and EN/RW availability copy; independent
-in-place/affected runtime qualification is pending. The
+actual independent guardian approval and hosted operation remain open. Round8
+iOS app/unchanged revision7runner/unsignedRelease compilation passes205 inputs,
+including explicit browse/selection action semantics and retained EN/RW resources.
+Round7 independently qualifies one preserved update and four normal/largest
+toggle/restore probes, opening/Back navigation and a visible maximum-text read
+notification. Round6 six functional probes and normal read contrast keep their
+scope, with the raw largest18 offscreen native warning preserved. Round8 filtered-
+search opening/Back checks pass at both sizes. A separate one-case native runner
+qualifies maximum-text scrolling, a fully visible/hittable photo center tap and
+Back with all four selections preserved; five original PNGs were reviewed. The
 [UI checkpoint](release/ios-reference-ui-20261025.md) preserves the prior48/48
 normal/largest coverage, raw native findings and verified viewer navigation.
 The staged native branch passes1020 host assertions and exact16-input adoption;
 actual Swift HTTP6/26 is refreshed after application. Encrypted database backup tooling passes15 operator tests and nine
 actual PostgreSQL reconstruction checks; hosted custody, expiry operation and
-independent restore suppression remain open. Source through33a5d39 is pushed/read
-back; current Android/iOS UI work is outside that delivery. GitHub billing is parked by
+independent restore suppression remain open. Source throughf63b05c is pushed/read
+back; the current stable-action follow-up has a separate frozen build scope. GitHub billing is parked by
 the owner; no payment/limit change or CI retry is requested and remote CI is not
 qualified. UI fixes and the isolated pinned-image/actual-Deno/native-device run
 are ongoing. Hosted schema remains8/63, with the tested v9–v11 transaction staged;
-API deployment, full retention/backup operation, providers, signed store candidates
+Official CLI access/linking now works: three appsecrets are applied/digestverified,
+last baseline8/63 is freshly read back, and supported7/8history repair preserves
+all63 application-row fingerprints. The security advisor after repair reports
+zero items; the pending9–11 grant condition remains. API deployment, full
+retention/backup operation, providers, signed store candidates
 and both live replacements remain open. No real Memories customer-data import is
 needed; preserve unknown/test data and signing/history.
 

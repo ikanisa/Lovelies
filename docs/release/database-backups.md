@@ -115,6 +115,15 @@ sessions/consents/grants and a startup restore quarantine before making any
 restored copy accessible. The isolated reconstruction above does not qualify
 that serving restore or prove the published erasure deadline.
 
+The existing `services/push-provider` dispatch ledger is not that suppression
+ledger. Its separate PostgreSQL connection has no qualified production custody
+at this checkpoint, and its rows track push dispatch outcomes. Reusing another
+schema in the application database would still share a provider-wide restore
+boundary. An independent current journal, its fail-closed API/recovery protocol
+and operated replay/clearance must be implemented and qualified before serving
+a restored copy; neither the backup catalog nor the push ledger supplies that
+behavior today.
+
 The separate [database request gate](schema-request-gate-20261025.md) prevents API
 work against an older, newer or missing schema history. It cannot identify an old
 backup that still reports the supported schema11, and does not complete the

@@ -19,7 +19,7 @@
     "apple_paid_agreement": "Reviewedv127 accepted; Active effective2026-10-24 to2027-06-21. Separate billing/provider qualification remains.",
     "intended_audience": {
       "minimum_age": 13,
-      "guardian_consent_required_for": "13\u201317",
+      "guardian_consent_required_for": "13–17",
       "under13": "excluded",
       "implementation_status": "new_age_and_guardian_gate_required_not_yet_qualified",
       "retention_decision": "Ownerdelegated proportionate schedule and implementation to coordinator; currentdefaults are not policyacceptance."
@@ -113,11 +113,43 @@
       "warnings": 0,
       "suggestions": 0
     },
-    "managed_migration_history_reconciled": false,
+    "managed_migration_history_reconciled": true,
     "api_or_supporting_services_deployed_at_original_schema_checkpoint": false,
     "application_runtime_serving": false,
     "disabled_inference_worker_uploaded": true,
-    "current_deployment_limit": "Only the separate authenticated inference Worker has been uploaded with serving disabled; application Edge API, accepted image serving, push gateway and scheduler remain unqualified/undeployed. No cutover."
+    "current_deployment_limit": "Official CLI2.84.2 now has target-project access; exact3initial appsecrets are applied/digestverified and supported baseline7/8history is reconciled. Application API/accepted inference/push/scheduler/restore operation remain undeployed/unqualified. Named v9–v11 grant confirmation remains pending. No application cutover or store release.",
+    "application_edge_function_count": 0,
+    "custom_application_secret_count": 3,
+    "current_cli_checkpoint": {
+      "cli_version": "2.84.2",
+      "project_access": {
+        "receipt": "/Volumes/PRO-G40/Projects/Lovelies/verification/supabase-cli-session-20261025/result.json",
+        "sha256": "12c5d07418ac47a3666ffacf84b99cca0b914114b6822ccf7973875167e40aba"
+      },
+      "baseline_catalog": {
+        "receipt": "/Volumes/PRO-G40/Projects/Lovelies/verification/supabase-cli-session-20261025/database-inventory.json",
+        "sha256": "4c9845075643febc14b40a3d067f1eccd93016903217270c63eeacb79fdea970"
+      },
+      "application_secrets": {
+        "receipt": "/Volumes/PRO-G40/Projects/Lovelies/verification/supabase-cli-session-20261025/application-secrets-write.json",
+        "sha256": "8f2ec7a50ba69f6296a0a595de52703b7be15b6af5a2c485aabd9fc92989d04f"
+      },
+      "supported_history_repair": {
+        "receipt": "/Volumes/PRO-G40/Projects/Lovelies/verification/supabase-cli-session-20261025/migration-history-repair.json",
+        "sha256": "620a82fc41d0cb5dc44744609da764dfa5f9bf2c88daf3af80edae788e8a919d"
+      },
+      "security_after_history": {
+        "receipt": "/Volumes/PRO-G40/Projects/Lovelies/verification/supabase-cli-session-20261025/security-advisors-after-history.json",
+        "sha256": "f88b110ea0d69b2ab41cfaab859f0628005b7a619151cebf7607fb1900197048"
+      },
+      "recorded_schema_version": 8,
+      "private_forced_rls_tables": 63,
+      "application_account_count": 0,
+      "client_public_schema_and_table_acl_entries": 0,
+      "api_functions_deployed": 0,
+      "all_63_application_row_fingerprints_preserved_during_history_repair": true,
+      "staged_v9_v11_executed": false
+    }
   },
   "local_verification": {
     "backend": {
@@ -387,7 +419,7 @@
         "debug_build_for_testing": "passed",
         "simulator_app_and_V4_runner": "passed",
         "source_inputs_unchanged": true,
-        "runtime": "Preserved35ca/c6 normal1\u201318 diagnostic checkpoint: all custom checks/exits pass; native failures retained, including shared banner later addressed. No newdc3 whole-matrix pass inferred.",
+        "runtime": "Preserved35ca/c6 normal1–18 diagnostic checkpoint: all custom checks/exits pass; native failures retained, including shared banner later addressed. No newdc3 whole-matrix pass inferred.",
         "runner_sha256": "c6e8536a13514b282cc2cd16b5fedfe0d9b7d34b6f180e58722a0aeac7da2711",
         "simulator_build_receipt": "verification/supabase-release-20261023/post-localization-ui/simulator-build.json"
       },
@@ -1981,7 +2013,7 @@
   },
   "remaining_gates_document": "docs/release/backlog-disposition.md",
   "deployment_inputs_document": "docs/release/deployment-inputs.md",
-  "source_history": "Bounded private source deliveries through1dfe4d1e5d02ffd71fb173b3b0cee9d42d563785 are verified on origin/main. Frozen five-View/one-file-QA delivery is recorded separately from its pending current runtime acceptance. GitHub billing remains parked; no passing remote CI, store upload, review or publication is implied.",
+  "source_history": "Earlier verified source checkpoints include f63b05c2803bc3e3dc0dbc486cffa5d5f35958e1. The current action-semantics/standalone-QA/hosted-Supabase-documentation source checkpoint is recorded in /Volumes/PRO-G40/Projects/Lovelies/verification/ios-actions-and-supabase-source-checkpoint-20261025/delivery.json with its exact local/tracking/remote state. Private credentials and CLI caches are excluded. GitHub billing remains parked; no passing remote CI, store upload/review/publication or whole-workspace acceptance follows.",
   "scope_limits": "Counts are separate overlapping evidence scopes, not a summed acceptance count. Historical failures/preimages/raw output and private credentials/builds remain local outside Git. Concurrent backend integration remains outside this native checkpoint; preserved older source hashes are explicit tested-snapshot provenance.",
   "external_provider_configuration": {
     "firebase": {
@@ -2020,7 +2052,7 @@
   },
   "last_updated_client_date": "2026-10-25",
   "tested_source_scope": {
-    "meaning": "Hashes identify tested snapshots. The current audience integration checkpoint overrides prior-current descriptions; engine/auth/native preflight work is ongoing and whole_workspace_current_green remains false.",
+    "meaning": "Hashes identify tested snapshots. The current audience integration checkpoint supersedes historical descriptions; each receipt retains its exact scope and whole_workspace_current_green remains false.",
     "prior_backend_commit": "9b9fda2ae918b73881fe7d1b318f570f0a97d2d8",
     "concurrent_backend_work": "Current bounded API291/290+one model skip and refreshed94 operator suite pass. The isolated pinned-image/actual-Deno/native-device integration and three-view accessibility work retain separate owners and source freezes.",
     "prior_backend_bindings_retained": [
@@ -2946,13 +2978,13 @@
       "root_bundle_readback": "/Volumes/PRO-G40/Projects/Lovelies/verification/ios-grouped-ui-round6-20261025/root-artifact-readback.json",
       "root_bundle_readback_sha256": "96c6e88a5a283588750f225d5e081a05ca3e0da78d75a396d8d9e01a9a3662ed",
       "native_copy_packaged_en_rw": true,
-      "runtime_qualification": "independently_qualified_and_installed_with_preservation; affected_cases_in_progress",
+      "runtime_qualification": "terminal_original26PNGs_reviewed_4_passed_runs_1_raw_failed_largest18_offscreen_warning",
       "host_assertions_adopted_by_exact_16_input_bytes": 1020,
       "native_host_adoption": "/Volumes/PRO-G40/Projects/Lovelies/verification/ios-schema-copy-hosts-20261025/hosts/result.json",
       "favorite_explicit_heart_context_fixed": true,
       "notification_read_opacity": 0.8,
       "prior_normal_12pt_read_contrast": 3.8491410991446666,
-      "new_read_contrast_runtime_pending": true,
+      "new_read_contrast_runtime_pending": false,
       "badge_consumer_readback": "/Volumes/PRO-G40/Projects/Lovelies/verification/ios-grouped-ui-round6-20261025/badge-consumer-readback.json",
       "same_six_release_preflight_gaps": true,
       "distribution_or_store_accepted": false,
@@ -2973,6 +3005,17 @@
         "full_pathname_or_native_metadata_equality": false,
         "reset_uninstall_keychain_or_retry": false,
         "original_pending_reconciliation_receipt_retained": true
+      },
+      "normal_read_timestamp_contrast": 6.078,
+      "focused_runtime": {
+        "receipt": "/Users/jeanbosco/Documents/Lovelies/verification/accessibility-navigation-20261023/ios-isolated-simulator/grouped-ui-fix-20261025/round6/6ec5-focused-runtime-reviewed.json",
+        "receipt_sha256": "317e0e3f7a6ad78b0bbdd99df2eefb20a2764c14c75e9b6b049989a88d3c67db",
+        "original_pngs_reviewed": 26,
+        "bounded_followup_probes": 6,
+        "bounded_followup_seconds": 154.68,
+        "normal14_largest14_normal18_and_bounded_passed": true,
+        "largest18_raw_failed_status_preserved": true,
+        "additional_stale_custom_action_name_bug_reproduced": true
       }
     },
     "ios_audience_http_before_native_copy": {
@@ -3020,7 +3063,266 @@
       "whole_matrix_passed": false,
       "bounded_r5_selector_run": "failed",
       "bounded_r6_artificial_inset_run": "failed_with_checkpointed_phases_and_separate_manual_completion",
-      "r7_current_runtime": "pending"
+      "r7_current_runtime": "six_probes_passed154.68s_on_round6; round7_reuses_unchanged_methods_and_geometry"
+    },
+    "ios_grouped_ui_round7": {
+      "document": "docs/release/ios-reference-ui-20261025.md",
+      "receipt": "/Volumes/PRO-G40/Projects/Lovelies/verification/ios-grouped-ui-round7-20261025/build-result.json",
+      "receipt_sha256": "26000322a8e34f2c2bb8408339eba58c99bfe60bd058ec323f2b68d67ea15af7",
+      "handoff": "/Volumes/PRO-G40/Projects/Lovelies/verification/ios-grouped-ui-round7-20261025/runtime-handoff.json",
+      "handoff_sha256": "0ef52a06b56d1aa5e63326144963db265774bd26286e9566ad3cbbf79d69c48f",
+      "source_inputs": 205,
+      "source_unchanged": true,
+      "app_files": 181,
+      "runner_products": 13,
+      "simulator_dylib_sha256": "3c75abe7cb6ff76456bc0bcbcd2910b96d75655a7e305f1176925673ede6ca7f",
+      "unsigned_release_executable_sha256": "6fd2136d5773045988908ee914511039310d8357a6f288117cd9af716125e1f6",
+      "runner_source_sha256": "fd37ced7289a03e2ba99dcd1f69972cc5397e451cb5c1d8005ab83253bd1da87",
+      "source_delta_from_round6": [
+        "ios/Lovelies/Views/Components.swift",
+        "ios/Lovelies/Resources/en.lproj/Localizable.strings",
+        "ios/Lovelies/Resources/rw.lproj/Localizable.strings"
+      ],
+      "stable_photo_custom_actions": [
+        "Toggle favorite",
+        "Change photo selection"
+      ],
+      "new_key_packaged_en_rw": true,
+      "selection_value_traits_badge_labels_callbacks_geometry_identity_unchanged": true,
+      "root_artifact_readback": "/Volumes/PRO-G40/Projects/Lovelies/verification/ios-grouped-ui-round7-20261025/root-artifact-readback.json",
+      "root_artifact_readback_sha256": "5dea837178ade88f7e5f725aac01ae1f9885aab7b9969b371cf392e202938b3f",
+      "source_reuse": "/Volumes/PRO-G40/Projects/Lovelies/verification/ios-grouped-ui-round7-20261025/unchanged-source-reuse.json",
+      "source_reuse_sha256": "2592dfe71eb1011254697290ced78a8d54814e6feb0841486922311d168c5c4c",
+      "exact_unchanged_maps": {
+        "swift_host": 16,
+        "api": 87,
+        "swift_audience_http": 49,
+        "android": 257
+      },
+      "runtime_qualification": "independently_qualified_one_preserved_install_bounded_stable_actions_passed; filtered_fallback_mismatch_at_round7_is_resolved_by_round8",
+      "same_six_release_preflight_gaps": true,
+      "distribution_or_store_accepted": false,
+      "current_locale_inventory": {
+        "receipt": "/Volumes/PRO-G40/Projects/Lovelies/verification/ios-grouped-ui-round7-20261025/localization-inventory-complete.json",
+        "sha256": "ba7f1bc249fda3abf172dbe9b119614c78747202380810ea6cd82d2e1aded36b",
+        "languages": [
+          "en",
+          "rw"
+        ],
+        "android_strings_each": 950,
+        "android_plurals_each": 17,
+        "ios_strings_each": 980,
+        "ios_plural_format_entries_each": 13,
+        "ios_plural_variables_each": 14,
+        "ios_permission_descriptions_each": 3,
+        "full_locale_or_spoken_acceptance": false
+      },
+      "independent_qualification": {
+        "receipt": "/Users/jeanbosco/Documents/Lovelies/verification/accessibility-navigation-20261023/ios-isolated-simulator/grouped-ui-fix-20261025/round7/qualified-build/qualification.json",
+        "sha256": "620d1f7614490046578e7bb596488b1fa0292b4ba836fa7283c5b130232f3bd4"
+      },
+      "qualified_install": {
+        "receipt": "/Users/jeanbosco/Documents/Lovelies/verification/accessibility-navigation-20261023/ios-isolated-simulator/grouped-ui-fix-20261025/round7/qualified-install.json",
+        "sha256": "86972fc498fb278cc118f98c6e7fbbe0b3383e7524f1b4fa0ab95aada3a22050",
+        "app_only_installs": 1,
+        "regular_payload_files_retained": 9,
+        "regular_payload_bytes_retained": 138795,
+        "common_selected_nodes_exact": 25,
+        "identical_os_snapshot_renamed": true,
+        "full_pathname_or_native_metadata_equality": false,
+        "reset_uninstall_keychain_or_retry": false
+      },
+      "bounded_runtime": {
+        "receipt": "/Users/jeanbosco/Documents/Lovelies/verification/accessibility-navigation-20261023/ios-isolated-simulator/grouped-ui-fix-20261025/round7/3c75-bounded-action-runtime-reviewed.json",
+        "sha256": "b50b8d1b22555e0bb6df851b3c711a851b5480504ae743d4da3d40c5e2847357",
+        "normal_largest_favorite_checkbox_physical_custom_toggle_restore_probes": 4,
+        "all_15_original_pngs_reviewed": true,
+        "both_primary_photo5_viewer_back_routes_passed": true,
+        "visible_largest_read_notification_contrast": 6.078496982649589,
+        "raw_native_warning_waived": false,
+        "new_native_audit": false,
+        "spoken_verified": false
+      },
+      "separate_fallback_semantic_mismatch": {
+        "reachable_nonempty_search": true,
+        "source_proposal": "/Users/jeanbosco/Documents/Lovelies/verification/accessibility-navigation-20261023/ios-isolated-simulator/grouped-ui-fix-20261025/round7/fallback-primary-action-proposal/proposal.json",
+        "source_proposal_sha256": "7e7e53348ed498e7654a74f38c99afdfe2d8e63ee8f1a404bbbde7199ca9c2c5",
+        "proposal_approved_for_exact3files": true,
+        "compiled_or_runtime_qualified": false,
+        "applied_exact3files": true,
+        "resolved_by_current_round8": true
+      }
+    },
+    "api_initial_secrets_preparation": {
+      "receipt": "/Volumes/PRO-G40/Projects/Lovelies/verification/api-initial-secret-preparation-20261025/result.json",
+      "receipt_sha256": "ac04ed1795332b8be7eb1297641d8927d417886e0f793cb66d81e835d4181c9a",
+      "independent_256bit_secrets": 3,
+      "private_readback_passed": true,
+      "git_ignored": true,
+      "prior_credentials_overwritten": false,
+      "hosted_set": true,
+      "offsite_custody_qualified": false,
+      "contains_provider_credentials": false,
+      "client_artifact_readback": {
+        "receipt": "/Volumes/PRO-G40/Projects/Lovelies/verification/api-initial-secret-preparation-20261025/client-artifact-readback.json",
+        "receipt_sha256": "8d5fec4c294f2060ba1c492614ad30a01a1915f108e9a15ab01f430e86eaa7ff",
+        "ios_simulator_and_unsigned_release_and_local_android_apk_and_tracked_diff_matches": 0
+      },
+      "expanded_client_artifact_readback": {
+        "receipt": "/Volumes/PRO-G40/Projects/Lovelies/verification/api-initial-secret-preparation-20261025/expanded-client-artifact-readback.json",
+        "receipt_sha256": "51db70e05f1e84b39eafe4a404d7fc75fa468b4611c20a1003c48800947e5505",
+        "representations": [
+          "UTF8",
+          "UTF16LE",
+          "UTF16BE"
+        ],
+        "android_decompressed_members": 370,
+        "exact_current_apk_sha256": "99edd6638283cf6bc2c027bd386e475def73a942d86358d1a7434b237d6e6e49",
+        "known_representation_matches": 0,
+        "general_dlp_or_production_custody_claim": false
+      },
+      "hosted_status_at_later_checkpoint": "applied_and_all3_server_sha256_digests_verified",
+      "hosted_write": {
+        "receipt": "/Volumes/PRO-G40/Projects/Lovelies/verification/supabase-cli-session-20261025/application-secrets-write.json",
+        "sha256": "8f2ec7a50ba69f6296a0a595de52703b7be15b6af5a2c485aabd9fc92989d04f"
+      },
+      "hosted_set_at_initial_preparation": false
+    },
+    "ios_grouped_ui_round8": {
+      "document": "docs/release/ios-reference-ui-20261025.md",
+      "receipt": "/Volumes/PRO-G40/Projects/Lovelies/verification/ios-grouped-ui-round8-20261025/build-result.json",
+      "receipt_sha256": "4a48f5685f480a249cfc88cdd5830a93438ccae799e97af1a2372e2d50773dd0",
+      "handoff": "/Volumes/PRO-G40/Projects/Lovelies/verification/ios-grouped-ui-round8-20261025/runtime-handoff.json",
+      "handoff_sha256": "d7be8fd44b0129f53179c29be50333d0898177c1585500ea89e3ebfb0e940449",
+      "source_inputs": 205,
+      "source_unchanged": true,
+      "app_files": 181,
+      "runner_products": 13,
+      "simulator_dylib_sha256": "b7621c527b326c7980c33db4a894807e5d344b0cc24afa92d067180eab050d9e",
+      "unsigned_release_executable_sha256": "adbeab5b087afbb3e5aef3b6b80211801481907ef49b1bb66072cffa2ff87e9d",
+      "runner_source_sha256": "fd37ced7289a03e2ba99dcd1f69972cc5397e451cb5c1d8005ab83253bd1da87",
+      "source_delta_from_round7": [
+        "ios/Lovelies/Views/Components.swift",
+        "ios/Lovelies/Views/SharingViews.swift",
+        "ios/Lovelies/Views/UploadViews.swift"
+      ],
+      "masonry_callers": 12,
+      "primary_selection_optins": 3,
+      "source_photo_grid_byte_unchanged": true,
+      "callback_layout_state_badge_identity_and_locale_bytes_unchanged": true,
+      "root_artifact_readback": "/Volumes/PRO-G40/Projects/Lovelies/verification/ios-grouped-ui-round8-20261025/root-artifact-readback.json",
+      "root_artifact_readback_sha256": "5dea837178ade88f7e5f725aac01ae1f9885aab7b9969b371cf392e202938b3f",
+      "source_reuse": "/Volumes/PRO-G40/Projects/Lovelies/verification/ios-grouped-ui-round8-20261025/unchanged-source-reuse.json",
+      "source_reuse_sha256": "c3ca9faedcac76c49f91d07dcbcf0616374bdbc5f7a89d129efac29e1914d856",
+      "exact_unchanged_maps": {
+        "swift_host": 16,
+        "api": 87,
+        "swift_audience_http": 49,
+        "android": 257
+      },
+      "consumer_classification": "/Volumes/PRO-G40/Projects/Lovelies/verification/ios-grouped-ui-round8-20261025/primary-action-consumer-readback.json",
+      "consumer_classification_sha256": "bf627be5396c9a9c4e772b7f2f270c814d462246662a9831e0f6cbdec07b7da2",
+      "runtime_qualification": "independently_qualified_one_preserved_install_normal_largest_named_actions_and_selected_maximum_filtered_coordinate_touch_case_passed",
+      "absent_layout_branches_runtime_qualified": false,
+      "same_six_release_preflight_gaps": true,
+      "distribution_or_store_accepted": false,
+      "independent_qualification": {
+        "receipt": "/Users/jeanbosco/Documents/Lovelies/verification/accessibility-navigation-20261023/ios-isolated-simulator/grouped-ui-fix-20261025/round8/qualified-build/qualification.json",
+        "sha256": "42821091be74a3d8e812cbe9bd6d1b73b7f66268c4fc434a8d086da8169ecd3d"
+      },
+      "qualified_install": {
+        "receipt": "/Users/jeanbosco/Documents/Lovelies/verification/accessibility-navigation-20261023/ios-isolated-simulator/grouped-ui-fix-20261025/round8/qualified-install.json",
+        "sha256": "1c8efc1dfe2b93c1255c1e4e9d91478c0a7545fb81971e96972617107d85feb4",
+        "app_only_installs": 1,
+        "regular_payload_files_retained": 7,
+        "regular_payload_bytes_retained": 135123,
+        "common_selected_nodes_exact": 22,
+        "identical_2172B_os_snapshot_renamed": true,
+        "full_pathname_or_native_metadata_equality": false,
+        "reset_uninstall_keychain_or_retry": false
+      },
+      "prior_runtime_saved_state_transition": {
+        "receipt": "/Users/jeanbosco/Documents/Lovelies/verification/accessibility-navigation-20261023/ios-isolated-simulator/grouped-ui-fix-20261025/round8/install/prior-runtime-saved-state-transition.json",
+        "sha256": "1a46724069b4cb73bd3b78dcc090fc5b3534b0c944baf9815ad59e65f18e2929",
+        "scope": "Two old scene-session files absent before current install; KnownSceneSessions1248→42B. Other selected nodes unchanged; original preimages retained; actor/exacttime not attributed."
+      },
+      "manual_action_runtime": {
+        "receipt": "/Users/jeanbosco/Documents/Lovelies/verification/accessibility-navigation-20261023/ios-isolated-simulator/grouped-ui-fix-20261025/round8/b762-bounded-action-runtime-reviewed.json",
+        "sha256": "31ab9e17b91821c73e8b0e714992bdce540f78c8ab2a6ac8c2c137a509c3fa7e",
+        "original_pngs_reviewed": 7,
+        "normal_and_largest_filtered_named_open_back_and4selected_passed": true,
+        "maximum_manual_probe_did_not_prove_physical_viewport": true
+      },
+      "maximum_filtered_coordinate_touch": {
+        "receipt": "/Users/jeanbosco/Documents/Lovelies/verification/accessibility-navigation-20261023/ios-isolated-simulator/grouped-ui-fix-20261025/round8/b762-filtered-physical-runtime-reviewed.json",
+        "sha256": "24bebf04663a06db43b322f9e8498634b3eb2b474a6e09e97cab6f6c84d1ca8a",
+        "runner_compile": {
+          "receipt": "/Volumes/PRO-G40/Projects/Lovelies/verification/ios-ui-filtered-search-runner-20261025/result.json",
+          "sha256": "d035e39cde34a5b924665d154cb5ce6749ce75b8dcc7a1830b3393c61d157800"
+        },
+        "runner_qualification": {
+          "receipt": "/Users/jeanbosco/Documents/Lovelies/verification/accessibility-navigation-20261023/ios-isolated-simulator/grouped-ui-fix-20261025/round8/filtered-runner-qualification.json",
+          "sha256": "868cc99bdd1d74d68330ff6e4373038baf7972aabb0ed3a8f17f0837277ed992"
+        },
+        "qa_source_sha256": "0d6af26b623f72b5fa70d6fda76e7552e46312a3f5a60d85eab354879cb60a6c",
+        "standalone_runner_inputs": 4,
+        "actual_compiler_files": 1,
+        "runner_products": 13,
+        "selected_tests": 1,
+        "passed": 1,
+        "failed": 0,
+        "skipped": 0,
+        "test_seconds": 58.214,
+        "first_execution": true,
+        "slow_drags": 8,
+        "photo_frame_before_tap": [
+          19,
+          676.3333333333,
+          133.6666666667,
+          828.6666666667
+        ],
+        "actual_viewport": [
+          0,
+          0,
+          390,
+          844
+        ],
+        "coordinate_tap_viewer12_back15_four_selected_preserved": true,
+        "all5_original_pngs_reviewed": true,
+        "no_extra_app_install_or_full_matrix_or_native_audit": true,
+        "physical_device_or_spoken_or_provider_store_acceptance": false
+      },
+      "source_checkpoint_receipt": "/Volumes/PRO-G40/Projects/Lovelies/verification/ios-actions-and-supabase-source-checkpoint-20261025/delivery.json"
+    },
+    "supabase_cli_hosted_checkpoint": {
+      "cli_version": "2.84.2",
+      "project_access": {
+        "receipt": "/Volumes/PRO-G40/Projects/Lovelies/verification/supabase-cli-session-20261025/result.json",
+        "sha256": "12c5d07418ac47a3666ffacf84b99cca0b914114b6822ccf7973875167e40aba"
+      },
+      "baseline_catalog": {
+        "receipt": "/Volumes/PRO-G40/Projects/Lovelies/verification/supabase-cli-session-20261025/database-inventory.json",
+        "sha256": "4c9845075643febc14b40a3d067f1eccd93016903217270c63eeacb79fdea970"
+      },
+      "application_secrets": {
+        "receipt": "/Volumes/PRO-G40/Projects/Lovelies/verification/supabase-cli-session-20261025/application-secrets-write.json",
+        "sha256": "8f2ec7a50ba69f6296a0a595de52703b7be15b6af5a2c485aabd9fc92989d04f"
+      },
+      "supported_history_repair": {
+        "receipt": "/Volumes/PRO-G40/Projects/Lovelies/verification/supabase-cli-session-20261025/migration-history-repair.json",
+        "sha256": "620a82fc41d0cb5dc44744609da764dfa5f9bf2c88daf3af80edae788e8a919d"
+      },
+      "security_after_history": {
+        "receipt": "/Volumes/PRO-G40/Projects/Lovelies/verification/supabase-cli-session-20261025/security-advisors-after-history.json",
+        "sha256": "f88b110ea0d69b2ab41cfaab859f0628005b7a619151cebf7607fb1900197048"
+      },
+      "recorded_schema_version": 8,
+      "private_forced_rls_tables": 63,
+      "application_account_count": 0,
+      "client_public_schema_and_table_acl_entries": 0,
+      "api_functions_deployed": 0,
+      "all_63_application_row_fingerprints_preserved_during_history_repair": true,
+      "staged_v9_v11_executed": false
     }
   }
 }

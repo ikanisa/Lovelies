@@ -220,6 +220,7 @@ struct PhotoTile: View {
     var photo: DemoPhoto
     var height: CGFloat? = nil
     var selected: Bool? = nil
+    var primaryActionSelectsPhoto = false
     var heart = false
     var people = false
     var badgeAction: (() -> Void)? = nil
@@ -238,7 +239,7 @@ struct PhotoTile: View {
             }.buttonStyle(LoveliesPressStyle()).accessibilityLabel("Photo \(photo.id), \(photo.tags)")
             .accessibilityAddTraits(selected == true ? .isSelected : [])
             .accessibilityValue(selected.map { $0 ? String(localized: "Selected") : String(localized: "Not selected") } ?? "")
-            .accessibilityAction(named: selected == nil && badgeAction == nil ? String(localized: "Open photo") : heart ? (selected == true ? String(localized: "Remove from favorites") : String(localized: "Add to favorites")) : (selected == true ? String(localized: "Deselect photo") : String(localized: "Select photo"))) { if let badgeAction { badgeAction() } else { action() } }
+            .accessibilityAction(named: badgeAction != nil ? (heart ? String(localized: "Toggle favorite") : String(localized: "Change photo selection")) : primaryActionSelectsPhoto ? String(localized: "Change photo selection") : String(localized: "Open photo")) { if let badgeAction { badgeAction() } else { action() } }
             if let selected, let badgeAction {
                 Button(action: badgeAction) { CheckBadge(selected: selected, heart: heart).frame(width: 44, height: 44).contentShape(Rectangle()) }
                     .buttonStyle(LoveliesPressStyle()).accessibilityLabel(heart ? (selected ? String(localized: "Remove from favorites") : String(localized: "Add to favorites")) : String(localized: "Change photo selection"))
@@ -252,6 +253,7 @@ struct MasonryPhotos: View {
     var photos = DemoPhoto.all
     var columns = 3
     var selected: Set<Int>? = nil
+    var primaryActionSelectsPhoto = false
     var showOnlySelectedBadges = false
     var heart = false
     var people = false
@@ -261,7 +263,7 @@ struct MasonryPhotos: View {
     var body: some View {
         MasonryLayout(columns: columns) {
             ForEach(photos) { photo in
-                PhotoTile(photo: photo, selected: badge(for: photo), heart: heart, people: people && photo.id.isMultiple(of: 3), badgeAction: badgeAction.map { callback in { callback(photo) } }) { action(photo) }
+                PhotoTile(photo: photo, selected: badge(for: photo), primaryActionSelectsPhoto: primaryActionSelectsPhoto, heart: heart, people: people && photo.id.isMultiple(of: 3), badgeAction: badgeAction.map { callback in { callback(photo) } }) { action(photo) }
                     .layoutValue(key: PhotoRatioKey.self, value: photo.ratio * heightScale)
             }
         }
@@ -646,7 +648,7 @@ struct SourcePhotoGrid: View {
                 }.buttonStyle(LoveliesPressStyle()).accessibilityLabel(accessiblePhotoLabel)
                     .accessibilityAddTraits(chosen ? .isSelected : [])
                     .accessibilityValue(selection == nil ? "" : chosen ? String(localized: "Selected") : String(localized: "Not selected"))
-                    .accessibilityAction(named: selection == nil && badgeAction == nil ? String(localized: "Open photo") : badge == .heart ? (chosen ? String(localized: "Remove from favorites") : String(localized: "Add to favorites")) : (chosen ? String(localized: "Deselect photo") : String(localized: "Select photo"))) { if let badgeAction { badgeAction(photo) } else { action(photo) } }
+                    .accessibilityAction(named: selection == nil && badgeAction == nil ? String(localized: "Open photo") : badge == .heart ? String(localized: "Toggle favorite") : String(localized: "Change photo selection")) { if let badgeAction { badgeAction(photo) } else { action(photo) } }
                 if outlineSelection {
                     if tile.selected == true && !chosen {
                         RoundedRectangle(cornerRadius: min(imageWidth, imageHeight) * 0.28).stroke(Color.black, lineWidth: 6)

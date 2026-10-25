@@ -4,12 +4,14 @@ Current integration evidence is in [audience-readiness-20261024.md](audience-rea
 The exact additive v9–v11 transaction is staged and locally tested, including
 unknown/test-account and hold preservation; it has not been applied hosted.
 
-Current console access is blocked because local browser use is disabled in Work
-settings. The existing Supabase connector also lacks project access. Enable the
-browser capability to resume the staged dashboard/store work; the owner's prior
-authorization remains in effect. GitHub billing remains parked.
+Official Supabase CLI2.84.2 now accesses the selected project and is linked
+through supported tooling; no Supabase reconnection is required. Local browser
+use remains disabled, affecting store consoles and interactive review. The
+existing connector still lacks project access, but it is no longer the only
+usable configuration path. The owner's authorization remains in effect, and
+GitHub billing remains parked.
 
-The approved Supabase baseline is freshly read back at version8. All63 tables
+The last qualified approved Supabase baseline reads back at version8. All63 tables
 have forced RLS/backend-only policies; the three private buckets have exact 20 MiB
 limits/MIME restrictions and no client Storage policies. The existing RLS event
 trigger's client execution grants were restricted, and the post-change Security
@@ -34,8 +36,11 @@ not a deployed application or store release.
 
 ## Server configuration
 
-No custom Edge Function secrets and no Edge Functions were present in the
-post-schema dashboard inventory. The adapter already supports Supabase's reserved
+The original post-schema dashboard inventory had no custom secrets or Edge
+Functions. The current CLI checkpoint applies exactly three independent initial
+application secrets and verifies their server SHA256 digests. No previous secret
+was overwritten; no Edge Function is deployed. Keys remain private and excluded
+from client bundles and Git. The adapter already supports Supabase's reserved
 `SUPABASE_DB_URL`, `SUPABASE_SECRET_KEYS.default` and legacy server-only Storage
 fallback. Do not unnecessarily reveal/copy reserved keys or set blank override
 secrets. Explicit `LOVELIES_DATABASE_URL`, optional verified CA and
@@ -44,7 +49,7 @@ remote TLS certificate/hostname validation remains mandatory.
 
 | Boundary | Required input/action |
 |---|---|
-| API credentials | Independent strong `AUTH_SIGNING_SECRET`, `MEDIA_SIGNING_SECRET`, `INTERNAL_MAINTENANCE_SECRET` in the secret store. Refresh receipt encryption derives from the auth secret; rotation requires an operated recovery/retention plan. |
+| API credentials | Three independent256-bit initial appsecrets are applied to the selected Supabase project and all server digests match the prepared values. The ignored `.release-secrets/server/initial-api-secrets.env` remains in an owned0700 directory/0600 one-link file with no ACL. No previous credential was replaced; known UTF8/UTF16 representations are absent from current iOS bundles,370 decompressed Android APK members and tracked diff. Off-site custody/rotation operation remains unqualified. Refresh receipt encryption derives from the auth secret; future rotation needs an operated recovery/retention plan. |
 | Policies/model | Final approved `FACE_AUTH_POLICY_VERSION`, `PHOTO_CONSENT_POLICY_VERSION` and accepted `PHOTO_MODEL_VERSION`; publish matching readable policies. |
 | Inference | Approved operator/host/location/architecture, qualified immutable runtime/model and purpose-specific evaluation; private HTTPS `ML_INFERENCE_URL` plus independent `ML_INFERENCE_SECRET`. Pin `ML_INFERENCE_ARTIFACT_SHA256` to the actually loaded OpenFace still package and `ML_INFERENCE_PROCESSING_SHA256` to the complete Lovelies consumer fingerprint for that exact runtime. Authenticated readiness and every inference reply must match both values; configuration presence alone is insufficient. The prepared service requires matching service-side configuration. |
 | Jobs | Authenticated maintenance scheduler with bounded intervals, observability and retry/dead-letter/retention ownership. A healthy web endpoint does not drain its jobs. |
@@ -78,26 +83,35 @@ exposed at inspection. No client schema grants were added.
   upgrades without uninstall/reset, run two-account hosted journeys and physical
   camera/storage/media/accessibility/performance/provider acceptance, and complete
   Play testing/TestFlight and reviewer access. No actual store upload occurred.
-- Google Play access is restored in Codex and its product/base plan/notification topic were read back; Apple is also authenticated in Codex and its approved monthly product/group/availability were read back. On25 October the private `ikanisa/Lovelies` repository was created and verified as local `origin`, preserving `ikanisa/Memories`. Bounded backend/operator source and release docs were pushed and read back at768e3ad. Both CI runs failed before jobs; authenticated GitHub readback identifies the existing organization billing hold. The owner has explicitly parked GitHub billing; do not retry those runs or change payments/limits. Local verification continues, with remote CI still unqualified. Qualified private inference/push operating inputs and
+- Earlier authenticated Codex sessions read back the Play product/base plan/notification topic and the Apple monthly product/group/availability. Current local browser access is disabled; refresh those sessions before actual console actions. On25 October the private `ikanisa/Lovelies` repository was created and verified as local `origin`, preserving `ikanisa/Memories`. Bounded backend/operator source and release docs were pushed and read back at768e3ad. Both CI runs failed before jobs; authenticated GitHub readback identifies the existing organization billing hold. The owner has explicitly parked GitHub billing; do not retry those runs or change payments/limits. Local verification continues, with remote CI still unqualified. Qualified private inference/push operating inputs and
   provider acceptance remain unresolved technical inputs. Earlier requests are
   historical and do not revoke the owner’s authorization to complete readiness.
   Temporary native-image build qualification is separate from an accepted release
   host; no production service, provider send or store publication is established.
-- Preserve the two manually applied baseline versions and reconcile history through supported Supabase
-  CLI history repair/readback before future `db push`; never blindly replay the
-  fresh-schema DDL or directly edit Supabase-managed migration/Storage tables.
+- The two manually applied baseline versions are now reconciled/read back through
+  supported CLI history repair. Keep the pending9–11 grant condition and quality
+  gates; never blindly replay baseline DDL or directly edit Supabase-managed
+  migration/Storage tables.
 
 Secrets must not be pasted into chat, committed, bundled in native clients or
 shown in submission evidence. This file requests configuration facts and secure
 setup, not a new authorization to repeat implementation work.
 
-Supabase CLI `2.122.0` is available through the exact npm runner pin. Its actual
-help confirms named-function deployment with `--project-ref`, `--use-api` and
-`--no-verify-jwt`; the required scoped capability is `edge_functions_write`.
-The prepared command targets only `lovelies-api`, with no `--prune`. CLI
-authentication, token creation, migration-history repair and deployment have
-not run. The current authenticated dashboard remains usable. The plugin was
-absent at the latest discovery; do not infer that a suggested connection exists.
+The actual cached/authenticated CLI is **2.84.2**;2.122.0 was an advertised
+available update, not the installed version. Current help confirms the named
+function deployment flags `--project-ref`, `--use-api` and `--no-verify-jwt`.
+Only `lovelies-api` is prepared, with no `--prune`; deployment has not run.
+Supported linking and Management-API SQL readback confirm schema8/63 forced-RLS
+tables, zero client/public ACLs/backend membership, zero appaccounts and the three
+private20MiB buckets. The security advisor reports zero items after history repair.
+
+The CLI migration-history repair records only the already-approved/applied
+`20261023162016` and `20261023210000`. Their source hashes match the original
+review bundle; all63 application-table row fingerprints match before/after.
+The v9/v10/v11 files remain local/pending, and no application SQL was reexecuted.
+Their existing named-grant confirmation remains pending; the supported CLI path
+is ready once that condition is resolved. No `db push` or blind replay occurred.
+Receipts: `/Volumes/PRO-G40/Projects/Lovelies/verification/supabase-cli-session-20261025/`.
 
 [Android public input template](android-public.properties.example) records the verified product/API/signing/version values without loading them automatically or inventing missing policy/Firebase/link inputs. The observed Google topic is `projects/easymoai/topics/lovelies-google-play-rtdn`; its receiver/OIDC/IAM and delivery still require qualification.
 

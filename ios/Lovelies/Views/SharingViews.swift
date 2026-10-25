@@ -139,12 +139,12 @@ struct SharingViews: View {
                     let overrides = Dictionary(uniqueKeysWithValues: store.sharingPhotos.filter { store.sharingPhotoAssets[$0.id] != nil }.map { ($0.id, $0) })
                     SourcePhotoGrid(route: screen.rawValue, selection: store.sharePhotoIDs, badge: .check, showUnselectedBadges: true, dimUnselected: screen == .deselectPhotos, photoOverrides: overrides, badgeAction: { store.toggleSharePhoto($0) }) { store.toggleSharePhoto($0) }.padding(.horizontal, 13).padding(.bottom, 80)
                 } else {
-                    MasonryPhotos(photos: matchedOrder, selected: store.sharePhotoIDs, people: true) { store.toggleSharePhoto($0.id) }
+                    MasonryPhotos(photos: matchedOrder, selected: store.sharePhotoIDs, primaryActionSelectsPhoto: true, people: true) { store.toggleSharePhoto($0.id) }
                         .padding(.horizontal, 13).padding(.bottom, 80)
                 }
                 let outsideIDs = store.sharePhotoIDs.subtracting(Set(matchedOrder.map(\.id)))
                 if !outsideIDs.isEmpty {
-                    MasonryPhotos(photos: store.sharingPhotos.filter { outsideIDs.contains($0.id) }, selected: store.sharePhotoIDs) { store.toggleSharePhoto($0) }.padding(.horizontal, 13).padding(.bottom, 80)
+                    MasonryPhotos(photos: store.sharingPhotos.filter { outsideIDs.contains($0.id) }, selected: store.sharePhotoIDs, primaryActionSelectsPhoto: true) { store.toggleSharePhoto($0) }.padding(.horizontal, 13).padding(.bottom, 80)
                 }
             }.scrollIndicators(.hidden)
         }.foregroundStyle(.white)

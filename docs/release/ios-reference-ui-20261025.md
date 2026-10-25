@@ -1,17 +1,97 @@
 # iOS reference UI checkpoint — 25 October 2026
 
-The current round6 Simulator app, exact revision7 UI runner and unsigned device
-Release compile with205 unchanged inputs. Strict ad-hoc Simulator signing passes;
-181 app files and13 runner products are staged. Dylib `6ec5cd2f…bb1e2d` includes the
-two confirmed visual corrections below and the native English/Kinyarwanda
-availability message. Both translations were read back from the Simulator and
-unsigned Release bundles. Independent source/app/runner qualification and one
-in-place install now pass: all nine data payloads138,795bytes are retained and25
-common selected nodes are exact. An identical2,172byte OSsnapshot was renamed;
-native identity/timestamp/dataUUID changes remain recorded. Full pathname/native
-metadata equality is false. No reset, uninstall, Keychain clear or retry occurred.
-Affected runtime qualification is ongoing;
-this checkpoint does not accept the replacement release.
+The current round8 Simulator app, unchanged revision7 UI runner and unsigned
+device Release compile with 205 unchanged inputs. Strict ad-hoc Simulator signing
+passes; 181 app files and 13 runner products are staged. Dylib `b7621c52…050d9e`
+contains stable custom-action names and explicit primary photo-action semantics.
+Independent qualification, one preserved app-only update and bounded normal/
+largest named-action checks pass. A separate revision8 runner-only test now
+qualifies one maximum-text filtered-photo coordinate-touch journey. No
+distribution, hosted, physical-device, spoken or store acceptance follows.
+
+Photo browsing and nonempty/filtered search now announce “Open photo”, including
+selected results. Three upload/sharing fallback callers explicitly select
+“Change photo selection”; the other nine Masonry callers keep opening semantics,
+with separate favorite/check badge callbacks retaining their stable action names.
+The mismatch was observed on round7: the selected Photo2 search result announced
+selection but actually opened viewer12, with four favorites unchanged after Back.
+The approved three-file correction preserves callbacks, images, geometry,
+selection values/traits, badge labels and view identity. SourcePhotoGrid is byte
+identical to round7. Absent-reference-layout branches are source-scoped only;
+they have no manufactured runtime acceptance.
+
+Current build/source archive:
+`/Volumes/PRO-G40/Projects/Lovelies/verification/ios-grouped-ui-round8-20261025/`.
+`build-result.json` SHA256:
+`4a48f5685f480a249cfc88cdd5830a93438ccae799e97af1a2372e2d50773dd0`;
+`runtime-handoff.json`:
+`d7be8fd44b0129f53179c29be50333d0898177c1585500ea89e3ebfb0e940449`.
+The five-View freeze is `round8/next-grouped-ui-freeze.json`, SHA256
+`461779cf7ce8b4861af72ada7d5745da8ed2d919d9b6ef86ff330eb8b78ea2f4`.
+The exact QA remains `c9-candidate/revision7-bounded-followup/LoveliesFrontendAudit.swift`,
+SHA256 `fd37ced7289a03e2ba99dcd1f69972cc5397e451cb5c1d8005ab83253bd1da87`.
+Only Components, SharingViews and UploadViews differ from round7; 199 app-relative
+inputs, the QA source and all locale bytes are unchanged. Exact current 16 Swift
+host, 87 API, 49 Swift HTTP and 257 Android input maps qualify reuse of their
+existing results. `unchanged-source-reuse.json` SHA256:
+`c3ca9faedcac76c49f91d07dcbcf0616374bdbc5f7a89d129efac29e1914d856`.
+`primary-action-consumer-readback.json` independently classifies all 12 callers,
+SHA256 `bf627be5396c9a9c4e772b7f2f270c814d462246662a9831e0f6cbdec07b7da2`.
+English/Kinyarwanda stable-action and availability strings remain packaged in
+both bundles, matching round7 exactly.
+
+Round7 independently qualified its app/runner and one in-place update. All nine
+regular data payloads (138,795 bytes) were retained and 25 common selected nodes
+matched exactly; an identical OS snapshot was renamed. Full pathname/native
+metadata equality is false, with no reset, uninstall, Keychain clear or retry.
+Its terminal bounded proof passes four actual normal/largest favorite/checkbox
+physical and custom-action toggle/restore probes, plus photo5→viewer12→Back at
+both sizes. All 15 original PNGs were reviewed. A visible maximum-text notification
+was opened and returned to as read, measuring 6.078:1 timestamp contrast; no new
+native audit or waiver of the earlier offscreen warning is inferred. Receipt:
+`round7/3c75-bounded-action-runtime-reviewed.json`, SHA256
+`b50b8d1b22555e0bb6df851b3c711a851b5480504ae743d4da3d40c5e2847357`.
+These unchanged SourcePhotoGrid/geometry/notification results retain their scope.
+
+Round6 likewise preserved all nine regular payloads and 25 common nodes. Its
+focused normal14/largest14/normal18 and six-probe functional follow-up pass;
+all 26 original PNGs were reviewed. Largest18 retains its raw native offscreen
+contrast warning and failed run status, with zero custom findings. The earlier
+48/48 normal/largest coverage remains coverage rather than an all-pass matrix.
+
+The separate maximum-text test09 passed on its first execution in58.214seconds.
+Eight bounded40pt/s drags moved Photo2 from offscreen into the actual viewport,
+with a fully visible114.67×152.33pt enabled/hittable target at
+[19,676.33,133.67,828.67] inside [0,0,390,844]. A coordinate center tap opened
+viewer12; a44pt Back tap returned to15 with all four Selected values preserved.
+All five original PNGs were reviewed. The earlier manual action probe had not
+established visibility; this native touch test closes that specific uncertainty.
+The app is restored to normal English/portrait/Home10 with keyboard off.
+
+The additional runner compiles one archived source with four unchanged inputs
+and13 products. Revision8 SHA256:
+`0d6af26b623f72b5fa70d6fda76e7552e46312a3f5a60d85eab354879cb60a6c`.
+Its124 added lines introduce only test09 inside the existing class; every prior
+line/method remains unchanged. It overlays the independently qualified b762 app
+without another app build/install. Compile receipt:
+`/Volumes/PRO-G40/Projects/Lovelies/verification/ios-ui-filtered-search-runner-20261025/result.json`
+SHA256 `d035e39cde34a5b924665d154cb5ce6749ce75b8dcc7a1830b3393c61d157800`.
+Physical-case review: `round8/b762-filtered-physical-runtime-reviewed.json`,
+SHA256 `24bebf04663a06db43b322f9e8498634b3eb2b474a6e09e97cab6f6c84d1ca8a`.
+The separate seven-original named-action review is
+`round8/b762-bounded-action-runtime-reviewed.json`, SHA256
+`31ab9e17b91821c73e8b0e714992bdce540f78c8ab2a6ac8c2c137a509c3fa7e`.
+No full matrix or native audit was replayed and no raw adverse finding is waived.
+
+The current install retained all seven pre-install regular payloads135,123bytes
+and22 common selected nodes; one identical2,172byte OSsnapshot was renamed.
+Full pathname/native-metadata equality is false. The earlier9→7 transition
+occurred before this install: two scene-session files were absent and
+KnownSceneSessions changed1,248→42bytes. Other selected nodes matched and all
+old payloads remain verified in preimages. The actor/exact time is not attributed.
+`round8/install/prior-runtime-saved-state-transition.json` SHA256:
+`1a46724069b4cb73bd3b78dcc090fc5b3534b0c944baf9815ad59e65f18e2929`.
+No reset, uninstall, Keychain clear or app-install retry occurred.
 
 The Favorites14 caller now retains its heart glyph when fixture metadata says
 check. Only its explicit heart context changes; all default/checkbox metadata
@@ -23,9 +103,13 @@ The other correction raises read-notification opacity from0.6 to0.8. Actual
 normal12pt timestamp ink109/109/110 against9/9/11 measured3.849:1, below4.5:1;
 the unread state measured9.181:1. The coordinator independently viewed the original
 read image and recomputed the ratio. Read/unread distinction and all row/filter/
-navigation bindings remain. The new rendered colour still needs runtime readback.
+navigation bindings remain. The actual new read timestamp is142/142/143 against
+9/9/11, measuring6.078:1 across549 ink pixels; the unread timestamp remains9.181:1.
+The coordinator independently viewed the original read capture and recalculated
+the ratio. This confirms that normal12pt repair without waiving the separately
+retained largest18 offscreen native warning.
 
-Current build receipts/source archive are in
+Preserved round6 build receipts/source archive are in
 `/Volumes/PRO-G40/Projects/Lovelies/verification/ios-grouped-ui-round6-20261025/`.
 `build-result.json` SHA256 is
 `4c393ca6712bd850238eefc8612f3996f3ca0d3803fa4379c9a94122fb0fe853`;
@@ -72,7 +156,7 @@ The preserved round5 evidence now covers48/48 normal and48/48 largest screens:
 while11 normal and10 largest raw native failed rows remain. This is coverage,
 not a passing aggregate. Actual maximum31 recipient toggles/restore and33/Back31,
 normal39 block/prune/unblock without automatic reselection, and18→24→18 have
-separate checkpointed/manual evidence.
+separate checkpointed/manual evidence and the later passing round6 six-probe run.
 
 The first bounded QA run failed because a semantic container was selected instead
 of the outer recipient button. Revision6 completed the main phases but failed its
@@ -80,9 +164,12 @@ last reselection because an artificial1pt viewport inset excluded the top edge.
 Both complete runs remain failed. Original captures/checkpoints and direct manual
 completion retain only their stated scope. Revision7 corrects those test selectors
 and the artificial inset, retaining actual44pt frame/intersection assertions;
-its current-app runtime is pending. No audit category or raw finding is waived.
+its round6 runtime passes154.68s with six functional probes and native read-audit
+zero. Maximum31 person selection/restore/Continue→33→Back, normal39 block/prune/
+unblock without automatic reselection, and normal18→24→18 unread-to-read were
+observed. No audit category or raw finding is waived.
 
-The exact frozen Swift QA source is retained at
+The historical matrix base Swift QA source is retained at
 `verification/accessibility-navigation-20261023/ios-isolated-simulator/c9-candidate/revision4/LoveliesFrontendAudit.swift`
 (SHA256 `cef012a6a4a9d373ec6e91e27dfc50c8c8dcf967de437eb9dc4ec64c6e3979da`).
 Its strict target/scroll assertions and audit findings are preserved.
