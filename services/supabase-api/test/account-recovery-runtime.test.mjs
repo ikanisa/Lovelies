@@ -136,7 +136,9 @@ const APPLICATION_TABLES = new Set([
   'job_queue', 'privacy_deletion_status_receipts', 'privacy_export_grants',
   'privacy_exports', 'privacy_redaction_context', 'privacy_requests', 'processing_attempts',
   'push_devices', 'renditions', 'request_limits', 'retention_jobs', 'retention_objects',
-  'retention_settings', 'retention_scan_cursors', 'safety_reports', 'schema_versions', 'sessions', 'sharing_approvals',
+  // v12 holds only opaque database/incarnation/checkpoint/operation metadata.
+  // It remains in the exhaustive plaintext-capability scan below.
+  'retention_settings', 'retention_scan_cursors', 'restore_control', 'safety_reports', 'schema_versions', 'sessions', 'sharing_approvals',
   'sharing_previews', 'sharing_requests', 'sharing_snapshots', 'store_notifications',
   'store_subscriptions', 'store_transactions', 'support_requests',
   'upload_transfers', 'upload_chunks', 'refresh_delivery_receipts',

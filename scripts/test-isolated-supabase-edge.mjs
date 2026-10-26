@@ -24,6 +24,7 @@ import {createServer} from 'node:net';
 import {isolatedPostgres} from '../services/supabase-api/test/postgres-harness.mjs';
 import {createEngineeringFixtures} from '../services/supabase-api/test/openface-runtime.mjs';
 import {exactReadiness} from '../services/supabase-api/src/inference-contract.ts';
+import {startRestoreJournalHTTPSFixture} from '../services/supabase-api/test/restore-journal-https-fixture.mjs';
 
 const root=fileURLToPath(new URL('../',import.meta.url));
 const EDGE='public.ecr.aws/supabase/edge-runtime:v1.77.8@sha256:178c041398a33ded8219344382d0672a90051d1babbf0af03425cafe20039a75';
@@ -41,6 +42,20 @@ const MIGRATIONS=[
   '20261023162016_lovelies_private_core.sql','20261023210000_refresh_delivery.sql',
   '20261024170000_audience_retention.sql','20261024180000_inference_generation.sql',
   '20261024190000_retention_scan_cursors.sql',
+  '20261026132612_restore_control.sql',
+];
+const JOURNAL_CA_TARGET='/run/lovelies-journal/ca.pem';
+const JOURNAL_ORIGIN='https://127.0.0.1:54324';
+// Pinned Edge v1.77.8 uses get_root_cert_store_provider() for fetch in user
+// workers. Its system store delegates to deno_native_certs 0.3.0, locked to
+// rustls-native-certs 0.7.1 on Linux, which reads SSL_CERT_FILE. DENO_CERT is
+// not used by that provider; a vanilla Deno CLI --cert test is insufficient.
+const TLS_SOURCES=[
+  'https://github.com/supabase/edge-runtime/blob/v1.77.8/crates/base/src/runtime/mod.rs',
+  'https://github.com/supabase/edge-runtime/blob/v1.77.8/crates/deno_facade/cert_provider.rs',
+  'https://github.com/supabase/edge-runtime/blob/v1.77.8/Cargo.lock',
+  'https://github.com/denoland/deno_native_certs/blob/0.3.0/src/lib.rs',
+  'https://github.com/rustls/rustls-native-certs/blob/v/0.7.1/src/lib.rs',
 ];
 const usage='Use --services-dir <owned-services> --output <new-dir> --ml-env <private-0600-env> [--port 18887] [--public-api-origin https://.../] [--fixtures-dir <existing-frozen-fixture-directory>]';
 const argumentsMap=new Map();
@@ -79,21 +94,23 @@ let resolveStop;
 const stopped=new Promise(done=>{resolveStop=done;});
 function stopRequested(){if(!shutdown.signal.aborted){shutdown.abort();resolveStop();}}
 process.once('SIGTERM',stopRequested);process.once('SIGINT',stopRequested);
-let database,ownsLock=false,maintenance,maintenanceAbort,sequence=0,ready=false;
+let database,journal,journalCA,ownsLock=false,maintenance,maintenanceAbort,sequence=0,ready=false;
 let saveTail=Promise.resolve();
 const lockPath=join(servicesDirectory,'.isolated-native-edge.lock');
 const bucketReceiptPath=join(servicesDirectory,'isolated-native-bucket-ownership.json');
 const report={schema:1,kind:'lovelies-isolated-native-supabase-edge-v1',status:'starting',started_at:new Date().toISOString(),
   api_origin:apiOrigin,public_api_base_url:publicOrigin,owner,containers:{edge:edgeName,relays:relayName},
   transports:{api:'actual_supabase_edge_runtime_production_entrypoint',database:'actual_postgresql_new_database',
-    storage:'actual_owned_supabase_storage_http',inference:'external_actual_authenticated_pinned_ml_http'},
+    storage:'actual_owned_supabase_storage_http',inference:'external_actual_authenticated_pinned_ml_http',
+    restore_journal:'production_handler_over_local_https_with_in_memory_fixture_storage'},
   limits:{container_memory_mib:1024,container_cpus:1,container_pids:128,tmpfs_bytes:128*1024*1024,
     max_workers:3,worker_memory_mib:256,worker_cpu_ms:2000,worker_timeout_ms:150000,
     worker_policy:'per_request',cpu_budget_scope:'per_request',
     worker_timeout_semantics:'Pinned per_request runtime resets its timeout while requests remain active; this is not an absolute HTTP wall deadline.'},
   external_image:{expected_manifest_sha256:EXTERNAL_IMAGE_MANIFEST,verification:'root_receipt_required_separately'},
   maintenance:{interval_after_completion_ms:1000,calls:0,failures:0},commands:[],
-  does_not_establish:['Hosted deployment','Optical camera capture','Representative recognition accuracy','Store distribution'],
+  does_not_establish:['Hosted deployment','Optical camera capture','Representative recognition accuracy','Store distribution',
+    'Independent journal provider persistence/EU custody','Backup restoration/replay/object cleanup or recovery clearance'],
 };
 async function save(){
   const path=join(directory,'runtime.json'),temporary=path+'.tmp';
@@ -157,6 +174,8 @@ async function freeze(){
   for(const name of ['services/supabase-api/src','supabase/functions/lovelies-api',
     'services/supabase-api/test/isolated-native-edge','scripts/test-isolated-supabase-edge.mjs',
     'scripts/test-openface-local-services.mjs','services/supabase-api/test/postgres-harness.mjs',
+    'services/supabase-api/test/restore-journal-https-fixture.mjs','services/restore-journal/src',
+    'services/restore-journal/test/fixtures.mjs',
     'services/supabase-api/test/openface-runtime.mjs','services/supabase-api/test/runtime-harness.mjs',
     'services/supabase-api/test/openface-storage.mjs','android/app/src/androidTest/prepare-openface-manifest.mjs',
     'services/supabase-api/package.json','pnpm-lock.yaml','shared/assets/person02.jpg','shared/assets/portrait.jpg',
@@ -313,7 +332,7 @@ async function removeOwned(name){
 async function cleanup(status){
   report.status='cleanup_pending';await save();maintenanceAbort?.abort();
   if(maintenance)try{await maintenance;}catch(error){report.maintenance.stop_error=error.name;}
-  const failures=[];report.cleanup={containers:[],database:'not_created',lock:'not_acquired'};
+  const failures=[];report.cleanup={containers:[],database:'not_created',journal:'not_started',lock:'not_acquired'};
   for(const name of [relayName,edgeName]){
     try{report.cleanup.containers.push(await removeOwned(name));}
     catch(error){failures.push({resource:name,error:error.name});}
@@ -323,6 +342,12 @@ async function cleanup(status){
     if(failures.length)report.cleanup.database='retained_because_container_absence_unconfirmed';
     else try{await database.engine.close();report.cleanup.database='dropped_only_new_database';}
     catch(error){report.cleanup.database='drop_failed';failures.push({resource:'new_database',error:error.name});}
+  }
+  // Close this invocation's exact local TLS server and remove its disposable
+  // keys even if a container could not be removed: admission then fails closed.
+  if(journal){
+    try{await journal.close();report.cleanup.journal='closed_only_owned_https_fixture_and_removed_disposable_keys';}
+    catch(error){report.cleanup.journal='close_failed';failures.push({resource:'owned_journal_fixture',error:error.name});}
   }
   if(ownsLock){
     try{
@@ -337,6 +362,12 @@ async function cleanup(status){
     const after=new Map(report.source_after.map(row=>[row.path,row.sha256]));
     report.changed_inputs=[...new Set([...before.keys(),...after.keys()])].filter(path=>before.get(path)!==after.get(path));
   }catch(error){report.changed_inputs=['source_freeze_unavailable'];report.source_after_error=error.name;}
+  if(journalCA&&report.restore_journal){
+    try{
+      report.restore_journal.ca_after_sha256=digest(await readFile(journalCA));
+      if(report.restore_journal.ca_after_sha256!==report.restore_journal.ca_sha256)report.changed_inputs.push('journal-ca.pem');
+    }catch(error){report.changed_inputs.push('journal-ca.pem');report.restore_journal.ca_after_error=error.name;}
+  }
   report.changed_fixtures=[];
   if(report.fixture_manifest){
     try{
@@ -413,7 +444,42 @@ try{
   redactions.push(database.url);
   for(const name of MIGRATIONS){shutdown.signal.throwIfAborted();await database.engine.exec(await readFile(join(root,'supabase/migrations',name),'utf8'));}
   const versions=(await database.engine.query('SELECT version FROM lovelies_private.schema_versions ORDER BY version')).rows.map(row=>Number(row.version));
-  assert.deepEqual(versions,[7,8,9,10,11],'All five actual production migrations required');report.database.schema_version=11;report.database.applied_versions=versions;
+  assert.deepEqual(versions,[7,8,9,10,11,12],'All six actual production migrations required');report.database.schema_version=12;report.database.applied_versions=versions;
+  shutdown.signal.throwIfAborted();journal=await startRestoreJournalHTTPSFixture();redactions.push(journal.token);
+  assert(Number.isSafeInteger(journal.port)&&journal.port>=1024&&journal.port<=65535,'Bounded exact HTTPS fixture port required');
+  assert.equal(journal.url,'https://127.0.0.1:'+journal.port,'Only the controlled local HTTPS fixture may be relayed');
+  const initial=await journal.bootstrap(),initialControl=(await journal.control()).control;
+  assert(initialControl.state==='serving'&&initial.checkpoint.revision===0&&initial.cursor.sequence===0&&initial.cursor.hash==='0'.repeat(64),
+    'Only an empty independent fixture may receive the initial deployment binding');
+  assert.deepEqual(initialControl.marker,initial,'Exact independent initial marker required');
+  // Explicit administrative initialization of this newly created disposable
+  // database only. The production API neither bootstraps nor repairs its row.
+  await database.engine.exec('BEGIN; SET LOCAL ROLE lovelies_api');
+  try{
+    const existing=(await database.engine.query('SELECT count(*) AS n FROM lovelies_private.restore_control')).rows;
+    assert.equal(Number(existing[0].n),0,'Initial checkpoint must be absent in the new fixture database');
+    await database.engine.query(`INSERT INTO lovelies_private.restore_control
+      (singleton,project_id,database_id,incarnation_id,checkpoint_revision,checkpoint_hash,journal_sequence,journal_hash,last_operation_id,last_plan_hash)
+      VALUES(1,'ltqfplqevxztlswlzexn',$1,$2,$3,$4,$5,$6,NULL,NULL)`,
+    [initial.database_id,initial.incarnation_id,initial.checkpoint.revision,initial.checkpoint.hash,initial.cursor.sequence,initial.cursor.hash]);
+    const installed=(await database.engine.query(`SELECT project_id,database_id,incarnation_id,checkpoint_revision,checkpoint_hash,
+      journal_sequence,journal_hash,last_operation_id,last_plan_hash FROM lovelies_private.restore_control WHERE singleton=1`)).rows;
+    assert.deepEqual(installed.map(row=>({...row,checkpoint_revision:Number(row.checkpoint_revision),journal_sequence:Number(row.journal_sequence)})),
+      [{project_id:'ltqfplqevxztlswlzexn',database_id:initial.database_id,incarnation_id:initial.incarnation_id,
+        checkpoint_revision:0,checkpoint_hash:initial.checkpoint.hash,journal_sequence:0,journal_hash:initial.cursor.hash,last_operation_id:null,last_plan_hash:null}],
+    'Exact initial database marker and null operation receipt must be read back');
+    await database.engine.exec('COMMIT');
+  }catch(error){await database.engine.exec('ROLLBACK');throw error;}
+  const caInfo=await lstat(journal.caPath);
+  assert(caInfo.isFile()&&!caInfo.isSymbolicLink()&&caInfo.size>0&&caInfo.size<=64*1024,'Bounded fixture public CA certificate required');
+  const ca=await readFile(journal.caPath);
+  assert(ca.includes(Buffer.from('-----BEGIN CERTIFICATE-----'))&&!ca.includes(Buffer.from('PRIVATE KEY')),'Mount only the public CA, never fixture private keys');
+  journalCA=join(directory,'journal-ca.pem');await writeFile(journalCA,ca,{flag:'wx',mode:0o600});
+  report.restore_journal={protocol:'lovelies-restriction-journal-v1',url:JOURNAL_ORIGIN,host_fixture_port:journal.port,
+    storage:'in_memory_fixture_not_provider_persistence',initial_marker:initial,initial_marker_admin_installed:true,
+    ca_sha256:digest(ca),ca_mount_read_only:true,tls_verification:'required',
+    tls_configuration:{DENO_TLS_CA_STORE:'mozilla,system',SSL_CERT_FILE:JOURNAL_CA_TARGET},
+    pinned_tls_sources:TLS_SOURCES,qualification:'prepared_not_yet_edge_observed'};
   if(!argumentsMap.has('--fixtures-dir')){
     await createEngineeringFixtures(fixturesDirectory);
     await command('fixture-manifest',process.execPath,[join(root,'android/app/src/androidTest/prepare-openface-manifest.mjs'),fixturesDirectory,apiOrigin]);
@@ -429,15 +495,18 @@ try{
     PHOTO_CONSENT_POLICY_VERSION:'photo-policy-fixture-v1',PUBLIC_API_BASE_URL:publicOrigin,
     ALLOWED_ORIGINS:'http://127.0.0.1:8765',PUBLIC_APP_BASE_URL:'http://127.0.0.1:8765',
     ML_INFERENCE_URL:'http://127.0.0.1:54323',ML_INFERENCE_SECRET:mlEnvironment.ML_INFERENCE_SECRET,
-    ML_INFERENCE_ARTIFACT_SHA256:ARTIFACT,ML_INFERENCE_PROCESSING_SHA256:PROCESSING,DENO_DIR:'/tmp/deno'};
+    ML_INFERENCE_ARTIFACT_SHA256:ARTIFACT,ML_INFERENCE_PROCESSING_SHA256:PROCESSING,DENO_DIR:'/tmp/deno',
+    RESTORE_JOURNAL_URL:JOURNAL_ORIGIN,RESTORE_JOURNAL_TOKEN:journal.token,
+    DENO_TLS_CA_STORE:'mozilla,system',SSL_CERT_FILE:JOURNAL_CA_TARGET};
   redactions.push(environment.AUTH_SIGNING_SECRET,environment.MEDIA_SIGNING_SECRET,maintenanceSecret,environment.LOVELIES_DATABASE_URL);
   const edgeEnvironment=join(directory,'edge.env'),relayEnvironment=join(directory,'relay.env');
   await writeFile(edgeEnvironment,Object.entries(environment).map(([key,value])=>key+'='+value).join('\n')+'\n',{flag:'wx',mode:0o600});
-  await writeFile(relayEnvironment,[`RELAY_POSTGRES_HOST=${info.postgresContainer}`,`RELAY_STORAGE_HOST=${info.storageContainer}`,`RELAY_ML_PORT=${ml.port}`].join('\n')+'\n',{flag:'wx',mode:0o600});
+  await writeFile(relayEnvironment,[`RELAY_POSTGRES_HOST=${info.postgresContainer}`,`RELAY_STORAGE_HOST=${info.storageContainer}`,`RELAY_ML_PORT=${ml.port}`,`RELAY_JOURNAL_PORT=${journal.port}`].join('\n')+'\n',{flag:'wx',mode:0o600});
   const restrictions=['--read-only','--cap-drop','ALL','--security-opt','no-new-privileges','--pids-limit','128',
     '--tmpfs','/tmp:rw,nosuid,nodev,size=134217728'];
   const mounts=['services/supabase-api/src','services/supabase-api/node_modules','services/supabase-api/test/isolated-native-edge',
     'supabase/functions/lovelies-api','node_modules'].flatMap(name=>['--mount',`type=bind,source=${join(root,name)},target=/workspace/${name},readonly`]);
+  mounts.push('--mount',`type=bind,source=${journalCA},target=${JOURNAL_CA_TARGET},readonly`);
   shutdown.signal.throwIfAborted();
   await docker('edge-start',['run','-d','--pull=never','--name',edgeName,'--label','lovelies.isolated-edge.owner='+owner,
     '--network',info.network,'--publish',`127.0.0.1:${apiPort}:9000`,'--env-file',edgeEnvironment,
@@ -456,12 +525,16 @@ try{
     }catch{}
     await pause(250);
   }
-  assert(health?.status==='ok'&&health.database==='supabase_postgresql'&&health.database_ready===true&&health.schema_version===11,
-    'Only production PostgreSQL/schema-11 health can establish API readiness');
+  assert(health?.status==='ok'&&health.database==='supabase_postgresql'&&health.database_ready===true&&health.schema_version===12,
+    'Only production PostgreSQL/schema-12 health can establish API readiness');
   const readyResponse=await fetch(apiOrigin+'/ready',{redirect:'manual',signal:AbortSignal.timeout(20000)});
   assert.equal(readyResponse.status,200,'Production Edge readiness required');readiness=await boundedJson(readyResponse);
-  assert(readiness.status==='ok'&&readiness.database==='supabase_postgresql'&&readiness.schema_version===11&&
+  assert(readiness.status==='ok'&&readiness.database==='supabase_postgresql'&&readiness.schema_version===12&&
     readiness.inference_ready===true&&Array.isArray(readiness.missing)&&readiness.missing.length===0,'Complete production inference readiness required');
+  const currentControl=(await journal.control()).control;
+  assert(currentControl.state==='serving'&&currentControl.marker.database_id===initial.database_id&&currentControl.marker.incarnation_id===initial.incarnation_id,
+    'The actual Edge worker must retain its exact independent fixture binding');
+  report.restore_journal.qualification='observed_local_edge_https_fixture';report.restore_journal.ready_control=currentControl;
   report.health=health;report.ready=readiness;report.status='ready';ready=true;finalStatus='stopped';await save();
   console.log(JSON.stringify({status:'ready',api_origin:apiOrigin,public_api_base_url:publicOrigin,fixture_manifest:manifest,
     runtime:join(directory,'runtime.json'),transport:report.transports.api}));

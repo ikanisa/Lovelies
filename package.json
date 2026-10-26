@@ -22,7 +22,10 @@
     "admin:test": "node --experimental-transform-types --test --test-concurrency=1 admin/*.test.mjs",
     "preview:test": "python3 -m unittest discover -s scripts -p test_serve_preview.py",
     "push:test": "pnpm --filter @lovelies/push-provider test",
-    "push:check": "pnpm --filter @lovelies/push-provider check"
+    "push:check": "pnpm --filter @lovelies/push-provider check",
+    "restore-journal:test": "pnpm --filter @lovelies/restore-journal test",
+    "restore-journal:check": "pnpm --filter @lovelies/restore-journal check",
+    "restore-journal:build": "pnpm --filter @lovelies/restore-journal build"
   },
   "devDependencies": {
     "fake-indexeddb": "6.2.6",
@@ -32,6 +35,7 @@
     "services/cloudflare-api",
     "services/ml-container-worker",
     "services/supabase-api",
-    "services/push-provider"
+    "services/push-provider",
+    "services/restore-journal"
   ]
 }

@@ -20,6 +20,7 @@ import urllib.parse
 ROOT = Path(__file__).resolve().parents[1]
 PRODUCTION = [
     'ios/Lovelies/Native/CoreWire.swift',
+    'ios/Lovelies/Native/NativeLocalAuthentication.swift',
     'ios/Lovelies/Native/DeviceIdentity.swift',
     'ios/Lovelies/Native/CameraRecovery.swift',
     'ios/Lovelies/Native/UploadRecovery.swift',

@@ -1,4 +1,4 @@
-# Lovelies replacement integration — 25 October 2026
+# Lovelies replacement integration — 26 October 2026
 
 The replacement is **not ready for runtime deployment or store submission**.
 The owner has authorized completing that work. The remaining gates below are
@@ -9,6 +9,65 @@ existing `com.lovelies.memories` store identities and signing lineage. No real
 Memories customers, photos or subscriptions require an import; preserve unknown
 or test records and source history. The audience is 13+, with independently
 reviewed guardian authorization for ages 13–17. There is no OTP or liveness/PAD.
+
+## Current26October execution delta
+
+This section supersedes conflicting25October descriptions below within its exact
+source/environment scopes. Hosted v9–v11 and v12 are applied: schema12/69 private
+forced-RLS tables/backend policies, zero client/public access/backend membership.
+The v12 transaction preserves all67 old non-version table fingerprints and adds
+only empty restore_control; only expected schema-version rows changed. All6
+supported history versions match; CLI Security Advisor reports no issues. No
+import/deletion/backfill or runtime marker bootstrap occurred. Evidence:
+`/Volumes/PRO-G40/Projects/Lovelies/verification/hosted-v12-20261026/result.json`.
+
+Current API:329 tests/328 pass/zero fail/one optional actual-model skip, types
+pass,95 unchanged inputs. This includes actual PostgreSQL17.11, Deno with verified
+local TLS and independent journal-handler integration;19 focused checkpoint/
+postcommit-race cases also pass. The preserved first full run had9 failures:
+explicit schema/secret-scan expectations and test connection lifetime were
+corrected. The final run passes without relaxing authority or capacity bounds.
+Evidence: `/Volumes/PRO-G40/Projects/Lovelies/verification/restore-pg-integration-20261026/full-api-final-v2/`.
+
+The journal protocol passes34 local tests, syntax/dry run and real SQLiteDO
+restart/fault coverage. Both production entrypoints now require its strict
+server-only client and PostgreSQL fence. Pending/old/missing markers fail closed;
+postcommit acknowledgement reacquires the PG lock and rereads current state.
+Domain restriction producers/stable allocations, external-effect generation
+fences, replay/object inventory/cleanup, computed recovery completion and hosted
+journal custody remain unfinished. No recovery-clear endpoint or manual flag
+exists. Default empty-event checkpoints are not complete withdrawal suppression.
+
+Inference configuration and Worker/container deployment exist, with7 custom
+Supabase secrets total and initial three preserved. A packaging-only d815 image
+reorders the proven empty layer, preserving the exact982e runtime payload/config.
+The registry and provider readback match; appversion2 reports healthy1/failed0/
+starting0 and no image-pull errors after the original unpack failure. This is
+provider image-health evidence, not loaded-model or recognition acceptance. The
+separate HTTPS403/1010 route was not retried or disguised. A supported private
+account ServiceBinding now returns401 for missing/wrong auth and200 for correct
+auth; the production exactReadiness validator confirms the loaded engine/artifact,
+processing fingerprint, model hashes, capabilities and limits. No biometric input
+was sent. Supabase public HTTPS connectivity and API cutover remain unqualified.
+Evidence: `/Volumes/PRO-G40/Projects/Lovelies/verification/inference-packaging-20261026/provider-trial/`.
+
+Current iOS: original1020 host checks, separate101 guest-deletion/35 private-media
+checks and108 focused LocalAuthentication fixtures pass. Canonical21-source
+Simulator Debug and unsigned iOS Release builds pass; the complete XCTest target
+also builds with the updated physical opt-in signer/real OS-authorizer adapter.
+No test/device prompt was launched by those builds. Source-bound proof is under
+`/Volumes/PRO-G40/Projects/Lovelies/verification/native-local-auth-20261026/`.
+The exact Release bundle still has six preflight gates: published link host,
+privacy/terms/support/deletion URLs and distribution signature. Physical
+FaceID/TouchID/passcode, new/legacy key ACL, lifecycle and App Review remain open.
+
+Hardened push key reading passes31 local provider tests/syntax; real credentials,
+host/independent ledger and device delivery remain open. Isolated Edge driver
+source now includes schema12, required TLS journal/CA and bounded relays; its
+syntax passes, while actual Docker/Edge execution remains unqualified because
+the daemon was unavailable. The [full goal](full-implementation-goal-20261026.md)
+reconciles all90 IDs into33 packages. GitHub billing remains parked; independent
+CI and both live/stable store replacements remain open.
 
 ## Implemented and checked within bounded snapshots
 

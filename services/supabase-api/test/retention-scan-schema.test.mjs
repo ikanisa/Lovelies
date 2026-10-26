@@ -55,7 +55,7 @@ test('v11 adds one empty private cursor table without changing existing rows or 
     assert.deepEqual((await engine.query("SELECT * FROM lovelies_private.accounts WHERE id='preserved-test-account'")).rows[0],account);
     assert.deepEqual((await engine.query("SELECT * FROM lovelies_private.assets WHERE id='preserved-test-photo'")).rows[0],asset);
     assert.equal(Number((await engine.query('SELECT count(*) n FROM lovelies_private.account_audience')).rows[0].n),0,'no age declaration backfill');
-    assert.equal(currentSchemaVersion,11);
+    assert.equal(currentSchemaVersion,12,'current engine retains the historical v11 cursor plus the additive restore control');
     assert(schemaStatements.some(statement=>statement.startsWith('CREATE TABLE IF NOT EXISTS retention_scan_cursors(')));
   }finally{await engine.close();}
 });

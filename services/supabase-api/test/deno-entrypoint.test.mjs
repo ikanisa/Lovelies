@@ -6,17 +6,24 @@ import fs from 'node:fs';
 import path from 'node:path';
 import {once} from 'node:events';
 import {isolatedPostgres} from './postgres-harness.mjs';
+import {startRestoreJournalHTTPSFixture} from './restore-journal-https-fixture.mjs';
 
 test('actual Deno Edge entrypoint uses PostgreSQL ALS and current anonymous/refresh/logout authority', {skip:!process.env.TEST_DATABASE_URL,timeout:60000},async()=>{
  const local=await isolatedPostgres(process.env.TEST_DATABASE_URL),folder=path.resolve(import.meta.dirname,'../../../supabase/functions/lovelies-api');
- let reserve,child,closed,spawnError,failure,failed=false;
+ let reserve,child,closed,spawnError,failure,failed=false,journal;
  try{
- const migrations=fs.readdirSync(new URL('../../../supabase/migrations/',import.meta.url)).filter(x=>/_lovelies_private_core\.sql$|_refresh_delivery\.sql$|_audience_retention\.sql$|_inference_generation\.sql$|_retention_scan_cursors\.sql$/.test(x)).sort();
+ const migrations=fs.readdirSync(new URL('../../../supabase/migrations/',import.meta.url)).filter(x=>/_lovelies_private_core\.sql$|_refresh_delivery\.sql$|_audience_retention\.sql$|_inference_generation\.sql$|_retention_scan_cursors\.sql$|_restore_control\.sql$/.test(x)).sort();
  for(const migration of migrations)await local.engine.exec(fs.readFileSync(new URL('../../../supabase/migrations/'+migration,import.meta.url),'utf8'));
+ journal=await startRestoreJournalHTTPSFixture();
+ const initial=await journal.bootstrap();
+ await local.engine.exec('SET ROLE lovelies_api');
+ await local.engine.query(`INSERT INTO lovelies_private.restore_control(singleton,project_id,database_id,incarnation_id,checkpoint_revision,checkpoint_hash,journal_sequence,journal_hash)
+  VALUES(1,'ltqfplqevxztlswlzexn',$1,$2,$3,$4,$5,$6)`,[initial.database_id,initial.incarnation_id,initial.checkpoint.revision,initial.checkpoint.hash,initial.cursor.sequence,initial.cursor.hash]);
+ await local.engine.exec('RESET ROLE');
  reserve=createServer();reserve.listen(0,'127.0.0.1');await once(reserve,'listening');const port=reserve.address().port;await new Promise((resolve,reject)=>reserve.close(error=>error?reject(error):resolve()));
  const base='http://127.0.0.1:'+port,fixtureSecret='synthetic-local-deno-only-'+crypto.randomUUID(),databasePort=new URL(local.url).port;
- child=spawn(process.env.LOVELIES_DENO_BIN??'deno',['run','--cached-only','--allow-env','--allow-read','--allow-sys','--allow-net=127.0.0.1:'+port+',127.0.0.1:'+databasePort+',localhost:'+databasePort,'--config='+path.join(folder,'deno.json'),'--lock='+path.join(folder,'deno.lock'),path.join(folder,'index.ts')],{
-  cwd:folder,stdio:['ignore','pipe','pipe'],env:{PATH:process.env.PATH,HOME:process.env.HOME,...process.env.DENO_DIR?{DENO_DIR:process.env.DENO_DIR}:{},SUPABASE_URL:'http://127.0.0.1',LOVELIES_DATABASE_URL:local.url,LOVELIES_STORAGE_SECRET:fixtureSecret,AUTH_SIGNING_SECRET:fixtureSecret+'-auth',MEDIA_SIGNING_SECRET:fixtureSecret+'-media',INTERNAL_MAINTENANCE_SECRET:fixtureSecret+'-maintenance',FACE_AUTH_POLICY_VERSION:'synthetic-deno-face-policy',PHOTO_MODEL_VERSION:'synthetic-deno-model',LOVELIES_BIND_HOST:'127.0.0.1',PORT:String(port),APP_ENV:'test'},
+ child=spawn(process.env.LOVELIES_DENO_BIN??'deno',['run','--cached-only','--cert='+journal.caPath,'--allow-env','--allow-read','--allow-sys','--allow-net=127.0.0.1:'+port+',127.0.0.1:'+databasePort+',localhost:'+databasePort+',127.0.0.1:'+journal.port,'--config='+path.join(folder,'deno.json'),'--lock='+path.join(folder,'deno.lock'),path.join(folder,'index.ts')],{
+  cwd:folder,stdio:['ignore','pipe','pipe'],env:{PATH:process.env.PATH,HOME:process.env.HOME,...process.env.DENO_DIR?{DENO_DIR:process.env.DENO_DIR}:{},SUPABASE_URL:'http://127.0.0.1',LOVELIES_DATABASE_URL:local.url,LOVELIES_STORAGE_SECRET:fixtureSecret,AUTH_SIGNING_SECRET:fixtureSecret+'-auth',MEDIA_SIGNING_SECRET:fixtureSecret+'-media',INTERNAL_MAINTENANCE_SECRET:fixtureSecret+'-maintenance',FACE_AUTH_POLICY_VERSION:'synthetic-deno-face-policy',PHOTO_MODEL_VERSION:'synthetic-deno-model',RESTORE_JOURNAL_URL:journal.url,RESTORE_JOURNAL_TOKEN:journal.token,LOVELIES_BIND_HOST:'127.0.0.1',PORT:String(port),APP_ENV:'test'},
  });
  closed=new Promise(resolve=>child.once('close',resolve));
  let output='';child.stdout.on('data',bytes=>output+=bytes);child.stderr.on('data',bytes=>output+=bytes);child.on('error',error=>spawnError=error);
@@ -27,7 +34,7 @@ test('actual Deno Edge entrypoint uses PostgreSQL ALS and current anonymous/refr
   const deadline=Date.now()+20000;let health;
   while(Date.now()<deadline){if(spawnError)throw spawnError;if(child.exitCode!==null)break;try{health=await request('/health');if(health.status===200)break;}catch{}await new Promise(resolve=>setTimeout(resolve,40));}
   assert.equal(health?.status,200,'Deno startup failed: '+output.replaceAll(local.url,'[private test DB]').replaceAll(fixtureSecret,'[fixture secret]'));
-  assert.equal(health.body.database,'supabase_postgresql');assert.equal(health.body.schema_version,11);
+  assert.equal(health.body.database,'supabase_postgresql');assert.equal(health.body.schema_version,12);
   assert.equal((await request('/ready')).status,503,'fixture has no Storage/model/provider qualification');
   const anonymous=await request('/auth/anonymous',{body:{}});assert.equal(anonymous.status,201);assert.equal(anonymous.body.auth_method,'anonymous');
   const account=await request('/me',{token:anonymous.body.access_token});assert.equal(account.status,200);assert.equal(account.body.user_id,anonymous.body.account_id);assert.equal(account.body.authenticated,false);
@@ -56,6 +63,19 @@ test('actual Deno Edge entrypoint uses PostgreSQL ALS and current anonymous/refr
   assert.equal((await local.engine.query('SELECT count(*)::int n FROM lovelies_private.accounts')).rows[0].n,before);
   for(const row of history.rows)await local.engine.query('INSERT INTO lovelies_private.schema_versions(version,applied_at) VALUES($1,$2) ON CONFLICT(version) DO NOTHING',[row.version,row.applied_at]);
   assert.equal((await request('/health')).status,200);
+  // Same schema, old checkpoint: the independent journal must quarantine this
+  // still-running isolate before any read/new account can be returned.
+  const checkpoint=(await journal.control()).control.marker;
+  assert(checkpoint.checkpoint.revision>0);
+  await local.engine.exec('SET ROLE lovelies_api');
+  await local.engine.query(`UPDATE lovelies_private.restore_control SET checkpoint_revision=$1,checkpoint_hash=$2,journal_sequence=$3,journal_hash=$4,last_operation_id=NULL,last_plan_hash=NULL`,
+   [initial.checkpoint.revision,initial.checkpoint.hash,initial.cursor.sequence,initial.cursor.hash]);
+  await local.engine.exec('RESET ROLE');
+  const beforeRollback=(await local.engine.query('SELECT count(*)::int n FROM lovelies_private.accounts')).rows[0].n;
+  assert.equal((await request('/health')).status,503);
+  assert.equal((await request('/auth/anonymous',{body:{}})).status,503);
+  assert.equal((await journal.control()).control.state,'quarantined');
+  assert.equal((await local.engine.query('SELECT count(*)::int n FROM lovelies_private.accounts')).rows[0].n,beforeRollback);
  }catch(error){failed=true;failure=error;throw error;}finally{
   const cleanupErrors=[];
   if(reserve?.listening)try{await new Promise((resolve,reject)=>reserve.close(error=>error?reject(error):resolve()));}catch(error){cleanupErrors.push(error);}
@@ -71,6 +91,7 @@ test('actual Deno Edge entrypoint uses PostgreSQL ALS and current anonymous/refr
     if(!await waitForClose())throw new Error('Deno subprocess did not close after termination');
    }
   }catch(error){cleanupErrors.push(error);}
+  try{await journal?.close();}catch(error){cleanupErrors.push(error);}
   try{await local.engine.close();}catch(error){cleanupErrors.push(error);}
   if(cleanupErrors.length){
    if(!failed)throw new AggregateError(cleanupErrors,'Deno entrypoint test cleanup failed');

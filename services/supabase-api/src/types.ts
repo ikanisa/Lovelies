@@ -3,7 +3,8 @@ export interface Database {
     all<T = Record<string, unknown>>(sql: string, ...bindings: Binding[]): Promise<T[]>;
     one<T = Record<string, unknown>>(sql: string, ...bindings: Binding[]): Promise<T | null>;
     run(sql: string, ...bindings: Binding[]): Promise<void>;
-    transaction<T>(callback: () => T | Promise<T>): Promise<T>;
+    read<T>(callback: () => T | Promise<T>): Promise<T>;
+    transaction<T>(callback: () => T | Promise<T>, intent?: unknown): Promise<T>;
 }
 export interface PrivateObject {
     size: number; etag: string; customMetadata?: Record<string,string>;

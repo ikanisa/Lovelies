@@ -3,6 +3,7 @@ packages:
   - "services/ml-container-worker"
   - "services/supabase-api"
   - "services/push-provider"
+  - "services/restore-journal"
 
 allowBuilds:
   esbuild: true

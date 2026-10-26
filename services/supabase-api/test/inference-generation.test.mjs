@@ -121,7 +121,7 @@ test('v10 upgrades and reapplies without relabelling legacy rows or changing for
     assert.equal(Number((await engine.query('SELECT max(version) version FROM lovelies_private.schema_versions')).rows[0].version),10);
     assert.equal(Number((await engine.query('SELECT count(*) n FROM lovelies_private.schema_versions WHERE version=10')).rows[0].n),1);
     await engine.exec('RESET ROLE');
-    assert.equal(currentSchemaVersion,11);
+    assert.equal(currentSchemaVersion,12,'current engine includes the additive restore checkpoint after historical v10');
     for(const table of ['auth_challenges','processing_attempts'])assert.match(
       schemaStatements.find(statement=>statement.startsWith('CREATE TABLE IF NOT EXISTS '+table+'(')),/engine_identity TEXT/);
     await engine.exec("ALTER TABLE lovelies_private.auth_challenges ALTER COLUMN engine_identity SET DEFAULT 'forbidden-backfill'");

@@ -3,6 +3,8 @@ import Foundation
 import Security
 import CryptoKit
 import ImageIO
+import LocalAuthentication
+import UIKit
 @testable import Lovelies
 
 final class ReleaseReadinessTests: XCTestCase {
@@ -47,6 +49,7 @@ final class ReleaseReadinessTests: XCTestCase {
         var ownedSecrets: ConnectedDeviceQASecrets?
         var ownedSigner: ConnectedDeviceQASigner?
         var activeRepository: BackendRepository?
+        var systemAuthorization: ConnectedDeviceQASystemAuthorization?
         do {
             let config = try ConnectedDeviceQAConfiguration(encoded)
             try ConnectedDeviceQA.require(ProcessInfo.processInfo.arguments.contains("--reference-preview"), "reference_host_required")
@@ -58,13 +61,19 @@ final class ReleaseReadinessTests: XCTestCase {
             ownedSecrets = secrets; ownedSigner = signer
             try secrets.claimEmptyNamespace()
             try signer.claimEmptyAlias()
+            let authorization = await ConnectedDeviceQASystemAuthorization()
+            systemAuthorization = authorization
             stage = "readiness"
             try await ConnectedDeviceQA.readiness(config)
             let repository = BackendRepository(origin: config.origin, transport: NativeURLTransport(), secrets: secrets, signer: signer)
             activeRepository = repository
             stage = "anonymous_admission"
             try config.requireCurrent()
-            guard let anonymous = try await repository.bootstrap() else { throw ConnectedDeviceQA.Failure.check("anonymous_session_missing") }
+            let initial = try await authorization.perform(repository, purpose: .connect, config: config) { grant in
+                try ConnectedDeviceQA.require(grant == nil, "anonymous_bootstrap_must_not_prompt")
+                return try await repository.bootstrap()
+            }
+            guard let anonymous = initial else { throw ConnectedDeviceQA.Failure.check("anonymous_session_missing") }
             try ConnectedDeviceQA.require(!anonymous.authenticated && anonymous.roles == ["user"], "anonymous_authority_changed")
             let denied = try await ConnectedDeviceQA.request(config, path: "/community/action", method: "POST", secrets: secrets,
                 body: .object(["action": .string("photos"), "payload": .object(["source": .string("all")])]))
@@ -78,51 +87,72 @@ final class ReleaseReadinessTests: XCTestCase {
             try ConnectedDeviceQA.require(pendingAudience == nil, "audience_operation_unconfirmed")
             stage = "three_still_enrollment"
             try config.requireCurrent()
-            let publicKey = try signer.publicJWK(alias: NativeEnrollmentRecord.keyAlias, create: true)
-            try signer.requireSecureEnclaveKey()
-            let keyDigest = signer.sha256(try publicKey.canonical())
-            let policy = try await repository.policy()
-            let enrollment = try await repository.startFace(consentPolicy: policy, publicKey: publicKey)
+            let enrollment = try await authorization.perform(repository, purpose: .enrollment, config: config, grantRequired: true) { _ in
+                let publicKey = try signer.publicJWK(alias: NativeEnrollmentRecord.keyAlias, create: true)
+                try signer.requireSecureEnclaveKey()
+                let policy = try await repository.policy()
+                return try await repository.startFace(consentPolicy: policy, publicKey: publicKey)
+            }
+            let keyDigest = signer.sha256(try signer.publicJWK(alias: NativeEnrollmentRecord.keyAlias, create: false).canonical())
             try ConnectedDeviceQA.require(enrollment.accountID == anonymous.accountID && enrollment.purpose == "registration" && enrollment.poses == ["front", "left", "right"], "enrollment_binding_changed")
             var captures: [WireValue] = []
             for (index, name) in ["a0", "a1", "a2"].enumerated() {
                 try config.requireCurrent()
-                captures.append(try await repository.capture(try config.jpeg(name), index: index, challenge: enrollment))
+                captures.append(try await authorization.perform(repository, purpose: .capture, config: config, grantRequired: true) { _ in
+                    try await repository.capture(try config.jpeg(name), index: index, challenge: enrollment)
+                })
             }
-            let registered = try await repository.completeFace(enrollment, captures: captures)
+            let enrollmentReceipts = captures
+            let registered = try await authorization.perform(repository, purpose: .reconciliation, config: config, grantRequired: true) { _ in
+                try await repository.completeFace(enrollment, captures: enrollmentReceipts)
+            }
             guard let originalDevice = try await repository.device() else { throw ConnectedDeviceQA.Failure.check("registered_device_missing") }
             try ConnectedDeviceQA.require(registered.authenticated && registered.accountID == anonymous.accountID && originalDevice.accountID == anonymous.accountID && originalDevice.profileID != nil && originalDevice.profileRevision != nil, "same_account_upgrade_missing")
             stage = "logout_and_retained_state"
-            try await repository.logout()
+            try await authorization.perform(repository, purpose: .connect, config: config) { _ in try await repository.logout() }
             activeRepository = nil
             let loggedOut = await repository.summary()
             try ConnectedDeviceQA.require(loggedOut == nil && (try secrets.read("credentials")) == nil && (try signer.hasRetainedKey()), "logout_or_retained_key_changed")
             // A new actor restores only this run's actual Keychain records/key.
             let returning = BackendRepository(origin: config.origin, transport: NativeURLTransport(), secrets: secrets, signer: signer)
             activeRepository = returning
-            let restored = try await returning.bootstrap()
+            let restored = try await authorization.perform(returning, purpose: .connect, config: config) { _ in try await returning.bootstrap() }
             guard let retained = try await returning.device() else { throw ConnectedDeviceQA.Failure.check("retained_device_missing") }
             try ConnectedDeviceQA.require(restored == nil && retained.accountID == originalDevice.accountID && retained.deviceID == originalDevice.deviceID && retained.faceHandle == originalDevice.faceHandle && retained.profileID == originalDevice.profileID && retained.profileRevision == originalDevice.profileRevision && retained.modelID == originalDevice.modelID, "retained_identity_changed")
             let retainedPublicKey = try signer.publicJWK(alias: NativeEnrollmentRecord.keyAlias, create: false)
             try ConnectedDeviceQA.require(signer.sha256(try retainedPublicKey.canonical()) == keyDigest, "retained_key_changed")
             stage = "single_still_returning_login"
             try config.requireCurrent()
-            let currentPolicy = try await returning.policy()
-            let login = try await returning.startFace(consentPolicy: currentPolicy, publicKey: retainedPublicKey)
+            let login = try await authorization.perform(returning, purpose: .enrollment, config: config, grantRequired: true) { _ in
+                let currentPolicy = try await returning.policy()
+                return try await returning.startFace(consentPolicy: currentPolicy, publicKey: retainedPublicKey)
+            }
             try ConnectedDeviceQA.require(login.purpose == "login" && login.poses == ["front"] && login.accountID == anonymous.accountID && login.deviceID == originalDevice.deviceID && login.id != enrollment.id && login.wire["profile_id"].string == originalDevice.profileID && login.wire["profile_revision"].string == originalDevice.profileRevision && login.wire["model_id"].string == originalDevice.modelID, "returning_challenge_binding_changed")
-            let freshCapture = try await returning.capture(try config.jpeg("a5"), index: 0, challenge: login)
-            let signedIn = try await returning.completeFace(login, captures: [freshCapture])
+            let freshCapture = try await authorization.perform(returning, purpose: .capture, config: config, grantRequired: true) { _ in
+                try await returning.capture(try config.jpeg("a5"), index: 0, challenge: login)
+            }
+            let signedIn = try await authorization.perform(returning, purpose: .reconciliation, config: config, grantRequired: true) { _ in
+                try await returning.completeFace(login, captures: [freshCapture])
+            }
             try ConnectedDeviceQA.require(signedIn.authenticated && signedIn.accountID == anonymous.accountID, "returning_account_changed")
             stage = "consumed_challenge_replay"
             var envelope = login.deviceEnvelope()
             envelope["step"] = .string("complete"); envelope["capture_manifest"] = .array([freshCapture])
-            let replay = try await ConnectedDeviceQA.request(config, path: "/auth/face/complete", method: "POST", secrets: secrets,
-                body: .object(["challenge_id": .string(login.id), "device_signature": .string(try signer.sign(WireValue.object(envelope).canonical()))]))
+            let replayBytes = try WireValue.object(envelope).canonical()
+            let replay = try await authorization.perform(returning, purpose: .reconciliation, config: config, grantRequired: true) { grant in
+                guard let grant else { throw NativeLocalAuthenticationIssue.required }
+                let permit = try grant.permit(replayBytes, alias: NativeEnrollmentRecord.keyAlias,
+                                             epoch: grant.binding.epoch, operationID: grant.binding.operationID)
+                let signature = try signer.sign(replayBytes, alias: NativeEnrollmentRecord.keyAlias, permit: permit)
+                _ = try permit.require(replayBytes, alias: NativeEnrollmentRecord.keyAlias)
+                return try await ConnectedDeviceQA.request(config, path: "/auth/face/complete", method: "POST", secrets: secrets,
+                    body: .object(["challenge_id": .string(login.id), "device_signature": .string(signature)]))
+            }
             try ConnectedDeviceQA.require([401, 409].contains(replay.status), "consumed_challenge_replay_not_denied")
             let current = try await returning.current()
             try ConnectedDeviceQA.require(current["authenticated"].bool == true && current["user_id"].string == anonymous.accountID, "replay_changed_current_authority")
             stage = "final_logout"
-            try await returning.logout()
+            try await authorization.perform(returning, purpose: .connect, config: config) { _ in try await returning.logout() }
             activeRepository = nil
             let finalSession = await returning.summary()
             try ConnectedDeviceQA.require(finalSession == nil && (try secrets.read("credentials")) == nil, "final_session_not_retired")
@@ -134,9 +164,13 @@ final class ReleaseReadinessTests: XCTestCase {
             XCTFail("Connected physical repository check failed at " + stage + ": " + code)
         }
         if let activeRepository {
-            do { try await activeRepository.logout() }
+            do {
+                guard let systemAuthorization else { throw NativeLocalAuthenticationIssue.required }
+                try await systemAuthorization.performCleanup(activeRepository)
+            }
             catch { XCTFail("Connected physical repository cleanup could not confirm its own session logout.") }
         }
+        await systemAuthorization?.close()
         do { try ownedSecrets?.cleanupOwnedItems() }
         catch { XCTFail("Connected physical repository cleanup could not confirm removal of its own Keychain items.") }
         do { try ownedSigner?.cleanupOwnedKey() }
@@ -301,11 +335,73 @@ private final class ConnectedDeviceQASecrets: NativeSecretStore, @unchecked Send
     }
 }
 
+/// This opt-in physical lane uses real system authorization. It cannot auto-pass
+/// Face ID, Touch ID or passcode, and it never substitutes a fixture authorizer.
+@MainActor
+private final class ConnectedDeviceQASystemAuthorization {
+    private let authenticator = NativeLocalAuthenticator()
+    private var observers: [NSObjectProtocol] = []
+    private var generation = 0
+    private var busy = false
+    init() {
+        observers = [UIApplication.didEnterBackgroundNotification, UIApplication.willTerminateNotification].map { name in
+            NotificationCenter.default.addObserver(forName: name, object: nil, queue: .main) { [weak self] _ in
+                MainActor.assumeIsolated { self?.generation += 1; self?.authenticator.invalidate() }
+            }
+        }
+    }
+    func perform<T>(_ repository: BackendRepository, purpose: NativeLocalAuthenticationPurpose,
+                    config: ConnectedDeviceQAConfiguration? = nil, grantRequired: Bool = false,
+                    _ work: (NativeLocalSigningLease?) async throws -> T) async throws -> T {
+        guard !busy, UIApplication.shared.applicationState == .active else { throw NativeLocalAuthenticationIssue.required }
+        busy = true; defer { busy = false }
+        let operationID = UUID(), expectedGeneration = generation
+        var lease: NativeLocalSigningLease?
+        do {
+            try config?.requireCurrent(); try Task.checkCancellation()
+            if let request = try await repository.prepareLocalSigning(purpose: purpose, operationID: operationID) {
+                lease = try await authenticator.authorize(request)
+                // The expected system sheet can make the scene inactive. True
+                // background invalidates the real context and this generation.
+                let deadline = ProcessInfo.processInfo.systemUptime + 5
+                while UIApplication.shared.applicationState != .active {
+                    guard generation == expectedGeneration, ProcessInfo.processInfo.systemUptime < deadline else { throw NativeLocalAuthenticationIssue.cancelled }
+                    try await Task.sleep(for: .milliseconds(25))
+                }
+                guard generation == expectedGeneration, let lease else { throw NativeLocalAuthenticationIssue.cancelled }
+                try await repository.installLocalSigning(lease)
+            }
+            guard !grantRequired || lease != nil, generation == expectedGeneration,
+                  UIApplication.shared.applicationState == .active else { throw NativeLocalAuthenticationIssue.required }
+            try config?.requireCurrent(); try Task.checkCancellation()
+            let result = try await NativeLocalSigningOperation.$id.withValue(operationID) {
+                try await NativeLocalSigningOperation.$purpose.withValue(purpose) { try await work(lease) }
+            }
+            guard generation == expectedGeneration, UIApplication.shared.applicationState == .active else { throw NativeLocalAuthenticationIssue.cancelled }
+            try config?.requireCurrent(); try Task.checkCancellation()
+            lease?.retire(); await repository.finishLocalSigning(operationID: operationID)
+            return result
+        } catch {
+            lease?.invalidate(); authenticator.invalidate()
+            await repository.finishLocalSigning(operationID: operationID)
+            throw error
+        }
+    }
+    func performCleanup(_ repository: BackendRepository) async throws {
+        try await perform(repository, purpose: .connect) { _ in try await repository.logout() }
+    }
+    func close() {
+        generation += 1; authenticator.invalidate()
+        observers.forEach(NotificationCenter.default.removeObserver); observers = []
+    }
+}
+
 /// Only the logical enrollment alias is mapped to this run's one physical tag.
 private final class ConnectedDeviceQASigner: NativeDeviceSigner, @unchecked Sendable {
     private let ownedAlias: String
     private let lock = NSRecursiveLock()
     private var claimed = false, creationAttempted = false
+    var requiresLocalAuthentication: Bool { true }
     init(runID: String) { ownedAlias = NativeAccountRecoveryRecord.aliasPrefix + runID }
     func claimEmptyAlias() throws {
         lock.lock(); defer { lock.unlock() }
@@ -324,11 +420,21 @@ private final class ConnectedDeviceQASigner: NativeDeviceSigner, @unchecked Send
         if create { creationAttempted = true }
         return try DeviceIdentity.publicJWK(alias: ownedAlias, createIfMissing: create)
     }
-    func sign(_ data: Data) throws -> String { try sign(data, alias: NativeEnrollmentRecord.keyAlias) }
+    func sign(_ data: Data) throws -> String { throw NativeLocalAuthenticationIssue.required }
     func sign(_ data: Data, alias: String) throws -> String {
+        throw NativeLocalAuthenticationIssue.required
+    }
+    func sign(_ data: Data, alias: String, permit: NativeLocalSigningPermit) throws -> String {
         lock.lock(); defer { lock.unlock() }
         try ConnectedDeviceQA.require(claimed && alias == NativeEnrollmentRecord.keyAlias, "foreign_key_alias_rejected")
-        return try DeviceIdentity.sign(data, alias: ownedAlias)
+        guard let context = try permit.require(data, alias: alias) else { throw NativeLocalAuthenticationIssue.required }
+        var error: Unmanaged<CFError>?
+        let key = try DeviceIdentity.key(alias: ownedAlias, createIfMissing: false, authenticationContext: context)
+        guard let signature = SecKeyCreateSignature(key, .ecdsaSignatureMessageX962SHA256, data as CFData, &error) as Data? else {
+            throw ConnectedDeviceQA.Failure.check("owned_signature_unavailable")
+        }
+        _ = try permit.require(data, alias: alias)
+        return try P256.Signing.ECDSASignature(derRepresentation: signature).rawRepresentation.base64URL
     }
     func requireSecureEnclaveKey() throws {
         let key = try DeviceIdentity.key(alias: ownedAlias, createIfMissing: false)

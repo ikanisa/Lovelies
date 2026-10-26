@@ -1,19 +1,18 @@
 import { createServer } from 'node:http';
 import { Readable } from 'node:stream';
-import { readFile, stat } from 'node:fs/promises';
 import { pathToFileURL } from 'node:url';
 import { createGateway } from './gateway.mjs';
 import { DispatchLedger } from './ledger.mjs';
 import { connectDatabase } from './database.mjs';
 import { ApnsAuthorization, ApnsProvider, FcmAuthorization, FcmProvider } from './providers.mjs';
-async function secretFile(path) { if (!path || (await stat(path)).size > 65_536) throw new Error('private_provider_file_unavailable'); return readFile(path, 'utf8'); }
+import { privateProviderFile } from './private-files.mjs';
 export async function configuredProviders(env = process.env) {
   // Default process startup cannot send provider work. Enable only with the
   // separately authorized provider deployment/test configuration.
   if (env.PUSH_PROVIDER_SEND_ENABLED !== 'true') return {};
   const providers = {};
-  if (env.APNS_PRIVATE_KEY_FILE) providers.ios = new ApnsProvider({ authorization: new ApnsAuthorization({ teamID: env.APNS_TEAM_ID, keyID: env.APNS_KEY_ID, privateKey: await secretFile(env.APNS_PRIVATE_KEY_FILE) }), topic: env.APNS_TOPIC, environment: env.APNS_ENVIRONMENT });
-  if (env.FCM_SERVICE_ACCOUNT_FILE) providers.android = new FcmProvider({ authorization: new FcmAuthorization({ serviceAccount: JSON.parse(await secretFile(env.FCM_SERVICE_ACCOUNT_FILE)), projectID: env.FCM_PROJECT_ID }), projectID: env.FCM_PROJECT_ID, packageName: env.ANDROID_PACKAGE_NAME });
+  if (env.APNS_PRIVATE_KEY_FILE) providers.ios = new ApnsProvider({ authorization: new ApnsAuthorization({ teamID: env.APNS_TEAM_ID, keyID: env.APNS_KEY_ID, privateKey: await privateProviderFile(env.APNS_PRIVATE_KEY_FILE) }), topic: env.APNS_TOPIC, environment: env.APNS_ENVIRONMENT });
+  if (env.FCM_SERVICE_ACCOUNT_FILE) providers.android = new FcmProvider({ authorization: new FcmAuthorization({ serviceAccount: JSON.parse(await privateProviderFile(env.FCM_SERVICE_ACCOUNT_FILE)), projectID: env.FCM_PROJECT_ID }), projectID: env.FCM_PROJECT_ID, packageName: env.ANDROID_PACKAGE_NAME });
   if (!Object.keys(providers).length) throw new Error('provider_send_enabled_without_configuration');
   return providers;
 }

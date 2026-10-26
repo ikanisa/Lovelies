@@ -1,0 +1,24 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "account_id": "2209b915a85b1c11cee79b7806c6e73b",
+  "name": "lovelies-restore-journal",
+  "main": "src/worker.mjs",
+  "compatibility_date": "2026-07-21",
+  "workers_dev": false,
+  "preview_urls": false,
+  "send_metrics": false,
+  "logpush": false,
+  "observability": {
+    "enabled": false,
+    "head_sampling_rate": 0,
+    "logs": { "enabled": false, "invocation_logs": false, "persist": false },
+    "traces": { "enabled": false, "persist": false }
+  },
+  "vars": { "SUPABASE_PROJECT_ID": "ltqfplqevxztlswlzexn" },
+  // RESTORE_JOURNAL_TOKEN is a server-only secret, never a client config value.
+  // The Worker selects the one EU subnamespace and fixed project object name.
+  "durable_objects": {
+    "bindings": [{ "name": "RESTORE_JOURNAL", "class_name": "RestoreJournal" }]
+  },
+  "migrations": [{ "tag": "restore-journal-v1", "new_sqlite_classes": ["RestoreJournal"] }]
+}

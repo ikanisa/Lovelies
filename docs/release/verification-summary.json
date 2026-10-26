@@ -1,6 +1,6 @@
 {
   "prepared": "2026-10-23",
-  "readiness": "not_ready_for_runtime_deployment_or_store_submission",
+  "readiness": "not_ready_for_application_cutover_or_store_submission",
   "replacement": {
     "existing_store_id": "com.lovelies.memories",
     "apple_app_id": "6786056510",
@@ -19,7 +19,7 @@
     "apple_paid_agreement": "Reviewedv127 accepted; Active effective2026-10-24 to2027-06-21. Separate billing/provider qualification remains.",
     "intended_audience": {
       "minimum_age": 13,
-      "guardian_consent_required_for": "13–17",
+      "guardian_consent_required_for": "13\u201317",
       "under13": "excluded",
       "implementation_status": "new_age_and_guardian_gate_required_not_yet_qualified",
       "retention_decision": "Ownerdelegated proportionate schedule and implementation to coordinator; currentdefaults are not policyacceptance."
@@ -28,41 +28,38 @@
   "hosted_infrastructure": {
     "project": "ltqfplqevxztlswlzexn",
     "schema": {
-      "status": "applied_and_schema_read_back",
+      "status": "schema12_69_private_tables_preservation_history_security_verified",
       "project": "ltqfplqevxztlswlzexn",
-      "tables": 63,
-      "transaction": "all-or-nothing",
-      "baseline_sha256": "ccd7d4b23b21bc65088fce436ade9019f0513e622140eb4e89c0048793bd9a6b",
-      "additive_sha256": "96438cd659e8f767b8e3977127e2137d4acf40cd2532f1c7d2e094777f102969",
-      "bundle_sha256": "4af45131d43ae3e5e832b8e6a151c683cc018eb08d43c1f4f34a4e6b42bc156a",
-      "bytes": 54495,
-      "scope": "Private schema and nonlogin backend role; no legacy imports, no data deletion, no public grants; requires current inventory and specific action-time approval. Does not deploy API/services or create runtime credentials.",
-      "owner_action_time_approval": "Approve the staged v7+v8 migration",
-      "execution_result": "Success. No rows returned",
-      "readback": {
-        "schema_version": 8,
-        "tables": 63,
-        "forced_rls_tables": 63,
-        "backend_only_policies": 63,
-        "accounts": 0,
-        "unsafe_backend_role_flags": false,
-        "anon_schema_access": false,
-        "authenticated_schema_access": false,
-        "anon_backend_membership": false,
-        "authenticated_backend_membership": false
-      },
-      "evidence": [
-        "supabase-v7-v8-applied.png",
-        "supabase-v8-readback.png",
-        "supabase-v8-readback.txt"
+      "version": 12,
+      "tables": 69,
+      "forced_rls_tables": 69,
+      "backend_only_policies": 69,
+      "client_public_acl_entries": 0,
+      "client_backend_memberships": [],
+      "accounts": 0,
+      "old_non_version_table_fingerprints_preserved": 67,
+      "expected_changed_old_tables": [
+        "schema_versions"
       ],
-      "supabase_cli_history": "Manual SQL execution does not establish Supabase CLI migration-history reconciliation; repair/read back through supported tooling before future db push.",
-      "not_deployed_at_that_readback": [
-        "Edge API",
-        "private inference",
-        "push gateway",
-        "maintenance scheduler"
-      ]
+      "new_table": "restore_control",
+      "new_control_empty": true,
+      "runtime_marker_seeded": false,
+      "bootstrap_or_clearance": false,
+      "no_imports_or_deletions": true,
+      "supported_history_versions": [
+        "20261023162016",
+        "20261023210000",
+        "20261024170000",
+        "20261024180000",
+        "20261024190000",
+        "20261026132612"
+      ],
+      "security_advisor_items": 0,
+      "receipt": {
+        "path": "/Volumes/PRO-G40/Projects/Lovelies/verification/hosted-v12-20261026/result.json",
+        "sha256": "3c7714de872c675b61dcc9a4beaf08d318e127218dca35863a4db9fee57c8651"
+      },
+      "scope": "Hosted additive DDL/security/preservation/history only; no API cutover, journal serving clearance or store release."
     },
     "storage_role": {
       "scope": "Actual hosted PostgreSQL read-only result through visible Supabase editor; not API/media/provider acceptance",
@@ -116,10 +113,10 @@
     "managed_migration_history_reconciled": true,
     "api_or_supporting_services_deployed_at_original_schema_checkpoint": false,
     "application_runtime_serving": false,
-    "disabled_inference_worker_uploaded": true,
-    "current_deployment_limit": "Official CLI2.84.2 now has target-project access; exact3initial appsecrets are applied/digestverified and supported baseline7/8history is reconciled. Application API/accepted inference/push/scheduler/restore operation remain undeployed/unqualified. Named v9–v11 grant confirmation remains pending. No application cutover or store release.",
+    "disabled_inference_worker_uploaded": false,
+    "current_deployment_limit": "Schema12/69 + six applied history entries qualified. Inference packaging-only d815 appversion2 healthy1/failed0/starting0; exact loaded-model readiness through private account ServiceBinding qualified; Supabase public HTTPS remains unqualified. Seven custom Supabase secrets preserve initial three. Private journal/domain replay/cleanup/provider/scheduler/backup operation and API cutover remain unfinished.",
     "application_edge_function_count": 0,
-    "custom_application_secret_count": 3,
+    "custom_application_secret_count": 7,
     "current_cli_checkpoint": {
       "cli_version": "2.84.2",
       "project_access": {
@@ -149,7 +146,45 @@
       "api_functions_deployed": 0,
       "all_63_application_row_fingerprints_preserved_during_history_repair": true,
       "staged_v9_v11_executed": false
-    }
+    },
+    "historical_v7_v8_schema_receipt": {
+      "status": "applied_and_schema_read_back",
+      "project": "ltqfplqevxztlswlzexn",
+      "tables": 63,
+      "transaction": "all-or-nothing",
+      "baseline_sha256": "ccd7d4b23b21bc65088fce436ade9019f0513e622140eb4e89c0048793bd9a6b",
+      "additive_sha256": "96438cd659e8f767b8e3977127e2137d4acf40cd2532f1c7d2e094777f102969",
+      "bundle_sha256": "4af45131d43ae3e5e832b8e6a151c683cc018eb08d43c1f4f34a4e6b42bc156a",
+      "bytes": 54495,
+      "scope": "Private schema and nonlogin backend role; no legacy imports, no data deletion, no public grants; requires current inventory and specific action-time approval. Does not deploy API/services or create runtime credentials.",
+      "owner_action_time_approval": "Approve the staged v7+v8 migration",
+      "execution_result": "Success. No rows returned",
+      "readback": {
+        "schema_version": 8,
+        "tables": 63,
+        "forced_rls_tables": 63,
+        "backend_only_policies": 63,
+        "accounts": 0,
+        "unsafe_backend_role_flags": false,
+        "anon_schema_access": false,
+        "authenticated_schema_access": false,
+        "anon_backend_membership": false,
+        "authenticated_backend_membership": false
+      },
+      "evidence": [
+        "supabase-v7-v8-applied.png",
+        "supabase-v8-readback.png",
+        "supabase-v8-readback.txt"
+      ],
+      "supabase_cli_history": "Manual SQL execution does not establish Supabase CLI migration-history reconciliation; repair/read back through supported tooling before future db push.",
+      "not_deployed_at_that_readback": [
+        "Edge API",
+        "private inference",
+        "push gateway",
+        "maintenance scheduler"
+      ]
+    },
+    "inference_worker_container_deployed": true
   },
   "local_verification": {
     "backend": {
@@ -178,6 +213,26 @@
         "reviewed_delta": {
           "path": "verification/supabase-release-20261023/post-localization-ui/caption-scroll-build/backend-backlog-delta-pg-qualified.json",
           "sha256": "8b0a4073aae43e22e822631b473cae3d5ed0f0c086cdda43cf978de7a22f6c1e"
+        }
+      },
+      "current_schema12_checkpoint": {
+        "tests": 329,
+        "pass": 328,
+        "fail": 0,
+        "skipped": 1,
+        "skip_scope": "Optional actual-model HTTP test; separate recognition/hosted acceptance remains open",
+        "types_pass": true,
+        "source_inputs": 95,
+        "source_unchanged": true,
+        "actual_native_postgres_version": "17.11",
+        "actual_deno_tls_journal_handler": true,
+        "receipt": {
+          "path": "/Volumes/PRO-G40/Projects/Lovelies/verification/restore-pg-integration-20261026/full-api-final-v2/result.json",
+          "sha256": "d2de7aedd8029ca292c667f082aebd911edcdd7be68d1066db4dc5e80efb6236"
+        },
+        "first_failed_329_case_run_preserved": {
+          "path": "/Volumes/PRO-G40/Projects/Lovelies/verification/restore-pg-integration-20261026/full-api-final/result.json",
+          "sha256": "903142c6135e7180c4f6835de835e1daff04e3592c132064f8f2a1d1220656d7"
         }
       }
     },
@@ -419,7 +474,7 @@
         "debug_build_for_testing": "passed",
         "simulator_app_and_V4_runner": "passed",
         "source_inputs_unchanged": true,
-        "runtime": "Preserved35ca/c6 normal1–18 diagnostic checkpoint: all custom checks/exits pass; native failures retained, including shared banner later addressed. No newdc3 whole-matrix pass inferred.",
+        "runtime": "Preserved35ca/c6 normal1\u201318 diagnostic checkpoint: all custom checks/exits pass; native failures retained, including shared banner later addressed. No newdc3 whole-matrix pass inferred.",
         "runner_sha256": "c6e8536a13514b282cc2cd16b5fedfe0d9b7d34b6f180e58722a0aeac7da2711",
         "simulator_build_receipt": "verification/supabase-release-20261023/post-localization-ui/simulator-build.json"
       },
@@ -652,6 +707,52 @@
           "PRO_G40": 3221225472
         },
         "runtime_acceptance": false
+      },
+      "current_local_authentication_checkpoint": {
+        "state": "implemented_and_locally_integrated",
+        "original_swift_hosts_pass": 1020,
+        "separate_guest_hosts_pass": 101,
+        "separate_media_hosts_pass": 35,
+        "focused_local_auth_checks_pass": 108,
+        "counts_are_separate_scopes": true,
+        "original_hosts_receipt": {
+          "path": "/Volumes/PRO-G40/Projects/Lovelies/verification/native-local-auth-20261026/original-hosts-v3/result.json",
+          "sha256": "41f34ee55ac9cfa6621c0596b64dec3179b58d02b2752943745245574107aa43"
+        },
+        "guest_media_receipt": {
+          "path": "/Volumes/PRO-G40/Projects/Lovelies/verification/native-local-auth-20261026/guest-media-regressions/result.json",
+          "sha256": "2841e1e1a97f278025bf56b1f15cd9bd8d9051a185e06b9a4159e07a89deb099"
+        },
+        "focused_receipt": {
+          "path": "/Volumes/PRO-G40/Projects/Lovelies/verification/native-local-auth-20261026/handoff-v3/result.json",
+          "sha256": "59264411ce057b966af19695feb2189f3802318548627207c084429066abbc19"
+        },
+        "app_swift_source_count": 21,
+        "debug_compile": {
+          "path": "/Volumes/PRO-G40/Projects/Lovelies/verification/native-local-auth-20261026/app-build/result.json",
+          "sha256": "8f90082f5ca9f9080d49081f0a65da7a9ff13ff26c260a5282abd661509b9992"
+        },
+        "unsigned_release_compile": {
+          "path": "/Volumes/PRO-G40/Projects/Lovelies/verification/native-local-auth-20261026/release-build/result.json",
+          "sha256": "1b5ebaa091aba65d24fd2b501b586d50769c5d5f4c530a5d5953ef1cda824502"
+        },
+        "complete_xctest_target_compile": {
+          "path": "/Volumes/PRO-G40/Projects/Lovelies/verification/native-local-auth-20261026/test-build/result.json",
+          "sha256": "3f45b6079e7c70835a0d4a3c7f73126857d7cec9ad32b13d01da0332186ff88d"
+        },
+        "physical_optin_adapter_real_system_authorizer": true,
+        "physical_test_launched": false,
+        "physical_new_legacy_os_authentication_qualified": false,
+        "app_review_accepted": false,
+        "exact_unsigned_release_preflight_issue_count": 6,
+        "preflight_issues": [
+          "Published link host",
+          "Published privacy URL",
+          "Published terms URL",
+          "Published support URL",
+          "Published account deletion URL",
+          "Distribution signature"
+        ]
       }
     },
     "model_service": {
@@ -2050,7 +2151,7 @@
       "live_listing_publication": false
     }
   },
-  "last_updated_client_date": "2026-10-25",
+  "last_updated_client_date": "2026-10-26",
   "tested_source_scope": {
     "meaning": "Hashes identify tested snapshots. The current audience integration checkpoint supersedes historical descriptions; each receipt retains its exact scope and whole_workspace_current_green remains false.",
     "prior_backend_commit": "9b9fda2ae918b73881fe7d1b318f570f0a97d2d8",
@@ -3244,7 +3345,7 @@
       "prior_runtime_saved_state_transition": {
         "receipt": "/Users/jeanbosco/Documents/Lovelies/verification/accessibility-navigation-20261023/ios-isolated-simulator/grouped-ui-fix-20261025/round8/install/prior-runtime-saved-state-transition.json",
         "sha256": "1a46724069b4cb73bd3b78dcc090fc5b3534b0c944baf9815ad59e65f18e2929",
-        "scope": "Two old scene-session files absent before current install; KnownSceneSessions1248→42B. Other selected nodes unchanged; original preimages retained; actor/exacttime not attributed."
+        "scope": "Two old scene-session files absent before current install; KnownSceneSessions1248\u219242B. Other selected nodes unchanged; original preimages retained; actor/exacttime not attributed."
       },
       "manual_action_runtime": {
         "receipt": "/Users/jeanbosco/Documents/Lovelies/verification/accessibility-navigation-20261023/ios-isolated-simulator/grouped-ui-fix-20261025/round8/b762-bounded-action-runtime-reviewed.json",
@@ -3323,6 +3424,205 @@
       "api_functions_deployed": 0,
       "all_63_application_row_fingerprints_preserved_during_history_repair": true,
       "staged_v9_v11_executed": false
+    },
+    "current_state_superseded_by": "goal_execution_20261026; retain older receipts within historical scopes"
+  },
+  "goal_execution_20261026": {
+    "goal_contract": "docs/release/full-implementation-goal-20261026.md",
+    "original_ids": 90,
+    "consolidated_work_packages": 33,
+    "explicitly_mapped_ids": 86,
+    "legacy_real_customer_import_not_applicable": [
+      "R03",
+      "R04",
+      "R05",
+      "R07"
+    ],
+    "overall_ready": false,
+    "application_api_cutover": false,
+    "stores_submitted": false,
+    "both_live_stable": false,
+    "github_billing_parked": true,
+    "required_independent_ci_pass": false,
+    "hosted_database": {
+      "status": "schema12_69_private_tables_preservation_history_security_verified",
+      "project": "ltqfplqevxztlswlzexn",
+      "version": 12,
+      "tables": 69,
+      "forced_rls_tables": 69,
+      "backend_only_policies": 69,
+      "client_public_acl_entries": 0,
+      "client_backend_memberships": [],
+      "accounts": 0,
+      "old_non_version_table_fingerprints_preserved": 67,
+      "expected_changed_old_tables": [
+        "schema_versions"
+      ],
+      "new_table": "restore_control",
+      "new_control_empty": true,
+      "runtime_marker_seeded": false,
+      "bootstrap_or_clearance": false,
+      "no_imports_or_deletions": true,
+      "supported_history_versions": [
+        "20261023162016",
+        "20261023210000",
+        "20261024170000",
+        "20261024180000",
+        "20261024190000",
+        "20261026132612"
+      ],
+      "security_advisor_items": 0,
+      "receipt": {
+        "path": "/Volumes/PRO-G40/Projects/Lovelies/verification/hosted-v12-20261026/result.json",
+        "sha256": "3c7714de872c675b61dcc9a4beaf08d318e127218dca35863a4db9fee57c8651"
+      },
+      "scope": "Hosted additive DDL/security/preservation/history only; no API cutover, journal serving clearance or store release."
+    },
+    "inference": {
+      "worker_deployed": true,
+      "worker_version": "4ff27d98-932f-49d0-a0f6-6be7044fc654",
+      "container_application": "a032803f-78a2-40f2-b011-24abaeb599ed",
+      "immutable_platform_manifest": "sha256:d815c57f43cb4f1e26d624e68d8b5f43db5a76723e1c1de8d88a341273b68ffe",
+      "serving_qualified": false,
+      "running_instances": 0,
+      "provider_failure": "runtime failed unpacking image",
+      "independent_https_failure": "403/1010 browser_signature_banned; no unchanged retry/disguised user agent",
+      "biometric_request_sent": false,
+      "supabase_custom_secrets_total": 7,
+      "initial_three_secrets_preserved": true,
+      "receipt": {
+        "path": "/Volumes/PRO-G40/Projects/Lovelies/verification/inference-packaging-20261026/provider-trial/provider-readback.json",
+        "sha256": "564ca7c2c02509c1915d263a790b738839e051ada76d0686bacd616bb156c8da"
+      },
+      "original_runtime_manifest_preserved": "sha256:982e2ed7bb66b17db17979495495892579f1b734c55d93516a2aeedbf70e1c6c",
+      "packaging_only_same_files_and_runtime": true,
+      "app_version": 2,
+      "provider_health": {
+        "healthy": 1,
+        "failed": 0,
+        "starting": 0,
+        "active": 0,
+        "assigned": 0,
+        "errors": []
+      },
+      "provider_unpack_failure": "Prior error preserved; new provider image preparation reports healthy, not loaded model readiness",
+      "runtime_model_ready": true,
+      "packaging_lineage": {
+        "path": "/Volumes/PRO-G40/Projects/Lovelies/verification/inference-packaging-20261026/result.json",
+        "sha256": "67d79c607ab5bde4e01c0259280545287cdfdaa0a215f008cebe8e282818ad46"
+      },
+      "authenticated_private_binding_ready": true,
+      "private_binding_missing_and_wrong_auth_status": 401,
+      "private_binding_ready_status": 200,
+      "private_binding_receipt": {
+        "path": "/Volumes/PRO-G40/Projects/Lovelies/verification/inference-packaging-20261026/private-binding-probe/exact-readiness.json",
+        "sha256": "f015264b02f97c4ada751570d0b1b3dd9260b3377a36560ed6f76ee964956581"
+      },
+      "supabase_public_https_consumer_qualified": false
+    },
+    "restore_journal": {
+      "local_service_tests": 34,
+      "fail": 0,
+      "skipped": 0,
+      "actual_sqlite_do_restart_fault_tests": true,
+      "service_syntax_and_dry_run": true,
+      "local_eu_selector_test_seam": true,
+      "service_receipt": {
+        "path": "/Volumes/PRO-G40/Projects/Lovelies/verification/restore-journal-20261026/final-protocol/result.json",
+        "sha256": "9b19849ca0427cdcb5682c15d7b41f4c0f1cae74cab4f784bf61e7c635a052c4"
+      },
+      "strict_api_client_and_pg_fence_integrated": true,
+      "production_entrypoints_require_journal": true,
+      "focused_actual_pg_tests": 19,
+      "focus_receipt": {
+        "path": "/Volumes/PRO-G40/Projects/Lovelies/verification/restore-pg-integration-20261026/postcommit-races/result.json",
+        "sha256": "bb9816f75214f13312959e77663fdf3fb08d587de4cada3e2ce44bd48387f963"
+      },
+      "hosted_service_deployed": false,
+      "runtime_marker_seeded": false,
+      "domain_restriction_producers_and_stable_allocations_complete": false,
+      "external_effect_generation_fences_complete": false,
+      "replay_object_inventory_cleanup_computed_completion_complete": false,
+      "recovery_clear_endpoint": false,
+      "scope": "Empty-event mutation checkpoints alone are not complete deletion/withdrawal suppression; hosted custody/restore qualification remains open."
+    },
+    "push_private_files": {
+      "local_provider_tests": 31,
+      "fail": 0,
+      "skipped": 0,
+      "syntax": true,
+      "actual_provider_credentials_host_device_acceptance": false,
+      "receipt": {
+        "path": "/Volumes/PRO-G40/Projects/Lovelies/verification/push-private-files-20261026/counts-reconciled.json",
+        "sha256": "1450605ffe4a3ba90760f35d985eca5e5c02ed12db1b9cf62235994af481e4ec"
+      }
+    },
+    "ios_local_authentication": {
+      "state": "implemented_and_locally_integrated",
+      "original_swift_hosts_pass": 1020,
+      "separate_guest_hosts_pass": 101,
+      "separate_media_hosts_pass": 35,
+      "focused_local_auth_checks_pass": 108,
+      "counts_are_separate_scopes": true,
+      "original_hosts_receipt": {
+        "path": "/Volumes/PRO-G40/Projects/Lovelies/verification/native-local-auth-20261026/original-hosts-v3/result.json",
+        "sha256": "41f34ee55ac9cfa6621c0596b64dec3179b58d02b2752943745245574107aa43"
+      },
+      "guest_media_receipt": {
+        "path": "/Volumes/PRO-G40/Projects/Lovelies/verification/native-local-auth-20261026/guest-media-regressions/result.json",
+        "sha256": "2841e1e1a97f278025bf56b1f15cd9bd8d9051a185e06b9a4159e07a89deb099"
+      },
+      "focused_receipt": {
+        "path": "/Volumes/PRO-G40/Projects/Lovelies/verification/native-local-auth-20261026/handoff-v3/result.json",
+        "sha256": "59264411ce057b966af19695feb2189f3802318548627207c084429066abbc19"
+      },
+      "app_swift_source_count": 21,
+      "debug_compile": {
+        "path": "/Volumes/PRO-G40/Projects/Lovelies/verification/native-local-auth-20261026/app-build/result.json",
+        "sha256": "8f90082f5ca9f9080d49081f0a65da7a9ff13ff26c260a5282abd661509b9992"
+      },
+      "unsigned_release_compile": {
+        "path": "/Volumes/PRO-G40/Projects/Lovelies/verification/native-local-auth-20261026/release-build/result.json",
+        "sha256": "1b5ebaa091aba65d24fd2b501b586d50769c5d5f4c530a5d5953ef1cda824502"
+      },
+      "complete_xctest_target_compile": {
+        "path": "/Volumes/PRO-G40/Projects/Lovelies/verification/native-local-auth-20261026/test-build/result.json",
+        "sha256": "3f45b6079e7c70835a0d4a3c7f73126857d7cec9ad32b13d01da0332186ff88d"
+      },
+      "physical_optin_adapter_real_system_authorizer": true,
+      "physical_test_launched": false,
+      "physical_new_legacy_os_authentication_qualified": false,
+      "app_review_accepted": false,
+      "exact_unsigned_release_preflight_issue_count": 6,
+      "preflight_issues": [
+        "Published link host",
+        "Published privacy URL",
+        "Published terms URL",
+        "Published support URL",
+        "Published account deletion URL",
+        "Distribution signature"
+      ]
+    },
+    "scope": "Current26October scoped results supersede historical contradictions. Readiness/serving/physical/provider/store/CI completion remains unproved. No overall completion percentage.",
+    "api": {
+      "tests": 329,
+      "pass": 328,
+      "fail": 0,
+      "skipped": 1,
+      "skip_scope": "Optional actual-model HTTP test; separate recognition/hosted acceptance remains open",
+      "types_pass": true,
+      "source_inputs": 95,
+      "source_unchanged": true,
+      "actual_native_postgres_version": "17.11",
+      "actual_deno_tls_journal_handler": true,
+      "receipt": {
+        "path": "/Volumes/PRO-G40/Projects/Lovelies/verification/restore-pg-integration-20261026/full-api-final-v2/result.json",
+        "sha256": "d2de7aedd8029ca292c667f082aebd911edcdd7be68d1066db4dc5e80efb6236"
+      },
+      "first_failed_329_case_run_preserved": {
+        "path": "/Volumes/PRO-G40/Projects/Lovelies/verification/restore-pg-integration-20261026/full-api-final/result.json",
+        "sha256": "903142c6135e7180c4f6835de835e1daff04e3592c132064f8f2a1d1220656d7"
+      }
     }
   }
 }

@@ -10,6 +10,8 @@ import {PostgresJobQueue} from '../services/supabase-api/src/jobs.ts';
 import {AuthenticatedService} from '../services/supabase-api/src/service-fetcher.ts';
 import {createModelServices} from '../services/supabase-api/src/model-services.ts';
 import {createApp,createHandler} from '../services/supabase-api/src/index.ts';
+import {RestoreJournalClient} from '../services/supabase-api/src/restore-journal.ts';
+import {RestoreDatabaseFence} from '../services/supabase-api/src/restore-database.ts';
 const required=name=>{const value=process.env[name];if(!value)throw new Error('Missing configuration: '+name);return value;};
 const port=Number(process.env.LOVELIES_DEV_PORT??8787);
 if(!Number.isSafeInteger(port)||port<1024||port>65535)throw new Error('Invalid loopback port');
@@ -17,7 +19,8 @@ const project=new URL(required('SUPABASE_URL'));
 if(project.protocol!=='https:'&&!['localhost','127.0.0.1','[::1]'].includes(project.hostname)||project.username||project.password||project.pathname!=='/'||project.search||project.hash)throw new Error('Invalid Supabase origin');
 if(project.protocol==='https:'&&project.hostname!=='ltqfplqevxztlswlzexn.supabase.co')throw new Error('Unexpected Supabase project');
 for(const name of ['AUTH_SIGNING_SECRET','MEDIA_SIGNING_SECRET','INTERNAL_MAINTENANCE_SECRET'])if(required(name).length<32)throw new Error('Strong independent secret required: '+name);
-const db=connectPostgres(required('LOVELIES_DATABASE_URL'),process.env.LOVELIES_DATABASE_CA);
+const journal=new RestoreJournalClient(required('RESTORE_JOURNAL_URL'),required('RESTORE_JOURNAL_TOKEN'));
+const db=connectPostgres(required('LOVELIES_DATABASE_URL'),process.env.LOVELIES_DATABASE_CA,new RestoreDatabaseFence(journal));
 const env={...process.env,APP_ENV:'local',PUBLIC_API_BASE_URL:`http://127.0.0.1:${port}`,
  PHOTOS:new SupabasePrivateBucket(project.href,required('LOVELIES_STORAGE_SECRET'),'lovelies-photos'),
  QUARANTINE:new SupabasePrivateBucket(project.href,required('LOVELIES_STORAGE_SECRET'),'lovelies-quarantine'),

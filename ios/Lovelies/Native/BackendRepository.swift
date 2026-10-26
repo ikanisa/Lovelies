@@ -161,10 +161,38 @@ struct NativeAuthorizedShareFiles: Sendable {
     }
 }
 
+/// Process-local, single-use continuation identity. Receipt and credential
+/// material remain inside the repository; a caller cannot manufacture a ticket.
+struct NativeGuestSetupResumeTicket: Sendable {
+    fileprivate let id: UUID
+}
+enum NativeLocalTransitionKind: Sendable { case accountRecoveryStart, profileCancellation }
+struct NativeLocalTransitionTicket: Sendable { fileprivate let id: UUID }
+
 actor BackendRepository {
     private let origin: URL, transport: any NativeTransport, secrets: any NativeSecretStore, signer: any NativeDeviceSigner
-    private var credentials: NativeCredentials?
-    private var epoch = 0
+    private var credentials: NativeCredentials? {
+        didSet {
+            if !Self.sameCredentials(oldValue, credentials) {
+                invalidateLocalSigning(); localPromotionActivation = nil; preparedGuestResume = nil; preparedLocalTransition = nil
+            }
+        }
+    }
+    private var epoch = 0 { didSet { if oldValue != epoch { invalidateLocalSigning(); localPromotionActivation = nil; preparedGuestResume = nil; preparedLocalTransition = nil } } }
+    private struct LocalPromotionActivation: Equatable {
+        let intent: String, credential: String
+        let epoch: Int
+    }
+    private var localPromotionActivation: LocalPromotionActivation?
+    private var localSigningLease: NativeLocalSigningLease?
+    private var localSigningCredentialDigest: String?
+    private var preparedLocalSigning: NativeLocalAuthenticationBinding?
+    private struct LocalTransitionPreparation {
+        let ticket: NativeLocalTransitionTicket, kind: NativeLocalTransitionKind
+        let account: String, alias: String, intent: String, stateDigest: String
+        let epoch: Int, serial: Int, issuedAt: TimeInterval
+    }
+    private var preparedLocalTransition: LocalTransitionPreparation?
     private var intents: [NativeOperationIntent] = []
     private var uploads: [NativeUploadRecord] = []
     private var uploadBatches: [NativeResumableUploadBatch] = []
@@ -175,6 +203,13 @@ actor BackendRepository {
     private var guestDeletion: NativeGuestDeletionRecord?
     private var guestDeletionSerial = 0
     private var guestDeletionBusy = false
+    private struct GuestResumePreparation {
+        let ticket: NativeGuestSetupResumeTicket
+        let scope: Scope
+        let receiptDigest: String, stateDigest: String
+        let serial: Int, issuedAt: TimeInterval
+    }
+    private var preparedGuestResume: GuestResumePreparation?
     private var enrollment: NativeEnrollmentRecord?
     private var enrollmentSerial = 0
     private var enrollmentBusy = false
@@ -197,6 +232,286 @@ actor BackendRepository {
         self.origin = origin; self.transport = transport; self.secrets = secrets; self.signer = signer; self.uploadFiles = uploadFiles
         self.uploadTransport = uploadTransport ?? NativeFileURLUploadTransport.shared
         self.privateMediaClock = privateMediaClock
+    }
+    /// Reads existing vault slots only. No key or network work precedes the
+    /// system's authorization of this exact interactive signing operation.
+    func prepareLocalSigning(purpose: NativeLocalAuthenticationPurpose, operationID: UUID,
+                             recoveryBackup: String? = nil, retainedEnrollmentOnly: Bool = false,
+                             guestResume: NativeGuestSetupResumeTicket? = nil,
+                             transition: NativeLocalTransitionTicket? = nil) throws -> NativeLocalAuthenticationBinding? {
+        localSigningLease?.retire(); localSigningLease = nil; localSigningCredentialDigest = nil; preparedLocalSigning = nil
+        if let transition {
+            guard guestResume == nil, !retainedEnrollmentOnly else { throw NativeLocalAuthenticationIssue.bindingChanged }
+            let prepared = try requireLocalTransition(transition)
+            guard purpose == (prepared.kind == .accountRecoveryStart ? .accountRecovery : .profileControl) else { throw NativeLocalAuthenticationIssue.bindingChanged }
+            if prepared.kind == .accountRecoveryStart {
+                guard let recoveryBackup, let record = accountRecovery else { throw NativeLocalAuthenticationIssue.bindingChanged }
+                let parsed = try NativeAccountRecoveryRecord.backup(recoveryBackup)
+                guard parsed.0 == record.accountID, parsed.1 == record.recoveryKey else { throw NativeLocalAuthenticationIssue.bindingChanged }
+            } else if recoveryBackup != nil { throw NativeLocalAuthenticationIssue.bindingChanged }
+            guard signer.requiresLocalAuthentication else { return nil }
+            let binding = try NativeLocalAuthenticationBinding(operationID: operationID, purpose: purpose,
+                accountID: prepared.account, epoch: epoch, aliases: [prepared.alias], stateDigest: prepared.stateDigest)
+            preparedLocalSigning = binding; return binding
+        }
+        if let guestResume {
+            guard purpose == .reconciliation, !retainedEnrollmentOnly, recoveryBackup == nil else { throw NativeLocalAuthenticationIssue.bindingChanged }
+            let prepared = try requireGuestResume(guestResume)
+            guard signer.requiresLocalAuthentication, let enrollment else { return nil }
+            let binding = try NativeLocalAuthenticationBinding(operationID: operationID, purpose: purpose,
+                accountID: prepared.scope.account!, epoch: epoch, aliases: [enrollment.keyAlias], stateDigest: prepared.stateDigest)
+            preparedLocalSigning = binding; return binding
+        }
+        guard signer.requiresLocalAuthentication else { return nil }
+        let slots = try localSigningSlots()
+        if retainedEnrollmentOnly {
+            guard purpose == .reconciliation, recoveryBackup == nil else { throw NativeLocalAuthenticationIssue.bindingChanged }
+            if slots["face-enrollment-journal"] == nil { return nil }
+        }
+        // These paths use their own existing private receipt/anonymous guards.
+        // A face journal must not turn guest privacy into an OS-auth prerequisite.
+        if slots["guest-deletion-receipt"] != nil || slots["registered-deletion-receipt"] != nil || slots["audience-suspended-authority"] != nil { return nil }
+        let identities = try hydrateLocalSigningState(slots)
+        if retainedEnrollmentOnly && enrollment == nil { return nil }
+        if purpose == .connect && enrollment == nil && ordinaryLogin == nil && accountRecovery == nil && faceLifecycle == nil { return nil }
+        let stored = try slots["credentials"].map { try JSONDecoder().decode(NativeCredentials.self, from: $0) }
+        let recoveryAccount = try recoveryBackup.map { try NativeAccountRecoveryRecord.backup($0).0 }
+        guard let account = recoveryAccount ?? identities.first?.account ?? credentials?.account_id ?? stored?.account_id else {
+            throw NativeLocalAuthenticationIssue.bindingChanged
+        }
+        guard identities.allSatisfy({ $0.account == account }),
+              credentials == nil || credentials?.account_id == account || credentials?.authenticated == false,
+              stored == nil || stored?.account_id == account || stored?.authenticated == false else {
+            throw NativeLocalAuthenticationIssue.bindingChanged
+        }
+        let retainedAlias = try device()?.keyAlias ?? NativeEnrollmentRecord.keyAlias
+        var aliases: Set<String>
+        switch purpose {
+        case .enrollment: aliases = [enrollment?.keyAlias ?? ordinaryLogin?.keyAlias ?? retainedAlias]
+        case .accountRecovery: aliases = [accountRecovery?.keyAlias ?? retainedAlias]
+        case .profileControl: aliases = [faceLifecycle?.keyAlias ?? retainedAlias]
+        case .capture:
+            aliases = [accountRecovery?.keyAlias ?? faceLifecycle?.keyAlias ?? enrollment?.keyAlias ?? ordinaryLogin?.keyAlias ?? retainedAlias]
+        case .connect, .reconciliation:
+            aliases = Set(identities.map(\.alias)); if aliases.isEmpty { aliases.insert(retainedAlias) }
+        }
+        if retainedEnrollmentOnly, let enrollment { aliases = [enrollment.keyAlias] }
+        if purpose == .accountRecovery, recoveryBackup != nil, accountRecovery == nil { throw NativeLocalAuthenticationIssue.required }
+        let binding = try NativeLocalAuthenticationBinding(operationID: operationID, purpose: purpose,
+            accountID: account, epoch: epoch, aliases: aliases, stateDigest: localSigningStateDigest(slots))
+        preparedLocalSigning = binding; return binding
+    }
+    private func localSigningSlots() throws -> [String: Data] {
+        var slots: [String: Data] = [:]
+        let limits = ["credentials": 16 * 1024, "registered-device": 32 * 1024, "pending-face-device": 32 * 1024,
+                      "face-enrollment-journal": 32 * 1024, "ordinary-face-login-journal": 32 * 1024,
+                      "account-recovery-journal": 32 * 1024, "face-profile-lifecycle": 128 * 1024,
+                      "retired-account-recoveries": 512 * 1024, "retired-face-profile-controls": 2 * 1024 * 1024,
+                      "refresh-delivery-journal-v1": 128 * 1024, "guest-deletion-receipt": 16 * 1024,
+                      "registered-deletion-receipt": 32 * 1024, "audience-suspended-authority": 32 * 1024]
+        for (name, maximum) in limits {
+            if let bytes = try secrets.read(name) {
+                guard bytes.count <= maximum else { throw NativeLocalAuthenticationIssue.bindingChanged }
+                slots[name] = bytes
+            }
+        }
+        return slots
+    }
+    private static func sameCredentials(_ first: NativeCredentials?, _ second: NativeCredentials?) -> Bool {
+        first?.account_id == second?.account_id && first?.access_token == second?.access_token &&
+        first?.refresh_token == second?.refresh_token && first?.auth_method == second?.auth_method &&
+        first?.expires_in == second?.expires_in && first?.expiresAt == second?.expiresAt && first?.roles == second?.roles
+    }
+    private func localEncodedDigest<T: Encodable>(_ value: T) throws -> String {
+        let encoder = JSONEncoder(); encoder.outputFormatting = [.sortedKeys]
+        return NativeLocalSigningLease.digest(try encoder.encode(value))
+    }
+    private func localPromotion<T: Encodable>(_ journal: T, credential: NativeCredentials) throws -> LocalPromotionActivation {
+        LocalPromotionActivation(intent: String(describing: T.self) + ":" + (try localEncodedDigest(journal)), credential: try localEncodedDigest(credential), epoch: epoch)
+    }
+    /// Promote once for the exact staged journal and complete credential. A
+    /// different intent, token, session, or repository epoch is a new transition.
+    private func activateLocalPromotion<T: Encodable>(_ next: NativeCredentials, journal: T) throws {
+        if signer.requiresLocalAuthentication,
+           Self.sameCredentials(credentials, next), localPromotionActivation == (try localPromotion(journal, credential: next)) { return }
+        credentials = next; epoch += 1; retireMedia()
+        if signer.requiresLocalAuthentication { localPromotionActivation = try localPromotion(journal, credential: next) }
+    }
+    private func requireLocalPromotionBinding() throws {
+        guard let activation = localPromotionActivation else { return }
+        let decoder = JSONDecoder()
+        func require<T: Codable>(_ record: T, credential: NativeCredentials, slot: String) throws {
+            guard Self.sameCredentials(credentials, credential),
+                  try localPromotion(record, credential: credential) == activation,
+                  let data = try secrets.read(slot),
+                  try localPromotion(decoder.decode(T.self, from: data), credential: credential) == activation else {
+                throw NativeLocalAuthenticationIssue.bindingChanged
+            }
+        }
+        do {
+            if let record = faceLifecycle, record.blocksAlternateRecovery || accountRecovery == nil,
+               let staged = record.promotionCredentials { try require(record, credential: staged, slot: "face-profile-lifecycle") }
+            else if let record = accountRecovery, let staged = record.promotionCredentials { try require(record, credential: staged, slot: "account-recovery-journal") }
+            else if let record = enrollment, let staged = record.promotionCredentials { try require(record, credential: staged, slot: "face-enrollment-journal") }
+            else if let record = ordinaryLogin, let staged = record.promotionCredentials { try require(record, credential: staged, slot: "ordinary-face-login-journal") }
+            else { throw NativeLocalAuthenticationIssue.bindingChanged }
+        } catch { invalidateLocalSigning(); throw error }
+    }
+    private func validLocalDevice(_ device: RegisteredDevice) throws {
+        guard UUID(uuidString: device.accountID) != nil, device.accountID == device.accountID.lowercased(),
+              UUID(uuidString: device.deviceID) != nil, NativeAccountRecoveryRecord.validSecret(device.faceHandle, prefix: "lfh_"),
+              NativeAccountRecoveryRecord.validAlias(device.keyAlias ?? NativeEnrollmentRecord.keyAlias),
+              (device.profileID == nil && device.profileRevision == nil && device.modelID == nil) ||
+                (device.profileID.flatMap(UUID.init(uuidString:)) != nil && device.profileRevision?.isEmpty == false &&
+                 device.modelID?.isEmpty == false && device.profileRevision!.count <= 512 && device.modelID!.count <= 512) else {
+            throw NativeLocalAuthenticationIssue.bindingChanged
+        }
+    }
+    private func sameLocalDevice(_ first: RegisteredDevice, _ second: RegisteredDevice, profile: Bool = true) -> Bool {
+        first.accountID == second.accountID && first.deviceID == second.deviceID && first.faceHandle == second.faceHandle &&
+        (first.keyAlias ?? NativeEnrollmentRecord.keyAlias) == (second.keyAlias ?? NativeEnrollmentRecord.keyAlias) &&
+        (!profile || first.profileID == second.profileID && first.profileRevision == second.profileRevision && first.modelID == second.modelID)
+    }
+    /// Local-only restore precedes the OS prompt. Public journal signatures and
+    /// complete shapes are validated here; private-key possession, fresh server
+    /// status and all durable repairs remain in the original authenticated path.
+    private func hydrateLocalSigningState(_ slots: [String: Data]) throws -> [(account: String, alias: String)] {
+        let decoder = JSONDecoder()
+        let stored = try slots["credentials"].map { try decoder.decode(NativeCredentials.self, from: $0) }
+        let registered = try slots["registered-device"].map { try decoder.decode(RegisteredDevice.self, from: $0) }
+        let pending = try slots["pending-face-device"].map { try decoder.decode(RegisteredDevice.self, from: $0) }
+        for device in [registered, pending].compactMap({ $0 }) { try validLocalDevice(device) }
+        var profile = try slots["face-profile-lifecycle"].map { try decoder.decode(NativeFaceLifecycleRecord.self, from: $0) }
+        var recovery = try slots["account-recovery-journal"].map { try decoder.decode(NativeAccountRecoveryRecord.self, from: $0) }
+        let setup = try slots["face-enrollment-journal"].map { try decoder.decode(NativeEnrollmentRecord.self, from: $0) }
+        let login = try slots["ordinary-face-login-journal"].map { try decoder.decode(NativeOrdinaryLoginRecord.self, from: $0) }
+        try profile?.validate(origin: origin); try recovery?.validate(origin: origin); try setup?.validate(origin: origin); try login?.validate(origin: origin)
+        let oldProfiles = try slots["retired-face-profile-controls"].map { try decoder.decode([NativeFaceLifecycleRecord].self, from: $0) } ?? []
+        let oldRecoveries = try slots["retired-account-recoveries"].map { try decoder.decode([NativeAccountRecoveryRecord].self, from: $0) } ?? []
+        guard oldProfiles.count <= 16, oldRecoveries.count <= 16, Set(oldRecoveries.map(\.requestID)).count == oldRecoveries.count else { throw NativeLocalAuthenticationIssue.bindingChanged }
+        for record in oldProfiles { try record.validate(origin: origin) }; for record in oldRecoveries { try record.validate(origin: origin) }
+        if let active = profile, oldProfiles.contains(where: { $0.controlOperationKey == active.controlOperationKey }) { profile = nil }
+        if let active = recovery, oldRecoveries.contains(where: { $0.requestID == active.requestID }) { recovery = nil }
+        let retained = registered ?? pending
+        if let login {
+            guard let retained, sameLocalDevice(retained, login.originalDevice) else { throw NativeLocalAuthenticationIssue.bindingChanged }
+        }
+        if let profile, let retained {
+            guard sameLocalDevice(retained, profile.originalDevice, profile: false),
+                  retained.profileID == profile.originalDevice.profileID && retained.profileRevision == profile.originalDevice.profileRevision && retained.modelID == profile.originalDevice.modelID ||
+                  retained.profileID == profile.promotionProfile?.id && retained.profileRevision == profile.promotionProfile?.revision && retained.modelID == profile.promotionProfile?.modelID ||
+                  retained.profileID == profile.metadata.profile?.id && retained.profileRevision == profile.metadata.profile?.revision && retained.modelID == profile.metadata.profile?.modelID else { throw NativeLocalAuthenticationIssue.bindingChanged }
+        }
+        if let setup {
+            for device in [registered, pending].compactMap({ $0 }) {
+                guard device.accountID == setup.accountID, device.deviceID == setup.deviceID, device.faceHandle == setup.faceHandle,
+                      (device.keyAlias ?? NativeEnrollmentRecord.keyAlias) == setup.keyAlias,
+                      device.profileID == nil || device.profileID == setup.profile?.id && device.profileRevision == setup.profile?.revision && device.modelID == setup.profile?.modelID else { throw NativeLocalAuthenticationIssue.bindingChanged }
+            }
+        }
+        var identities: [(account: String, alias: String)] = []
+        if let profile { identities.append((profile.accountID, profile.keyAlias)) }
+        if let recovery { identities.append((recovery.accountID, recovery.keyAlias)) }
+        if let setup { identities.append((setup.accountID, setup.keyAlias)) }
+        if let login { identities.append((login.originalDevice.accountID, login.keyAlias)) }
+        identities += [registered, pending].compactMap { $0 }.map { ($0.accountID, $0.keyAlias ?? NativeEnrollmentRecord.keyAlias) }
+        if let account = identities.first?.account {
+            guard identities.allSatisfy({ $0.account == account }),
+                  stored == nil || stored?.account_id == account || stored?.authenticated == false,
+                  credentials == nil || credentials?.account_id == account || credentials?.authenticated == false else { throw NativeLocalAuthenticationIssue.bindingChanged }
+        }
+        let held: NativeCredentials?, promotion: LocalPromotionActivation?
+        if let profile, profile.blocksAlternateRecovery || recovery == nil {
+            held = profile.promotionCredentials ?? profile.credentials
+            promotion = try profile.promotionCredentials.map { try localPromotion(profile, credential: $0) }
+        } else if let recovery {
+            held = recovery.promotionCredentials; promotion = try recovery.promotionCredentials.map { try localPromotion(recovery, credential: $0) }
+        } else if let setup {
+            held = setup.promotionCredentials ?? setup.originalAnonymous
+            promotion = try setup.promotionCredentials.map { try localPromotion(setup, credential: $0) }
+        } else if let login {
+            held = login.promotionCredentials; promotion = try login.promotionCredentials.map { try localPromotion(login, credential: $0) }
+        } else { held = stored; promotion = nil }
+        // Assign only after every held shape and relationship has passed. Holds
+        // remain installed so staged credentials cannot become a public session.
+        faceLifecycle = profile; accountRecovery = recovery; enrollment = setup; ordinaryLogin = login
+        lifecycleArchives = oldProfiles; recoveryArchives = oldRecoveries
+        if !Self.sameCredentials(credentials, held) { credentials = held; epoch += 1; retireMedia() }
+        if let promotion, let old = localPromotionActivation, old.intent != promotion.intent || old.credential != promotion.credential { epoch += 1; retireMedia() }
+        if let promotion { localPromotionActivation = LocalPromotionActivation(intent: promotion.intent, credential: promotion.credential, epoch: epoch) }
+        else { localPromotionActivation = nil }
+        return identities
+    }
+    private func localSigningStateDigest(_ slots: [String: Data]) -> String {
+        let rows = slots.keys.sorted().map { $0 + ":" + NativeLocalSigningLease.digest(slots[$0]!) }.joined(separator: "\n")
+        return NativeLocalSigningLease.digest(Data(rows.utf8))
+    }
+    func installLocalSigning(_ lease: NativeLocalSigningLease) throws {
+        guard signer.requiresLocalAuthentication, preparedLocalSigning == lease.binding,
+              lease.binding.epoch == epoch,
+              lease.binding.stateDigest == (try localSigningStateDigest(localSigningSlots())) else {
+            lease.invalidate(); throw NativeLocalAuthenticationIssue.bindingChanged
+        }
+        localSigningCredentialDigest = try secrets.read("credentials").map(NativeLocalSigningLease.digest)
+        localSigningLease = lease; preparedLocalSigning = nil
+    }
+    func finishLocalSigning(operationID: UUID) {
+        if localSigningLease?.binding.operationID == operationID { localSigningLease?.retire(); localSigningLease = nil; localSigningCredentialDigest = nil }
+        else if preparedLocalSigning?.operationID == operationID { invalidateLocalSigning() }
+    }
+    private func invalidateLocalSigning() {
+        localSigningLease?.invalidate(); localSigningLease = nil; localSigningCredentialDigest = nil; preparedLocalSigning = nil
+    }
+    private func makeLocalTransition(kind: NativeLocalTransitionKind, account: String, alias: String, intent: String, serial: Int) throws -> NativeLocalTransitionTicket {
+        let now = ProcessInfo.processInfo.systemUptime
+        guard now.isFinite, now >= 0 else { throw NativeLocalAuthenticationIssue.expired }
+        let ticket = NativeLocalTransitionTicket(id: UUID())
+        preparedLocalTransition = LocalTransitionPreparation(ticket: ticket, kind: kind, account: account, alias: alias,
+            intent: intent, stateDigest: try localSigningStateDigest(localSigningSlots()), epoch: epoch, serial: serial, issuedAt: now)
+        return ticket
+    }
+    private func requireLocalTransition(_ ticket: NativeLocalTransitionTicket) throws -> LocalTransitionPreparation {
+        try Task.checkCancellation()
+        let now = ProcessInfo.processInfo.systemUptime
+        guard let prepared = preparedLocalTransition, prepared.ticket.id == ticket.id, prepared.epoch == epoch,
+              now.isFinite, now >= prepared.issuedAt, now < prepared.issuedAt + NativeLocalSigningLease.maximumLifetime,
+              prepared.stateDigest == (try localSigningStateDigest(localSigningSlots())) else { throw NativeLocalAuthenticationIssue.bindingChanged }
+        switch prepared.kind {
+        case .accountRecoveryStart:
+            guard !recoveryBusy, recoverySerial == prepared.serial, let record = accountRecovery,
+                  record.requestID == prepared.intent, record.accountID == prepared.account, record.keyAlias == prepared.alias else { throw NativeLocalAuthenticationIssue.bindingChanged }
+            try record.validate(origin: origin)
+        case .profileCancellation:
+            guard !lifecycleBusy, lifecycleSerial == prepared.serial, let record = faceLifecycle,
+                  record.accountID == prepared.account, record.keyAlias == prepared.alias,
+                  record.controlOperationKey + ":" + (record.pending?.operationKey ?? "") == prepared.intent,
+                  record.pending?.cancelRequested == true else { throw NativeLocalAuthenticationIssue.bindingChanged }
+            try record.validate(origin: origin)
+        }
+        return prepared
+    }
+    private func requireLocalTransitionGrant(_ prepared: LocalTransitionPreparation, envelope: WireValue) throws {
+        guard signer.requiresLocalAuthentication else { return }
+        guard let lease = localSigningLease, lease.binding.epoch == epoch, lease.binding.accountID == prepared.account,
+              lease.binding.aliases == [prepared.alias], lease.binding.stateDigest == prepared.stateDigest,
+              lease.binding.purpose == (prepared.kind == .accountRecoveryStart ? .accountRecovery : .profileControl),
+              let operation = NativeLocalSigningOperation.id else { throw NativeLocalAuthenticationIssue.required }
+        _ = try lease.permit(envelope.canonical(), alias: prepared.alias, epoch: epoch, operationID: operation)
+    }
+    private func signDevice(_ bytes: Data, alias: String = NativeEnrollmentRecord.keyAlias) throws -> String {
+        guard signer.requiresLocalAuthentication else { return try signer.sign(bytes, alias: alias) }
+        guard let lease = localSigningLease, let operation = NativeLocalSigningOperation.id else { throw NativeLocalAuthenticationIssue.required }
+        guard try secrets.read("credentials").map(NativeLocalSigningLease.digest) == localSigningCredentialDigest else {
+            invalidateLocalSigning(); throw NativeLocalAuthenticationIssue.bindingChanged
+        }
+        try requireLocalPromotionBinding()
+        let permit = try lease.permit(bytes, alias: alias, epoch: epoch, operationID: operation)
+        let signature = try signer.sign(bytes, alias: alias, permit: permit)
+        guard try secrets.read("credentials").map(NativeLocalSigningLease.digest) == localSigningCredentialDigest else {
+            invalidateLocalSigning(); throw NativeLocalAuthenticationIssue.bindingChanged
+        }
+        try requireLocalPromotionBinding()
+        return signature
     }
     struct Scope: Sendable { let epoch: Int, account: String?, token: String? }
     func summary() -> NativeSessionSummary? {
@@ -363,7 +678,7 @@ actor BackendRepository {
             return summary()
         }
         if accountRecovery != nil {
-            credentials = nil; retireMedia()
+            credentials = accountRecovery?.promotionCredentials; retireMedia()
             if accountRecovery?.promotionCredentials != nil { return try await repairAccountRecoveryPromotion() }
             _ = try await recoverAccount(); return nil
         }
@@ -388,7 +703,7 @@ actor BackendRepository {
         if let data = try secrets.read("operation-intents") { intents = try JSONDecoder().decode([NativeOperationIntent].self, from: data); guard intents.count <= 100 else { throw NativeAPIError.invalidResponse } }
         if let data = try secrets.read("upload-stages") { uploads = try JSONDecoder().decode([NativeUploadRecord].self, from: data); guard uploads.count <= 100 else { throw NativeAPIError.invalidResponse } }
         if ordinaryLogin != nil {
-            credentials = nil; retireMedia()
+            credentials = ordinaryLogin?.promotionCredentials; retireMedia()
             if ordinaryLogin?.promotionCredentials != nil { return try await repairOrdinaryLoginPromotion() }
             return nil
         }
@@ -630,7 +945,14 @@ actor BackendRepository {
         }
         var cancellationError: Error?
         if faceLifecycle?.pending?.action.captures == true, faceLifecycle?.pending?.terminal != true {
-            do { _ = try await cancelFaceProfileCapture() } catch { cancellationError = error }
+            do {
+                if signer.requiresLocalAuthentication {
+                    // Logout has already retired its signing epoch. Preserve
+                    // restrictive cancellation intent now; a later explicit
+                    // status action obtains its own post-retirement OS grant.
+                    _ = try prepareFaceProfileCancellation()
+                } else { _ = try await cancelFaceProfileCapture() }
+            } catch { cancellationError = error }
         }
         if let previous { _ = try await json("/auth/logout", method: "POST", body: .object([:]), scope: Scope(epoch: epoch, account: nil, token: previous.access_token)) }
         if let published, published.access_token != previous?.access_token {
@@ -667,7 +989,7 @@ actor BackendRepository {
         try secrets.write("face-enrollment-journal", data: data); enrollment = record
     }
     private func assertEnrollmentKey(_ record: NativeEnrollmentRecord) throws {
-        let bytes = try record.startEnvelope.canonical(), raw = try signer.sign(bytes)
+        let bytes = try record.startEnvelope.canonical(), raw = try signDevice(bytes)
         guard let data = Data(base64URL: raw), data.count == 64,
               try record.publicKey().isValidSignature(P256.Signing.ECDSASignature(rawRepresentation: data), for: bytes) else {
             throw NativeAPIError.unsupported(String(localized: "The original enrollment key is unavailable. Recovery cannot replace it."))
@@ -698,7 +1020,7 @@ actor BackendRepository {
             "request_nonce": .string(nonce), "request_expires_at": .integer(Int(Date().addingTimeInterval(45).timeIntervalSince1970 * 1000))]
         for (key, value) in extra { body[key] = value }
         var envelope = body; envelope["protocol"] = .string("lovelies-face-enrollment-device-v1"); envelope["step"] = .string(step)
-        body["device_signature"] = .string(try signer.sign(WireValue.object(envelope).canonical()))
+        body["device_signature"] = .string(try signDevice(WireValue.object(envelope).canonical()))
         return (.object(body), nonce)
     }
     private func acceptEnrollmentChallenge(_ value: WireValue, record: NativeEnrollmentRecord, successor: Bool = false) throws -> NativeFaceChallenge {
@@ -840,7 +1162,7 @@ actor BackendRepository {
         guard let record = enrollment, let credential = record.promotionCredentials, let device = record.promotionDevice, guestDeletion == nil else { throw NativeAPIError.invalidResponse }
         try assertEnrollmentKey(record); try record.validate(origin: origin)
         try secrets.write("registered-device", data: JSONEncoder().encode(device))
-        credentials = credential; epoch += 1; retireMedia()
+        try activateLocalPromotion(credential, journal: record)
         if credential.expiresAt <= Date() { try await refresh() }
         let captured = try scope(anonymous: true), value = try await json("/me", scope: captured)
         guard value["user_id"].string == record.accountID, value["auth_method"].string == "registered_face", value["authenticated"].bool == true else { throw NativeAPIError.invalidResponse }
@@ -898,7 +1220,7 @@ actor BackendRepository {
             let challenge = try NativeFaceChallenge(value, accountID: saved.accountID, purpose: "login")
             var record = NativeOrdinaryLoginRecord(apiOrigin: origin.absoluteString, originalDevice: saved, publicJWK: publicKey,
                 publicKeyDigest: signer.sha256(try publicKey.canonical()), challengeWire: value, createdAt: Date(), bindingSignature: "")
-            record.bindingSignature = try signer.sign(record.binding.canonical(), alias: record.keyAlias)
+            record.bindingSignature = try signDevice(record.binding.canonical(), alias: record.keyAlias)
             try saveOrdinaryLogin(record); return challenge
         }
         let captured = try await readyScope(anonymous: true)
@@ -911,7 +1233,7 @@ actor BackendRepository {
             "enrollment_key": .string(key), "face_handle": .string(handle), "policy_version": .string(consentPolicy), "device_public_jwk": publicKey])
         let record = NativeEnrollmentRecord(accountID: original.account_id, apiOrigin: origin.absoluteString, enrollmentKey: key, keyAlias: NativeEnrollmentRecord.keyAlias,
             publicJWK: publicKey, publicKeyDigest: signer.sha256(try publicKey.canonical()), faceHandle: handle, policy: consentPolicy, consent: true, createdAt: Date(),
-            startSignature: try signer.sign(envelope.canonical()), originalAnonymous: original)
+            startSignature: try signDevice(envelope.canonical()), originalAnonymous: original)
         try saveEnrollment(record) // Identity and original signature precede all registration traffic.
         let value = try await json("/auth/face/registration/challenge", method: "POST", body: record.startBody, scope: captured)
         try checkEnrollment(record, serial: serial)
@@ -944,7 +1266,7 @@ actor BackendRepository {
         }
         var envelope = challenge.deviceEnvelope(); envelope["step"] = .string("capture"); envelope["capture_index"] = .integer(index)
         envelope["capture_sha256"] = .string(hash); envelope["mime"] = .string(mime); envelope["byte_size"] = .integer(bytes.count)
-        let signature = try signer.sign(WireValue.object(envelope).canonical(), alias: try device()?.keyAlias ?? NativeEnrollmentRecord.keyAlias)
+        let signature = try signDevice(WireValue.object(envelope).canonical(), alias: try device()?.keyAlias ?? NativeEnrollmentRecord.keyAlias)
         let reply = try await request("/auth/face/proof/\(challenge.id)/\(index)", method: "PUT", raw: bytes,
             headers: ["Content-Type": mime, "X-Lovelies-Capture-SHA256": hash, "X-Lovelies-Capture-Bytes": String(bytes.count), "X-Lovelies-Device-Signature": signature], scope: captured)
         guard guestDeletion == nil, enrollmentSerial == serial else { throw NativeAPIError.sessionChanged }
@@ -986,7 +1308,7 @@ actor BackendRepository {
         }
         let captured = challenge.purpose == "registration" ? try scope(anonymous: true) : Scope(epoch: epoch, account: nil, token: nil)
         var envelope = challenge.deviceEnvelope(); envelope["step"] = .string("complete"); envelope["capture_manifest"] = .array(captures)
-        let signature = try signer.sign(WireValue.object(envelope).canonical(), alias: try device()?.keyAlias ?? NativeEnrollmentRecord.keyAlias)
+        let signature = try signDevice(WireValue.object(envelope).canonical(), alias: try device()?.keyAlias ?? NativeEnrollmentRecord.keyAlias)
         let path = challenge.purpose == "registration" ? "/auth/face/registration/complete" : "/auth/face/complete"
         let value: WireValue
         do { value = try await json(path, method: "POST", body: .object(["challenge_id": .string(challenge.id), "device_signature": .string(signature)]), scope: captured) }
@@ -1141,7 +1463,7 @@ actor BackendRepository {
         _ = try retireExpiredOrdinaryPromotion(record)
     }
     private func assertOrdinaryLoginKey(_ record: NativeOrdinaryLoginRecord) throws {
-        let binding = try record.binding.canonical(), signature = try signer.sign(binding, alias: record.keyAlias)
+        let binding = try record.binding.canonical(), signature = try signDevice(binding, alias: record.keyAlias)
         guard let raw = Data(base64URL: signature), raw.count == 64,
               try record.key().isValidSignature(P256.Signing.ECDSASignature(rawRepresentation: raw), for: binding) else { throw NativeAPIError.sessionChanged }
     }
@@ -1176,7 +1498,7 @@ actor BackendRepository {
     private func repairOrdinaryLoginPromotion() async throws -> NativeSessionSummary {
         guard let record = ordinaryLogin, let staged = record.promotionCredentials else { throw NativeAPIError.invalidResponse }
         let serial = enrollmentSerial; try assertOrdinaryLoginKey(record); try checkOrdinaryLogin(record, serial: serial)
-        credentials = staged; epoch += 1; retireMedia()
+        try activateLocalPromotion(staged, journal: record)
         if staged.expiresAt <= Date() { _ = try retireExpiredOrdinaryPromotion(record); throw NativeAPIError.operationUnconfirmed(try record.challengeWire.uuid("challenge_id")) }
         try checkOrdinaryLogin(record, serial: serial)
         let captured = try scope(anonymous: true), value = try await json("/me", scope: captured)
@@ -1227,6 +1549,7 @@ actor BackendRepository {
     /// Only this deletion creation method admits the current anonymous bearer.
     /// Protected gallery/export/sharing methods keep their registered guard.
     func requestGuestDeletion(reason: String? = nil) async throws -> NativeGuestDeletionSummary {
+        if guestDeletion == nil { try restoreEnrollment() }
         if guestDeletion == nil, enrollment != nil {
             let status = try await recoverEnrollment()
             guard !status.awaitingServer, status.state != .registered, status.state != .promoting else {
@@ -1311,12 +1634,15 @@ actor BackendRepository {
     }
     private func clearGuestDeviceReferences(account: String, completed: Bool = false) throws {
         if completed { try retireFaceLifecycleAfterDeletion(account: account); try retireAudienceAfterDeletion(account: account) }
-        var removedOwnReference = false, anotherReference = false, canClearKey = true
+        var removedOwnReference = false, anotherReference = false, canClearKey = false
         if let data = try secrets.read("face-enrollment-journal") {
             let held = try JSONDecoder().decode(NativeEnrollmentRecord.self, from: data); try held.validate(origin: origin)
             if held.accountID == account {
                 guard completed else { return } // Private recovery survives rejected/expired deletion; no capture/session is published.
-                let ownedKey = (try? assertEnrollmentKey(held)) != nil
+                // Server-confirmed deletion authorizes this cleanup. Comparing
+                // public key material proves only exact local alias ownership;
+                // it cannot authenticate, sign or elevate a retired session.
+                let ownedKey = deletionOwnsKey(account: account, alias: held.keyAlias, publicJWK: held.publicJWK)
                 canClearKey = ownedKey
                 try secrets.write("face-enrollment-journal", data: nil)
                 if enrollment?.accountID == account { enrollment = nil; enrollmentSerial += 1 }
@@ -1332,12 +1658,112 @@ actor BackendRepository {
         }
         if removedOwnReference && !anotherReference && canClearKey { signer.clear() }
     }
-    func resumeGuestSetup() async throws -> NativeSessionSummary {
+    private func deletionOwnsKey(account: String, alias: String, publicJWK: WireValue) -> Bool {
+        guard NativeAccountRecoveryRecord.validAlias(alias),
+              let expected = try? publicJWK.canonical(),
+              let actual = try? signer.publicJWK(alias: alias, create: false).canonical() else { return false }
+        guard expected == actual else { return false }
+        do {
+            let slots = try localSigningSlots(), decoder = JSONDecoder()
+            for name in ["registered-device", "pending-face-device"] {
+                if let bytes = slots[name] {
+                    let reference = try decoder.decode(RegisteredDevice.self, from: bytes); try validLocalDevice(reference)
+                    if (reference.keyAlias ?? NativeEnrollmentRecord.keyAlias) == alias && reference.accountID != account { return false }
+                }
+            }
+            if let bytes = slots["face-enrollment-journal"] {
+                let reference = try decoder.decode(NativeEnrollmentRecord.self, from: bytes); try reference.validate(origin: origin)
+                if reference.keyAlias == alias && reference.accountID != account { return false }
+            }
+            if let bytes = slots["account-recovery-journal"] {
+                let reference = try decoder.decode(NativeAccountRecoveryRecord.self, from: bytes); try reference.validate(origin: origin)
+                if reference.keyAlias == alias && reference.accountID != account { return false }
+            }
+            if let bytes = slots["ordinary-face-login-journal"] {
+                let reference = try decoder.decode(NativeOrdinaryLoginRecord.self, from: bytes); try reference.validate(origin: origin)
+                if reference.keyAlias == alias && reference.originalDevice.accountID != account { return false }
+            }
+            if let bytes = slots["face-profile-lifecycle"] {
+                let reference = try decoder.decode(NativeFaceLifecycleRecord.self, from: bytes); try reference.validate(origin: origin)
+                if reference.keyAlias == alias && reference.accountID != account { return false }
+            }
+            return true
+        } catch { return false } // Unknown/corrupt references never authorize key deletion.
+    }
+    /// Receipt/current-account preflight can retire/refresh the session. Finish
+    /// that work before requesting OS authorization, then issue an opaque local
+    /// ticket for the resulting exact epoch. This never signs a face request.
+    func prepareGuestSetupResume() async throws -> NativeGuestSetupResumeTicket {
+        preparedGuestResume = nil; invalidateLocalSigning()
+        try Task.checkCancellation()
         let serial = try beginGuestDeletionWork(); defer { endGuestDeletionWork(serial) }
         guard let record = guestDeletion, guestDeletionSummary()?.canResumeSetup == true else { throw NativeAPIError.unsupported(String(localized: "Check the current deletion result before resuming this guest account.")) }
+        try requireDurableGuestReceipt(record)
         let latest = try await reconcileGuestDeletion(record, serial: serial, retryOriginal: false)
         guard latest.canResumeSetup, let currentRecord = guestDeletion else { throw NativeAPIError.unsupported(String(localized: "This account cannot resume while its deletion outcome is unresolved.")) }
         let captured = try await activateOriginalGuest(currentRecord, serial: serial)
+        try checkGuestDeletion(currentRecord, serial: serial); try check(captured); try Task.checkCancellation()
+        guard let receipt = guestDeletion, let original = receipt.originalCredentials,
+              Self.sameCredentials(credentials, original), original.auth_method == "anonymous",
+              captured.account == receipt.accountID else { throw NativeAPIError.sessionChanged }
+        try requireDurableGuestReceipt(receipt)
+        let slots = try localSigningSlots()
+        guard slots["account-recovery-journal"] == nil, slots["face-profile-lifecycle"] == nil,
+              slots["ordinary-face-login-journal"] == nil else { throw NativeAPIError.sessionChanged }
+        if let bytes = slots["face-enrollment-journal"] {
+            let setup = try JSONDecoder().decode(NativeEnrollmentRecord.self, from: bytes); try setup.validate(origin: origin)
+            guard setup.accountID == receipt.accountID else { throw NativeAPIError.sessionChanged }
+            for name in ["registered-device", "pending-face-device"] {
+                if let bytes = slots[name] {
+                    let retained = try JSONDecoder().decode(RegisteredDevice.self, from: bytes); try validLocalDevice(retained)
+                    guard retained.accountID == setup.accountID, retained.deviceID == setup.deviceID,
+                          retained.faceHandle == setup.faceHandle, (retained.keyAlias ?? NativeEnrollmentRecord.keyAlias) == setup.keyAlias,
+                          retained.profileID == nil || retained.profileID == setup.profile?.id && retained.profileRevision == setup.profile?.revision && retained.modelID == setup.profile?.modelID else { throw NativeAPIError.sessionChanged }
+                }
+            }
+            enrollment = setup
+        } else { enrollment = nil }
+        let now = ProcessInfo.processInfo.systemUptime
+        guard now.isFinite, now >= 0 else { throw NativeLocalAuthenticationIssue.expired }
+        let ticket = NativeGuestSetupResumeTicket(id: UUID())
+        preparedGuestResume = GuestResumePreparation(ticket: ticket, scope: captured,
+            receiptDigest: try localEncodedDigest(receipt), stateDigest: localSigningStateDigest(slots), serial: serial, issuedAt: now)
+        return ticket
+    }
+    private func requireDurableGuestReceipt(_ record: NativeGuestDeletionRecord) throws {
+        try record.validate(origin: origin)
+        guard let bytes = try secrets.read("guest-deletion-receipt"), bytes.count <= 16 * 1024,
+              try localEncodedDigest(JSONDecoder().decode(NativeGuestDeletionRecord.self, from: bytes)) == localEncodedDigest(record) else { throw NativeAPIError.sessionChanged }
+    }
+    private func requireGuestResume(_ ticket: NativeGuestSetupResumeTicket) throws -> GuestResumePreparation {
+        try Task.checkCancellation()
+        let now = ProcessInfo.processInfo.systemUptime
+        guard let prepared = preparedGuestResume, prepared.ticket.id == ticket.id,
+              prepared.serial == guestDeletionSerial, !guestDeletionBusy,
+              now.isFinite, now >= prepared.issuedAt, now < prepared.issuedAt + NativeLocalSigningLease.maximumLifetime,
+              let receipt = guestDeletion, guestDeletionSummary()?.canResumeSetup == true,
+              prepared.receiptDigest == (try localEncodedDigest(receipt)),
+              receipt.accountID == prepared.scope.account, credentials?.auth_method == "anonymous",
+              prepared.stateDigest == (try localSigningStateDigest(localSigningSlots())) else { throw NativeLocalAuthenticationIssue.bindingChanged }
+        try check(prepared.scope); try requireDurableGuestReceipt(receipt)
+        return prepared
+    }
+    func resumeGuestSetup() async throws -> NativeSessionSummary {
+        try await resumeGuestSetup(prepareGuestSetupResume())
+    }
+    func resumeGuestSetup(_ ticket: NativeGuestSetupResumeTicket) async throws -> NativeSessionSummary {
+        let prepared = try requireGuestResume(ticket)
+        if signer.requiresLocalAuthentication, let enrollment {
+            guard let lease = localSigningLease, lease.binding.purpose == .reconciliation,
+                  lease.binding.accountID == prepared.scope.account, lease.binding.epoch == prepared.scope.epoch,
+                  lease.binding.stateDigest == prepared.stateDigest, lease.binding.aliases == [enrollment.keyAlias],
+                  let operation = NativeLocalSigningOperation.id else { throw NativeLocalAuthenticationIssue.required }
+            _ = try lease.permit(enrollment.startEnvelope.canonical(), alias: enrollment.keyAlias, epoch: epoch, operationID: operation)
+        }
+        preparedGuestResume = nil // Single-use even if a subsequent reply is lost.
+        let serial = try beginGuestDeletionWork(); defer { endGuestDeletionWork(serial) }
+        guard let currentRecord = guestDeletion else { throw NativeAPIError.sessionChanged }
+        let captured = prepared.scope
         try checkGuestDeletion(currentRecord, serial: serial); try check(captured)
         if enrollment != nil {
             let enrollmentTicket = try beginEnrollmentWork(allowDeletionResume: true)
@@ -1349,6 +1775,7 @@ actor BackendRepository {
             } catch { endEnrollmentWork(enrollmentTicket); throw error }
         }
         guard let current = credentials else { throw NativeAPIError.sessionChanged }
+        try check(captured); try requireDurableGuestReceipt(currentRecord); try Task.checkCancellation()
         try secrets.write("credentials", data: JSONEncoder().encode(current))
         try secrets.write("guest-deletion-receipt", data: nil); guestDeletion = nil
         return summary()!
@@ -1637,15 +2064,20 @@ extension BackendRepository {
               accountRecovery?.publicKeyDigest == record.publicKeyDigest, record.apiOrigin == origin.absoluteString else { throw NativeAPIError.sessionChanged }
     }
     private func assertRecoveryKey(_ record: NativeAccountRecoveryRecord) throws {
-        let bytes = try record.startEnvelope.canonical(), signature = try signer.sign(bytes, alias: record.keyAlias)
+        let bytes = try record.startEnvelope.canonical(), signature = try signDevice(bytes, alias: record.keyAlias)
         guard let raw = Data(base64URL: signature), raw.count == 64,
               try record.publicKey().isValidSignature(P256.Signing.ECDSASignature(rawRepresentation: raw), for: bytes) else { throw NativeAPIError.unsupported(String(localized: "The original recovery device key is missing. Keep your private backup and recovery status; this request cannot replace its key.")) }
     }
     private func prepareRecoveryKey(_ record: NativeAccountRecoveryRecord) throws -> NativeAccountRecoveryRecord {
         guard record.state == .preparingKey else { try assertRecoveryKey(record); return record }
+        if signer.requiresLocalAuthentication {
+            guard let lease = localSigningLease, let operation = NativeLocalSigningOperation.id,
+                  try secrets.read("credentials").map(NativeLocalSigningLease.digest) == localSigningCredentialDigest else { throw NativeLocalAuthenticationIssue.required }
+            _ = try lease.permit(record.startEnvelope.canonical(), alias: record.keyAlias, epoch: epoch, operationID: operation)
+        }
         var next = record; next.publicJWK = try signer.publicJWK(alias: record.keyAlias, create: true)
         next.publicKeyDigest = signer.sha256(try next.publicJWK!.canonical())
-        next.startSignature = try signer.sign(next.startEnvelope.canonical(), alias: record.keyAlias); next.state = .starting
+        next.startSignature = try signDevice(next.startEnvelope.canonical(), alias: record.keyAlias); next.state = .starting
         try saveAccountRecovery(next); return next
     }
     private func recoveryRequest(_ record: NativeAccountRecoveryRecord, step: String, extra: [String: WireValue] = [:]) throws -> (WireValue, String) {
@@ -1653,7 +2085,7 @@ extension BackendRepository {
         body["request_nonce"] = .string(nonce); body["request_expires_at"] = .integer(Int(Date().addingTimeInterval(45).timeIntervalSince1970 * 1000))
         extra.forEach { body[$0.key] = $0.value }; var envelope = body
         envelope["protocol"] = .string("lovelies-account-recovery-device-v1"); envelope["step"] = .string(step)
-        body["device_signature"] = .string(try signer.sign(WireValue.object(envelope).canonical(), alias: record.keyAlias)); return (.object(body), nonce)
+        body["device_signature"] = .string(try signDevice(WireValue.object(envelope).canonical(), alias: record.keyAlias)); return (.object(body), nonce)
     }
     private func acceptRecoveryChallenge(_ value: WireValue, record: NativeAccountRecoveryRecord, successor: Bool = false) throws -> NativeFaceChallenge {
         guard value["recovery_request_id"].string == record.requestID, let generation = value["recovery_generation"].integer,
@@ -1668,8 +2100,66 @@ extension BackendRepository {
         next.generation = generation; next.predecessorID = challenge.id; next.challengeWire = value; next.resume = nil; next.state = .pending
         try saveAccountRecovery(next); return challenge
     }
-    func startAccountRecovery(backup: String) async throws -> NativeAccountRecoverySummary {
+    /// Only a staged registered logout needs an earlier signing grant. Ordinary
+    /// anonymous recovery does not prompt until its new request is durably held
+    /// and the previous session epoch has been retired.
+    func recoveryStartNeedsSignedRetirement(backup: String) throws -> Bool {
         let parsed = try NativeAccountRecoveryRecord.backup(backup)
+        guard guestDeletion == nil, try secrets.read("guest-deletion-receipt") == nil else { throw NativeAPIError.authenticationRequired }
+        if signer.requiresLocalAuthentication { _ = try hydrateLocalSigningState(localSigningSlots()) }
+        if let lifecycle = faceLifecycle { guard lifecycle.accountID == parsed.0, !lifecycle.blocksAlternateRecovery else { throw NativeAPIError.sessionChanged } }
+        if let current = credentials, current.authenticated, accountRecovery == nil {
+            guard current.account_id == parsed.0 else { throw NativeAPIError.sessionChanged }
+            return faceLifecycle?.promotionCredentials != nil || enrollment?.promotionCredentials != nil || ordinaryLogin?.promotionCredentials != nil
+        }
+        return false
+    }
+    func prepareAccountRecoveryStart(backup: String) async throws -> NativeLocalTransitionTicket {
+        preparedLocalTransition = nil; invalidateLocalSigning()
+        let parsed = try NativeAccountRecoveryRecord.backup(backup)
+        guard try !recoveryStartNeedsSignedRetirement(backup: backup) else { throw NativeLocalAuthenticationIssue.required }
+        if let current = credentials, current.authenticated, accountRecovery == nil {
+            guard current.account_id == parsed.0 else { throw NativeAPIError.sessionChanged }
+            try await logout()
+        }
+        let serial = try beginRecoveryWork(); defer { endRecoveryWork(serial) }
+        if let saved = accountRecovery {
+            guard saved.accountID == parsed.0, saved.recoveryKey == parsed.1 else { throw NativeAPIError.sessionChanged }
+        } else { try await prepareAccountRecoveryRecord(parsed, serial: serial) }
+        guard let record = accountRecovery else { throw NativeAPIError.invalidResponse }
+        return try makeLocalTransition(kind: .accountRecoveryStart, account: record.accountID, alias: record.keyAlias, intent: record.requestID, serial: serial)
+    }
+    private func prepareAccountRecoveryRecord(_ parsed: (String, String), serial: Int) async throws {
+        if let known = try device() { guard known.accountID == parsed.0 else { throw NativeAPIError.unsupported(String(localized: "This device retains another account's identity. Recovery cannot overwrite it.")) } }
+        if let enrollment { guard enrollment.accountID == parsed.0 else { throw NativeAPIError.sessionChanged } }
+        let policy = try await policy(); guard recoverySerial == serial, guestDeletion == nil, accountRecovery == nil else { throw NativeAPIError.sessionChanged }
+        // The policy read awaited remote work. Revalidate held state before
+        // allocating a request so a different actor's vault change cannot be
+        // adopted as this recovery's superseded key/account.
+        if signer.requiresLocalAuthentication {
+            _ = try hydrateLocalSigningState(localSigningSlots())
+            guard recoverySerial == serial, guestDeletion == nil, accountRecovery == nil else { throw NativeAPIError.sessionChanged }
+        }
+        let known = try device()
+        if let known { guard known.accountID == parsed.0 else { throw NativeAPIError.sessionChanged } }
+        if let enrollment { guard enrollment.accountID == parsed.0 else { throw NativeAPIError.sessionChanged } }
+        let requestID = UUID().uuidString.lowercased()
+        var record = NativeAccountRecoveryRecord(accountID: parsed.0, apiOrigin: origin.absoluteString, recoveryKey: parsed.1, requestID: requestID,
+            faceHandle: try Self.recoveryRandom("lfh_"), keyAlias: NativeAccountRecoveryRecord.aliasPrefix + requestID, policy: policy, createdAt: Date())
+        if let known { record.supersededAliases.append(known.keyAlias ?? NativeEnrollmentRecord.keyAlias) }
+        if let enrollment, !record.supersededAliases.contains(enrollment.keyAlias) { record.supersededAliases.append(enrollment.keyAlias) }
+        try saveAccountRecovery(record) // Original request/alias/secret precede key creation and every recovery POST.
+        credentials = nil; epoch += 1; retireMedia(); intents = []; uploads = []
+    }
+    func startAccountRecovery(backup: String, transition: NativeLocalTransitionTicket? = nil) async throws -> NativeAccountRecoverySummary {
+        let parsed = try NativeAccountRecoveryRecord.backup(backup)
+        if let transition {
+            let prepared = try requireLocalTransition(transition)
+            guard prepared.kind == .accountRecoveryStart, let record = accountRecovery,
+                  record.accountID == parsed.0, record.recoveryKey == parsed.1 else { throw NativeLocalAuthenticationIssue.bindingChanged }
+            try requireLocalTransitionGrant(prepared, envelope: record.startEnvelope)
+            preparedLocalTransition = nil
+        } else if signer.requiresLocalAuthentication, accountRecovery == nil { throw NativeLocalAuthenticationIssue.required }
         guard guestDeletion == nil else { throw NativeAPIError.unsupported(String(localized: "Check the current deletion request before recovering.")) }
         if let lifecycle = faceLifecycle {
             guard lifecycle.accountID == parsed.0, !lifecycle.blocksAlternateRecovery else { throw NativeAPIError.unsupported(String(localized: "Check your face-profile action before recovering this account.")) }
@@ -1680,18 +2170,7 @@ extension BackendRepository {
         }
         let serial = try beginRecoveryWork(); defer { endRecoveryWork(serial) }
         if let saved = accountRecovery { guard saved.accountID == parsed.0, saved.recoveryKey == parsed.1 else { throw NativeAPIError.sessionChanged } }
-        else {
-            if let known = try device() { guard known.accountID == parsed.0 else { throw NativeAPIError.unsupported(String(localized: "This device retains another account's identity. Recovery cannot overwrite it.")) } }
-            if let enrollment { guard enrollment.accountID == parsed.0 else { throw NativeAPIError.sessionChanged } }
-            let policy = try await policy(); guard recoverySerial == serial, guestDeletion == nil else { throw NativeAPIError.sessionChanged }
-            let requestID = UUID().uuidString.lowercased()
-            var record = NativeAccountRecoveryRecord(accountID: parsed.0, apiOrigin: origin.absoluteString, recoveryKey: parsed.1, requestID: requestID,
-                faceHandle: try Self.recoveryRandom("lfh_"), keyAlias: NativeAccountRecoveryRecord.aliasPrefix + requestID, policy: policy, createdAt: Date())
-            if let known = try device() { record.supersededAliases.append(known.keyAlias ?? NativeEnrollmentRecord.keyAlias) }
-            if let enrollment, !record.supersededAliases.contains(enrollment.keyAlias) { record.supersededAliases.append(enrollment.keyAlias) }
-            try saveAccountRecovery(record) // Alias/request/secret intent precedes key creation and all private API traffic.
-            credentials = nil; epoch += 1; retireMedia(); intents = []; uploads = []
-        }
+        else { try await prepareAccountRecoveryRecord(parsed, serial: serial) }
         var record = try prepareRecoveryKey(accountRecovery!); try checkRecovery(record, serial: serial)
         if record.promotionCredentials != nil { _ = try await repairAccountRecoveryPromotion(); return NativeAccountRecoverySummary(accountID: record.accountID, state: .registered, challenge: nil, receipts: []) }
         if try recoveryLoginCurrent(record) { return try accountRecoverySummary()! }
@@ -1785,7 +2264,7 @@ extension BackendRepository {
         try assertRecoveryKey(record); let hash = signer.sha256(bytes)
         record.captures = [NativeEnrollmentCapture(index: 0, sha256: hash, byteSize: bytes.count)]; record.state = .capturePending; try saveAccountRecovery(record)
         var envelope = challenge.deviceEnvelope(); envelope["step"] = .string("capture"); envelope["capture_index"] = .integer(0); envelope["capture_sha256"] = .string(hash); envelope["mime"] = .string("image/jpeg"); envelope["byte_size"] = .integer(bytes.count)
-        let signature = try signer.sign(WireValue.object(envelope).canonical(), alias: record.keyAlias)
+        let signature = try signDevice(WireValue.object(envelope).canonical(), alias: record.keyAlias)
         let reply = try await request("/auth/face/proof/\(challenge.id)/0", method: "PUT", raw: bytes, headers: ["Content-Type": "image/jpeg", "X-Lovelies-Capture-SHA256": hash, "X-Lovelies-Capture-Bytes": String(bytes.count), "X-Lovelies-Device-Signature": signature])
         try checkRecovery(record, serial: serial); let value = try WireValue.decoded(reply.data)
         guard value["protocol"].string == "lovelies-face-auth-v1", value["status"].string == "capture_received", value["challenge_id"].string == challenge.id,
@@ -1800,7 +2279,7 @@ extension BackendRepository {
         try assertRecoveryKey(record); record.state = .completionPending; try saveAccountRecovery(record)
         var envelope = challenge.deviceEnvelope(); envelope["step"] = .string("complete"); envelope["capture_manifest"] = .array(captures)
         let value: WireValue
-        do { value = try await json("/auth/face/complete", method: "POST", body: .object(["challenge_id": .string(challenge.id), "device_signature": .string(try signer.sign(WireValue.object(envelope).canonical(), alias: record.keyAlias))])) }
+        do { value = try await json("/auth/face/complete", method: "POST", body: .object(["challenge_id": .string(challenge.id), "device_signature": .string(try signDevice(WireValue.object(envelope).canonical(), alias: record.keyAlias))])) }
         catch {
             if challenge.wire["recovery_request_id"] == .null, let code = NativeFaceTerminalFailure.code(error), recoverySerial == serial, accountRecovery?.challengeWire == challenge.wire {
                 record.loginTerminalCode = code; try saveAccountRecovery(record)
@@ -1818,7 +2297,7 @@ extension BackendRepository {
         guard let record = accountRecovery, let promoted = record.promotionCredentials, let device = record.promotionDevice, guestDeletion == nil else { throw NativeAPIError.invalidResponse }
         let serial = recoverySerial
         try assertRecoveryKey(record); try record.validate(origin: origin)
-        credentials = promoted; epoch += 1; retireMedia()
+        try activateLocalPromotion(promoted, journal: record)
         if promoted.expiresAt <= Date() { try await refresh() }
         guard recoverySerial == serial, accountRecovery?.requestID == record.requestID, guestDeletion == nil else { throw NativeAPIError.sessionChanged }
         let captured = try scope(anonymous: true), value = try await json("/me", scope: captured)
@@ -1926,7 +2405,7 @@ extension BackendRepository {
               record.apiOrigin == origin.absoluteString, !Task.isCancelled else { throw NativeAPIError.sessionChanged }
     }
     private func assertLifecycleKey(_ record: NativeFaceLifecycleRecord) throws {
-        let bytes = try record.controlEnvelope.canonical(), signature = try signer.sign(bytes, alias: record.keyAlias)
+        let bytes = try record.controlEnvelope.canonical(), signature = try signDevice(bytes, alias: record.keyAlias)
         guard let raw = Data(base64URL: signature), raw.count == 64,
               try record.publicKey().isValidSignature(P256.Signing.ECDSASignature(rawRepresentation: raw), for: bytes) else {
             throw NativeAPIError.unsupported(String(localized: "The original device key is missing. Keep this face-profile record; another account or device key cannot replace it."))
@@ -1937,7 +2416,7 @@ extension BackendRepository {
         body["request_nonce"] = .string(nonce); body["request_expires_at"] = .integer(Int(Date().addingTimeInterval(45).timeIntervalSince1970 * 1000))
         extra.forEach { body[$0.key] = $0.value }; var envelope = body
         envelope["protocol"] = .string("lovelies-face-profile-device-v1"); envelope["step"] = .string(step)
-        body["device_signature"] = .string(try signer.sign(WireValue.object(envelope).canonical(), alias: record.keyAlias))
+        body["device_signature"] = .string(try signDevice(WireValue.object(envelope).canonical(), alias: record.keyAlias))
         return (.object(body), nonce)
     }
     func faceLifecycleSummary() throws -> NativeFaceLifecycleSummary? {
@@ -1970,7 +2449,7 @@ extension BackendRepository {
         let metadata = try NativeFaceProfileMetadata(.object(object), account: device.accountID, device: device.deviceID, digest: digest)
         let control = try Self.recoveryRandom("lfl_"), operation = UUID().uuidString.lowercased()
         var body: [String: WireValue] = ["account_id": .string(device.accountID), "device_id": .string(device.deviceID), "control_key": .string(control), "control_operation_key": .string(operation), "protocol": .string("lovelies-face-profile-device-v1"), "step": .string("control")]
-        let signature = try signer.sign(WireValue.object(body).canonical(), alias: alias)
+        let signature = try signDevice(WireValue.object(body).canonical(), alias: alias)
         let record = NativeFaceLifecycleRecord(accountID: device.accountID, apiOrigin: origin.absoluteString, originalDevice: device, keyAlias: alias,
             publicJWK: jwk, publicKeyDigest: digest, controlKey: control, controlOperationKey: operation, controlSignature: signature, createdAt: Date(), metadata: metadata, credentials: original, currentAuthorityValidated: true)
         body.removeAll(); try saveFaceLifecycle(record) // Control intent precedes dispatch.
@@ -2237,7 +2716,7 @@ extension BackendRepository {
         if login { record.loginCaptures = captures } else { record.pending!.captures = captures }
         try saveFaceLifecycle(record)
         var envelope = challenge.deviceEnvelope(); envelope["step"] = .string("capture"); envelope["capture_index"] = .integer(index); envelope["capture_sha256"] = .string(hash); envelope["mime"] = .string("image/jpeg"); envelope["byte_size"] = .integer(bytes.count)
-        let signature = try signer.sign(WireValue.object(envelope).canonical(), alias: record.keyAlias)
+        let signature = try signDevice(WireValue.object(envelope).canonical(), alias: record.keyAlias)
         let reply = try await request("/auth/face/proof/\(challenge.id)/\(index)", method: "PUT", raw: bytes, headers: ["Content-Type": "image/jpeg", "X-Lovelies-Capture-SHA256": hash, "X-Lovelies-Capture-Bytes": String(bytes.count), "X-Lovelies-Device-Signature": signature])
         try checkLifecycle(record, serial: serial); let receipt = try WireValue.decoded(reply.data)
         guard receipt["protocol"].string == "lovelies-face-auth-v1", receipt["status"].string == "capture_received", receipt["challenge_id"].string == challenge.id,
@@ -2254,7 +2733,7 @@ extension BackendRepository {
         if login { record.loginCompletionPending = true } else { record.pending!.completionPending = true }; try saveFaceLifecycle(record)
         var envelope = challenge.deviceEnvelope(); envelope["step"] = .string("complete"); envelope["capture_manifest"] = .array(captures)
         let value: WireValue
-        do { value = try await json(login ? "/auth/face/complete" : "/auth/face/profile/complete", method: "POST", body: .object(["challenge_id": .string(challenge.id), "device_signature": .string(try signer.sign(WireValue.object(envelope).canonical(), alias: record.keyAlias))])) }
+        do { value = try await json(login ? "/auth/face/complete" : "/auth/face/profile/complete", method: "POST", body: .object(["challenge_id": .string(challenge.id), "device_signature": .string(try signDevice(WireValue.object(envelope).canonical(), alias: record.keyAlias))])) }
         catch {
             if login, let code = NativeFaceTerminalFailure.code(error), lifecycleSerial == serial, faceLifecycle?.loginChallengeWire == challenge.wire {
                 record.loginTerminalCode = code; try saveFaceLifecycle(record)
@@ -2287,7 +2766,7 @@ extension BackendRepository {
         let serial = serial ?? lifecycleSerial
         guard var record = faceLifecycle, let staged = record.promotionCredentials, let profile = record.promotionProfile else { throw NativeAPIError.invalidResponse }
         try checkLifecycle(record, serial: serial); try assertLifecycleKey(record)
-        credentials = staged; epoch += 1; retireMedia()
+        try activateLocalPromotion(staged, journal: record)
         if staged.expiresAt <= Date() { try await refresh() }; try checkLifecycle(record, serial: serial)
         let captured = try scope(anonymous: true), value = try await json("/me", scope: captured); try check(captured); try checkLifecycle(record, serial: serial)
         guard value["user_id"].string == record.accountID, value["auth_method"].string == "registered_face", value["authenticated"].bool == true,
@@ -2316,12 +2795,24 @@ extension BackendRepository {
 }
 
 extension BackendRepository {
-    func cancelFaceProfileCapture() async throws -> NativeFaceLifecycleSummary {
+    func prepareFaceProfileCancellation() throws -> NativeLocalTransitionTicket {
         guard guestDeletion == nil, !guestDeletionBusy, accountRecovery == nil, let saved = faceLifecycle, saved.pending?.action.captures == true else { throw NativeAPIError.authenticationRequired }
+        try saved.validate(origin: origin)
+        guard let bytes = try secrets.read("face-profile-lifecycle"), bytes.count <= 128 * 1024,
+              try localEncodedDigest(JSONDecoder().decode(NativeFaceLifecycleRecord.self, from: bytes)) == localEncodedDigest(saved) else { throw NativeAPIError.sessionChanged }
         // Fence an older shutter/verifier reply before awaiting its cancellation.
         lifecycleSerial += 1; lifecycleBusy = false; epoch += 1; transport.cancelPending(); retireMedia()
-        let serial = try beginLifecycleWork(); defer { endLifecycleWork(serial) }
         var record = saved; record.pending!.cancelRequested = true; record.authorityUnavailable = false; try saveFaceLifecycle(record)
+        return try makeLocalTransition(kind: .profileCancellation, account: record.accountID, alias: record.keyAlias,
+            intent: record.controlOperationKey + ":" + record.pending!.operationKey, serial: lifecycleSerial)
+    }
+    func cancelFaceProfileCapture(transition: NativeLocalTransitionTicket? = nil) async throws -> NativeFaceLifecycleSummary {
+        let ticket = try transition ?? prepareFaceProfileCancellation()
+        let prepared = try requireLocalTransition(ticket)
+        guard prepared.kind == .profileCancellation, let record = faceLifecycle else { throw NativeLocalAuthenticationIssue.bindingChanged }
+        try requireLocalTransitionGrant(prepared, envelope: record.controlEnvelope)
+        preparedLocalTransition = nil
+        let serial = try beginLifecycleWork(); defer { endLifecycleWork(serial) }
         return try await dispatchLifecycleCancellation(serial: serial)
     }
     private func dispatchLifecycleCancellation(serial: Int) async throws -> NativeFaceLifecycleSummary {
@@ -2348,7 +2839,7 @@ extension BackendRepository {
         try secrets.write("face-profile-lifecycle", data: nil); faceLifecycle = nil; lifecycleSerial += 1
         // The server-completed deletion is the authority for retiring this exact
         // owned alias. The archive cannot authenticate or trigger new setup.
-        if (try? assertLifecycleKey(record)) != nil { signer.clear(alias: record.keyAlias) }
+        if deletionOwnsKey(account: account, alias: record.keyAlias, publicJWK: record.publicJWK) { signer.clear(alias: record.keyAlias) }
     }
 }
 
@@ -2412,7 +2903,7 @@ extension BackendRepository {
         record = faceLifecycle!; record.metadata = metadata
         let key = try Self.recoveryRandom("lfl_"), operation = UUID().uuidString.lowercased()
         var body: [String: WireValue] = ["account_id": .string(record.accountID), "device_id": .string(record.originalDevice.deviceID), "control_key": .string(key), "control_operation_key": .string(operation), "renew": .bool(true), "previous_control_operation_key": .string(record.controlOperationKey), "protocol": .string("lovelies-face-profile-device-v1"), "step": .string("control")]
-        let signature = try signer.sign(WireValue.object(body).canonical(), alias: record.keyAlias); body.removeAll()
+        let signature = try signDevice(WireValue.object(body).canonical(), alias: record.keyAlias); body.removeAll()
         record.renewal = NativeFaceControlBinding(key: key, operationKey: operation, previousOperationKey: record.controlOperationKey, signature: signature, createdAt: Date())
         record.currentAuthorityValidated = false; try saveFaceLifecycle(record) // New secret/body precedes renewal traffic; old binding remains.
         return try await dispatchControlRenewal(serial: serial)

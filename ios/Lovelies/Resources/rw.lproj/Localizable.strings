@@ -983,3 +983,12 @@
 "Lovelies is temporarily unavailable. Please try again later." = "Lovelies ntiboneka by'agateganyo. Nyamuneka ongera ugerageze nyuma.";
 
 "Toggle favorite" = "Shyira cyangwa ukure mu byo nkunda";
+
+"Device authentication was cancelled. Your saved request is unchanged." = "Kwemeza uburenganzira kuri iki gikoresho byahagaritswe. Icyifuzo cyawe cyabitswe nticyahindutse.";
+"Device authentication did not finish. Try again when you are ready." = "Kwemeza uburenganzira kuri iki gikoresho ntibyarangiye. Ongera ugerageze igihe witeguye.";
+"Device authentication is unavailable. Unlock this device and try again." = "Kwemeza uburenganzira kuri iki gikoresho ntibishoboka ubu. Fungura iki gikoresho wongere ugerageze.";
+"Set a device passcode before using protected Lovelies sign-in. Guest privacy controls remain available." = "Shyiraho kode yo gufungura iki gikoresho mbere yo kwinjira muri Lovelies mu buryo burinzwe. Uburyo bwo gucunga ibanga bw’umushyitsi buracyaboneka.";
+"Authenticate on this device before continuing the saved face request." = "Emeza uburenganzira bwawe kuri iki gikoresho mbere yo gukomeza icyifuzo cy’isura cyabitswe.";
+"Your sign-in state changed. Authenticate again to check the original request." = "Uko winjiye byahindutse. Ongera wemeze uburenganzira bwawe kugira ngo ugenzure icyifuzo cya mbere.";
+"Device authorization expired. Authenticate again to continue the original request." = "Uburenganzira bwo gukoresha iki gikoresho bwarangiye. Ongera wemeze uburenganzira bwawe kugira ngo ukomeze icyifuzo cya mbere.";
+"Confirm access on this device to continue your Lovelies request. Your selfies are verified separately." = "Emeza uburenganzira bwawe kuri iki gikoresho kugira ngo ukomeze icyifuzo cyawe muri Lovelies. Selfie zawe zigenzurwa ukwazo.";

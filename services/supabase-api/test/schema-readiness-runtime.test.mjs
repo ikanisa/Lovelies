@@ -13,11 +13,11 @@ async function rows(h){
     const records=await h.db.all(`SELECT to_jsonb(t) AS row FROM "${tablename}" t ORDER BY to_jsonb(t)::text`);
     hashes[tablename]=createHash('sha256').update(JSON.stringify(records)).digest('hex');
   }
-  assert.equal(tables.length,68);
+  assert.equal(tables.length,69);
   return hashes;
 }
 
-for(const version of [8,12,null])test(`database schema ${version??'missing'} gates existing and new requests without changing any private rows`,async()=>{
+for(const version of [8,13,null])test(`database schema ${version??'missing'} gates existing and new requests without changing any private rows`,async()=>{
   const h=await startHarness({consumeQueue:false});
   try{
     const guest=await h.anonymous({adult:true});

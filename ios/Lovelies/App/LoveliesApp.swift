@@ -68,8 +68,9 @@ struct LoveliesRootView: View {
         .onChange(of: scenePhase) { _, phase in
             foregroundRefresh?.cancel()
             guard !store.isReferenceMode else { return }
+            if phase == .inactive, live.localAuthenticationSceneInactive() { return }
             if phase != .active { live.background(scheduleRetry: phase == .background) }
-            else { resumeConnectedApp() }
+            else if !live.localAuthenticationSceneActive() { resumeConnectedApp() }
         }
         .onChange(of: store.isReferenceMode) { _, reference in
             foregroundRefresh?.cancel()

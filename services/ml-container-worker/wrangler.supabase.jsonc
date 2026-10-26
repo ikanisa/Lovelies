@@ -11,10 +11,12 @@
   "logpush":false,
   "observability":{"enabled":false,"head_sampling_rate":0,"logs":{"enabled":false,"invocation_logs":false,"persist":false},"traces":{"enabled":false,"persist":false}},
   // Select the immutable inference artifact directly. This configuration does
-  // not build an image or represent security/recognition acceptance.
+  // not build an image or represent security/recognition acceptance. The
+  // packaging-only d815 candidate moves the proven empty layer first while
+  // retaining the exact 982e payload/runtime; provider unpack is a real gate.
   "containers":[{
     "class_name":"SupabaseInferenceContainer",
-    "image":"registry.cloudflare.com/2209b915a85b1c11cee79b7806c6e73b/lovelies-inference-native@sha256:982e2ed7bb66b17db17979495495892579f1b734c55d93516a2aeedbf70e1c6c",
+    "image":"registry.cloudflare.com/2209b915a85b1c11cee79b7806c6e73b/lovelies-inference-native@sha256:d815c57f43cb4f1e26d624e68d8b5f43db5a76723e1c1de8d88a341273b68ffe",
     "scheduling_policy":"default",
     "instance_type":{"vcpu":1,"memory_mib":3072,"disk_mb":8000},
     "max_instances":1,

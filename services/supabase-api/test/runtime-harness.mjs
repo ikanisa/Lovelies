@@ -33,7 +33,7 @@ export async function startHarness({faceVerifier,photoProcessor,storeVerifier,pu
   const engine=localDatabase?.engine??await PGlite.create();
   try{
     if(!localDatabase)await engine.exec('CREATE ROLE anon; CREATE ROLE authenticated;');
-    const migrations=fs.readdirSync(new URL('../../../supabase/migrations/',import.meta.url)).filter(x=>/_lovelies_private_core\.sql$|_refresh_delivery\.sql$|_audience_retention\.sql$|_inference_generation\.sql$|_retention_scan_cursors\.sql$/.test(x)).sort();
+    const migrations=fs.readdirSync(new URL('../../../supabase/migrations/',import.meta.url)).filter(x=>/_lovelies_private_core\.sql$|_refresh_delivery\.sql$|_audience_retention\.sql$|_inference_generation\.sql$|_retention_scan_cursors\.sql$|_restore_control\.sql$/.test(x)).sort();
     for(const migration of migrations)await engine.exec(fs.readFileSync(new URL('../../../supabase/migrations/'+migration,import.meta.url),'utf8'));
   }catch(error){
     if(localDatabase)try{await engine.close();}catch(cleanupError){try{if(error instanceof Error&&Object.isExtensible(error))Object.defineProperty(error,'cleanupErrors',{value:[cleanupError],configurable:true});}catch{}}
@@ -69,7 +69,9 @@ export async function startHarness({faceVerifier,photoProcessor,storeVerifier,pu
     return result;
   };
   const json=async(path,options={},expected=200)=>{const res=await request(path,options),value=await res.json();assert.equal(res.status,expected,`${options.method??'request'} ${path}: ${value?.error?.code??value?.status??'unexpected_response'}`);return value;};
-  const harness={engine,db,app,env,request,json,databaseUrl:localDatabase?.url,storage:{exec:(sql,...bindings)=>db.all(sql,...bindings)},anonymous:async({adult=false}={})=>{const guest=await json('/auth/anonymous',{body:{}},201);if(adult)await json('/me/audience',{token:guest.access_token,method:'PUT',body:{age_band:'18_plus',policy_version:'audience-2026-10-24-v1',expected_version:0,operation_key:crypto.randomUUID()}});return guest;},community:(token,action,payload={},expected=200)=>json('/community/action',{token,body:{action,payload}},expected),alarm:()=>maintain(app),mf:{getR2Bucket:async name=>env[name]},close:async()=>{instances.delete(harness);await Promise.allSettled([...pendingJobs]);await tail;await db.close?.();await engine.close();}};
+  // Fixture setup/corruption is an explicit write transaction. Production
+  // automatic all()/one() are PostgreSQL READ ONLY, including SELECT functions.
+  const harness={engine,db,app,env,request,json,databaseUrl:localDatabase?.url,storage:{exec:(sql,...bindings)=>db.transaction(()=>db.all(sql,...bindings))},anonymous:async({adult=false}={})=>{const guest=await json('/auth/anonymous',{body:{}},201);if(adult)await json('/me/audience',{token:guest.access_token,method:'PUT',body:{age_band:'18_plus',policy_version:'audience-2026-10-24-v1',expected_version:0,operation_key:crypto.randomUUID()}});return guest;},community:(token,action,payload={},expected=200)=>json('/community/action',{token,body:{action,payload}},expected),alarm:()=>maintain(app),mf:{getR2Bucket:async name=>env[name]},close:async()=>{instances.delete(harness);await Promise.allSettled([...pendingJobs]);await tail;await db.close?.();await engine.close();}};
   instances.add(harness);return harness;
 }
 export async function closeHarnesses(){await Promise.all([...instances].map(h=>h.close()));}

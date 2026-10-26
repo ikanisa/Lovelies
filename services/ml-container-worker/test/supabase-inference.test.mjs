@@ -90,7 +90,7 @@ test('Supabase host selects one immutable image without duplicate release switch
   assert.equal(config.observability.logs.invocation_logs,false);assert.equal(config.observability.logs.persist,false);
   assert(!Object.hasOwn(config,'r2_buckets'));assert(!Object.hasOwn(config,'services'));
   assert.equal(config.containers.length,1);assert.equal(config.containers[0].max_instances,1);
-  assert.equal(config.containers[0].image,'registry.cloudflare.com/2209b915a85b1c11cee79b7806c6e73b/lovelies-inference-native@sha256:982e2ed7bb66b17db17979495495892579f1b734c55d93516a2aeedbf70e1c6c');
+  assert.equal(config.containers[0].image,'registry.cloudflare.com/2209b915a85b1c11cee79b7806c6e73b/lovelies-inference-native@sha256:d815c57f43cb4f1e26d624e68d8b5f43db5a76723e1c1de8d88a341273b68ffe');
   assert.deepEqual(config.containers[0].constraints,{jurisdiction:'eu',regions:['WEUR']});
   assert.deepEqual(config.containers[0].instance_type,{vcpu:1,memory_mib:3072,disk_mb:8000});
 });

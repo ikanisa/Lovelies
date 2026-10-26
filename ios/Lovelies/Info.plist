@@ -41,6 +41,8 @@
 	<string>$(LOVELIES_LINK_HOST)</string>
 	<key>LoveliesSubscriptionProduct</key>
 	<string>$(LOVELIES_SUBSCRIPTION_PRODUCT)</string>
+	<key>NSFaceIDUsageDescription</key>
+	<string>Use Face ID to authorize protected Lovelies requests on this device. Your selfies are verified separately.</string>
 	<key>NSCameraUsageDescription</key>
 	<string>Take your guided Lovelies face-registration selfies and photos you choose to upload.</string>
 	<key>NSPhotoLibraryAddUsageDescription</key>

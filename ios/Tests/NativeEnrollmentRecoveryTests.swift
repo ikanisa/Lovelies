@@ -40,6 +40,13 @@ private final class RecoverySigner: NativeDeviceSigner, @unchecked Sendable {
         let bytes = key!.publicKey.x963Representation
         return .object(["kty": .string("EC"), "crv": .string("P-256"), "x": .string(bytes.subdata(in: 1..<33).base64URL), "y": .string(bytes.subdata(in: 33..<65).base64URL), "ext": .bool(true), "key_ops": .strings(["verify"])])
     }
+    func publicJWK(alias: String, create: Bool) throws -> WireValue {
+        lock.lock(); defer { lock.unlock() }
+        guard alias == NativeEnrollmentRecord.keyAlias, !create, let key else { throw NativeAPIError.unavailable("missing_original_key") }
+        let bytes = key.publicKey.x963Representation
+        return .object(["kty": .string("EC"), "crv": .string("P-256"), "x": .string(bytes.subdata(in: 1..<33).base64URL),
+            "y": .string(bytes.subdata(in: 33..<65).base64URL), "ext": .bool(true), "key_ops": .strings(["verify"])])
+    }
     func sign(_ data: Data) throws -> String {
         lock.lock(); defer { lock.unlock() }; guard let key else { throw NativeAPIError.unavailable("missing_original_key") }
         retained = true; return try key.signature(for: data).rawRepresentation.base64URL

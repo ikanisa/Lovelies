@@ -4,6 +4,8 @@ import { PostgresJobQueue } from '../../../services/supabase-api/src/jobs.ts';
 import { AuthenticatedService } from '../../../services/supabase-api/src/service-fetcher.ts';
 import { createModelServices } from '../../../services/supabase-api/src/model-services.ts';
 import { createApp, createHandler } from '../../../services/supabase-api/src/index.ts';
+import { RestoreJournalClient } from '../../../services/supabase-api/src/restore-journal.ts';
+import { RestoreDatabaseFence } from '../../../services/supabase-api/src/restore-database.ts';
 import type { SupabaseEnv } from '../../../services/supabase-api/src/types.ts';
 
 const value=(name:string)=>Deno.env.get(name);
@@ -14,7 +16,10 @@ if(project.hostname!=='ltqfplqevxztlswlzexn.supabase.co'&&!['localhost','127.0.0
 const keys=value('SUPABASE_SECRET_KEYS');
 const storageSecret=value('LOVELIES_STORAGE_SECRET')??(keys?JSON.parse(keys).default:undefined)??value('SUPABASE_SERVICE_ROLE_KEY');
 if(!storageSecret)throw new Error('Server-only Storage secret missing');
-const db=connectPostgres(value('LOVELIES_DATABASE_URL')??required('SUPABASE_DB_URL'),value('LOVELIES_DATABASE_CA'));
+// No request/bootstrap fallback: a missing independent service or uninstalled
+// database marker makes the production entrypoint unavailable, including jobs.
+const journal=new RestoreJournalClient(required('RESTORE_JOURNAL_URL'),required('RESTORE_JOURNAL_TOKEN'));
+const db=connectPostgres(value('LOVELIES_DATABASE_URL')??required('SUPABASE_DB_URL'),value('LOVELIES_DATABASE_CA'),new RestoreDatabaseFence(journal));
 const env:SupabaseEnv={
   APP_ENV:value('APP_ENV')??'production',
   PHOTOS:new SupabasePrivateBucket(projectUrl,storageSecret,'lovelies-photos'),

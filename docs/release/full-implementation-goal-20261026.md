@@ -29,13 +29,36 @@ The exact immutable Linux AMD64 inference platform manifest is `sha256:982e2ed7b
 
 ### Execution checkpoint, 26 October 2026
 
-These newer results supersede the initial baseline above within their exact scopes. Do not repeat completed external mutations to reconcile old status text.
+Newer receipts supersede the initial baseline only within their tested scopes.
+Hosted v9–v11 and v12 are applied: schema12/69 private forced-RLS tables/policies,
+zero client/public access, all67 old non-version table fingerprints preserved by
+v12, new restore_control empty, six supported history versions matched and Security
+Advisor reporting no issues. No imports/deletions or serving-marker bootstrap.
+Current receipt: `/Volumes/PRO-G40/Projects/Lovelies/verification/hosted-v12-20261026/result.json`.
 
-- Hosted v9–v11 is applied and supported migration history verified: schema11,68 private tables,68 forced-RLS tables and68 backend-only policies; zero client/public access or backend membership. All62 pre-existing non-version table fingerprints are unchanged; only the expected schema-version rows changed. No import or deletion occurred. Evidence: `/Volumes/PRO-G40/Projects/Lovelies/verification/hosted-v9-v11-20261026/result.json`, SHA256 `42888b4abfaadae94e643db32e71f606cb87ea0759a0e321876fd29277a14e5a`. Security advisor reports zero items.
-- The inference Worker and exact-image container application are deployed, with four inference bindings added to Supabase and digest-verified. Serving is unqualified: the provider reports image unpack failure and no running instances; the HTTPS route separately returns403/1010. Preserve both failures and resolve their causes before API cutover. Evidence: `/Volumes/PRO-G40/Projects/Lovelies/verification/serving-inference-20261026/`. No application API cutover or successful recognition request is claimed.
-- The independent restriction-journal foundation passes12 local tests, syntax and Worker dry run, including actual SQLite Durable Object restart persistence. It is not deployed or integrated with API write-ahead, checkpoint fencing or restore clearance. The local EU-selector seam does not prove hosted EU placement. Evidence: `/Volumes/PRO-G40/Projects/Lovelies/verification/restore-journal-20261026/workspace-result.json`.
-- Push private-key file handling passes the full31-test local provider suite and syntax checks. Credentials, host/ledger deployment and actual APNs/FCM device delivery remain open. Evidence: `/Volumes/PRO-G40/Projects/Lovelies/verification/push-private-files-20261026/`.
-- iOS LocalAuthentication implementation is in progress. Its focused local evidence does not qualify the final app, physical Face ID/Touch ID/passcode behavior, existing-key upgrade or App Review outcome.
+Whole API329/328 pass/zero fail/one optional model skip and types pass on95
+unchanged inputs, including actual PostgreSQL17.11/Deno/TLS. Journal34 SQLiteDO/
+protocol checks and19 focused PG checkpoint/race cases pass. Required entrypoint
+client/fencing is implemented; domain restriction producers, stable allocations,
+external generation fences, replay/object cleanup and computed completion remain
+unfinished. No hosted journal or recovery clearance is established.
+
+Original1020 Swift hosts, separate101 guest/35 media hosts and108 focused OS-auth
+fixtures pass; current21-source Debug/unsignedRelease app and XCTest target build.
+Physical OS/new/legacy key behavior and App Review remain unqualified. Six exact
+Release preflight URL/signature gates remain. Push private-file handling passes31
+local checks; actual providers/host/device delivery remain open.
+
+The packaging-only d815 image is published and deployed with the exact982e
+payload/runtime preserved. Cloudflare appversion2 reports healthy1/failed0/
+starting0 and no pull errors. A supported private
+ServiceBinding passes missing/wrong401 and authenticated200 loaded readiness,
+validated against exact engine/processing/model hashes/capabilities/limits. No
+biometric input was sent; recognition quality and Supabase public HTTPS remain
+unqualified. The403/1010 public route is unresolved and was not retried/disguised. No API
+cutover, store submission or live/stable replacement is claimed. See the current
+[integration checkpoint](audience-readiness-20261024.md) for source-bound receipts
+and preserved failures. GitHub billing remains parked without a substitute CI pass.
 
 ## Work packages and acceptance criteria
 
@@ -44,7 +67,7 @@ Rows retain qualified substeps and the remaining outcomes; the checkpoint above 
 | # | Work package and original IDs | Required remaining outcome / acceptance |
 |---|---|---|
 | 01 | iOS authentication — A01/A02/S03/S07 | Resolve the recorded returning-authentication architecture decision using current official store guidance; implement and test the agreed supported approach while retaining the owner's signed-selfie enrollment, matching, consent and same-account requirements. Do not silently change the product or treat a presumed policy interpretation as a proven store rejection. |
-| 02 | Hosted database — SP01/SP03 | Hosted v9–v11 and its preservation/security/history postflight are qualified by the26October checkpoint. Retain schema11/68 private forced-RLS tables, expected policies/backend grants, zero client/public access and unknown/test rows/holds. Qualify subsequent schema changes against affected consumers; no migration repetition, baseline replay or blind db push. |
+| 02 | Hosted database — SP01/SP03 | Hosted v9–v11 and v12 preservation/security/history postflight are qualified by the26October checkpoint. Retain schema12/69 private forced-RLS tables, expected policies/backend grants, zero client/public access and unknown/test rows/holds. Qualify subsequent schema changes against affected consumers; no migration repetition, baseline replay or blind db push. |
 | 03 | Inference artifact and gateway — SP02/SP07/B01/B02/B03 | Reconcile exact image/SBOM/identity/security dispositions and ML cleanup delivery; retain completed native fixtures and raw scan. Test affected gateway consumers after source changes. Any new payload/dependency/ABI change requires affected artifact proof; an unchanged qualified image does not need rebuilding for an old threshold or fake approval field. |
 | 04 | Recognition quality — A05/B04 | Use permissioned representative calibration and held-out data separately for enrollment consistency, returning authentication and matching. Record accepted thresholds/error rates/relevant device-demographic conditions, monitoring and rollback without claims of liveness/civil identity. |
 | 05 | Serving stack — SP01/SP02/SP04/SP07/SP08/B05/B06 | Configure remaining policy/model versions, private TLS endpoint, independent service credentials and exact artifact/processing pins; deploy API and selected inference service. Prove loaded readiness, authenticated real requests and rejection of wrong auth/generation. Reuse initial application secrets; avoid unnecessary rotation. |

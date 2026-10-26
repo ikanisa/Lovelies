@@ -1,6 +1,6 @@
 /** Mechanical, credential-free transports in the production Edge container's
  * network namespace. No application handlers, fixture responses or retries.
- * All three listeners are private loopback; upstream identities are supplied
+ * All four listeners are private loopback; upstream identities are supplied
  * only after the runner verifies its owned PostgreSQL/Storage containers.
  */
 import assert from 'node:assert/strict';
@@ -10,12 +10,14 @@ import {Transform,pipeline} from 'node:stream';
 
 const postgresHost=process.env.RELAY_POSTGRES_HOST,storageHost=process.env.RELAY_STORAGE_HOST;
 const mlPort=Number(process.env.RELAY_ML_PORT);
+const journalPort=Number(process.env.RELAY_JOURNAL_PORT);
 assert(/^lovelies-openface-[a-f0-9]{12}-postgres$/.test(postgresHost??''),'Owned PostgreSQL host required');
 assert(/^lovelies-openface-[a-f0-9]{12}-storage(?:-retry[0-9]+)?$/.test(storageHost??''),'Owned Storage host required');
 assert(Number.isSafeInteger(mlPort)&&mlPort>=1024&&mlPort<=65535,'Bounded host ML relay port required');
+assert(Number.isSafeInteger(journalPort)&&journalPort>=1024&&journalPort<=65535,'Exact bounded host HTTPS fixture port required');
 const MAX_CONNECTIONS=64,DEADLINE_MS=145000;
 const sockets=new Set(),servers=[];
-const metrics={postgres_connections:0,storage_requests:0,ml_requests:0,transport_failures:0,bound_failures:0};
+const metrics={postgres_connections:0,storage_requests:0,ml_requests:0,journal_tls_connections:0,transport_failures:0,bound_failures:0};
 let active=0,closing=false;
 function remember(socket){
   sockets.add(socket);socket.once('close',()=>sockets.delete(socket));
@@ -54,6 +56,24 @@ await listen(tcpServer(client=>{
   upstream.on('data',chunk=>{outgoing+=chunk.length;if(outgoing>128*1024*1024){metrics.bound_failures++;fail();}});
   client.pipe(upstream);upstream.pipe(client);
 }),54321);
+
+// Opaque TLS forwarding to one exact runner-created loopback fixture. No TLS
+// termination, application handler, CONNECT target, header or credential logic
+// lives here. The production client still verifies 127.0.0.1 against the fixture
+// certificate using its read-only mounted CA in the pinned Edge runtime.
+await listen(tcpServer(client=>{
+  if(closing||active>=MAX_CONNECTIONS){client.destroy();return;}
+  active++;metrics.journal_tls_connections++;
+  const upstream=remember(createConnection({host:'host.docker.internal',port:journalPort}));
+  let incoming=0,outgoing=0;
+  const fail=()=>{client.destroy();upstream.destroy();};
+  client.once('close',()=>{active--;upstream.destroy();});upstream.once('close',()=>client.destroy());
+  client.on('error',fail);upstream.on('error',()=>{metrics.transport_failures++;fail();});
+  client.setTimeout(180000,fail);upstream.setTimeout(180000,fail);
+  client.on('data',chunk=>{incoming+=chunk.length;if(incoming>128*1024*1024){metrics.bound_failures++;fail();}});
+  upstream.on('data',chunk=>{outgoing+=chunk.length;if(outgoing>128*1024*1024){metrics.bound_failures++;fail();}});
+  client.pipe(upstream);upstream.pipe(client);
+}),54324);
 
 function gateway({label,port,host,upstreamPort,requestLimit,responseLimit,strip=''}){
   const server=httpServer({maxHeaderSize:32*1024},(incoming,outgoing)=>{
@@ -109,4 +129,4 @@ async function close(code=0){
   process.exitCode=code;
 }
 process.once('SIGTERM',()=>void close());process.once('SIGINT',()=>void close());
-console.log(JSON.stringify({event:'loopback_relays_ready',ports:[54321,54322,54323],credentials:false}));
+console.log(JSON.stringify({event:'loopback_relays_ready',ports:[54321,54322,54323,54324],journal_transport:'opaque_tls_to_exact_fixture_port',credentials:false}));

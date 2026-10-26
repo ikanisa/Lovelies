@@ -1,6 +1,7 @@
 import Foundation
 import Security
 import CryptoKit
+import LocalAuthentication
 
 protocol NativeSecretStore: Sendable {
     func read(_ name: String) throws -> Data?
@@ -17,6 +18,7 @@ extension NativeSecretStore {
     }
 }
 protocol NativeDeviceSigner: Sendable {
+    var requiresLocalAuthentication: Bool { get }
     func sign(_ data: Data) throws -> String
     func sha256(_ data: Data) -> String
     func clear()
@@ -24,10 +26,12 @@ protocol NativeDeviceSigner: Sendable {
     func publicJWK(alias: String, create: Bool) throws -> WireValue
     func sign(_ data: Data, alias: String) throws -> String
     func clear(alias: String)
+    func sign(_ data: Data, alias: String, permit: NativeLocalSigningPermit) throws -> String
 }
 // Existing isolated protocol fixtures do not represent persistent key storage.
 // Production and restart-capable fixtures override this noncreating query.
 extension NativeDeviceSigner {
+    var requiresLocalAuthentication: Bool { false }
     func hasRetainedKey() throws -> Bool { false }
     func publicJWK(alias: String, create: Bool) throws -> WireValue { throw NativeAPIError.unsupported(String(localized: "This signer cannot manage a new device key.")) }
     func sign(_ data: Data, alias: String) throws -> String {
@@ -35,8 +39,13 @@ extension NativeDeviceSigner {
         return try sign(data)
     }
     func clear(alias: String) { if alias == NativeEnrollmentRecord.keyAlias { clear() } }
+    func sign(_ data: Data, alias: String, permit: NativeLocalSigningPermit) throws -> String {
+        _ = try permit.require(data, alias: alias)
+        return try sign(data, alias: alias)
+    }
 }
 struct KeychainDeviceSigner: NativeDeviceSigner {
+    var requiresLocalAuthentication: Bool { true }
     func sign(_ data: Data) throws -> String { try DeviceIdentity.sign(data) }
     func sha256(_ data: Data) -> String { DeviceIdentity.sha256(data) }
     func clear() { DeviceIdentity.clear() }
@@ -44,6 +53,9 @@ struct KeychainDeviceSigner: NativeDeviceSigner {
     func publicJWK(alias: String, create: Bool) throws -> WireValue { try DeviceIdentity.publicJWK(alias: alias, createIfMissing: create) }
     func sign(_ data: Data, alias: String) throws -> String { try DeviceIdentity.sign(data, alias: alias) }
     func clear(alias: String) { DeviceIdentity.clear(alias: alias) }
+    func sign(_ data: Data, alias: String, permit: NativeLocalSigningPermit) throws -> String {
+        try DeviceIdentity.sign(data, alias: alias, permit: permit)
+    }
 }
 struct KeychainSecretStore: NativeSecretStore {
     private let service = "com.lovelies.connected.private.v1"
@@ -94,10 +106,15 @@ enum DeviceIdentity {
         guard status == errSecSuccess, result != nil else { throw NativeAPIError.unsupported(String(localized: "Unlock this device to check its existing face-verification key.")) }
         return true
     }
-    static func key(alias: String = NativeEnrollmentRecord.keyAlias, createIfMissing: Bool = true) throws -> SecKey {
+    static func key(alias: String = NativeEnrollmentRecord.keyAlias, createIfMissing: Bool = true, authenticationContext: LAContext? = nil) throws -> SecKey {
         let tag = try tag(alias)
+        let context = authenticationContext ?? LAContext()
+        // UI authorization happened asynchronously before repository work. A key
+        // query/signature cannot start another prompt or bypass a cancelled one.
+        context.interactionNotAllowed = true
         let query: [String: Any] = [kSecClass as String: kSecClassKey, kSecAttrApplicationTag as String: tag,
-            kSecAttrKeyType as String: kSecAttrKeyTypeECSECPrimeRandom, kSecReturnRef as String: true]
+            kSecAttrKeyType as String: kSecAttrKeyTypeECSECPrimeRandom, kSecReturnRef as String: true,
+            kSecUseAuthenticationContext as String: context]
         var existing: CFTypeRef?
         let status = SecItemCopyMatching(query as CFDictionary, &existing)
         if status == errSecSuccess, let existing { return existing as! SecKey }
@@ -109,7 +126,7 @@ enum DeviceIdentity {
                 kSecAttrApplicationTag as String: tag, kSecAttrAccessible as String: kSecAttrAccessibleWhenUnlockedThisDeviceOnly]]
         #if !targetEnvironment(simulator)
         attributes[kSecAttrTokenID as String] = kSecAttrTokenIDSecureEnclave
-        guard let access = SecAccessControlCreateWithFlags(nil, kSecAttrAccessibleWhenUnlockedThisDeviceOnly, [.privateKeyUsage], nil) else { throw NativeAPIError.unsupported(String(localized: "Protected device-key access is unavailable.")) }
+        guard let access = SecAccessControlCreateWithFlags(nil, kSecAttrAccessibleWhenUnlockedThisDeviceOnly, [.privateKeyUsage, .userPresence], nil) else { throw NativeAPIError.unsupported(String(localized: "Protected device-key access is unavailable.")) }
         attributes[kSecPrivateKeyAttrs as String] = [kSecAttrIsPermanent as String: true, kSecAttrApplicationTag as String: tag, kSecAttrAccessControl as String: access]
         #endif
         var error: Unmanaged<CFError>?
@@ -124,9 +141,12 @@ enum DeviceIdentity {
         return .object(["kty": .string("EC"), "crv": .string("P-256"), "x": .string(raw.subdata(in: 1..<33).base64URL),
             "y": .string(raw.subdata(in: 33..<65).base64URL), "ext": .bool(true), "key_ops": .strings(["verify"])])
     }
-    static func sign(_ data: Data, alias: String = NativeEnrollmentRecord.keyAlias) throws -> String {
+    static func sign(_ data: Data, alias: String = NativeEnrollmentRecord.keyAlias, permit: NativeLocalSigningPermit? = nil) throws -> String {
+        guard let permit else { throw NativeLocalAuthenticationIssue.required }
+        guard let context = try permit.require(data, alias: alias) else { throw NativeLocalAuthenticationIssue.required }
         var error: Unmanaged<CFError>?
-        guard let signature = SecKeyCreateSignature(try key(alias: alias, createIfMissing: false), .ecdsaSignatureMessageX962SHA256, data as CFData, &error) as Data? else { throw NativeAPIError.unsupported(String(localized: "The device could not sign this capture. Unlock it and try again.")) }
+        guard let signature = SecKeyCreateSignature(try key(alias: alias, createIfMissing: false, authenticationContext: context), .ecdsaSignatureMessageX962SHA256, data as CFData, &error) as Data? else { throw NativeAPIError.unsupported(String(localized: "The device could not sign this capture. Unlock it and try again.")) }
+        _ = try permit.require(data, alias: alias) // Cancellation cannot publish a late signature.
         return try P256.Signing.ECDSASignature(derRepresentation: signature).rawRepresentation.base64URL
     }
     static func sha256(_ data: Data) -> String { SHA256.hash(data: data).map { String(format: "%02x", $0) }.joined() }

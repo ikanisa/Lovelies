@@ -39,20 +39,29 @@ export interface SqlConnection {
   close?():Promise<void>;
 }
 
+/** Independent restore admission is deliberately an injected production port;
+ * a missing database control row is never created by request handling. */
+export interface DatabaseFence {
+  enter(connection:SqlConnection):Promise<unknown>;
+  prepare(connection:SqlConnection,admission:unknown,intent?:unknown):Promise<unknown>;
+  committed(connection:SqlConnection,prepared:unknown):Promise<void>;
+}
+type TransactionFrame={connection:SqlConnection;readOnly:boolean};
+
 /** Every mutation runs on one reserved PostgreSQL connection. The advisory lock
  * retains the original engine's single-authority serialization across isolates.
  * AsyncLocalStorage scopes the connection to its callback; parallel requests
  * cannot accidentally join another request's transaction. Never automatically
  * retry a callback: it could include a deliberately prepared external effect. */
 export class PostgresDatabase implements Database {
-  private readonly transactions=new AsyncLocalStorage<SqlConnection>();
-  constructor(private readonly connection:SqlConnection){}
+  private readonly transactions=new AsyncLocalStorage<TransactionFrame>();
+  constructor(private readonly connection:SqlConnection,private readonly fence?:DatabaseFence){}
   async all<T=Record<string,unknown>>(source:string,...bindings:Binding[]):Promise<T[]> {
     if(bindings.length>100)throw new ApiError(500,'sql_binding_limit');
     const {sql,values}=postgresQuery(source,bindings);
-    const connection=this.transactions.getStore();
-    if(!connection)return this.transaction(()=>this.all<T>(source,...bindings));
-    return connection.query<T>(sql,values);
+    const frame=this.transactions.getStore();
+    if(!frame)return this.read(()=>this.all<T>(source,...bindings));
+    return frame.connection.query<T>(sql,values);
   }
   async one<T=Record<string,unknown>>(sql:string,...bindings:Binding[]):Promise<T|null> {
     const rows=await this.all<T>(sql,...bindings);
@@ -60,21 +69,58 @@ export class PostgresDatabase implements Database {
   }
   async run(sql:string,...bindings:Binding[]):Promise<void> {
     if(!this.transactions.getStore()){await this.transaction(()=>this.run(sql,...bindings));return;}
+    if(this.transactions.getStore()!.readOnly)throw new ApiError(500,'read_only_transaction');
     await this.all(sql,...bindings);
   }
-  async transaction<T>(callback:()=>T|Promise<T>):Promise<T> {
+  async read<T>(callback:()=>T|Promise<T>):Promise<T>{
     if(this.transactions.getStore())return await callback();
-    return this.connection.begin(connection=>this.transactions.run(connection,async()=>{
+    return this.execute(callback,true);
+  }
+  async transaction<T>(callback:()=>T|Promise<T>,intent?:unknown):Promise<T> {
+    const active=this.transactions.getStore();
+    if(active){
+      if(active.readOnly)throw new ApiError(500,'read_only_transaction');
+      // A nested callback cannot install a different independent operation.
+      if(intent!==undefined)throw new ApiError(500,'nested_restore_operation');
+      return await callback();
+    }
+    return this.execute(callback,false,intent);
+  }
+  private async execute<T>(callback:()=>T|Promise<T>,readOnly:boolean,intent?:unknown):Promise<T>{
+    let prepared:unknown;
+    const result=await this.connection.begin(connection=>this.transactions.run({connection,readOnly},async()=>{
+      // This is enforced by PostgreSQL, including modifying CTEs and volatile
+      // functions. SQL spelling/method names cannot prove a query read-only.
+      if(readOnly)await connection.query('SET TRANSACTION READ ONLY',[]);
       await connection.query('SELECT pg_advisory_xact_lock(704536419730718193::bigint)',[]);
       await connection.query('SET LOCAL ROLE lovelies_api',[]);
       await connection.query("SET LOCAL search_path TO lovelies_private, pg_catalog",[]);
-      return await callback();
+      const admission=await this.fence?.enter(connection);
+      const value=await callback();
+      // SQL remains uncommitted until independent acknowledgement. Domain
+      // effects must register exact restrictions and external ports must fence
+      // effects; this adapter never automatically reruns a callback on error.
+      if(this.fence&&!readOnly)prepared=await this.fence.prepare(connection,admission,intent);
+      return value;
     }));
+    if(this.fence&&prepared!==undefined){
+      // The first transaction may have committed while its acknowledgement was
+      // lost or taken over by another pool. Reacquire the same lock and reread
+      // the actual PG marker; a cached pre-restore successor is insufficient.
+      await this.connection.begin(async connection=>{
+        await connection.query('SET TRANSACTION READ ONLY',[]);
+        await connection.query('SELECT pg_advisory_xact_lock(704536419730718193::bigint)',[]);
+        await connection.query('SET LOCAL ROLE lovelies_api',[]);
+        await connection.query("SET LOCAL search_path TO lovelies_private, pg_catalog",[]);
+        await this.fence!.committed(connection,prepared);
+      });
+    }
+    return result;
   }
   async close():Promise<void>{await this.connection.close?.();}
 }
 
-export function connectPostgres(url:string,rootCertificate?:string):PostgresDatabase {
+export function connectPostgres(url:string,rootCertificate?:string,fence?:DatabaseFence):PostgresDatabase {
   const target=new URL(url);
   if(!['postgres:','postgresql:'].includes(target.protocol))throw new Error('PostgreSQL URL required');
   const local=['127.0.0.1','localhost','::1','[::1]'].includes(target.hostname);
@@ -89,5 +135,5 @@ export function connectPostgres(url:string,rootCertificate?:string):PostgresData
     begin:async<T>(callback:(connection:SqlConnection)=>Promise<T>)=>await sql.begin(async tx=>callback(wrap(tx as unknown as typeof sql))) as T,
   });
   const connection=wrap(sql);connection.close=async()=>{await sql.end({timeout:5});};
-  return new PostgresDatabase(connection);
+  return new PostgresDatabase(connection,fence);
 }

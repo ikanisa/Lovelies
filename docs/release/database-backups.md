@@ -2,8 +2,8 @@
 
 The local operator tooling now produces, authenticates, inspects and expires
 encrypted application-database backups. It does not change the serving API,
-Supabase schema or Storage buckets. Hosted scheduling, off-site custody and the
-independent restore-suppression workflow remain release gates.
+Supabase schema or Storage buckets. Hosted scheduling, off-site custody and a
+fully operated independent recovery/replay workflow remain release gates.
 
 ## Boundary and format
 
@@ -13,6 +13,13 @@ security enabled. The custom archive includes the application schema and data;
 it excludes Supabase managed schemas, global role credentials and Storage object
 contents. A successful producer exit without warnings is required. The CLI then
 uses `pg_restore --list` to inspect the recovered archive without executing SQL.
+
+The producer selects the whole private schema, with no fixed table list or table
+exclusions. Current schema v12 has 69 private tables, including `restore_control`.
+Its empty state or populated database/incarnation/checkpoint/cursor and operation
+receipt fields are opaque backup data: they must be reconstructed exactly, never
+replaced with a new marker, cleared or treated as independent serving authority.
+The archive/catalog format has no schema-version or table-count admission flag.
 
 The source is streamed directly into AES-256-GCM encryption. The authenticated
 header binds the project, environment, schema, format, archive ID, key ID and
@@ -75,28 +82,34 @@ and privilege restoration; it does not authorize reconnecting the application.
 
 ## Observed qualification and remaining operation
 
-`pnpm backup:test` passes 15 controlled cases covering interrupted producers,
+The existing `pnpm backup:test` qualification passed 15 controlled cases covering interrupted producers,
 corruption, wrong keys/catalog tampering, exact expiry and interrupted expiry,
 unknown-file preservation, locks, permissions/links, consumer cancellation,
 post-verification mutation/replacement, wrong-project/local target refusal and credential-safe CLI errors. The backend
-readiness workflow includes that command and passes local actionlint1.7.12.
+readiness workflow includes that command and passed local actionlint 1.7.12.
 GitHub billing remains parked; no passing remote run is inferred.
 
-An actual PostgreSQL 17.6.1 fixture run uses the production CLI and flags through
-fixed wrappers for the existing owned container's binaries. It encrypts and
-inspects the dump, reconstructs all 68 private tables in a newly created isolated
-database, and verifies every row hash, the unknown test record and hold. Original
-source rows remain unchanged. All 68 reconstructed tables retain forced RLS and
-zero client/public table grants; omitted backend ACLs leave this particular
-reconstruction unusable for serving. A separately copied encrypted artifact
-passes the exact seven-day expiry boundary. Both disposable databases are removed;
-the owned container is stopped and preserved. No hosted or customer data is used.
+On 26 October, the encryption library, operator CLI and both controlled-test
+files still match their recorded 25 October source seals. The schema change does
+not alter that cryptographic/catalog implementation, so those unchanged cases
+remain applicable. A fresh v12 reconstruction is a separate affected check.
 
-A real counterexample changed an8MiB encrypted fixture after initial verification:
+The recorded 25 October PostgreSQL 17.6.1 fixture run used the production CLI and
+flags through fixed wrappers for the existing owned container's binaries. It
+encrypted and inspected the dump and reconstructed the then-current v11/68
+private tables in a newly created isolated database, verifying every row hash,
+the unknown test record and hold. Original source rows remained unchanged. All
+68 reconstructed tables retained forced RLS and
+zero client/public table grants; omitted backend ACLs left this particular
+reconstruction unusable for serving. A separately copied encrypted artifact
+passed the exact seven-day expiry boundary. Both disposable databases were removed;
+the owned container was stopped and preserved. No hosted or customer data was used.
+
+A real counterexample changed an 8 MiB encrypted fixture after initial verification:
 altered plaintext reached the old consumer before GCM's final rejection. The
 corrected snapshot delivers only the originally verified bytes under that same
 mutation. A smaller first probe did not reproduce the race and remains recorded.
-The original13-case and PostgreSQL runs retain their source scope. All15 cases
+The original 13-case and PostgreSQL runs retain their source scope. All 15 cases
 and all nine actual PostgreSQL checks were refreshed after the correction.
 
 Current receipts:
@@ -107,11 +120,29 @@ Current receipts:
 failures and synthetic artifacts remain preserved. Keys and synthetic database
 artifacts remain private and outside Git.
 
+The prepared v12/69-table adaptation is
+`/Volumes/PRO-G40/Projects/Lovelies/verification/encrypted-backup-schema12-20261026/`
+(`actual-postgres.mjs`, `run-instructions.md`, `source-seal.json`). It reuses the
+actual dump/encryption/reconstruction/RLS/expiry flow with native PostgreSQL 17
+binaries selected by the integration owner. It additionally preserves a real
+nonzero opaque `restore_control` checkpoint/operation receipt, then compares that
+exact reconstructed marker against a later checkpoint established by an actual
+source transaction. The journal/client/database gate uses production source with
+an explicit controlled in-memory HTTP fixture for this qualification; it cannot
+establish provider custody or independent persistence.
+
+That adaptation is prepared for the integration owner's existing PostgreSQL 17.11
+lane; it has not established a fresh actual v12 reconstruction pass yet. The old
+68-table result must not be relabelled as current 69-table restore evidence.
+Private server metadata and an existing synthetic qualification key are injected
+only by the integration owner. The preparer did not read those credentials,
+generate keys, access the running server or execute a backup/reconstruction.
+
 Before release, configure and observe a monitored backup/expiry schedule with
 independent off-site custody and recovery-key access. Inventory provider backups,
-WAL/PITR and any media copies separately. Implement an independently current
-deletion/withdrawal ledger, replay/absent-object checks, retirement of restored
-sessions/consents/grants and a startup restore quarantine before making any
+WAL/PITR and any media copies separately. Independently current deletion/withdrawal
+replay, absent-object checks, retirement of restored sessions/consents/grants and
+computed recovery completion must be operated and qualified before making any
 restored copy accessible. The isolated reconstruction above does not qualify
 that serving restore or prove the published erasure deadline.
 
@@ -119,15 +150,30 @@ The existing `services/push-provider` dispatch ledger is not that suppression
 ledger. Its separate PostgreSQL connection has no qualified production custody
 at this checkpoint, and its rows track push dispatch outcomes. Reusing another
 schema in the application database would still share a provider-wide restore
-boundary. An independent current journal, its fail-closed API/recovery protocol
-and operated replay/clearance must be implemented and qualified before serving
-a restored copy; neither the backup catalog nor the push ledger supplies that
-behavior today.
+boundary. The independent restriction-journal service and database fence now
+exist in source. The production API requires the journal connection and compares
+the local control row to independently current serving state under its reserved
+database lock, including reads and internal jobs. Missing control never causes
+request-time bootstrap; a supported-schema rollback with an old marker fails
+closed. An exact committed SQL marker can reconcile a lost acknowledgement, but
+a pending predecessor is never automatically replayed or assumed aborted.
+
+The journal permits a serving bootstrap only at empty genesis; existing facts
+bind in quarantine. Its recovery-begin generation cannot clear quarantine, and
+there is no manual clear endpoint or flag. Provider custody, full restriction
+replay, object cleanup/inventory and computed recovery completion remain open.
+An encrypted archive's copied `restore_control` row, a valid GCM tag, a successful
+SQL reconstruction or an omitted-ACL repair cannot certify current consent,
+deletion completion or serving recovery. A planned restore must enter independent
+recovery before replacing the database; never overwrite the independent journal
+or use an archive's marker to reset it.
 
 The separate [database request gate](schema-request-gate-20261025.md) prevents API
-work against an older, newer or missing schema history. It cannot identify an old
-backup that still reports the supported schema11, and does not complete the
-independent suppression or restore-quarantine obligations above.
+work against an older, newer or missing schema history. Schema v12 alone cannot
+identify an old v12 backup. The independent checkpoint fence supplements that
+schema check; it does not complete suppression replay, physical cleanup or
+recovery-completion obligations. The focused database-gate tests cover old-marker
+rollback denial separately from encrypted archive reconstruction.
 
 Supabase documents separate plan-dependent backup availability and explains that
 database backups do not contain Storage objects. Its Free plan guidance calls for

@@ -983,3 +983,12 @@
 "Lovelies is temporarily unavailable. Please try again later." = "Lovelies is temporarily unavailable. Please try again later.";
 
 "Toggle favorite" = "Toggle favorite";
+
+"Device authentication was cancelled. Your saved request is unchanged." = "Device authentication was cancelled. Your saved request is unchanged.";
+"Device authentication did not finish. Try again when you are ready." = "Device authentication did not finish. Try again when you are ready.";
+"Device authentication is unavailable. Unlock this device and try again." = "Device authentication is unavailable. Unlock this device and try again.";
+"Set a device passcode before using protected Lovelies sign-in. Guest privacy controls remain available." = "Set a device passcode before using protected Lovelies sign-in. Guest privacy controls remain available.";
+"Authenticate on this device before continuing the saved face request." = "Authenticate on this device before continuing the saved face request.";
+"Your sign-in state changed. Authenticate again to check the original request." = "Your sign-in state changed. Authenticate again to check the original request.";
+"Device authorization expired. Authenticate again to continue the original request." = "Device authorization expired. Authenticate again to continue the original request.";
+"Confirm access on this device to continue your Lovelies request. Your selfies are verified separately." = "Confirm access on this device to continue your Lovelies request. Your selfies are verified separately.";

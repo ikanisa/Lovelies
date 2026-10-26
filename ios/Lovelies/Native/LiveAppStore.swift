@@ -97,11 +97,16 @@ import AVFoundation
     private var navigation: DemoStore?
     private var workTask: Task<Void, Never>?
     private var workGeneration = 0
+    private let localAuthenticator: any NativeLocalAuthenticating
+    private var localSigningLease: NativeLocalSigningLease?
+    private var localAuthenticationOperation: UUID?
+    private var localAuthenticationPending = false
     private var cameraReviewGeneration = 0
     private var retakeChallenge: NativeFaceChallenge?
     private(set) var photoCameraContext: NativeMediaCaptureContext?
-    init(sharedFiles: NativeAuthorizedShareFiles = NativeAuthorizedShareFiles(), privateMediaClock: NativePrivateMediaClock = .live) {
-        self.sharedFiles = sharedFiles; self.privateMediaClock = privateMediaClock
+    init(sharedFiles: NativeAuthorizedShareFiles = NativeAuthorizedShareFiles(), privateMediaClock: NativePrivateMediaClock = .live,
+         localAuthenticator: any NativeLocalAuthenticating = NativeLocalAuthenticator()) {
+        self.sharedFiles = sharedFiles; self.privateMediaClock = privateMediaClock; self.localAuthenticator = localAuthenticator
         // A restarted presentation has no surviving authority. Only recognized
         // private share files participate; durable upload staging is separate.
         do { try sharedFiles.prune(now: privateMediaClock.read().wall) }
@@ -126,13 +131,73 @@ import AVFoundation
     private func checkPublication(_ fence: NativePublicationFence) throws {
         guard fence.permits(currentGeneration: workGeneration, cancelled: Task.isCancelled) else { throw CancellationError() }
     }
-    private func performGuarded(_ work: @escaping @MainActor (NativePublicationFence) async throws -> Void) {
+    private func performGuarded(localSigning purpose: NativeLocalAuthenticationPurpose? = nil, recoveryBackup: String? = nil,
+                                retainedEnrollmentOnly: Bool = false,
+                                _ work: @escaping @MainActor (NativePublicationFence) async throws -> Void) {
+        performGuarded(localSigning: purpose, recoveryBackup: recoveryBackup, retainedEnrollmentOnly: retainedEnrollmentOnly,
+                       guestResume: false) { fence, _, _ in try await work(fence) }
+    }
+    private func performGuarded(localSigning purpose: NativeLocalAuthenticationPurpose?, recoveryBackup: String? = nil,
+                                retainedEnrollmentOnly: Bool = false, guestResume: Bool, profileCancellation: Bool = false,
+                                _ work: @escaping @MainActor (NativePublicationFence, NativeGuestSetupResumeTicket?, NativeLocalTransitionTicket?) async throws -> Void) {
         guard !busy else { return }; busy = true; error = nil; workGeneration += 1; let generation = workGeneration
         let fence = NativePublicationFence(generation: generation)
+        let operationID = UUID()
         workTask = Task {
-            defer { if generation == workGeneration { busy = false } }
-            do { try checkPublication(fence); try await work(fence) }
+            var lease: NativeLocalSigningLease?
+            defer {
+                lease?.retire()
+                if localAuthenticationOperation == operationID {
+                    localAuthenticationPending = false; localAuthenticationOperation = nil; localSigningLease = nil
+                }
+                if let repository { Task { await repository.finishLocalSigning(operationID: operationID) } }
+                if generation == workGeneration { busy = false }
+            }
+            do {
+                try checkPublication(fence)
+                var resumeTicket: NativeGuestSetupResumeTicket?
+                var transitionTicket: NativeLocalTransitionTicket?
+                if let purpose {
+                    if repository == nil { repository = try NativeBackgroundUploads.shared.repository() }
+                    guard let repository else { throw NativeAPIError.unavailable("configuration") }
+                    if let recoveryBackup {
+                        await NativeBackgroundUploads.shared.stop(); try checkPublication(fence)
+                        if try await repository.recoveryStartNeedsSignedRetirement(backup: recoveryBackup) {
+                            guard let retirement = try await repository.prepareLocalSigning(purpose: .connect, operationID: operationID) else { throw NativeLocalAuthenticationIssue.required }
+                            lease = try await authorizeLocalSigning(retirement, repository: repository, fence: fence)
+                            try await NativeLocalSigningOperation.$id.withValue(operationID) {
+                                try await NativeLocalSigningOperation.$purpose.withValue(.connect) { try await repository.logout() }
+                            }
+                            lease?.retire(); lease = nil; localSigningLease = nil
+                            await repository.finishLocalSigning(operationID: operationID); try checkPublication(fence)
+                        }
+                        transitionTicket = try await repository.prepareAccountRecoveryStart(backup: recoveryBackup)
+                        try checkPublication(fence)
+                    } else if profileCancellation {
+                        transitionTicket = try await repository.prepareFaceProfileCancellation()
+                        try checkPublication(fence)
+                    }
+                    if guestResume {
+                        resumeTicket = try await repository.prepareGuestSetupResume()
+                        try checkPublication(fence)
+                    }
+                    let request = try await repository.prepareLocalSigning(purpose: purpose, operationID: operationID, recoveryBackup: recoveryBackup,
+                                                                          retainedEnrollmentOnly: retainedEnrollmentOnly, guestResume: resumeTicket, transition: transitionTicket)
+                    try checkPublication(fence)
+                    if let request {
+                        lease = try await authorizeLocalSigning(request, repository: repository, fence: fence)
+                    }
+                }
+                // Recreate publication authority only after OS authentication and
+                // the active-scene/account/epoch checks have completed.
+                let currentFence = NativePublicationFence(generation: generation)
+                try checkPublication(currentFence)
+                try await NativeLocalSigningOperation.$id.withValue(operationID) {
+                    try await NativeLocalSigningOperation.$purpose.withValue(purpose) { try await work(currentFence, resumeTicket, transitionTicket) }
+                }
+            }
             catch is CancellationError {}
+            catch NativeLocalAuthenticationIssue.cancelled { localAuthenticator.invalidate() }
             catch {
                 if fence.permits(currentGeneration: workGeneration, cancelled: Task.isCancelled) {
                     if let quality = NativeFaceQualityFailure.from(error), retakeChallenge != nil {
@@ -203,9 +268,24 @@ import AVFoundation
             }
         }
     }
+    private func authorizeLocalSigning(_ request: NativeLocalAuthenticationBinding, repository: BackendRepository,
+                                       fence: NativePublicationFence) async throws -> NativeLocalSigningLease {
+        localAuthenticationOperation = request.operationID; localAuthenticationPending = true
+        let lease = try await localAuthenticator.authorize(request)
+        do {
+            // The expected OS-sheet inactive phase still retires camera/media.
+            for _ in 0..<80 {
+                if isForeground { break }
+                try checkPublication(fence); try await Task.sleep(for: .milliseconds(25))
+            }
+            guard isForeground, localAuthenticationOperation == request.operationID else { throw NativeLocalAuthenticationIssue.cancelled }
+            try checkPublication(fence); try await repository.installLocalSigning(lease); try checkPublication(fence)
+            localSigningLease = lease; localAuthenticationPending = false; return lease
+        } catch { lease.invalidate(); throw error }
+    }
     func connect() {
         retireSharedFile()
-        performGuarded { [self] fence in
+        performGuarded(localSigning: .connect) { [self] fence in
             await NativeBackgroundUploads.shared.stop()
             try checkPublication(fence)
             if repository == nil { repository = try NativeBackgroundUploads.shared.repository() }
@@ -310,12 +390,12 @@ import AVFoundation
         return next?.authenticated == true
     }
     func loadFacePolicy() { perform { [self] in guard let repository else { return }; policy = try await repository.policy() } }
-    func acceptAuthConsent(_ enabled: Bool) { if !enabled { stopFaceCameraPresentation() }; authConsent = enabled; acceptedAuthPolicy = enabled ? policy : "" }
+    func acceptAuthConsent(_ enabled: Bool) { if !enabled { invalidateLocalAuthentication(); stopFaceCameraPresentation() }; authConsent = enabled; acceptedAuthPolicy = enabled ? policy : "" }
     func prepareFace() {
         guard selfieReview == nil else { return }
         if faceLifecycle != nil, accountRecovery == nil { checkFaceProfile(); return }
         if accountRecovery != nil { checkAccountRecovery(); return }
-        performGuarded { [self] fence in
+        performGuarded(localSigning: .enrollment) { [self] fence in
             guard guestDeletion == nil else { throw NativeAPIError.unsupported(String(localized: "Check your guest account deletion before resuming setup.")) }
             guard let repository else { throw NativeAPIError.unavailable("configuration") }
             let currentPolicy = try await repository.policy()
@@ -370,7 +450,7 @@ import AVFoundation
         let shutter = NativeFaceShutterContext(challenge), captureIndex = candidate.index
         let cameraGeneration = candidate.cameraGeneration, sessionEpoch = candidate.sessionEpoch
         var bytes = candidate.bytes; candidate.retire(); retireSelfieReview()
-        performGuarded { [self] fence in
+        performGuarded(localSigning: .capture) { [self] fence in
             defer { bytes.resetBytes(in: 0..<bytes.count) }
             guard let repository, guestDeletion == nil, isForeground, camera.currentState.generation == cameraGeneration,
                   shutter.permits(self.challenge), session?.epoch == sessionEpoch, captureReceipts.count == captureIndex else { throw NativeAPIError.sessionChanged }
@@ -403,6 +483,7 @@ import AVFoundation
         if let candidate = selfieReview, candidate.cameraGeneration != camera.currentState.generation || !camera.currentState.foreground || camera.currentState.permission != .authorized { retireSelfieReview() }
     }
     func leaveFaceCamera() {
+        invalidateLocalAuthentication()
         retireSelfieReview(); stopFaceCameraPresentation(); workTask?.cancel(); workGeneration += 1; busy = false
         navigation?.back()
     }
@@ -432,7 +513,7 @@ import AVFoundation
         guard let previous = retakeChallenge else { checkCurrentFaceCapture(); return }
         let terminal = faceQualityFailure != nil
         retireSelfieReview(); stopFaceCameraPresentation()
-        performGuarded { [self] fence in
+        performGuarded(localSigning: .reconciliation) { [self] fence in
             guard let repository, guestDeletion == nil else { throw NativeAPIError.authenticationRequired }
             let recovered = try await repository.prepareFaceRetake(previous, terminalQualityFailure: terminal)
             let current = await repository.summary(), nextEnrollment = try await repository.enrollmentSummary()
@@ -472,7 +553,7 @@ import AVFoundation
     }
     func checkEnrollment() {
         if captureNeedsStatus && retakeChallenge != nil { retakeRejectedSequence(); return }
-        performGuarded { [self] fence in
+        performGuarded(localSigning: .reconciliation) { [self] fence in
             guard let repository, guestDeletion == nil else { throw NativeAPIError.authenticationRequired }
             let recovered = try await repository.recoverEnrollment()
             let current = await repository.summary()
@@ -831,7 +912,7 @@ import AVFoundation
     }
     func requestGuestDeletion() {
         guard canDeleteGuest else { return }
-        performGuarded { [self] fence in
+        performGuarded(localSigning: .reconciliation, retainedEnrollmentOnly: true) { [self] fence in
             guard let repository else { throw NativeAPIError.authenticationRequired }
             let value = try await repository.requestGuestDeletion()
             try checkPublication(fence); guestDeletion = value
@@ -845,9 +926,9 @@ import AVFoundation
         }
     }
     func resumeGuestSetup() {
-        performGuarded { [self] fence in
-            guard let repository else { throw NativeAPIError.unavailable("configuration") }
-            let value = try await repository.resumeGuestSetup()
+        performGuarded(localSigning: .reconciliation, guestResume: true) { [self] fence, ticket, _ in
+            guard let repository, let ticket else { throw NativeAPIError.unavailable("configuration") }
+            let value = try await repository.resumeGuestSetup(ticket)
             try checkPublication(fence); session = value; guestDeletion = nil; connected = true
             navigation?.go(.introduction, replace: true, simulateProgress: false)
         }
@@ -862,6 +943,7 @@ import AVFoundation
     }
     func loadDevices() { perform { [self] in guard let repository else { return }; devices = try await repository.protectedJSON("/me/devices")["items"].array ?? []; sessions = try await repository.protectedJSON("/me/sessions")["items"].array ?? [] } }
     func revoke(_ value: WireValue, device: Bool) {
+        invalidateLocalAuthentication()
         perform { [self] in
             guard let repository else { return }
             let result = try await repository.protectedJSON(device ? "/auth/device/revoke" : "/auth/session/revoke", method: "POST", body: .object([device ? "device_id" : "session_id": .string(try value.uuid("id"))]))
@@ -918,9 +1000,10 @@ import AVFoundation
         }
     }
     func logout() {
+        invalidateLocalAuthentication()
         workTask?.cancel(); busy = false
         retireSelfieReview(); stopFaceCameraPresentation()
-        performGuarded { [self] fence in
+        performGuarded(localSigning: .connect) { [self] fence in
             photos = []; currentPhoto = nil; snapshot = nil; draft = nil; preview = nil; inbox = []; receipt = nil; favoriteIDs = []
             retireAccountPresentation()
             challenge = nil; captureReceipts = []; lastSelfie = nil; imports = []; NativeImport.removeAll(); mediaRevision += 1; stopFaceCameraPresentation()
@@ -935,9 +1018,26 @@ import AVFoundation
             } else { navigation?.go(.faceEnrollment, replace: true, simulateProgress: false) }
         }
     }
-    func pauseWork() { if uploadRecovery != nil { pausePhotoUploads(); return }; workTask?.cancel(); transferText = String(localized: "Paused. Resume keeps the original upload stage and pending request keys.") }
+    func pauseWork() { invalidateLocalAuthentication(); if uploadRecovery != nil { pausePhotoUploads(); return }; workTask?.cancel(); transferText = String(localized: "Paused. Resume keeps the original upload stage and pending request keys.") }
     func clearPreviewCache() { mediaRevision += 1; if let repository { Task { await repository.retireMedia() } } }
-    func background(scheduleRetry: Bool = false) { persistLibraryState(); if uploadRunning || scheduleRetry && uploadRecovery?.batch.started == true { pausePhotoUploads(userInitiated: false, scheduleRetry: scheduleRetry) }; isForeground = false; photoCamera = false; photoCameraContext = nil; retireSelfieReview(); camera.setForeground(false); recoveryBackup = nil; recoveryBackupSheet = false; mediaRevision += 1; workTask?.cancel(); workGeneration += 1; busy = false; if let repository { Task { await repository.retireMedia() } } }
+    /// Called only for a native authentication sheet's expected inactive phase.
+    /// Private media/camera are still retired; true backgrounding never uses it.
+    func localAuthenticationSceneInactive() -> Bool {
+        guard localAuthenticationPending, localAuthenticationOperation != nil else { return false }
+        isForeground = false; photoCamera = false; photoCameraContext = nil
+        retireSelfieReview(); camera.setForeground(false); retireSharedFile(); mediaRevision += 1
+        if let repository { Task { await repository.retireMedia() } }
+        return true
+    }
+    func localAuthenticationSceneActive() -> Bool {
+        guard localAuthenticationPending, localAuthenticationOperation != nil else { return false }
+        isForeground = true; camera.setForeground(true); return true
+    }
+    private func invalidateLocalAuthentication() {
+        localAuthenticator.invalidate(); localSigningLease?.invalidate(); localSigningLease = nil
+        localAuthenticationPending = false; localAuthenticationOperation = nil
+    }
+    func background(scheduleRetry: Bool = false) { invalidateLocalAuthentication(); persistLibraryState(); if uploadRunning || scheduleRetry && uploadRecovery?.batch.started == true { pausePhotoUploads(userInitiated: false, scheduleRetry: scheduleRetry) }; isForeground = false; photoCamera = false; photoCameraContext = nil; retireSelfieReview(); camera.setForeground(false); recoveryBackup = nil; recoveryBackupSheet = false; mediaRevision += 1; workTask?.cancel(); workGeneration += 1; busy = false; if let repository { Task { await repository.retireMedia() } } }
     func foreground() {
         expireSharedFiles()
         if let repository { Task { await repository.expirePrivateMedia() } }
@@ -1021,26 +1121,26 @@ extension LiveAppStore {
 
 extension LiveAppStore {
     func beginAccountRecovery(_ backup: String) {
-        performGuarded { [self] fence in
+        performGuarded(localSigning: .accountRecovery, recoveryBackup: backup, guestResume: false) { [self] fence, _, ticket in
             guard guestDeletion == nil else { throw NativeAPIError.unsupported(String(localized: "Check your deletion request before recovering an account.")) }
-            await NativeBackgroundUploads.shared.stop()
-            if repository == nil { repository = try NativeBackgroundUploads.shared.repository() }
-            let result = try await repository!.startAccountRecovery(backup: backup)
+            guard let repository, let ticket else { throw NativeAPIError.unavailable("configuration") }
+            let result = try await repository.startAccountRecovery(backup: backup, transition: ticket)
             try checkPublication(fence); accountRecoverySheet = false; connected = true
             try await presentAccountRecovery(result, fence: fence)
         }
     }
     func checkAccountRecovery() {
         if captureNeedsStatus && retakeChallenge != nil { retakeRejectedSequence(); return }
-        performGuarded { [self] fence in
+        performGuarded(localSigning: .accountRecovery) { [self] fence in
             guard let repository, guestDeletion == nil else { throw NativeAPIError.authenticationRequired }
             let result = try await repository.continueAccountRecovery()
             try checkPublication(fence); try await presentAccountRecovery(result, fence: fence)
         }
     }
     func useAnotherRecoveryKey() {
+        invalidateLocalAuthentication()
         workTask?.cancel(); workGeneration += 1; busy = false
-        performGuarded { [self] fence in
+        performGuarded(localSigning: .accountRecovery) { [self] fence in
             guard let repository, guestDeletion == nil else { throw NativeAPIError.authenticationRequired }
             try await repository.useAnotherRecoveryKey(); try checkPublication(fence)
             accountRecovery = nil; challenge = nil; captureReceipts = []; lastSelfie = nil; stopFaceCameraPresentation()
@@ -1089,7 +1189,7 @@ extension LiveAppStore {
 extension LiveAppStore {
     func openFaceManagement() {
         navigation?.go(.faceManagement, simulateProgress: false)
-        performGuarded { [self] fence in
+        performGuarded(localSigning: .profileControl) { [self] fence in
             guard let repository, guestDeletion == nil else { throw NativeAPIError.authenticationRequired }
             let value = try await repository.openFaceLifecycle(); try checkPublication(fence)
             try await presentFaceLifecycle(value, fence: fence)
@@ -1097,14 +1197,14 @@ extension LiveAppStore {
     }
     func checkFaceProfile(retry: Bool = false) {
         if captureNeedsStatus && retakeChallenge != nil { retakeRejectedSequence(); return }
-        performGuarded { [self] fence in
+        performGuarded(localSigning: .profileControl) { [self] fence in
             guard let repository, guestDeletion == nil else { throw NativeAPIError.authenticationRequired }
             let value = try await repository.checkFaceLifecycle(retryOriginal: retry); try checkPublication(fence)
             try await presentFaceLifecycle(value, fence: fence)
         }
     }
     func manageFace(_ action: NativeFaceProfileAction, explicitlyConsented: Bool = false) {
-        performGuarded { [self] fence in
+        performGuarded(localSigning: .profileControl) { [self] fence in
             guard let repository, let current = faceLifecycle, guestDeletion == nil else { throw NativeAPIError.authenticationRequired }
             stopFaceCameraPresentation(); challenge = nil; captureReceipts = []; lastSelfie = nil
             let policy = action == .resume ? current.metadata.photoPolicy : current.metadata.authPolicy
@@ -1118,7 +1218,7 @@ extension LiveAppStore {
         }
     }
     func verifyManagedFace() {
-        performGuarded { [self] fence in
+        performGuarded(localSigning: .profileControl) { [self] fence in
             guard let repository, guestDeletion == nil else { throw NativeAPIError.authenticationRequired }
             let value = try await repository.freshFaceProfileLogin(); try checkPublication(fence)
             try await presentFaceLifecycle(value, fence: fence)
@@ -1152,11 +1252,13 @@ extension LiveAppStore {
 
 extension LiveAppStore {
     func cancelManagedCapture() {
+        invalidateLocalAuthentication()
         workTask?.cancel(); workGeneration += 1; busy = false; stopFaceCameraPresentation(); challenge = nil; captureReceipts = []; lastSelfie = nil
         navigation?.go(.faceManagement, replace: true, simulateProgress: false)
-        performGuarded { [self] fence in
+        performGuarded(localSigning: .profileControl, guestResume: false, profileCancellation: true) { [self] fence, _, ticket in
             guard let repository, guestDeletion == nil else { throw NativeAPIError.authenticationRequired }
-            let value = try await repository.cancelFaceProfileCapture(); try checkPublication(fence)
+            guard let ticket else { throw NativeLocalAuthenticationIssue.required }
+            let value = try await repository.cancelFaceProfileCapture(transition: ticket); try checkPublication(fence)
             try await presentFaceLifecycle(value, fence: fence)
         }
     }
@@ -1164,7 +1266,7 @@ extension LiveAppStore {
 
 extension LiveAppStore {
     func renewFaceManagementControl() {
-        performGuarded { [self] fence in
+        performGuarded(localSigning: .profileControl) { [self] fence in
             guard let repository, guestDeletion == nil else { throw NativeAPIError.authenticationRequired }
             let value = try await repository.renewFaceControl(); try checkPublication(fence)
             try await presentFaceLifecycle(value, fence: fence)

@@ -15,7 +15,7 @@ await fs.mkdir(directory,{mode:0o700});await backupDirectory(directory);
 const sourceNames=[
   'scripts/test-native-audience-http.mjs','scripts/lib/encrypted-backup.mjs','pnpm-lock.yaml','services/supabase-api/package.json',
   'services/supabase-api/test/runtime-harness.mjs','services/supabase-api/test/postgres-harness.mjs',
-  'ios/Tests/NativeAudienceHTTPJourney.swift',...['CoreWire','DeviceIdentity','CameraRecovery','UploadRecovery','UploadFileTransport','BackendRepository'].map(name=>'ios/Lovelies/Native/'+name+'.swift'),
+  'ios/Tests/NativeAudienceHTTPJourney.swift',...['CoreWire','NativeLocalAuthentication','DeviceIdentity','CameraRecovery','UploadRecovery','UploadFileTransport','BackendRepository'].map(name=>'ios/Lovelies/Native/'+name+'.swift'),
 ];
 for(const folder of ['services/supabase-api/src','supabase/migrations'])for(const item of await fs.readdir(path.join(root,folder)))if(/\.(ts|sql)$/.test(item))sourceNames.push(folder+'/'+item);
 const hashes=async()=>Object.fromEntries(await Promise.all([...new Set(sourceNames)].sort().map(async name=>[name,createHash('sha256').update(await fs.readFile(path.join(root,name))).digest('hex')])));
@@ -65,7 +65,7 @@ try{
       if(request.method!=='POST'||request.url!=='/control'||request.headers['x-lovelies-fixture-control']!==secret){response.writeHead(404);response.end();return;}
       const {action}=JSON.parse((await body(request)).toString());let result;
       if(action==='schema_unavailable'&&!history){history=await h.db.all('SELECT version,applied_at FROM schema_versions ORDER BY version');await h.db.run('DELETE FROM schema_versions WHERE version>8');result={version:8};}
-      else if(action==='schema_restore'&&history){await h.db.transaction(async()=>{await h.db.run('DELETE FROM schema_versions');for(const item of history)await h.db.run('INSERT INTO schema_versions(version,applied_at) VALUES(?,?)',item.version,item.applied_at);});history=undefined;result={version:11};}
+      else if(action==='schema_restore'&&history){await h.db.transaction(async()=>{await h.db.run('DELETE FROM schema_versions');for(const item of history)await h.db.run('INSERT INTO schema_versions(version,applied_at) VALUES(?,?)',item.version,item.applied_at);});result={version:Math.max(...history.map(row=>row.version))};history=undefined;}
       else if(action==='summary')result=await summary();
       else throw new Error('fixture_action_refused');
       response.writeHead(200,{'content-type':'application/json'});response.end(JSON.stringify(result));
