@@ -270,7 +270,7 @@ async function decide(payload: Record<string, any>, ctx: AppContext, actor: Acto
     if (decision === 'accept')
         mediaSource(initial.source);
     const intent = await prepareOperation('request.decide', payload, initial.source);
-    return (await executeOperation(ctx, actor, intent, async () => {
+    return (await executeOperation(ctx, actor, intent, async restore => {
         (await assertMediaActor(ctx, actor));
         const row = (await requestRow(ctx, actor, id));
         const status = effectiveRequestStatus(ctx, row);
@@ -282,6 +282,12 @@ async function decide(payload: Record<string, any>, ctx: AppContext, actor: Acto
             return { ...sourceWire(row.source), request_id: row.id, status: wanted };
         if (decision === 'revoke' ? status !== 'accepted' : status !== 'requested')
             throw new ApiError(409, 'request_not_pending');
+        if (decision !== 'accept') {
+            // Exact request retirement survives an application-database restore.
+            // This registration must precede both grant and request mutation.
+            await restore.restrict('sharing-request-retired', {
+                sender_id: row.sender_id, recipient_id: row.recipient_id, request_id: row.id });
+        }
         if (decision === 'accept') {
             // Counterpart erasure may redact other recipients from this preview.
             // This recipient's pre-existing exact approval remains independently bound.

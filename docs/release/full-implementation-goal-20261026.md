@@ -36,12 +36,13 @@ v12, new restore_control empty, six supported history versions matched and Secur
 Advisor reporting no issues. No imports/deletions or serving-marker bootstrap.
 Current receipt: `/Volumes/PRO-G40/Projects/Lovelies/verification/hosted-v12-20261026/result.json`.
 
-Whole API329/328 pass/zero fail/one optional model skip and types pass on95
-unchanged inputs, including actual PostgreSQL17.11/Deno/TLS. Journal34 SQLiteDO/
-protocol checks and19 focused PG checkpoint/race cases pass. Required entrypoint
-client/fencing is implemented; domain restriction producers, stable allocations,
-external generation fences, replay/object cleanup and computed completion remain
-unfinished. No hosted journal or recovery clearance is established.
+Whole API344/343 pass/zero fail/one optional model skip, current types and94
+operator tests pass. Forty-one focused collector/sharing/PG checkpoint/race
+checks pass. Exact sharing-retirement facts are implemented with stable logical
+operation IDs and immutable bounded manifests. Other restriction producers,
+resource allocations, external generation fences, replay/object cleanup and
+computed completion remain unfinished. No hosted journal or recovery clearance
+is established.
 
 Original1020 Swift hosts, separate101 guest/35 media hosts and108 focused OS-auth
 fixtures pass; current21-source Debug/unsignedRelease app and XCTest target build.
@@ -54,12 +55,14 @@ old-marker quarantine preserved. Hosted backup custody/media replay/operation
 remain open.
 
 The packaging-only d815 image is published and deployed with the exact982e
-payload/runtime preserved. Cloudflare appversion2 reports healthy1/failed0/
-starting0 and no pull errors. A supported private
+payload/runtime preserved. After the seven-case run, Cloudflare appversion2 reads back the exactd815
+image, one active instance, no failures/pull errors, private network and EU/WEUR
+constraints. A supported private
 ServiceBinding passes missing/wrong401 and authenticated200 loaded readiness,
-validated against exact engine/processing/model hashes/capabilities/limits. No
-biometric input was sent; recognition quality and Supabase public HTTPS remain
-unqualified. The403/1010 public route is unresolved and was not retried/disguised. No API
+validated against exact engine/processing/model hashes/capabilities/limits. A separate seven-case engineering run passes through that private binding
+using the actual model/PostgreSQL/API HTTP and controlled in-memory Storage,
+with96 source files and19 declared JPEGs sealed. Representative recognition,
+actual Storage and Supabase public HTTPS remain unqualified. The403/1010 public route is unresolved and was not retried/disguised. No API
 cutover, store submission or live/stable replacement is claimed. See the current
 [integration checkpoint](audience-readiness-20261024.md) for source-bound receipts
 and preserved failures. GitHub billing remains parked without a substitute CI pass.
@@ -138,4 +141,4 @@ The journal foundation alone does not close row08. Implement and test the follow
 
 ## Initial next actions
 
-Continue the independently current operation/checkpoint and restore-quarantine implementation; diagnose the actual inference image-unpack and403/1010 failures without repeating unchanged denied requests; integrate and qualify the iOS LocalAuthentication candidate; stage independent operator/provider/public/store work. Reuse the completed hosted v9–v11 checkpoint. Keep GitHub billing unchanged and retain the unrelated untracked `-` file.
+Continue other exact restriction producers, stable resource allocations, external generation fencing and recovery/replay/verified cleanup. Retain the deployed image/loaded readiness and seven-case private model proof; resolve the legitimate Supabase public HTTPS access path without repeating denied requests. Qualify physical iOS LocalAuthentication and Android API24/25 compatibility, then complete independent operator/provider/public/store work. Reuse the completed hosted v9–v12 checkpoint. Keep GitHub billing unchanged and retain the unrelated untracked `-` file.

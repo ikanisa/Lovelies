@@ -114,7 +114,7 @@
     "api_or_supporting_services_deployed_at_original_schema_checkpoint": false,
     "application_runtime_serving": false,
     "disabled_inference_worker_uploaded": false,
-    "current_deployment_limit": "Schema12/69 + six applied history entries qualified. Inference packaging-only d815 appversion2 healthy1/failed0/starting0; exact loaded-model readiness through private account ServiceBinding qualified; Supabase public HTTPS remains unqualified. Seven custom Supabase secrets preserve initial three. Private journal/domain replay/cleanup/provider/scheduler/backup operation and API cutover remain unfinished.",
+    "current_deployment_limit": "Schema12/69 and six history entries qualified. Exact deployed model private-binding engineering seven-case proof passes with realPG/API HTTP and memoryStorage; public Supabase HTTPS unqualified. Shared collector/exact sharing-retirement producer locally passes. Other restore producers/allocations/fences/replay/cleanup, hosted journal/provider/scheduler/backup operation and API cutover remain unfinished.",
     "application_edge_function_count": 0,
     "custom_application_secret_count": 7,
     "current_cli_checkpoint": {
@@ -216,6 +216,25 @@
         }
       },
       "current_schema12_checkpoint": {
+        "tests": 344,
+        "pass": 343,
+        "fail": 0,
+        "skipped": 1,
+        "skip_scope": "Optional model aggregate test; separate seven-case deployed-model/private-binding proof retained without relabelling aggregate counts",
+        "types_pass": true,
+        "source_inputs": 130,
+        "source_unchanged": true,
+        "actual_native_postgres_version": "17.11",
+        "actual_deno_tls_journal_handler": true,
+        "focused_actual_pg_collector_sharing_checks_pass": 41,
+        "operator_tests_pass": 94,
+        "receipt": {
+          "path": "/Volumes/PRO-G40/Projects/Lovelies/verification/restore-sharing-producer-20261026/whole-api-01/result.json",
+          "sha256": "8db349970b4bf7f0b2a7da474da589f9de1e4b5b4eb84058348686eeba5b5721"
+        },
+        "implemented_producer": "Exact sharing retirement only; other producers/allocations/external fences/recovery remain open"
+      },
+      "historical_first_schema12_checkpoint": {
         "tests": 329,
         "pass": 328,
         "fail": 0,
@@ -758,7 +777,28 @@
     "model_service": {
       "local_checks_pass": 23,
       "representative_threshold_or_hosted_qualification": false,
-      "source_scope": "Retained pre-OpenFace tested source snapshot; not acceptance of concurrent consumer integration."
+      "source_scope": "Retained pre-OpenFace tested source snapshot; not acceptance of concurrent consumer integration.",
+      "current_private_binding_engineering_checkpoint": {
+        "receipt": "/Volumes/PRO-G40/Projects/Lovelies/verification/inference-packaging-20261026/private-inference-qualification/run-02/result.json",
+        "sha256": "acfa90a2e5e2395ebcfef2210be1cbc8e73910f225ce08d96255a71cc837e3c2",
+        "tests": 7,
+        "pass": 7,
+        "fail": 0,
+        "skipped": 0,
+        "input_source_files": 96,
+        "engineering_jpegs": 19,
+        "input_seal_unchanged": true,
+        "transport": {
+          "database": "actual_postgresql",
+          "storage": "memory",
+          "api": "actual_loopback_http",
+          "inference": "actual_authenticated_http_real_models"
+        },
+        "task_local_credentials_removed": true,
+        "source_credentials_preserved": true,
+        "denied_public_route_requested": false,
+        "scope": "Real deployed model via supported authenticated private ServiceBinding + actualPG/API HTTP; in-memoryStorage only; no representative recognition/physical capture/Supabase public HTTPS/store acceptance"
+      }
     },
     "push_gateway": {
       "historical_postgres_fixture_checkpoint": {
@@ -861,9 +901,9 @@
       "ios_readback_receipt": "verification/supabase-release-20261023/post-localization-ui/caption-scroll-build/release-readback.json"
     },
     "current_schema12_encrypted_backup_checkpoint": {
-      "receipt": "/Volumes/PRO-G40/Projects/Lovelies/verification/encrypted-backup-schema12-20261026/attempt-02/result.json",
+      "receipt": "/Volumes/PRO-G40/Projects/Lovelies/verification/encrypted-backup-schema12-20261026/attempt-03/result.json",
       "checks_pass": 11,
-      "source_inputs": 52,
+      "source_inputs": 53,
       "source_unchanged": true,
       "native_postgres": "17.11",
       "tables_reconstructed": 69,

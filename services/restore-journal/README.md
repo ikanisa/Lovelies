@@ -237,3 +237,15 @@ The operation runtime case exercises the actual outer Worker and SQLite DO over
 HTTP with persistence/restarts and test-only injected exceptions after real
 SQLite writes. It qualifies transactional rollback and protocol persistence;
 it does not perform an application database restore or cleanup.
+
+### Sharing producer checkpoint, 26 October
+
+The Supabase API now registers exact `sharing-request-retired` facts for actual
+validated decline/withdraw/revoke transitions before their SQL effects. Its
+immutable transaction collector binds the actor/source/key logical operation and
+payload hash, shares one scope through nested callbacks, closes registration
+before journal preparation and prevents duplicate facts on receipt/no-op retries.
+Current proof:41 focused actualPG/collector/sharing cases, whole API344/343-pass
+with one optional model skip, and94 operator cases. Other producers, new-resource
+allocation consumption, generation fences and recovery replay/cleanup/completion
+remain unfinished; this is no hosted custody or recovery-clearance claim.

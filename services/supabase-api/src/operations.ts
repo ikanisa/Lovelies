@@ -1,6 +1,7 @@
 import { assertAudienceCapability } from './audience.ts';
 import { ApiError, digest, stable, type Actor, type AppContext } from './types.ts';
 import { assertEnrollmentActor, assertPrivacyActor } from './auth.ts';
+import { restoreOperationID, type RestoreTransactionScope } from './restore-transaction.ts';
 export type PreparedOperation = Readonly<{
     key: string;
     action: string;
@@ -125,8 +126,8 @@ function relatedSubjects(value: unknown, subjects: Set<string>, parent = ''): vo
 }
 /** Uses the same durable key after ambiguity. The callback and all authorizing
  * reads/writes are awaited inside one PostgreSQL transaction. */
-async function executeAuthorizedOperation<T extends Record<string, unknown>>(ctx: AppContext, actor: Actor, intent: PreparedOperation, callback: () => T | Promise<T>, subjectIds: readonly string[], assertAuthority: () => void | Promise<void>): Promise<T> {
-    return (await ctx.db.transaction(async () => {
+async function executeAuthorizedOperation<T extends Record<string, unknown>>(ctx: AppContext, actor: Actor, intent: PreparedOperation, callback: (restore: RestoreTransactionScope) => T | Promise<T>, subjectIds: readonly string[], assertAuthority: () => void | Promise<void>): Promise<T> {
+    return (await ctx.db.transaction(async restore => {
         (await assertAuthority());
         const previous = (await ctx.db.one<{
             action: string;
@@ -146,7 +147,11 @@ async function executeAuthorizedOperation<T extends Record<string, unknown>>(ctx
             (await assertAuthority());
             return JSON.parse(previous.response_json) as T;
         }
-        const result = await callback();
+        // A SQL receipt retry above never re-prepares its committed independent
+        // operation. New callbacks bind the logical key before collecting facts.
+        restore.operation({ operation_id: await restoreOperationID(actor.accountId, intent.source, intent.key),
+            input_hash: intent.hash, allocations: {} });
+        const result = await callback(restore);
         if (!result || typeof result !== 'object' || Array.isArray(result) || typeof (result as {
             then?: unknown;
         }).then === 'function') {
@@ -169,18 +174,18 @@ async function executeAuthorizedOperation<T extends Record<string, unknown>>(ctx
     }));
 }
 /** Protected product operations retain registered-face authority. */
-export async function executeOperation<T extends Record<string, unknown>>(ctx: AppContext, actor: Actor, intent: PreparedOperation, callback: () => T | Promise<T>, subjectIds: readonly string[] = []): Promise<T> {
+export async function executeOperation<T extends Record<string, unknown>>(ctx: AppContext, actor: Actor, intent: PreparedOperation, callback: (restore: RestoreTransactionScope) => T | Promise<T>, subjectIds: readonly string[] = []): Promise<T> {
     return (await executeAuthorizedOperation(ctx, actor, intent, callback, subjectIds, async () => (await assertRegisteredActor(ctx, actor))));
 }
 /** Anonymous admission is confined to deleting the actor's own account. */
-export async function executeAccountDeletionOperation<T extends Record<string, unknown>>(ctx: AppContext, actor: Actor, intent: PreparedOperation, callback: () => T | Promise<T>): Promise<T> {
+export async function executeAccountDeletionOperation<T extends Record<string, unknown>>(ctx: AppContext, actor: Actor, intent: PreparedOperation, callback: (restore: RestoreTransactionScope) => T | Promise<T>): Promise<T> {
     if (intent.action !== 'privacy.request.delete' || intent.source !== 'privacy')
         throw new ApiError(400, 'operation_scope_invalid');
     return (await executeAuthorizedOperation(ctx, actor, intent, callback, [], async () => (await assertPrivacyActor(actor, ctx))));
 }
 
 /** Restricted account controls never grant a product capability. */
-export async function executeRestrictedOperation<T extends Record<string, unknown>>(ctx: AppContext, actor: Actor, intent: PreparedOperation, callback: () => T | Promise<T>, subjectIds: readonly string[] = []): Promise<T> {
+export async function executeRestrictedOperation<T extends Record<string, unknown>>(ctx: AppContext, actor: Actor, intent: PreparedOperation, callback: (restore: RestoreTransactionScope) => T | Promise<T>, subjectIds: readonly string[] = []): Promise<T> {
     if (!['audience', 'guardian', 'privacy'].includes(intent.source)) throw new ApiError(400, 'operation_scope_invalid');
     return executeAuthorizedOperation(ctx, actor, intent, callback, subjectIds, () => assertPrivacyActor(actor, ctx));
 }

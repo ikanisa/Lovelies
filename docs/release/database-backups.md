@@ -157,3 +157,10 @@ fixture here. This proves the local restore mismatch behavior, not independent
 provider persistence, deployed custody, media replay/cleanup or serving recovery.
 Private server metadata and the existing synthetic qualification key were
 injected by root; no key was generated or hosted backup/provider action run.
+
+After the sharing collector changed the database/operation input closure, root
+repeated the affected reconstruction in `attempt-03/` with the same unmodified
+runner and existing synthetic key. All11 checks pass again; all53 inputs,
+including the new collector, remain unchanged. This is the current source-bound
+schema12 backup result; attempts01/02 remain preserved. It does not close the
+hosted custody, scheduler, media replay or serving-recovery gates above.

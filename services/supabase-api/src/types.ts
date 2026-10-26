@@ -1,10 +1,12 @@
+import type { RestoreTransactionScope } from './restore-transaction.ts';
+
 export type Binding = string | number | null | ArrayBuffer;
 export interface Database {
     all<T = Record<string, unknown>>(sql: string, ...bindings: Binding[]): Promise<T[]>;
     one<T = Record<string, unknown>>(sql: string, ...bindings: Binding[]): Promise<T | null>;
     run(sql: string, ...bindings: Binding[]): Promise<void>;
     read<T>(callback: () => T | Promise<T>): Promise<T>;
-    transaction<T>(callback: () => T | Promise<T>, intent?: unknown): Promise<T>;
+    transaction<T>(callback: (restore: RestoreTransactionScope) => T | Promise<T>, intent?: unknown): Promise<T>;
 }
 export interface PrivateObject {
     size: number; etag: string; customMetadata?: Record<string,string>;

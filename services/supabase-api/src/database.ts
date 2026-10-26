@@ -1,6 +1,7 @@
 import postgres from 'postgres';
 import { AsyncLocalStorage } from 'node:async_hooks';
 import { ApiError, type Binding, type Database } from './types.ts';
+import { RestoreTransactionCollector, type RestoreTransactionScope } from './restore-transaction.ts';
 
 /** Only bound values cross this translator. SQL is static application source.
  * Quoted strings/comments/dollar strings never become parameter positions. */
@@ -46,7 +47,7 @@ export interface DatabaseFence {
   prepare(connection:SqlConnection,admission:unknown,intent?:unknown):Promise<unknown>;
   committed(connection:SqlConnection,prepared:unknown):Promise<void>;
 }
-type TransactionFrame={connection:SqlConnection;readOnly:boolean};
+type TransactionFrame={connection:SqlConnection;readOnly:boolean;restore:RestoreTransactionScope};
 
 /** Every mutation runs on one reserved PostgreSQL connection. The advisory lock
  * retains the original engine's single-authority serialization across isolates.
@@ -76,32 +77,36 @@ export class PostgresDatabase implements Database {
     if(this.transactions.getStore())return await callback();
     return this.execute(callback,true);
   }
-  async transaction<T>(callback:()=>T|Promise<T>,intent?:unknown):Promise<T> {
+  async transaction<T>(callback:(restore:RestoreTransactionScope)=>T|Promise<T>,intent?:unknown):Promise<T> {
     const active=this.transactions.getStore();
     if(active){
       if(active.readOnly)throw new ApiError(500,'read_only_transaction');
       // A nested callback cannot install a different independent operation.
       if(intent!==undefined)throw new ApiError(500,'nested_restore_operation');
-      return await callback();
+      return await callback(active.restore);
     }
     return this.execute(callback,false,intent);
   }
-  private async execute<T>(callback:()=>T|Promise<T>,readOnly:boolean,intent?:unknown):Promise<T>{
+  private async execute<T>(callback:(restore:RestoreTransactionScope)=>T|Promise<T>,readOnly:boolean,intent?:unknown):Promise<T>{
     let prepared:unknown;
-    const result=await this.connection.begin(connection=>this.transactions.run({connection,readOnly},async()=>{
-      // This is enforced by PostgreSQL, including modifying CTEs and volatile
-      // functions. SQL spelling/method names cannot prove a query read-only.
-      if(readOnly)await connection.query('SET TRANSACTION READ ONLY',[]);
-      await connection.query('SELECT pg_advisory_xact_lock(704536419730718193::bigint)',[]);
-      await connection.query('SET LOCAL ROLE lovelies_api',[]);
-      await connection.query("SET LOCAL search_path TO lovelies_private, pg_catalog",[]);
-      const admission=await this.fence?.enter(connection);
-      const value=await callback();
-      // SQL remains uncommitted until independent acknowledgement. Domain
-      // effects must register exact restrictions and external ports must fence
-      // effects; this adapter never automatically reruns a callback on error.
-      if(this.fence&&!readOnly)prepared=await this.fence.prepare(connection,admission,intent);
-      return value;
+    const collector=new RestoreTransactionCollector(readOnly,intent!==undefined),restore=collector.scope;
+    const result=await this.connection.begin(connection=>this.transactions.run({connection,readOnly,restore},async()=>{
+      try{
+        // This is enforced by PostgreSQL, including modifying CTEs and volatile
+        // functions. SQL spelling/method names cannot prove a query read-only.
+        if(readOnly)await connection.query('SET TRANSACTION READ ONLY',[]);
+        await connection.query('SELECT pg_advisory_xact_lock(704536419730718193::bigint)',[]);
+        await connection.query('SET LOCAL ROLE lovelies_api',[]);
+        await connection.query("SET LOCAL search_path TO lovelies_private, pg_catalog",[]);
+        const admission=await this.fence?.enter(connection);
+        const value=await callback(restore);
+        const manifest=await collector.seal(intent);
+        // SQL remains uncommitted until independent acknowledgement. Domain
+        // effects must register exact restrictions and external ports must fence
+        // effects; this adapter never automatically reruns a callback on error.
+        if(this.fence&&!readOnly)prepared=await this.fence.prepare(connection,admission,manifest);
+        return value;
+      }finally{collector.close();}
     }));
     if(this.fence&&prepared!==undefined){
       // The first transaction may have committed while its acknowledgement was
