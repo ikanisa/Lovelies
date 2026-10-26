@@ -9,8 +9,7 @@ import {Miniflare} from 'miniflare';
 // fixtures. No container image, recognition, hosting or jurisdiction is claimed.
 const secret='synthetic-supabase-inference-secret-for-tests';
 const image='registry.cloudflare.com/'+'1'.repeat(32)+'/fixture-only@sha256:'+'d'.repeat(64);
-const defaults={ML_INFERENCE_SECRET:secret,INFERENCE_SERVING_ENABLED:'true',
-  INFERENCE_RELEASE_RECEIPT_SHA256:'c'.repeat(64),INFERENCE_IMAGE_URI:image,TEST_MODE:'consume',TEST_DEADLINE:'55000'};
+const defaults={ML_INFERENCE_SECRET:secret,TEST_MODE:'consume',TEST_DEADLINE:'55000'};
 const entry=new URL('../src/supabase-inference.ts',import.meta.url).pathname;
 let bundled;
 async function bundle(){
@@ -36,7 +35,7 @@ async function bundle(){
       // Node HTTP client for disagreeing with its two-byte transport fixture.
       if(env.TEST_CLAIMED_LENGTH){const headers=new Headers(selected.headers);headers.set('content-length',env.TEST_CLAIMED_LENGTH);selected=new Request(selected,{headers});}
       if(env.TEST_CANCEL_AFTER){const controller=new AbortController();request.signal.addEventListener('abort',()=>controller.abort(),{once:true});setTimeout(()=>controller.abort(),Number(env.TEST_CANCEL_AFTER));selected=new Request(selected,{signal:controller.signal});}
-      const proxied=await serveSupabaseInference(selected,env,()=>({async fetch(upstream){
+      const fixtureService=()=>({async fetch(upstream){
         state.calls++;upstream.signal.addEventListener('abort',()=>{state.aborted=true;});
         if(env.TEST_MODE==='stallHeaders')return new Promise(()=>{});
         if(env.TEST_MODE==='lateHeaders')return new Promise(resolve=>setTimeout(()=>resolve(new Response(new ReadableStream({cancel(){state.lateCancelled=true;}}),{headers:{'content-type':'application/json'}})),60));
@@ -51,7 +50,9 @@ async function bundle(){
           secretMatches:upstream.headers.get('authorization')==='Bearer '+env.ML_INFERENCE_SECRET,
           leakedHeaders:['cookie','x-client-name','x-supabase-key'].filter(name=>upstream.headers.has(name))}),
           {status:env.TEST_MODE==='negative'?409:200,headers:{'content-type':'application/json','set-cookie':'must-not-escape','location':'https://must-not-escape.invalid'}});
-      }}),Number(env.TEST_DEADLINE),true,task=>ctx.waitUntil(task));
+      }});
+      const proxied=await serveSupabaseInference(selected,env,env.TEST_MODE==='missingBinding'?selectSupabaseContainer:fixtureService,
+        Number(env.TEST_DEADLINE),true,task=>ctx.waitUntil(task));
       // Inspect the production response stream before Miniflare translates its
       // failure into HTTP framing. Count only: no extra reply buffer is kept.
       if(env.TEST_INSPECT_BODY){let received=0;const reader=proxied.body.getReader();
@@ -80,33 +81,34 @@ async function assertFailedStream(h){
   const state=await h.state();assert.equal(state.calls,1);assert.equal(state.aborted,true);assert.equal(state.replyCancelled,true);
 }
 
-test('Supabase host template cannot build/serve an unaccepted image and preserves the old host configuration',async()=>{
+test('Supabase host selects one immutable image without duplicate release switches or receipt claims',async()=>{
   const text=await readFile(new URL('../wrangler.supabase.jsonc',import.meta.url),'utf8');
   const config=JSON.parse(text.replace(/^\s*\/\/.*$/gm,''));
-  assert.equal(config.main,'src/supabase-inference.ts');assert.equal(config.vars.INFERENCE_SERVING_ENABLED,'false');
-  assert.equal(config.vars.INFERENCE_RELEASE_RECEIPT_SHA256,'');assert.equal(config.vars.INFERENCE_IMAGE_URI,'');
+  assert.equal(config.main,'src/supabase-inference.ts');assert.equal(config.account_id,'2209b915a85b1c11cee79b7806c6e73b');
+  assert(!Object.hasOwn(config,'vars'));
   assert.equal(config.workers_dev,true);assert.equal(config.preview_urls,false);assert.equal(config.observability.enabled,false);
   assert.equal(config.observability.logs.invocation_logs,false);assert.equal(config.observability.logs.persist,false);
   assert(!Object.hasOwn(config,'r2_buckets'));assert(!Object.hasOwn(config,'services'));
   assert.equal(config.containers.length,1);assert.equal(config.containers[0].max_instances,1);
-  assert.equal(config.containers[0].image,'__QUALIFIED_IMMUTABLE_CLOUDFLARE_IMAGE_URI_REQUIRED__');
+  assert.equal(config.containers[0].image,'registry.cloudflare.com/2209b915a85b1c11cee79b7806c6e73b/lovelies-inference-native@sha256:982e2ed7bb66b17db17979495495892579f1b734c55d93516a2aeedbf70e1c6c');
   assert.deepEqual(config.containers[0].constraints,{jurisdiction:'eu',regions:['WEUR']});
   assert.deepEqual(config.containers[0].instance_type,{vcpu:1,memory_mib:3072,disk_mb:8000});
-  const old=JSON.parse(await readFile(new URL('../wrangler.jsonc',import.meta.url),'utf8'));
-  assert.equal(old.main,'src/index.ts');assert.equal(old.workers_dev,false);assert(old.r2_buckets.length>0);
 });
 
-test('authorization and accepted immutable release configuration precede body/container access',async t=>{
-  const h=await harness(t,{INFERENCE_SERVING_ENABLED:'false'});
+test('service authorization precedes body/container access and retired release fields grant no authority',async t=>{
+  const h=await harness(t,{INFERENCE_SERVING_ENABLED:'true',INFERENCE_RELEASE_RECEIPT_SHA256:'c'.repeat(64),INFERENCE_IMAGE_URI:image});
   for(const authorization of [undefined,'Bearer wrong',`Bearer ${secret}, Bearer ${secret}`]){
     const response=await h.raw('/internal/photo',{method:'POST',headers:{...(authorization?{authorization}:{}),'content-type':'application/json'},body:'private fixture bytes'});
     assert.equal(response.status,401);assert.deepEqual(await response.json(),{error:{code:'service_authentication_required'}});
   }
-  assert.equal((await h.send('/ready')).status,503);assert.equal((await h.state()).calls,0);
-  for(const bindings of [{ML_INFERENCE_SECRET:''},{INFERENCE_RELEASE_RECEIPT_SHA256:''},{INFERENCE_IMAGE_URI:'sha256:'+'d'.repeat(64)},
-    {INFERENCE_IMAGE_URI:image.replace('@sha256:',':latest-')}]){
+  assert.equal((await h.state()).calls,0);
+  for(const bindings of [{ML_INFERENCE_SECRET:''},{ML_INFERENCE_SECRET:'short'},{TEST_MODE:'missingBinding'}]){
     const denied=await harness(t,bindings);assert.equal((await denied.send('/ready')).status,503);assert.equal((await denied.state()).calls,0);
   }
+  const withoutFlags=await harness(t);
+  assert.equal((await withoutFlags.send('/ready')).status,200);
+  const retiredFlags=await harness(t,{INFERENCE_SERVING_ENABLED:'false',INFERENCE_RELEASE_RECEIPT_SHA256:'',INFERENCE_IMAGE_URI:'invalid'});
+  assert.equal((await retiredFlags.send('/ready')).status,200);
 });
 
 test('only the three selected routes are available and private requests carry only the independent secret',async t=>{

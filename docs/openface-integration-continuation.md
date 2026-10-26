@@ -1,5 +1,10 @@
 # Lovelies × OpenFace continuation evidence
 
+26 October correction: the unverified gateway release switches and redundant
+build paths have been removed. See the [current correction](#26-october-2026--remove-redundant-release-controls-and-build-setup)
+and [operating guide](private-inference-host.md). Dated records below retain their
+original outcomes; they are not additional live setup requirements.
+
 25 October 2026 checkpoint, continuing the [initial local integration](openface-integration.md).
 Cloudflare Containers, EU jurisdiction/WEUR and Linux AMD64 remain selected.
 The corrected native consumer is built and has passed its actual 55-case,
@@ -904,3 +909,60 @@ engineering stills and the exact pinned inference image. Optical capture,
 representative recognition acceptance, hosted Supabase cutover, affected full-UI
 accessibility, store update qualification and release acceptance remain separate
 open gates.
+
+
+## 26 October 2026 — remove redundant release controls and build setup
+
+The previous statement that raw scanner exit 2 required another inference
+security fix/rebuild was too broad. The existing image-bound assessment already
+accounts for every Critical/High row. The [26 October revalidation](../verification/openface-integration-20261024/continuation/native-security-disposition-20261025/root-verification-20261026/assessment.json)
+rechecks the unchanged scan, SBOM, image identity, native qualification and
+component evidence: **60/60 High rows reviewed, zero unreviewed Critical/High**.
+Its 111 lower-severity rows were also triaged. They include removed
+implementations, existing patches and specific applicability limits; fourteen
+rows cover seven retained Negligible glibc advisories that are **not claimed
+fixed**. Unused POP3 code and the bounded protobuf case retain their qualifications.
+This is an assessment of the recorded scan, not a new scanner execution or a
+claim that the image contains no vulnerabilities. The raw exit/report and all
+historical `final_image_accepted=false` fields remain unchanged.
+
+The actual redundant controls and setup were corrected:
+
+- Removed `INFERENCE_SERVING_ENABLED`, `INFERENCE_RELEASE_RECEIPT_SHA256` and
+  the mirrored `INFERENCE_IMAGE_URI` from the gateway. The receipt hash was only
+  checked for shape; no receipt was verified. The container configuration now
+  selects manifest `982e2ed7…` directly, once.
+- Kept constant-time service authentication, the three private routes, HTTPS,
+  12/40 MiB request and 6 MiB response bounds, cancellation/deadline handling,
+  redirect denial and one original inference call. Supabase still checks actual
+  loaded model/engine identity and owns all application authority.
+- Changed the default ML `dev`/`build` commands to the selected Supabase gateway.
+  The old Cloudflare configuration is explicitly `wrangler.legacy.jsonc` with
+  named legacy commands, preserving recovery without being the default.
+- Removed the disabled-host configuration generator and the obsolete local
+  overlay producer/Dockerfile. The canonical native producer remains available
+  for genuine dependency/runtime changes. Their Git history and old test
+  evidence remain preserved.
+
+Validation on the corrected source: **22/22 Worker tests passed**, TypeScript
+passed, and `pnpm backend:ml:build` completed its selected Supabase dry run.
+That dry run selected the exact existing immutable image; it did not build an
+image, start a container or deploy. An independent source review found no
+remaining issue in these bounded gateway/configuration changes.
+
+The model image and processing fingerprint did not change. The prior native and
+connected results retain their recorded scope; no unnecessary native/device
+rebuild was run for this gateway/configuration correction. No Supabase, native
+app, store or production inference deployment was performed.
+
+The completed unused temporary build service was retired after a fresh inactive
+instance readback and confirmation that the other root had no job using it.
+Cloudflare deletion completed without force for exactly application
+`a033e64f-76a6-4b4a-879e-79a88033f103` and Worker
+`lovelies-native-build-20261024`. The [independent postcheck](../verification/openface-integration-20261024/continuation/temporary-builder-retirement-20261026-attempt1/post-retirement-receipt.json)
+confirms both absent and both EU build-input/evidence buckets still present.
+The production inference gateway reports its retained earlier version
+`223c6f07-079e-4364-9de1-67c8b5a99bc4`; it was not redeployed. Registry images,
+application data and archived evidence were not targeted by cleanup commands.
+The [preserved inventory](../verification/openface-integration-20261024/continuation/temporary-builder-retirement-20261026-attempt1/inventory.json)
+records the retired service's exact identity and resource bindings.

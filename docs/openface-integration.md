@@ -1,22 +1,20 @@
 # Lovelies × OpenFace local integration
 
-25 October 2026 checkpoint. The owner-selected host is Cloudflare Containers,
-EU jurisdiction/WEUR placement, Linux AMD64, behind Supabase. The separate
-authenticated Worker remains **disabled**. The first minimized native image is
-built, privately preserved and qualified for its recorded engineering scopes;
-it remains **UNACCEPTED**. The corrected native-binary fingerprint consumer has
-now passed its 55-case service suite, separate 35 fixtures, real worker and six
-native modes plus exact minimization checks. Its fresh raw scan remains
-**exit 2 / DENY**. Exact High-row dispositions permit scoped local engineering
-use. The earlier seven-case PostgreSQL/Storage/native-HTTP integration and Edge
-resource cases passed. Current-source qualification also runs the actual
-Supabase Edge handler against isolated PostgreSQL schema 11, private Storage
-and the same pinned image, including connected Android and physical iPhone
-checks. The continuation checkpoint records each runtime version, completed
-scope, failed attempt and remaining readback separately.
-No inference traffic,
-Supabase function/schema or store distribution has been cut over. See the
-[continuation checkpoint](openface-integration-continuation.md).
+26 October 2026 correction. The selected service remains Cloudflare Containers,
+EU/WEUR, Linux AMD64, behind Supabase. Its configuration now selects the existing
+immutable inference image directly. The gateway's serving flag, mirrored image
+URI and unverified receipt-hash requirement were removed; the default ML build
+now validates this Supabase gateway. The disabled-host generator and obsolete
+supplemental overlay build path were retired. See the [current operating guide](private-inference-host.md).
+
+The retained native/model and connected tests remain bound to their exact image
+and source. The raw scanner report remains unchanged; its High rows already have
+exact patch/omission/applicability evidence. A raw threshold exit is not evidence
+of 15 unresolved applicable High vulnerabilities or a reason to rebuild an
+unchanged image. Earlier `final_image_accepted=false` receipts remain historical.
+This correction does not deploy or establish production/recognition/store
+acceptance. The [continuation checkpoint](openface-integration-continuation.md)
+retains actual runtime scopes, failed attempts and outstanding hosted work.
 The original release register remains authoritative; these LOF IDs add no new
 blanket release requirements.
 
@@ -196,10 +194,10 @@ hosted operations, optical camera capture, recognition accuracy and distribution
 | LOF05 | Authenticated loaded readiness and exact identity/request binding in Supabase transport/Edge wiring. Wrong engine/model/reply/timeout denied; existing post-await guards retained. |
 | LOF06 | MIME/size/profile/body alignment and bounded canonical transport implemented. Actual cached Edge Runtime worker checks pass at 256 MiB/2,000 ms: 20 MiB source, 1,000 profiles and exactly 40 MiB outbound; the next byte returns413 without private transport. Prior memory failures remain. This is synthetic adapter evidence, not full hosted API/Storage/TLS aggregate capacity. |
 | LOF07 | Local schema-10 durable generation binding is implemented without backfilling legacy operations; separate schema-11 retention work is prepared by the Supabase owner. Hosted schema/history reconciliation and deployment remain. |
-| LOF08 | Corrected native fingerprint image passed the original 55 cases, separate 35 fixtures, worker, six modes and 1,347-omission/161-retention scopes and is privately preserved. Raw 171 rows/75 IDs, zero Critical/15 High IDs remain exit 2/DENY. Every High row has an exact engineering disposition; 111 other rows remain outside that policy. Outcome is ALLOW_SCOPED_LOCAL_ENGINEERING_CANDIDATE; no final-image/production acceptance. |
+| LOF08 | Corrected native fingerprint image passed the original 55 cases, separate 35 fixtures, worker, six modes and 1,347-omission/161-retention scopes and is privately preserved. The unchanged raw report has 171 rows/75 IDs and zero Critical; all 60 High rows have exact patch/omission/applicability evidence. Raw exit 2 and the old engineering-only receipt are historical facts, not live approval switches. Lower findings remain recorded; no broad vulnerability-free claim or production deployment is made. |
 | LOF09 | Current seven-case actual PostgreSQL/private Storage/faithful native model HTTP run passed 7/7, zero skips and no changed inputs: registration/login, review/accept/grants, stale profile/consent/session/source/lease and DELETE plus absence. Node loopback/SSH scope; Deno, production TLS and hosted scheduler/retention/restore remain separate. |
 | LOF10 | Android unit/contract checks and actual Pixel4a API33 Keystore, sharing, recovery and process-restart fixture journeys pass. Debug same-signature in-place update/state preservation is recorded. Optical capture, spoken accessibility and store-installed release updates remain separate. |
-| LOF11 | Existing Swift host suites and real HTTP/live/recovery/lifecycle journeys pass within their exact source/runtime scopes. No iPhone, physical camera, iOS Keychain/Secure Enclave or whole-app acceptance is claimed. |
+| LOF11 | Four Swift host HTTP suites pass within their exact runtime scopes. The separate physical iPhone 12 Pro check passed using test-scoped Keychain/Secure Enclave, with the existing encrypted profile byte-identical after the test. Optical camera and whole-app acceptance remain separate; see the 25 October connected checkpoint. |
 | LOF12 | Cloudflare/EU/WEUR/AMD64 selected and separate disabled Worker deployed; HTTPS401/503 and exact active version read back. Temporary native builder is separate. No Supabase function/schema/cutover, scheduler or operated restore is established. |
 | LOF13 | Purpose-specific permissioned representative data and recorded threshold decisions remain. No PAD or extra committee requirement is added. |
 | LOF14 | Android debug in-place proof preserves com.lovelies.memories; exact signed store packages/store-installed updates, physical optical/iPhone scope, enabled billing/push and authorized distribution remain separate. |

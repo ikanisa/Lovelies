@@ -92,8 +92,9 @@ hardening and upstream codec tests. See `sources/libpng1.6/README.md`.
 The optional `ML_SECURITY_RUNTIME` input must be an unminimized runtime with
 the shell and package tools needed for installation. A completed release image
 has deliberately removed those tools and is rejected by an exec-form preflight.
-`Dockerfile.local-cache` remains a separate local overlay check; it is not the
-default Cloudflare image recipe.
+The old `Dockerfile.local-cache`/supplemental overlay producer was retired on
+26 October. Use the canonical producer above for a changed native runtime;
+reuse the already qualified immutable image when its inputs have not changed.
 
 The unchanged glibc resolver fixtures create UTS/network namespaces and chroots.
 Ordinary BuildKit sandboxes do not have the required capabilities. The producer

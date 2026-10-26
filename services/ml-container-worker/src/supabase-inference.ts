@@ -5,9 +5,6 @@ import {Container} from '@cloudflare/containers';
 export interface SupabaseInferenceEnv {
   ML_SUPABASE_CONTAINER:DurableObjectNamespace<SupabaseInferenceContainer>;
   ML_INFERENCE_SECRET?:string;
-  INFERENCE_SERVING_ENABLED?:string;
-  INFERENCE_RELEASE_RECEIPT_SHA256?:string;
-  INFERENCE_IMAGE_URI?:string;
 }
 interface InferenceService {fetch(request:Request):Promise<Response>;}
 type ServiceFactory=(env:SupabaseInferenceEnv)=>InferenceService;
@@ -18,13 +15,6 @@ class ProxyError extends Error {
 export const SUPABASE_INFERENCE_LIMITS=Object.freeze({face:12*1024*1024,photo:40*1024*1024,reply:6*1024*1024,deadlineMs:55_000});
 const encoder=new TextEncoder();
 const json=(code:string,status:number)=>Response.json({error:{code}},{status,headers:{'Cache-Control':'no-store','X-Content-Type-Options':'nosniff'}});
-function releaseConfigured(env:SupabaseInferenceEnv):boolean {
-  // The deployment preparer verifies the accepted receipt and binds its exact
-  // immutable registry URI into both Worker vars and containers[0].image.
-  return env.INFERENCE_SERVING_ENABLED==='true'&&
-    typeof env.INFERENCE_RELEASE_RECEIPT_SHA256==='string'&&/^[a-f0-9]{64}$/.test(env.INFERENCE_RELEASE_RECEIPT_SHA256)&&
-    typeof env.INFERENCE_IMAGE_URI==='string'&&/^registry\.cloudflare\.com\/[a-f0-9]{32}\/[a-z0-9][a-z0-9._/-]*@sha256:[a-f0-9]{64}$/.test(env.INFERENCE_IMAGE_URI);
-}
 function secretConfigured(secret:unknown):secret is string {
   return typeof secret==='string'&&/^[\x21-\x7e]{32,512}$/.test(secret);
 }
@@ -40,7 +30,6 @@ async function admission(request:Request,env:SupabaseInferenceEnv,https:boolean)
   // bundled WebWorker lib does not include the extension's declaration.
   const subtle=crypto.subtle as SubtleCrypto&{timingSafeEqual(a:ArrayBuffer,b:ArrayBuffer):boolean};
   if(!subtle.timingSafeEqual(provided,expected))throw new ProxyError(401,'service_authentication_required');
-  if(!releaseConfigured(env))throw new ProxyError(503,'inference_release_not_accepted');
   const url=new URL(request.url);
   if(https&&url.protocol!=='https:')throw new ProxyError(400,'https_required');
   if(url.search||url.username||url.password||url.hash)throw new ProxyError(404,'route_not_found');
@@ -65,19 +54,20 @@ async function admission(request:Request,env:SupabaseInferenceEnv,https:boolean)
  * the container's WEUR/EU constraints are configured separately and read back
  * by the deployment owner. No global/account/profile registry is introduced. */
 export function selectSupabaseContainer(env:SupabaseInferenceEnv):InferenceService {
+  if(!env.ML_SUPABASE_CONTAINER)throw new ProxyError(503,'inference_configuration_required');
   const namespace=env.ML_SUPABASE_CONTAINER.jurisdiction('eu');
   return namespace.get(namespace.idFromName('supabase-inference-v1'),{locationHint:'weur'});
 }
 
 export function containerEnvironment(env:SupabaseInferenceEnv):Record<string,string> {
-  if(!releaseConfigured(env)||!secretConfigured(env.ML_INFERENCE_SECRET))throw new ProxyError(503,'inference_release_not_accepted');
+  if(!secretConfigured(env.ML_INFERENCE_SECRET))throw new ProxyError(503,'inference_configuration_required');
   return {APP_ENV:'production',ML_DEPLOYMENT_MODE:'monitored_pilot',ML_REQUIRE_MODEL_ARTIFACTS:'true',
     ML_USE_DETERMINISTIC_SIMULATOR:'false',ML_DEPLOYMENT_TRANSPORT:'https_service',ML_INFERENCE_SECRET:env.ML_INFERENCE_SECRET};
 }
 
 /** The optional factory/deadline are controlled test seams, absent from the
  * deployed bindings. Both public Worker and Container entrypoint enforce the
- * same authentication/release/stream limits. No ambiguous request is retried. */
+ * same authentication and stream limits. No ambiguous request is retried. */
 export async function serveSupabaseInference(request:Request,env:SupabaseInferenceEnv,
   serviceFactory:ServiceFactory=selectSupabaseContainer,deadlineMs=SUPABASE_INFERENCE_LIMITS.deadlineMs,https=true,retainCleanup?:RetainCleanup):Promise<Response> {
   let controller:AbortController|undefined,timer:ReturnType<typeof setTimeout>|undefined;
