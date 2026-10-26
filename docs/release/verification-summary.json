@@ -3681,15 +3681,15 @@
         "tests": 7,
         "pass": 7,
         "fail": 0,
-        "source_files_at_run": 101,
+        "source_files_at_run": 102,
         "declared_engineering_jpegs": 19,
         "input_seal_unchanged_at_completion": true,
         "storage": "controlled memory Storage",
         "real_supabase_image_requests": false,
         "representative_quality_qualified": false,
         "receipt": {
-          "path": "/Volumes/PRO-G40/Projects/Lovelies/verification/inference-packaging-20261026/private-inference-qualification/run-05/result.json",
-          "sha256": "2a220227c64f243df0147301735de000bac5ebbb93da9e7659f30f2d893c8bf6"
+          "path": "/Volumes/PRO-G40/Projects/Lovelies/verification/inference-packaging-20261026/private-inference-qualification/run-06/result.json",
+          "sha256": "0135f3bb16865291b2912ff55690488a519cee0d7d25fa7901f8be505b177688"
         }
       }
     },
@@ -3711,7 +3711,7 @@
         "path": "/Volumes/PRO-G40/Projects/Lovelies/verification/restore-pg-integration-20261026/postcommit-races/result.json",
         "sha256": "bb9816f75214f13312959e77663fdf3fb08d587de4cada3e2ce44bd48387f963"
       },
-      "hosted_service_deployed": false,
+      "hosted_service_deployed": true,
       "runtime_marker_seeded": false,
       "domain_restriction_producers_and_stable_allocations_complete": false,
       "external_effect_generation_fences_complete": false,
@@ -3726,11 +3726,50 @@
       "operated_post_tombstone_asset_holds_qualified": false,
       "request_hold_aba_generation_complete": false,
       "current_producer_receipt": {
-        "path": "/Volumes/PRO-G40/Projects/Lovelies/verification/restore-face-cancel-control-20261026/root-whole-02/result.json",
-        "sha256": "043bd36ac8df28ec4c55cda7328a90482323bd5fd0a8b334239bf2886a48d3a4"
+        "path": "/Volumes/PRO-G40/Projects/Lovelies/verification/restore-audience-producers-20261026/root-whole-05/result.json",
+        "sha256": "10f46d7762bbf310dfcc695a05e7430608d5eea58c25c2f878ddbf8f8d390140"
       },
       "exact_signed_cancel_and_control_renewal_producers": true,
-      "pending_consent_ownership_and_purpose_fail_closed": true
+      "pending_consent_ownership_and_purpose_fail_closed": true,
+      "hosted_worker_version": "5e141f2d-3fc3-4d93-bb61-20024deb6c33",
+      "hosted_namespace": "1b1d30fa71074b76b279ac9caffabc2b",
+      "hosted_state": "uninitialized_genesis_no_serving_marker",
+      "dedicated_initial_credential": true,
+      "offsite_credential_custody_qualified": false,
+      "direct_readonly_checks_pass": 7,
+      "direct_readonly_receipt": {
+        "path": "/Volumes/PRO-G40/Projects/Lovelies/verification/restore-journal-hosted-prep-20261026/qualification-01/result.json",
+        "sha256": "7f23835a9a90d55e188a2b35cb2efe40f1956a5da7cb89627ecaf5fd40fee4d3"
+      },
+      "supabase_bindings_digest_verified": true,
+      "all_prior_secret_digests_preserved": true,
+      "supabase_custom_secret_count": 9,
+      "bindings_receipt": {
+        "path": "/Volumes/PRO-G40/Projects/Lovelies/verification/restore-journal-hosted-prep-20261026/supabase-bindings-01/result.json",
+        "sha256": "e2f61bbcbe0bde54228033f1d954f32fca33a38e46b4a3dbbf626e76395c55f6"
+      },
+      "actual_supabase_readonly_consumer": {
+        "head_status": 200,
+        "exact_uninitialized_control_status": 409,
+        "production_client_status": 503,
+        "auth_controls_pass": 2,
+        "application_serving": false,
+        "temporary_helpers_remaining": 0,
+        "downloaded_source_exact": true,
+        "sealed_inputs": 17,
+        "receipt": {
+          "path": "/Volumes/PRO-G40/Projects/Lovelies/verification/supabase-journal-hosted-20261026/result.json",
+          "sha256": "826ced274ea0125b016677aae4f4afd48ce7c35b523427d5aa540db6c0b0274c"
+        }
+      },
+      "hosted_serving_or_recovery_clearance": false,
+      "exact_audience_and_guardian_restriction_producers": true,
+      "audience_new_cases_pass": 46,
+      "audience_future_authority_fail_closed": true,
+      "audience_fair_cursor_preserves_unknown_rows_and_namespaces": true,
+      "audience_source_sha256": "dfe478eb685128ef3e966ce50127e65b0991b10d3d8467c2b2dd22d59fbb19b9",
+      "audience_test_sha256": "779349330a83aba29f40e5a0f7ec7c1d19992ac7914402ad0c863725f975ab3f",
+      "all_domain_producers_complete": false
     },
     "push_private_files": {
       "local_provider_tests": 31,
@@ -3791,19 +3830,19 @@
     },
     "scope": "Current26October scoped results supersede historical contradictions. Readiness/serving/physical/provider/store/CI completion remains unproved. No overall completion percentage.",
     "api": {
-      "tests": 432,
-      "pass": 431,
+      "tests": 478,
+      "pass": 477,
       "fail": 0,
       "skipped": 1,
       "skip_scope": "Optional actual-model HTTP test; separate recognition/hosted acceptance remains open",
       "types_pass": true,
-      "source_inputs": 135,
+      "source_inputs": 136,
       "source_unchanged": true,
       "actual_native_postgres_version": "17.11",
       "actual_deno_tls_journal_handler": true,
       "receipt": {
-        "path": "/Volumes/PRO-G40/Projects/Lovelies/verification/restore-face-cancel-control-20261026/root-whole-02/result.json",
-        "sha256": "043bd36ac8df28ec4c55cda7328a90482323bd5fd0a8b334239bf2886a48d3a4"
+        "path": "/Volumes/PRO-G40/Projects/Lovelies/verification/restore-audience-producers-20261026/root-whole-05/result.json",
+        "sha256": "10f46d7762bbf310dfcc695a05e7430608d5eea58c25c2f878ddbf8f8d390140"
       },
       "first_failed_329_case_run_preserved": {
         "path": "/Volumes/PRO-G40/Projects/Lovelies/verification/restore-pg-integration-20261026/full-api-final/result.json",
@@ -3818,7 +3857,21 @@
         "/Volumes/PRO-G40/Projects/Lovelies/verification/restore-privacy-face-20261026/focused-01/result.json",
         "/Volumes/PRO-G40/Projects/Lovelies/verification/restore-privacy-face-20261026/whole-api-03/result.json"
       ],
-      "preserved_cancel_control_failure": "/Volumes/PRO-G40/Projects/Lovelies/verification/restore-face-cancel-control-20261026/root-focused-01/result.json"
+      "preserved_cancel_control_failure": "/Volumes/PRO-G40/Projects/Lovelies/verification/restore-face-cancel-control-20261026/root-focused-01/result.json",
+      "preserved_audience_timeout": "/Volumes/PRO-G40/Projects/Lovelies/verification/restore-audience-producers-20261026/root-focused-01/result.json",
+      "preserved_audience_assertion_failure": "/Volumes/PRO-G40/Projects/Lovelies/verification/restore-audience-producers-20261026/root-whole-03/result.json",
+      "audience_test_repairs": {
+        "recursive_read_hooks_run_only_after_outer_commit": true,
+        "page_count_observed_once": true,
+        "stale_role_token_exact_401": true,
+        "fresh_ordinary_user_exact_403_before_cached_result": true
+      },
+      "types_reuse": {
+        "path": "/Volumes/PRO-G40/Projects/Lovelies/verification/restore-audience-producers-20261026/root-focused-01/result.json",
+        "command_index": 0,
+        "production_typecheck_inputs_unchanged": true,
+        "later_changes_test_assertions_and_hooks_only": true
+      }
     },
     "current_encrypted_backup_reconstruction": {
       "checks": 11,
@@ -3832,7 +3885,7 @@
         "sha256": "e496611312b2cb6486e74b39ec994f491c92f44c5e0ebd2a8bfa686c2a0ef94c"
       },
       "source_unchanged_at_execution": true,
-      "scope": "Unchanged backup/encryption/schema/fence proof; later face cancel/control code was not exercised by this reconstruction. Full serving recovery remains open."
+      "scope": "Unchanged backup/encryption/schema/fence proof; later face cancel/control and audience code was not exercised by this reconstruction. Full serving recovery remains open."
     },
     "actual_hosted_storage": {
       "status": "qualified_tiny_object_plumbing_only",

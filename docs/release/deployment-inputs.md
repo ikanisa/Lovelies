@@ -45,8 +45,9 @@ completed DDL/grants. New receipt: `/Volumes/PRO-G40/Projects/Lovelies/verificat
 The original post-schema dashboard inventory had no custom secrets or Edge
 Functions. The current CLI checkpoint applies exactly three independent initial
 application secrets and verifies their server SHA256 digests. Four inference
-bindings are now added/digest-verified, bringing the custom-secret count to7.
-The initial three remain preserved; no Edge Function is deployed. Keys remain private and excluded
+bindings and the two independent restore-journal bindings are now added/digest-verified,
+bringing the custom-secret count to9. All earlier digests remain unchanged; no
+application API function is deployed and all temporary diagnostics are removed. Keys remain private and excluded
 from client bundles and Git. The adapter already supports Supabase's reserved
 `SUPABASE_DB_URL`, `SUPABASE_SECRET_KEYS.default` and legacy server-only Storage
 fallback. Do not unnecessarily reveal/copy reserved keys or set blank override
@@ -62,8 +63,23 @@ remote TLS certificate/hostname validation remains mandatory.
 | Jobs | Authenticated maintenance scheduler with bounded intervals, observability and retry/dead-letter/retention ownership. A healthy web endpoint does not drain its jobs. |
 | Purchases | Verified exact products/offers, Apple/Google validation and notification configuration, account ownership mapping and callback audiences. Store service-account/private keys enter secret stores only. |
 | Push | Private-key reading and selected independent SQLite receipt ledger are integrated. All46 local provider/transport/real Worker/Node tests, expanded syntax and Worker dry run pass. Private Node gateway/independent Worker host/EU binding/initialization/custody, separate service credentials, APNs team/key/topic/environment and FCM project/service-account authorization remain unqualified; no provider sends occurred. |
-| Restore | Independent restriction-journal protocol passes34 tests/syntax/Worker dry run with SQLite restart/fault proof; API/PostgreSQL checkpoint integration passes19 focused cases and whole API329/328-pass scope. Exact sharing-retirement producer and immutable typed collector now pass41 focused actualPG cases, current whole API432/431+one optional model skip, and94 operator tests. Exact signed face-action, independently reviewed deletion and stable terminal-erasure facts now pass, with hold evidence and successor cleanup preserved. Stable deletion-request IDs/requested facts and HTTP/queue/maintenance incarnation fences now also pass; other domain producers/resource allocations, external-effect generation fences, replay/verified object cleanup and computed completion remain in progress; no hosted journal deployment or serving clearance is established. Local jurisdiction seam does not prove EU placement. |
+| Restore | Independent restriction-journal protocol passes34 tests/syntax/Worker dry run with SQLite restart/fault proof; API/PostgreSQL checkpoint integration passes19 focused cases and whole API329/328-pass scope. Exact sharing-retirement producer and immutable typed collector now pass41 focused actualPG cases, current whole API478/477+one optional model skip, and94 operator tests. Exact signed face-action, independently reviewed deletion and stable terminal-erasure facts now pass, with hold evidence and successor cleanup preserved. Stable deletion-request IDs/requested facts and HTTP/queue/maintenance incarnation fences now also pass; other domain producers/resource allocations, external-effect generation fences, replay/verified object cleanup and computed completion remain in progress; the independent journal Worker is deployed uninitialized, with its dedicated token and exact Supabase URL/token bindings verified. Actual Supabase Edge GETs observe genesis head200 and exact control_uninitialized409; the unchanged production client fails closed with503. No database marker, bootstrap or serving/recovery clearance exists. The Worker uses the EU namespace selector; this does not prove all ingress/log/backup custody. |
 | Web/operator | Approved HTTPS operator origin/CORS, public app/link host, independently provisioned face-authorized operators, support/moderation/privacy ownership, alarms and backups/restore. |
+
+
+Audience redeclaration, independent adulthood review and guardian expiry/withdrawal/rejection now record exact old consent/profile/approval episodes before effects. Future-version relationships cannot be promoted into authority; row-local failures preserve that row while later children progress through the isolated fair cursor. Unsupported tuples are excluded before page selection and reported without cursor corruption. All46 new cases pass in the current aggregate. The initial test-hook deadlock and stale-role status expectation remain preserved; corrected tests require exact401 stale-role and403 current-user denials with unchanged results. Indirect lifecycle producers, durable manifests above32 and operated guardian/restore acceptance remain open.
+
+The hosted journal is `https://lovelies-restore-journal.ikanisa.workers.dev`,
+Worker version `5e141f2d-3fc3-4d93-bb61-20024deb6c33`, namespace
+`1b1d30fa71074b76b279ac9caffabc2b`. Its dedicated initial credential is held in
+an ignored0600 one-link local file; off-site custody and rotation operation remain
+open. Seven direct read-only checks pass. The temporary Supabase consumer's
+downloaded source matches the reviewed bundle, both auth controls return401,
+and the one authorized diagnostic passes the exact uninitialized contract.
+Its recorded function is removed; no helpers remain and all9 custom bindings
+are preserved. No application SQL/Storage, append, bootstrap, marker or clear
+operation ran. Bounded receipt:
+`/Volumes/PRO-G40/Projects/Lovelies/verification/supabase-journal-hosted-20261026/result.json`.
 
 The active app uses **custom anonymous-first application sessions**. Supabase
 managed Auth settings were inspected only: managed anonymous sign-in is disabled,

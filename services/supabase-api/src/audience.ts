@@ -1,7 +1,8 @@
-import { ApiError, jsonBody, ok, stable, uuid, type Actor, type AppContext, type Database } from './types.ts';
+import { ApiError, digest, jsonBody, ok, stable, uuid, type Actor, type AppContext, type Database } from './types.ts';
 import { assertPrivacyActor } from './auth.ts';
 import { executeRestrictedOperation, prepareOperation, assertRegisteredActor } from './operations.ts';
 import { requireOperator } from './operators.ts';
+import { restoreOperationID, type RestoreTransactionScope } from './restore-transaction.ts';
 
 export const AUDIENCE_POLICY = 'audience-2026-10-24-v1';
 export const AUDIENCE_PROTOCOL = 'lovelies-audience-v1';
@@ -77,6 +78,116 @@ export async function audienceProjection(ctx: AppContext, account: string): Prom
 async function audit(ctx: AppContext, actor: string, subject: string, action: string, entity: string): Promise<void> {
  await ctx.db.run('INSERT INTO audit_events(id,actor_id,subject_id,action,entity_id,details_json,created_at) VALUES(?,?,?,?,?,?,?)',crypto.randomUUID(),actor,subject,action,entity,'{}',ctx.now());
 }
+type AudienceRestrictionFact = { kind: 'consent-withdrawn' | 'profile-retired' | 'guardian-approval-retired'; scope: Record<string, string> };
+type GuardianApproval = { id: string; child_account_id: string; guardian_account_id: string; purpose: string; status: string; version: number; revoked_at: number | null };
+type GuardianTermination = { request: Guardian; controlsCurrent: boolean };
+type TerminationGroup = { plans: GuardianTermination[]; facts: AudienceRestrictionFact[] };
+type GuardianExpiryAdmission = Guardian & { admitted_audience_version: number };
+
+function orderedAudienceFacts(facts: readonly AudienceRestrictionFact[]): AudienceRestrictionFact[] {
+ const selected = new Map(facts.map(fact => [stable(fact), fact]));
+ return [...selected.entries()].sort(([a], [b]) => a < b ? -1 : a > b ? 1 : 0).map(([, fact]) => fact);
+}
+async function registerAudienceFacts(restore: RestoreTransactionScope, facts: readonly AudienceRestrictionFact[]): Promise<void> {
+ const selected = orderedAudienceFacts(facts);
+ // Until durable work plans exist, one audience operation is atomic. Never
+ // mutate state and then discover that only a prefix fits the manifest.
+ if (selected.length > 32) throw new ApiError(503, 'audience_restriction_capacity');
+ for (const fact of selected) await restore.restrict(fact.kind, fact.scope);
+}
+async function assertNoFutureGuardianEpisode(ctx: AppContext, account: string, version: number): Promise<void> {
+ // Unknown future rows cannot come from the atomic current-request creator.
+ // Preserve them and block the child's transition before incrementing into
+ // that version, including on a later maintenance invocation.
+ if (await ctx.db.one('SELECT id FROM guardian_requests WHERE child_account_id=? AND child_audience_version>? LIMIT 1', account, version))
+  throw new ApiError(409, 'audience_future_guardian_episode');
+}
+async function audienceAuthorityFacts(ctx: AppContext, account: string): Promise<AudienceRestrictionFact[]> {
+ const consents = await ctx.db.all<{ id: string; purpose: string }>(`SELECT id,purpose FROM consents WHERE account_id=?
+   AND purpose IN('face_authentication','photo_matching','photo_processing') AND status='granted' ORDER BY id`, account);
+ const facts: AudienceRestrictionFact[] = consents.map(consent => ({ kind: 'consent-withdrawn',
+   scope: { account_id: account, consent_id: consent.id, purpose: consent.purpose } }));
+ const profile = await ctx.db.one<{ id: string; revision: string; status: string }>('SELECT id,revision,status FROM face_profiles WHERE account_id=?', account);
+ if (profile?.status === 'active') facts.push({ kind: 'profile-retired',
+   scope: { account_id: account, profile_id: profile.id, profile_revision: profile.revision } });
+ return facts;
+}
+async function guardianApprovalFacts(ctx: AppContext, request: Guardian): Promise<AudienceRestrictionFact[]> {
+ const approvals = await ctx.db.all<GuardianApproval>(`SELECT id,child_account_id,guardian_account_id,purpose,status,version,revoked_at
+   FROM guardian_purpose_approvals WHERE request_id=? AND status<>'revoked' ORDER BY id`, request.id);
+ // Validate every row selected by retirement, including requested-only rows.
+ // A malformed relationship may not revoke another person's purpose choice.
+ if (approvals.some(approval => approval.child_account_id !== request.child_account_id ||
+   !request.guardian_account_id || approval.guardian_account_id !== request.guardian_account_id ||
+   !audiencePurposes.includes(approval.purpose as AudiencePurpose))) throw new ApiError(409, 'guardian_approval_scope_invalid');
+ return approvals.filter(approval => approval.status === 'approved' && approval.revoked_at === null).map<AudienceRestrictionFact>(approval => ({ kind: 'guardian-approval-retired',
+   scope: { child_account_id: request.child_account_id, guardian_request_id: request.id,
+     guardian_approval_id: approval.id, purpose: approval.purpose } }));
+}
+async function controlsAudience(ctx: AppContext, request: Guardian, selected?: Audience | null): Promise<boolean> {
+ const a = selected === undefined ? await row(ctx, request.child_account_id) : selected;
+ const replacement = await ctx.db.one(`SELECT id FROM guardian_requests WHERE child_account_id=? AND child_audience_version=?
+   AND id<>? AND state IN('pending','under_review','approved') AND expires_at>? LIMIT 1`,
+ request.child_account_id, request.child_audience_version, request.id, ctx.now());
+ return a?.age_band === '13_17' && a.version === request.child_audience_version &&
+   a.policy_version === request.policy_version && !replacement;
+}
+async function terminationGroup(ctx: AppContext, requests: readonly Guardian[], admittedVersions?: ReadonlyMap<string, number>): Promise<TerminationGroup> {
+ const plans: GuardianTermination[] = [], facts: AudienceRestrictionFact[] = [];
+ const audiences = new Map<string, Audience | null>(), retiredAuthorities = new Set<string>();
+ for (const selected of requests) {
+  const current = await ctx.db.one<Guardian>('SELECT * FROM guardian_requests WHERE id=?', selected.id);
+  if (!current || !['pending','under_review','approved'].includes(current.state)) continue;
+  const admitted = admittedVersions?.get(current.child_account_id);
+  if (admittedVersions && (admitted === undefined || current.child_audience_version > admitted)) continue;
+  if (!audiences.has(current.child_account_id)) audiences.set(current.child_account_id, await row(ctx, current.child_account_id));
+  const a = audiences.get(current.child_account_id)!;
+  await assertNoFutureGuardianEpisode(ctx, current.child_account_id, a?.version ?? 0);
+  if (!a) throw new ApiError(409, 'audience_authority_changed');
+  const controlsCurrent = !retiredAuthorities.has(current.child_account_id) && await controlsAudience(ctx, current, a);
+  facts.push(...await guardianApprovalFacts(ctx, current));
+  if (controlsCurrent) {
+   facts.push(...await audienceAuthorityFacts(ctx, current.child_account_id));
+   retiredAuthorities.add(current.child_account_id);
+  }
+  plans.push({ request: current, controlsCurrent });
+ }
+ return { plans, facts: orderedAudienceFacts(facts) };
+}
+const retirementSignature = (group: TerminationGroup): string => stable({ facts: group.facts,
+ requests: group.plans.map(({ request: r, controlsCurrent }) => ({ id: r.id, child_account_id: r.child_account_id,
+   guardian_account_id: r.guardian_account_id, revision: r.revision, state: r.state, policy_version: r.policy_version,
+   child_audience_version: r.child_audience_version, expires_at: r.expires_at, controlsCurrent })) });
+async function prepareTerminations(ctx: AppContext, restore: RestoreTransactionScope, requests: readonly Guardian[], admittedVersions?: ReadonlyMap<string, number>): Promise<TerminationGroup> {
+ const selected = await terminationGroup(ctx, requests, admittedVersions);
+ await registerAudienceFacts(restore, selected.facts);
+ const current = await terminationGroup(ctx, requests, admittedVersions);
+ if (retirementSignature(current) !== retirementSignature(selected)) throw new ApiError(409, 'audience_authority_changed');
+ return current;
+}
+async function prepareAudienceReplacement(ctx: AppContext, restore: RestoreTransactionScope, account: string, expected: Audience, requests: readonly Guardian[]): Promise<void> {
+ const select = async () => {
+  const current = await row(ctx, account);
+  if (!current || stable(current) !== stable(expected)) throw new ApiError(409, 'audience_authority_changed');
+  await assertNoFutureGuardianEpisode(ctx, account, current.version);
+  const guardians = await Promise.all(requests.map(async selected => {
+   const request = await ctx.db.one<Guardian>('SELECT * FROM guardian_requests WHERE id=?', selected.id);
+   if (!request || request.child_account_id !== account || request.revision !== selected.revision ||
+     request.state !== selected.state || request.guardian_account_id !== selected.guardian_account_id ||
+     request.child_audience_version !== selected.child_audience_version || request.policy_version !== selected.policy_version)
+    throw new ApiError(409, 'audience_authority_changed');
+   return request;
+  }));
+  return orderedAudienceFacts([
+   ...await audienceAuthorityFacts(ctx, account),
+   ...(await Promise.all(guardians.map(request => guardianApprovalFacts(ctx, request)))).flat(),
+  ]);
+ };
+ const selected = await select();
+ await registerAudienceFacts(restore, selected);
+ if (stable(await select()) !== stable(selected)) throw new ApiError(409, 'audience_authority_changed');
+}
+
 /** Audience revocation preserves the durable session for status/privacy and
  * security controls, while product checks use the incremented audience version.
  * Neither a later approval nor an idempotent replay restores previous consents. */
@@ -107,18 +218,23 @@ export async function revokeAudienceAuthority(ctx: AppContext, account: string, 
 }
 async function retireGuardianRequest(ctx: AppContext, request: Guardian, state: 'withdrawn'|'expired'|'rejected', actor: string): Promise<void> {
  if (!['pending','under_review','approved'].includes(request.state)) return;
+ await guardianApprovalFacts(ctx, request);
  await ctx.db.run('UPDATE guardian_requests SET state=?,revision=revision+1,terminated_at=? WHERE id=?',state,ctx.now(),request.id);
- await ctx.db.run("UPDATE guardian_purpose_approvals SET status='revoked',version=version+1,revoked_at=coalesce(revoked_at,?) WHERE request_id=?",ctx.now(),request.id);
+ await ctx.db.run("UPDATE guardian_purpose_approvals SET status='revoked',version=version+1,revoked_at=coalesce(revoked_at,?) WHERE request_id=? AND status<>'revoked'",ctx.now(),request.id);
  await audit(ctx,actor,request.child_account_id,'guardian.'+state,request.id);
 }
-async function terminate(ctx: AppContext, request: Guardian, state: 'withdrawn'|'expired'|'rejected', actor: string): Promise<void> {
+async function terminate(ctx: AppContext, request: Guardian, state: 'withdrawn'|'expired'|'rejected', actor: string, expectedControls?: boolean): Promise<void> {
  const current=await ctx.db.one<Guardian>('SELECT * FROM guardian_requests WHERE id=?',request.id);
- if(!current||!['pending','under_review','approved'].includes(current.state)) return;
- const a=await row(ctx,current.child_account_id);
+ if(!current||!['pending','under_review','approved'].includes(current.state)){
+  if(expectedControls!==undefined)throw new ApiError(409,'audience_authority_changed');
+  return;
+ }
  // A retired relationship controls neither a reviewed adult declaration nor a
  // newer guardian episode. Expiry cleanup must not revoke the replacement.
- const replacement=await ctx.db.one("SELECT id FROM guardian_requests WHERE child_account_id=? AND child_audience_version=? AND id<>? AND state IN('pending','under_review','approved') AND expires_at>? LIMIT 1",current.child_account_id,current.child_audience_version,current.id,ctx.now());
- const controlsCurrent=a?.age_band==='13_17'&&a.version===current.child_audience_version&&a.policy_version===current.policy_version&&!replacement;
+ if(expectedControls!==undefined)await assertNoFutureGuardianEpisode(ctx,current.child_account_id,(await row(ctx,current.child_account_id))?.version??0);
+ const controlsCurrent=await controlsAudience(ctx,current);
+ if(expectedControls!==undefined&&(current.revision!==request.revision||current.state!==request.state||controlsCurrent!==expectedControls))
+  throw new ApiError(409,'audience_authority_changed');
  await retireGuardianRequest(ctx,current,state,actor);
  if(controlsCurrent){
   await revokeAudienceAuthority(ctx,current.child_account_id,current.id);
@@ -166,14 +282,22 @@ export async function handleAudience(request: Request,ctx: AppContext):Promise<R
  };
  await assertReviewAuthority();
  let requestId:string|null=null;
- const receipt=await executeRestrictedOperation(ctx,actor,intent,async()=>{
+ const receipt=await executeRestrictedOperation(ctx,actor,intent,async restore=>{
   if(path==='/me/audience'){
    exact(body,['age_band','policy_version','expected_version','operation_key']);policy(body);
    if(!['under13','13_17','18_plus'].includes(String(body.age_band)))throw new ApiError(400,'audience_input_invalid');
    const old=await row(ctx,actor.accountId);
    if(body.expected_version!==(old?.version??0))throw new ApiError(409,'audience_version_changed');
    if(old&&old.age_band!=='18_plus'&&body.age_band!==old.age_band)throw new ApiError(409,'audience_age_review_required');
-   if(old)await revokeAudienceAuthority(ctx,actor.accountId,crypto.randomUUID());
+   if(old){
+    // The new declaration already invalidates this exact old audience version.
+    // Retire only its relationship episodes, never an unknown/newer version.
+    const requests=await ctx.db.all<Guardian>("SELECT * FROM guardian_requests WHERE child_account_id=? AND child_audience_version=? AND policy_version=? AND state IN('pending','under_review','approved') ORDER BY created_at,id",actor.accountId,old.version,old.policy_version);
+    await prepareAudienceReplacement(ctx,restore,actor.accountId,old,requests);
+    for(const request of requests)await retireGuardianRequest(ctx,request,'withdrawn',actor.accountId);
+    await revokeAudienceAuthority(ctx,actor.accountId,crypto.randomUUID());
+   }
+   if(!old)await assertNoFutureGuardianEpisode(ctx,actor.accountId,0);
    const version=old?old.version+1:1,status=body.age_band==='under13'?'blocked':body.age_band==='13_17'?'guardian_pending':'eligible';
    await ctx.db.run('INSERT INTO account_audience(account_id,age_band,status,version,declared_at,policy_version) VALUES(?,?,?,?,?,?) ON CONFLICT(account_id) DO UPDATE SET age_band=excluded.age_band,status=excluded.status,version=excluded.version,declared_at=excluded.declared_at,policy_version=excluded.policy_version,next_review_at=NULL',actor.accountId,String(body.age_band),status,version,ctx.now(),AUDIENCE_POLICY);
    await audit(ctx,actor.accountId,actor.accountId,'audience.declared',actor.accountId);
@@ -184,8 +308,11 @@ export async function handleAudience(request: Request,ctx: AppContext):Promise<R
    const a=await row(ctx,actor.accountId);
    if(!a||a.age_band!=='13_17'||a.policy_version!==AUDIENCE_POLICY)throw new ApiError(403,'guardian_request_ineligible');
    if(body.expected_version!==a.version)throw new ApiError(409,'audience_version_changed');
+   await assertNoFutureGuardianEpisode(ctx,actor.accountId,a.version);
    if(await ctx.db.one("SELECT id FROM guardian_requests WHERE child_account_id=? AND state IN('pending','under_review','approved') AND expires_at>?",actor.accountId,ctx.now()))throw new ApiError(409,'guardian_request_active');
-   for(const old of await ctx.db.all<Guardian>("SELECT * FROM guardian_requests WHERE child_account_id=? AND state IN('pending','under_review','approved') AND expires_at<=?",actor.accountId,ctx.now()))await terminate(ctx,old,'expired',actor.accountId);
+   const expired=await ctx.db.all<Guardian>("SELECT * FROM guardian_requests WHERE child_account_id=? AND child_audience_version<=? AND state IN('pending','under_review','approved') AND expires_at<=? ORDER BY created_at,id",actor.accountId,a.version,ctx.now());
+   const group=await prepareTerminations(ctx,restore,expired,new Map([[actor.accountId,a.version]]));
+   for(const plan of group.plans)await terminate(ctx,plan.request,'expired',actor.accountId,plan.controlsCurrent);
    const currentAudience=(await row(ctx,actor.accountId))!;
    requestId=crypto.randomUUID();await ctx.db.run("INSERT INTO guardian_requests(id,child_account_id,state,child_audience_version,policy_version,created_at,expires_at) VALUES(?,?,'pending',?,?,?,?)",requestId,actor.accountId,currentAudience.version,AUDIENCE_POLICY,ctx.now(),ctx.now()+7*DAY);
    return {request_id:requestId};
@@ -195,7 +322,9 @@ export async function handleAudience(request: Request,ctx: AppContext):Promise<R
    const subject=uuid(adult[1]),a=await row(ctx,subject);
    if(subject===actor.accountId)throw new ApiError(403,'guardian_independent_review_required');
    if(!a||a.age_band==='18_plus'||a.version!==body.expected_version||body.adult_verified!==true)throw new ApiError(409,'audience_version_changed');
-   for(const old of await ctx.db.all<Guardian>("SELECT * FROM guardian_requests WHERE child_account_id=? AND state IN('pending','under_review','approved')",subject))await retireGuardianRequest(ctx,old,'withdrawn',actor.accountId);
+   const requests=await ctx.db.all<Guardian>("SELECT * FROM guardian_requests WHERE child_account_id=? AND child_audience_version<=? AND state IN('pending','under_review','approved') ORDER BY created_at,id",subject,a.version);
+   await prepareAudienceReplacement(ctx,restore,subject,a,requests);
+   for(const request of requests)await retireGuardianRequest(ctx,request,'withdrawn',actor.accountId);
    await revokeAudienceAuthority(ctx,subject,crypto.randomUUID());
    await ctx.db.run("UPDATE account_audience SET age_band='18_plus',status='eligible',policy_version=?,declared_at=?,next_review_at=NULL WHERE account_id=?",AUDIENCE_POLICY,ctx.now(),subject);
    await ctx.db.run('INSERT INTO audience_adult_reviews(id,account_id,reviewed_by,evidence_method,evidence_reference,created_at) VALUES(?,?,?,?,?,?)',crypto.randomUUID(),subject,actor.accountId,String(body.evidence_method),String(body.evidence_reference),ctx.now());
@@ -206,7 +335,8 @@ export async function handleAudience(request: Request,ctx: AppContext):Promise<R
   if(action?.[2]==='withdraw'){
    exact(body,['expected_revision','operation_key']);await owned(ctx,actor,requestId);
    if(body.expected_revision!==r.revision)throw new ApiError(409,'guardian_revision_changed');
-   await terminate(ctx,r,'withdrawn',actor.accountId);return {request_id:requestId};
+   const group=await prepareTerminations(ctx,restore,[r]);
+   for(const plan of group.plans)await terminate(ctx,plan.request,'withdrawn',actor.accountId,plan.controlsCurrent);return {request_id:requestId};
   }
   policy(body);
   if(r.expires_at<=ctx.now()||r.policy_version!==AUDIENCE_POLICY||body.expected_revision!==r.revision)throw new ApiError(409,'guardian_revision_changed');
@@ -234,8 +364,9 @@ export async function handleAudience(request: Request,ctx: AppContext):Promise<R
    await ctx.db.run("UPDATE account_audience SET status='eligible',next_review_at=? WHERE account_id=?",expires,r.child_account_id);
    await audit(ctx,actor.accountId,r.child_account_id,'guardian.approved',requestId);
   }else{
+   const group=await prepareTerminations(ctx,restore,[r]);
    await ctx.db.run('UPDATE guardian_requests SET reviewed_by=?,reviewed_at=?,evidence_method=?,evidence_reference=? WHERE id=?',actor.accountId,ctx.now(),String(body.evidence_method),String(body.evidence_reference),requestId);
-   await terminate(ctx,r,'rejected',actor.accountId);
+   for(const plan of group.plans)await terminate(ctx,plan.request,'rejected',actor.accountId,plan.controlsCurrent);
   }
   await assertReviewAuthority();
   return {request_id:requestId};
@@ -255,10 +386,21 @@ export async function handleAudience(request: Request,ctx: AppContext):Promise<R
 /** Expiration is effective in guards immediately; maintenance records terminal
  * state, invalidates old authority and keeps failed cleanup obligations durable. */
 export async function maintainAudience(ctx: AppContext):Promise<void>{
- await ctx.db.transaction(async()=>{
+  const cursorEntity='audience-expiry-v1';
+  const cursor=await ctx.db.one<{last_at:number|null;last_id:string|null}>("SELECT last_at,last_id FROM retention_scan_cursors WHERE scan='guardian' AND entity_id=?",cursorEntity);
+  const after=cursor?.last_at??null,afterID=cursor?.last_id??null;
+  if(after!==null&&(!Number.isSafeInteger(after)||after<0||typeof afterID!=='string'||afterID.length!==36||!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(afterID))||after===null&&afterID!==null)
+   throw new ApiError(503,'audience_cursor_invalid');
+  // Both cursor admission and persisted candidates use this exact UUID and
+  // nonnegative safe-integer form. Unsupported active source rows stay intact
+  // and reported; they cannot consume the page or poison the owned cursor.
+  const supportedTuple="(r.created_at BETWEEN 0 AND 9007199254740991 AND length(r.id)=36 AND r.id ~* '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$')";
+  let blocked=!!await ctx.db.one("SELECT id FROM guardian_requests r WHERE r.state IN('pending','under_review','approved') AND NOT "+supportedTuple+" LIMIT 1");
   // Select due/invalid rows before LIMIT. A long-lived valid approval must
   // never starve expiration of a newer request in a bounded maintenance pass.
-  for(const r of await ctx.db.all<Guardian>(`SELECT r.* FROM guardian_requests r WHERE r.state IN('pending','under_review','approved')
+  const selected=await ctx.db.all<GuardianExpiryAdmission>(`SELECT r.*,admitted.version admitted_audience_version FROM guardian_requests r
+    JOIN account_audience admitted ON admitted.account_id=r.child_account_id AND r.child_audience_version<=admitted.version
+    WHERE r.state IN('pending','under_review','approved') AND ${supportedTuple}
     AND (r.expires_at<=? OR r.policy_version<>? OR NOT EXISTS(SELECT 1 FROM account_audience a WHERE a.account_id=r.child_account_id AND a.age_band='13_17' AND a.version=r.child_audience_version AND a.policy_version=?)
     OR (r.state='approved' AND NOT EXISTS(SELECT 1 FROM guardian_purpose_approvals p
       JOIN account_audience g ON g.account_id=p.guardian_account_id AND g.age_band='18_plus' AND g.status='eligible' AND g.policy_version=? AND g.version=p.guardian_audience_version
@@ -267,14 +409,45 @@ export async function maintainAudience(ctx: AppContext):Promise<void>{
       JOIN consents c ON c.id=fp.auth_consent_id AND c.account_id=ga.id AND c.status='granted' AND c.revoked_at IS NULL AND (c.expires_at IS NULL OR c.expires_at>?) AND c.policy_version=?
       WHERE p.request_id=r.id AND p.status='approved' AND p.revoked_at IS NULL AND p.expires_at>? AND p.policy_version=CASE WHEN p.purpose='face_authentication' THEN ? ELSE ? END
       AND NOT EXISTS(SELECT 1 FROM privacy_requests d WHERE d.subject_id=ga.id AND d.request_type='delete' AND d.status IN('pending_approval','approved','queued','processing','failed')))))
-    ORDER BY r.created_at,r.id LIMIT 100`,ctx.now(),AUDIENCE_POLICY,AUDIENCE_POLICY,AUDIENCE_POLICY,ctx.now(),ctx.env.FACE_AUTH_POLICY_VERSION??'',ctx.now(),purposePolicy(ctx,'face_authentication'),purposePolicy(ctx,'photo_matching'))){
-   const a=await row(ctx,r.child_account_id);
-   const invalid=r.expires_at<=ctx.now()||r.policy_version!==AUDIENCE_POLICY||!a||a.age_band!=='13_17'||a.version!==r.child_audience_version||a.policy_version!==AUDIENCE_POLICY||r.state==='approved'&&!await audienceContext(ctx,r.child_account_id,'face_authentication')&&!await audienceContext(ctx,r.child_account_id,'photo_matching')&&!await audienceContext(ctx,r.child_account_id,'photo_processing');
-   if(invalid)await terminate(ctx,r,'expired',r.reviewed_by??r.child_account_id);
+    ${after===null?'':'AND (r.created_at>? OR (r.created_at=? AND r.id>?))'}
+    ORDER BY r.created_at,r.id LIMIT 100`,ctx.now(),AUDIENCE_POLICY,AUDIENCE_POLICY,AUDIENCE_POLICY,ctx.now(),ctx.env.FACE_AUTH_POLICY_VERSION??'',ctx.now(),purposePolicy(ctx,'face_authentication'),purposePolicy(ctx,'photo_matching'),...(after===null?[]:[after,after,afterID!]));
+  if(!selected.length){
+   // An empty page proves exhaustion; only then wrap this scan's own cursor.
+   if(cursor)await ctx.db.run("UPDATE retention_scan_cursors SET last_at=NULL,last_id=NULL WHERE scan='guardian' AND entity_id=?",cursorEntity);
+   if(blocked)throw new ApiError(503,'audience_maintenance_blocked');
+   return;
   }
+  for(const candidate of selected){
+   try{await ctx.db.transaction(async restore=>{
+   const r=await ctx.db.one<Guardian>('SELECT * FROM guardian_requests WHERE id=?',candidate.id);
+   // Bind eligibility to the original selection, not an audience increment
+   // performed by an earlier expiry in this pass. A changed request is fresh
+   // work for a later pass, never an authorization inherited by this candidate.
+   if(!r||!['pending','under_review','approved'].includes(r.state)||r.revision!==candidate.revision||
+    r.child_account_id!==candidate.child_account_id||r.child_audience_version!==candidate.child_audience_version||
+    r.policy_version!==candidate.policy_version||r.child_audience_version>candidate.admitted_audience_version)return;
+   if(r.created_at!==candidate.created_at)throw new ApiError(409,'audience_authority_changed');
+   const a=await row(ctx,r.child_account_id);
+   if(!a||r.child_audience_version>a.version)return;
+   const invalid=r.expires_at<=ctx.now()||r.policy_version!==AUDIENCE_POLICY||!a||a.age_band!=='13_17'||a.version!==r.child_audience_version||a.policy_version!==AUDIENCE_POLICY||r.state==='approved'&&!await audienceContext(ctx,r.child_account_id,'face_authentication')&&!await audienceContext(ctx,r.child_account_id,'photo_matching')&&!await audienceContext(ctx,r.child_account_id,'photo_processing');
+   if(!invalid)return;
+   restore.operation({operation_id:await restoreOperationID(r.child_account_id,'audience.guardian-expiry-v1','guardian.expire:'+r.id+':'+r.revision),
+    input_hash:await digest(stable({protocol:'lovelies-audience-guardian-expiry-v1',child_account_id:r.child_account_id,
+     guardian_request_id:r.id,request_revision:r.revision,child_audience_version:r.child_audience_version,policy_version:r.policy_version,expires_at:r.expires_at})),allocations:{}});
+   const group=await prepareTerminations(ctx,restore,[r],new Map([[r.child_account_id,candidate.admitted_audience_version]]));
+   for(const plan of group.plans)await terminate(ctx,plan.request,'expired',r.reviewed_by??r.child_account_id,plan.controlsCurrent);
+   });}catch(error){
+    // Only these deterministic row-local denials are isolated. Unknown SQL,
+    // journal or poisoned-invocation failures stop immediately, without moving
+    // the cursor past the uncertain relationship.
+    if(!(error instanceof ApiError)||!['audience_restriction_capacity','guardian_approval_scope_invalid','audience_authority_changed','audience_future_guardian_episode'].includes(error.code))throw error;
+    blocked=true;
+   }
+   await ctx.db.run("INSERT INTO retention_scan_cursors(scan,entity_id,last_at,last_id) VALUES('guardian',?,?,?) ON CONFLICT(scan,entity_id) DO UPDATE SET last_at=excluded.last_at,last_id=excluded.last_id",cursorEntity,candidate.created_at,candidate.id);
+  }
+  if(blocked)throw new ApiError(503,'audience_maintenance_blocked');
   // Terminal metadata is purged by retention together with its linked operation
   // copies; removing it here would lose the positive receipt-retirement binding.
- });
 }
 export async function audiencePrivacyRows(ctx:AppContext,subject:string):Promise<Record<string,unknown>>{
  return {audience_declaration:await ctx.db.all('SELECT age_band,status,version,declared_at,policy_version,next_review_at FROM account_audience WHERE account_id=?',subject),guardian_child_requests:await ctx.db.all('SELECT id,state,revision,policy_version,created_at,expires_at,reviewed_at,terminated_at FROM guardian_requests WHERE child_account_id=? ORDER BY id LIMIT 25001',subject),guardian_given_approvals:await ctx.db.all('SELECT id,purpose,policy_version,status,created_at,expires_at,revoked_at FROM guardian_purpose_approvals WHERE guardian_account_id=? ORDER BY id LIMIT 25001',subject)};
