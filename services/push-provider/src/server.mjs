@@ -2,8 +2,7 @@ import { createServer } from 'node:http';
 import { Readable } from 'node:stream';
 import { pathToFileURL } from 'node:url';
 import { createGateway } from './gateway.mjs';
-import { DispatchLedger } from './ledger.mjs';
-import { connectDatabase } from './database.mjs';
+import { RemoteDispatchLedger } from './remote-ledger.mjs';
 import { ApnsAuthorization, ApnsProvider, FcmAuthorization, FcmProvider } from './providers.mjs';
 import { privateProviderFile } from './private-files.mjs';
 export async function configuredProviders(env = process.env) {
@@ -15,6 +14,14 @@ export async function configuredProviders(env = process.env) {
   if (env.FCM_SERVICE_ACCOUNT_FILE) providers.android = new FcmProvider({ authorization: new FcmAuthorization({ serviceAccount: JSON.parse(await privateProviderFile(env.FCM_SERVICE_ACCOUNT_FILE)), projectID: env.FCM_PROJECT_ID }), projectID: env.FCM_PROJECT_ID, packageName: env.ANDROID_PACKAGE_NAME });
   if (!Object.keys(providers).length) throw new Error('provider_send_enabled_without_configuration');
   return providers;
+}
+export async function configuredLedger(env = process.env, { fetcher = fetch } = {}) {
+  // Never fall back to a receipt table inside the application restore boundary.
+  // Read the independently persisted binding before loading any provider key.
+  const ledger = new RemoteDispatchLedger(env.PUSH_LEDGER_URL, env.PUSH_LEDGER_TOKEN,
+    { ledgerID: env.PUSH_LEDGER_ID, fetcher });
+  if ((await ledger.control()).state !== 'serving') throw new Error('provider_ledger_unavailable');
+  return ledger;
 }
 export function createNodeServer(handle) {
   const server = createServer(async (incoming, outgoing) => {
@@ -33,15 +40,17 @@ export function createNodeServer(handle) {
 export async function start(env = process.env) {
   const port = Number(env.PORT ?? 8091);
   if (!Number.isInteger(port) || port < 1 || port > 65535) throw new Error('invalid_gateway_port');
-  const db = connectDatabase(env.PUSH_DATABASE_URL), providers = await configuredProviders(env);
-  const ledger = new DispatchLedger(db);
-  await db.query('SELECT operation_key FROM push_provider.dispatches LIMIT 0'); // Fail closed until the reviewed migration/role exists.
+  const ledger = await configuredLedger(env), providers = await configuredProviders(env);
   const handle = createGateway({ ledger, providers, secret: env.PUSH_SERVICE_SECRET });
   const server = createNodeServer(handle);
-  await new Promise((resolve, reject) => { server.once('error', reject); server.listen(port, env.HOST ?? '127.0.0.1', resolve); });
-  const close = async () => { server.close(); await Promise.allSettled(Object.values(providers).map(provider => provider.close())); await db.close(); };
+  try { await new Promise((resolve, reject) => { server.once('error', reject); server.listen(port, env.HOST ?? '127.0.0.1', resolve); }); }
+  catch (error) { await Promise.allSettled(Object.values(providers).map(provider => provider.close())); throw error; }
+  const close = async () => {
+    await new Promise(resolve => { server.closeAllConnections(); server.close(resolve); });
+    await Promise.allSettled(Object.values(providers).map(provider => provider.close()));
+  };
   return { server, close };
 }
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
-  start().then(({ close }) => { process.once('SIGTERM', () => void close()); process.once('SIGINT', () => void close()); }).catch(() => { console.error('Push gateway startup failed; verify private configuration, schema and database access.'); process.exitCode = 1; });
+  start().then(({ close }) => { process.once('SIGTERM', () => void close()); process.once('SIGINT', () => void close()); }).catch(() => { console.error('Push gateway startup failed; verify private configuration and independent ledger access.'); process.exitCode = 1; });
 }

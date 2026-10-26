@@ -78,6 +78,15 @@ importers:
       '@electric-sql/pglite':
         specifier: 0.3.14
         version: 0.3.14
+      esbuild:
+        specifier: 0.28.1
+        version: 0.28.1
+      miniflare:
+        specifier: 4.20260714.0
+        version: 4.20260714.0
+      wrangler:
+        specifier: 4.112.0
+        version: 4.112.0(@cloudflare/workers-types@5.20260718.1)
 
   services/restore-journal:
     devDependencies:

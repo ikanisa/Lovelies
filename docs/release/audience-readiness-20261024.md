@@ -61,8 +61,22 @@ The exact Release bundle still has six preflight gates: published link host,
 privacy/terms/support/deletion URLs and distribution signature. Physical
 FaceID/TouchID/passcode, new/legacy key ACL, lifecycle and App Review remain open.
 
-Hardened push key reading passes31 local provider tests/syntax; real credentials,
-host/independent ledger and device delivery remain open. Isolated Edge driver
+The selected push gateway now requires an independent Cloudflare SQLite ledger
+before reading provider keys or listening, with no application-PostgreSQL
+fallback. All46 provider/transport/Worker/Node integration tests, expanded syntax
+checks and Worker dry run pass on unchanged inputs. Partial SQL/KV rollback,
+dispatch-intent loss, stale claims, lost responses, quarantine and saved receipts
+are covered. Actual host/EU binding/custody/provider credentials/device delivery
+remain open. Evidence: `/Volumes/PRO-G40/Projects/Lovelies/verification/push-independent-ledger-20261026/root-integration/result.json`.
+
+Fresh schema12 encrypted-backup qualification passes11 actual nativePG17.11
+checks with52 unchanged inputs. All69 table hashes and the opaque control row
+reconstruct; seven-day expiry and old-marker quarantine pass. The original
+Result-array assertion failure is retained. Independent hosted custody/media
+replay/scheduling and serving recovery remain open. Evidence:
+`/Volumes/PRO-G40/Projects/Lovelies/verification/encrypted-backup-schema12-20261026/attempt-02/result.json`.
+
+Isolated Edge driver
 source now includes schema12, required TLS journal/CA and bounded relays; its
 syntax passes, while actual Docker/Edge execution remains unqualified because
 the daemon was unavailable. The [full goal](full-implementation-goal-20261026.md)

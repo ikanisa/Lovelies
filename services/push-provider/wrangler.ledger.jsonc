@@ -1,0 +1,19 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "account_id": "2209b915a85b1c11cee79b7806c6e73b",
+  "name": "lovelies-push-dispatch-ledger",
+  "main": "src/ledger-worker.mjs",
+  "compatibility_date": "2026-07-21",
+  "workers_dev": false,
+  "preview_urls": false,
+  "send_metrics": false,
+  "logpush": false,
+  "observability": { "enabled": false, "head_sampling_rate": 0, "logs": { "enabled": false, "invocation_logs": false, "persist": false }, "traces": { "enabled": false, "persist": false } },
+  "vars": { "SUPABASE_PROJECT_ID": "ltqfplqevxztlswlzexn" },
+  // Operator configures one immutable PUSH_LEDGER_ID and an independent
+  // server-only PUSH_LEDGER_TOKEN. No mobile client receives either credential.
+  // PUSH_LEDGER_BOOTSTRAP_TOKEN is distinct, temporary initial-operation
+  // authority; remove it after binding and preserve the provider namespace.
+  "durable_objects": { "bindings": [{ "name": "PUSH_DISPATCH_LEDGER", "class_name": "PushDispatchLedger" }] },
+  "migrations": [{ "tag": "lovelies-push-dispatch-ledger-v1", "new_sqlite_classes": ["PushDispatchLedger"] }]
+}

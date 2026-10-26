@@ -46,8 +46,12 @@ unfinished. No hosted journal or recovery clearance is established.
 Original1020 Swift hosts, separate101 guest/35 media hosts and108 focused OS-auth
 fixtures pass; current21-source Debug/unsignedRelease app and XCTest target build.
 Physical OS/new/legacy key behavior and App Review remain unqualified. Six exact
-Release preflight URL/signature gates remain. Push private-file handling passes31
-local checks; actual providers/host/device delivery remain open.
+Release preflight URL/signature gates remain. Push gateway/private-file/independent SQLite ledger integration passes46 local
+checks, expanded syntax and Worker dry run; actual providers/host/EU custody/
+device delivery remain open. Fresh actualPG17.11 schema12 backup qualification
+passes11 checks with all69 table hashes/control row, seven-day expiry and
+old-marker quarantine preserved. Hosted backup custody/media replay/operation
+remain open.
 
 The packaging-only d815 image is published and deployed with the exact982e
 payload/runtime preserved. Cloudflare appversion2 reports healthy1/failed0/

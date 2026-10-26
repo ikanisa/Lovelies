@@ -761,10 +761,26 @@
       "source_scope": "Retained pre-OpenFace tested source snapshot; not acceptance of concurrent consumer integration."
     },
     "push_gateway": {
-      "local_tests_pass": 19,
-      "syntax_checks_pass": 6,
-      "provider_fixture_only": true,
-      "actual_provider_delivery": false
+      "historical_postgres_fixture_checkpoint": {
+        "local_tests_pass": 19,
+        "syntax_checks_pass": 6,
+        "provider_fixture_only": true,
+        "actual_provider_delivery": false
+      },
+      "current_independent_ledger_checkpoint": {
+        "receipt": "/Volumes/PRO-G40/Projects/Lovelies/verification/push-independent-ledger-20261026/root-integration/result.json",
+        "tests": 46,
+        "pass": 46,
+        "fail": 0,
+        "skip": 0,
+        "syntax": "pass",
+        "worker_dry_run": "pass",
+        "inputs_unchanged": true,
+        "selected_runtime": "Node24 real APNs/FCM adapters + authenticated independent EU SQLite Durable Object receipt ledger; no application-PostgreSQL fallback",
+        "scope": "Local real Worker/SQLite and Node HTTP, provider fixtures only; immutable admission/dispatch intent, rollback loss, restart/race/lost replies and quarantine. No hosted EU placement/initialization/custody, actual provider or device acceptance."
+      },
+      "actual_provider_delivery": false,
+      "deployed": false
     },
     "browser_preview": {
       "source_sha256": "93f280ad24edb8e13655f6fe38183e6e9ba0040bff9c9288f4a5d33c3f450c5f",
@@ -843,6 +859,19 @@
       "ios_release_binary_sha256": "bae3cb7174c4a6ac180e4366650081026936f69e1a1997af86287f154e4c9a65",
       "scope": "Current392b compiled unsigned iOS artifact readback. SDK/identity/8 locale resources/privacy bytes preserved; signed archive/runtime/upload acceptance remains separate. Android findings retain their own existing source scope.",
       "ios_readback_receipt": "verification/supabase-release-20261023/post-localization-ui/caption-scroll-build/release-readback.json"
+    },
+    "current_schema12_encrypted_backup_checkpoint": {
+      "receipt": "/Volumes/PRO-G40/Projects/Lovelies/verification/encrypted-backup-schema12-20261026/attempt-02/result.json",
+      "checks_pass": 11,
+      "source_inputs": 52,
+      "source_unchanged": true,
+      "native_postgres": "17.11",
+      "tables_reconstructed": 69,
+      "opaque_committed_restore_control_preserved": true,
+      "old_marker_quarantine_and_guarded_read_denial": true,
+      "seven_day_authenticated_expiry": true,
+      "original_failed_attempt_retained": true,
+      "scope": "Actual native pg_dump/encryption/operator CLI/isolated pg_restore with exact all-row hashes and RLS/client-access assertions. Journal uses production handler over controlled in-memory HTTP; no hosted custody/scheduling/media replay or serving recovery."
     }
   },
   "receipts": {
