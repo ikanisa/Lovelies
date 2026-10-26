@@ -1,7 +1,8 @@
 import { assertAudienceCapability, audienceContext } from './audience.ts';
-import { cancelDeviceLifecycle } from './face-profile.ts';
+import { cancelDeviceLifecycle, unusedPendingConsents } from './face-profile.ts';
 import { cancelRefreshDelivery, refreshWithDelivery } from './refresh-delivery.ts';
-import { ApiError, digest, jsonBody, ok, uuid, type Actor, type AppContext } from './types.ts';
+import { ApiError, digest, jsonBody, ok, stable, uuid, type Actor, type AppContext } from './types.ts';
+import { restoreOperationID } from './restore-transaction.ts';
 const ACCESS_MS = 900000;
 const REFRESH_MS = 30 * 24 * 60 * 60 * 1000;
 const ISSUER = 'lovelies-supabase';
@@ -270,6 +271,24 @@ export async function revokeSessionAuthority(sessionId: string, accountId: strin
     await ctx.db.run('UPDATE sessions SET revoked_at=coalesce(revoked_at,?),refresh_consumed_at=coalesce(refresh_consumed_at,?) WHERE id=? AND account_id=?',ctx.now(),ctx.now(),sessionId,accountId);
     await ctx.db.run("UPDATE auth_challenges SET status='cancelled',used_at=? WHERE session_id=? AND used_at IS NULL",ctx.now(),sessionId);
 }
+type LogoutFact = { kind: 'session-retired' | 'consent-withdrawn'; scope: Record<string, string> };
+type LogoutSession = Pick<SessionRow, 'id' | 'account_id' | 'device_id' | 'device_revision' | 'revoked_at' | 'refresh_consumed_at'>;
+async function logoutRetirement(actor: Actor, ctx: AppContext): Promise<{ session: LogoutSession; pending: Awaited<ReturnType<typeof unusedPendingConsents>>; facts: LogoutFact[] }> {
+    await assertPrivacyActor(actor, ctx);
+    const session = await ctx.db.one<LogoutSession>('SELECT id,account_id,device_id,device_revision,revoked_at,refresh_consumed_at FROM sessions WHERE id=? AND account_id=?', actor.sessionId, actor.accountId);
+    if (!session || session.revoked_at !== null) throw new ApiError(401, 'session_invalid');
+    // Null means no device lifecycle work. Do not turn an anonymous logout into
+    // the selector's optional all-device scope.
+    const pending = session.device_id === null ? [] : await unusedPendingConsents(actor.accountId, ctx, session.device_id);
+    const facts: LogoutFact[] = [
+        { kind: 'session-retired', scope: { account_id: actor.accountId, session_id: session.id } },
+        ...pending.filter(row => row.status !== 'revoked').map<LogoutFact>(row => ({ kind: 'consent-withdrawn',
+            scope: { account_id: row.account_id, consent_id: row.id, purpose: row.purpose } })),
+    ];
+    return { session, pending: [...pending].sort((a, b) => a.id < b.id ? -1 : a.id > b.id ? 1 : 0),
+        facts: [...new Map(facts.map(fact => [stable(fact), fact])).entries()]
+            .sort(([a], [b]) => a < b ? -1 : a > b ? 1 : 0).map(([, fact]) => fact) };
+}
 export async function handleAuth(request: Request, ctx: AppContext): Promise<Response | null> {
     const path = new URL(request.url).pathname;
     if (request.method === 'POST' && path === '/auth/anonymous') {
@@ -329,9 +348,19 @@ export async function handleAuth(request: Request, ctx: AppContext): Promise<Res
     }
     if (request.method === 'POST' && path === '/auth/logout') {
         const actor = await authenticate(request, ctx);
-        (await ctx.db.transaction(async () => {
-            (await assertPrivacyActor(actor, ctx));
+        (await ctx.db.transaction(async restore => {
+            const selected = await logoutRetirement(actor, ctx);
+            // One logout is atomic, including the session itself. Reject an
+            // oversized manifest before the first lifecycle/push/session effect.
+            if (selected.facts.length > 32) throw new ApiError(503, 'logout_restriction_capacity');
+            restore.operation({ operation_id: await restoreOperationID(actor.accountId, 'auth.logout-v1', 'session.logout:' + actor.sessionId),
+                input_hash: await digest(stable({ protocol: 'lovelies-auth-logout-v1', account_id: actor.accountId,
+                    session_id: selected.session.id, device_id: selected.session.device_id, device_revision: selected.session.device_revision })), allocations: {} });
+            for (const fact of selected.facts) await restore.restrict(fact.kind, fact.scope);
+            if (stable(await logoutRetirement(actor, ctx)) !== stable(selected)) throw new ApiError(409, 'logout_authority_changed');
             await revokeSessionAuthority(actor.sessionId,actor.accountId,ctx);
+            // This terminal self-revocation cannot use a current-session postguard.
+            // No private response or new credential is released by logout.
         }));
         return ok({ status: 'logged_out' });
     }

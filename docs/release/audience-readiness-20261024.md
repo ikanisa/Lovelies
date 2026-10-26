@@ -1,4 +1,4 @@
-# Lovelies replacement integration — 26 October 2026
+# Lovelies replacement integration — 27 October 2026
 
 The replacement is **not ready for runtime deployment or store submission**.
 The owner has authorized completing that work. The remaining gates below are
@@ -10,7 +10,7 @@ Memories customers, photos or subscriptions require an import; preserve unknown
 or test records and source history. The audience is 13+, with independently
 reviewed guardian authorization for ages 13–17. There is no OTP or liveness/PAD.
 
-## Current26October execution delta
+## Current27October execution delta
 
 This section supersedes conflicting25October descriptions below within its exact
 source/environment scopes. Hosted v9–v11 and v12 are applied: schema12/69 private
@@ -21,14 +21,16 @@ supported history versions match; CLI Security Advisor reports no issues. No
 import/deletion/backfill or runtime marker bootstrap occurred. Evidence:
 `/Volumes/PRO-G40/Projects/Lovelies/verification/hosted-v12-20261026/result.json`.
 
-Current API:478 tests/477 pass/zero fail/one optional actual-model skip; current
+Current API:543 tests/542 pass/zero fail/one optional actual-model skip; current
 types and41 focused collector/sharing/PG checkpoint/race checks pass. All94
 operator tests also pass on the same frozen API source. Actual PostgreSQL17.11
 and verified-local-TLS Deno entrypoint are included. Evidence:
-`/Volumes/PRO-G40/Projects/Lovelies/verification/restore-audience-producers-20261026/root-whole-05/result.json`.
+`/Volumes/PRO-G40/Projects/Lovelies/verification/restore-preferences-producers-20261026/root-whole-02/result.json`.
 The earlier344- and329-case passes and preserved failures retain their scopes. Stable deletion-request IDs/requested facts and HTTP/queue invocation lineage fencing are now integrated. Eight dedicated actualPG lineage cases pass after fixing test teardown order; the timed-out cleanup-failure run and type-only maintenance inference correction remain preserved.
 
 Audience redeclaration, independent adulthood review and guardian expiry/withdrawal/rejection now record exact old consent/profile/approval episodes before effects. Future-version relationships cannot be promoted into authority; row-local failures preserve that row while later children progress through the isolated fair cursor. Unsupported tuples are excluded before page selection and reported without cursor corruption. All46 new cases pass in the current aggregate. The initial test-hook deadlock and stale-role status expectation remain preserved; corrected tests require exact401 stale-role and403 current-user denials with unchanged results. Indirect lifecycle producers, durable manifests above32 and operated guardian/restore acceptance remain open.
+
+The27October continuation adds exact logout session/pending-consent facts and exact preference-consent/accepted-request retirement facts through the existing stable operation scope. Current session/policy and selected rows are rechecked before effects; local policy drift rolls back, unchanged saves/new grants/unrelated rows survive, and old receipts cannot revive authority. All28 logout and37 preference cases pass, including real PostgreSQL rollback/COMMIT/ack uncertainty. The complete combined run passes543 tests/542 pass/zero fail/one optional model skip, plus94 operator cases and current types. A separate actual-model run passes7/7 on104 sealed inputs/19 engineering JPEGs with memory Storage. These remain local/engineering scopes. Distributed policy-generation fencing, other lifecycle callers, durable large manifests, resource inventory/replay and computed recovery remain open.
 
 The journal protocol's34 local SQLiteDO checks remain valid. The API now collects
 immutable exact sharing-request retirement facts before decline/withdraw/revoke
@@ -57,14 +59,14 @@ A separate seven-case run now passes using the actual deployed model through
 an authenticated private account ServiceBinding, actual PostgreSQL and production
 API HTTP handler. It covers signed same-account enrollment/login, wrong-face/
 replay denial, exact sharing, and held-result profile/consent/session/source/
-lease fences. The refreshed run-06 seals102 source inputs and19 declared engineering JPEGs. All sealed inputs remain unchanged at completion. Storage is controlled in-memory; cleanup assertions in this run do not
+lease fences. The refreshed run-07 seals104 source inputs and19 declared engineering JPEGs. All sealed inputs remain unchanged at completion. Storage is controlled in-memory; cleanup assertions in this run do not
 qualify Supabase Storage DELETE or provider custody. This is not representative
 recognition quality, physical capture or hosted application acceptance.
 The first local gateway attempt stopped before the suite because nested JSON
 was escaped by dotenv; the causal typed-config fix and original failure remain
 preserved. The successful run removed task-local credentials and preserved the
 source credential files. Evidence:
-`/Volumes/PRO-G40/Projects/Lovelies/verification/inference-packaging-20261026/private-inference-qualification/run-06/result.json`.
+`/Volumes/PRO-G40/Projects/Lovelies/verification/inference-packaging-20261026/private-inference-qualification/run-07/result.json`.
 The earlier root-client HTTPS403/1010 was not retried or disguised. Actual Supabase Edge→configured inference HTTPS readiness now returns200 with exact identity and401 unauthorized control. Its temporary diagnostic was removed; shared secrets and other functions were preserved. This is readiness transport only; hosted image/application-Storage journeys and API cutover remain unqualified. Receipt: `/Volumes/PRO-G40/Projects/Lovelies/verification/supabase-inference-egress-20261026/result.json`.
 
 Current iOS: original1020 host checks, separate101 guest-deletion/35 private-media

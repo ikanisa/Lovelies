@@ -285,7 +285,7 @@ async function maintainOwnCleanup(row: Control, ctx: AppContext): Promise<void> 
     }
 }
 type PendingConsent = { account_id: string; id: string; purpose: string; status: string };
-async function unusedPendingConsents(account: string, ctx: AppContext, deviceId?: string, operationKey?: string): Promise<PendingConsent[]> {
+export async function unusedPendingConsents(account: string, ctx: AppContext, deviceId?: string, operationKey?: string): Promise<PendingConsent[]> {
     // Mirror the UPDATE scope, including the profile-reference exclusion. Do not
     // silently filter a malformed reference and then let cancellation revoke it.
     const rows = await ctx.db.all<PendingConsent>(`SELECT c.account_id,c.id,c.purpose,c.status FROM consents c

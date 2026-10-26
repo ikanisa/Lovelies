@@ -27,7 +27,7 @@ Retain successful local API, Swift/Kotlin/operator, backup, native model and bou
 
 The exact immutable Linux AMD64 inference platform manifest is `sha256:982e2ed7bb66b17db17979495495892579f1b734c55d93516a2aeedbf70e1c6c`. Existing native/service/fixture and technical High-disposition proof must not be reopened solely because the unmodified scanner returns exit2. The 26 October lower-row assessment is `verification/openface-integration-20261024/continuation/native-security-disposition-20261025/root-verification-20261026/assessment.json`, SHA256 `ec3f8c1ada7e9a4f88c146c3edb9cb90d61750ffa223fd654c79042d245ea941`. It retains lower-severity findings and does not claim every vulnerability fixed, fresh scanner execution, changed runtime or production recognition acceptance. The ML owner reports gateway cleanup delivered at `5e7cb856acae018f3fdac8bcaf0db1254ea5c269`, with affected22 Worker tests, types and default Supabase dry run passing. Verify exact source/receipt bindings before adopting those results. Temporary-builder retirement has its own postflight receipt; the serving gateway was untouched. Do not recreate removed unverified receipt-shaped/serving flags or an obsolete builder merely to satisfy old notes.
 
-### Execution checkpoint, 26 October 2026
+### Execution checkpoint, 26–27 October 2026
 
 Newer receipts supersede the initial baseline only within their tested scopes.
 Hosted v9–v11 and v12 are applied: schema12/69 private forced-RLS tables/policies,
@@ -36,7 +36,7 @@ v12, new restore_control empty, six supported history versions matched and Secur
 Advisor reporting no issues. No imports/deletions or serving-marker bootstrap.
 Current receipt: `/Volumes/PRO-G40/Projects/Lovelies/verification/hosted-v12-20261026/result.json`.
 
-Current whole API:478 tests,477 pass, zero fail, one optional model skip;
+Current whole API:543 tests,542 pass, zero fail, one optional model skip;
 current production types and all94 operator tests pass. Signed pause/resume,
 authentication withdrawal and removal now register exact old consent/profile
 revision facts before mutation. Delete review records the exact independent
@@ -45,9 +45,11 @@ metadata erasure, no pending writers and verified request cleanup. Signed cancel
 and hold evidence survives cleanup; stale workers cannot downgrade a successor's
 verified result. The seven initial focused test failures and one later temporal
 assertion failure remain preserved with their corrected final proof.
-Receipt: `/Volumes/PRO-G40/Projects/Lovelies/verification/restore-audience-producers-20261026/root-whole-05/result.json`.
+Receipt: `/Volumes/PRO-G40/Projects/Lovelies/verification/restore-preferences-producers-20261026/root-whole-02/result.json`.
 
 Audience redeclaration, independent adulthood review and guardian expiry/withdrawal/rejection now record exact old consent/profile/approval episodes before effects. Future-version relationships cannot be promoted into authority; row-local failures preserve that row while later children progress through the isolated fair cursor. Unsupported tuples are excluded before page selection and reported without cursor corruption. All46 new cases pass in the current aggregate. The initial test-hook deadlock and stale-role status expectation remain preserved; corrected tests require exact401 stale-role and403 current-user denials with unchanged results. Indirect lifecycle producers, durable manifests above32 and operated guardian/restore acceptance remain open.
+
+The27October continuation adds exact logout session/pending-consent facts and exact preference-consent/accepted-request retirement facts through the existing stable operation scope. Current session/policy and selected rows are rechecked before effects; local policy drift rolls back, unchanged saves/new grants/unrelated rows survive, and old receipts cannot revive authority. All28 logout and37 preference cases pass, including real PostgreSQL rollback/COMMIT/ack uncertainty. The complete combined run passes543 tests/542 pass/zero fail/one optional model skip, plus94 operator cases and current types. A separate actual-model run passes7/7 on104 sealed inputs/19 engineering JPEGs with memory Storage. These remain local/engineering scopes. Distributed policy-generation fencing, other lifecycle callers, durable large manifests, resource inventory/replay and computed recovery remain open.
 
 Earlier collector/sharing, stable requested-deletion allocation and invocation
 lineage proof remains within its scope. Other lifecycle/indirect producers, durable
@@ -86,7 +88,7 @@ constraints. A supported private
 ServiceBinding passes missing/wrong401 and authenticated200 loaded readiness,
 validated against exact engine/processing/model hashes/capabilities/limits. A separate seven-case engineering run passes through that private binding
 using the actual model/PostgreSQL/API HTTP and controlled in-memory Storage,
-with102 sealed source files and19 declared JPEGs in the refreshed run-06, including current cancellation/control and audience code. Representative recognition remains unqualified. A later actual Supabase Edge invocation verifies the configured HTTPS inference readiness with the exact artifact/processing identity; an unauthorized control returns 401. The temporary diagnostic is removed with zero functions remaining and shared secrets preserved. This proves readiness transport only, not hosted image requests or API cutover. The earlier root-client403/1010 remains preserved and was not retried/disguised. Receipt: `/Volumes/PRO-G40/Projects/Lovelies/verification/supabase-inference-egress-20261026/result.json`. No API
+with104 sealed source files and19 declared JPEGs in the refreshed run-07, including current cancellation/control, audience, logout and preferences code. Representative recognition remains unqualified. A later actual Supabase Edge invocation verifies the configured HTTPS inference readiness with the exact artifact/processing identity; an unauthorized control returns 401. The temporary diagnostic is removed with zero functions remaining and shared secrets preserved. This proves readiness transport only, not hosted image requests or API cutover. The earlier root-client403/1010 remains preserved and was not retried/disguised. Receipt: `/Volumes/PRO-G40/Projects/Lovelies/verification/supabase-inference-egress-20261026/result.json`. No API
 cutover, store submission or live/stable replacement is claimed. See the current
 [integration checkpoint](audience-readiness-20261024.md) for source-bound receipts
 and preserved failures. GitHub billing remains parked without a substitute CI pass.
@@ -177,3 +179,16 @@ and bounded explicit cleanup remain preserved. No production Storage adapter
 change was needed. Application authorization/RLS role matrix, hosted image/user
 journeys, distributed writers, physical backing blobs and custody remain open.
 Receipt: `/Volumes/PRO-G40/Projects/Lovelies/verification/supabase-storage-probe-20261026/repair-v2/hosted-result.json`.
+
+The next source candidates are prepared externally and independently reviewed,
+with no repository application/runtime qualification yet: administrator session
+retirement (32 prepared cases) in
+`/Volumes/PRO-G40/Projects/Lovelies/verification/restore-admin-session-20261026/`,
+and immutable upload-reservation IDs (29 prepared cases) in
+`/Volumes/PRO-G40/Projects/Lovelies/verification/restore-upload-allocation-20261026/`.
+Root owns application and affected verification. Large restriction capacity
+remains an actual functional gate: valid accepted-request history can exceed257
+facts. The decision input at
+`/Volumes/PRO-G40/Projects/Lovelies/verification/restore-capacity-design-20261027/decision-input.md`
+records unresolved snapshot, authority, recovery, intent and bounded-work semantics;
+neither a larger finite cap nor an unqualified paged design closes R11.

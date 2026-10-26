@@ -118,40 +118,94 @@ async function sourceAsset(ctx: AppContext, actor: Actor, id: string): Promise<A
         throw new ApiError(403, 'processing_consent_required');
     return asset;
 }
+type PreferencePurpose = 'photo_processing' | 'photo_matching';
+type PreferenceField = 'processing_consent' | 'photo_matching_consent';
+type PreferenceConsent = { account_id: string; id: string; purpose: string };
+type PreferenceSharingRequest = { id: string; sender_id: string; recipient_id: string };
+type PreferencePurposePlan = { field: PreferenceField; purpose: PreferencePurpose; changed: boolean; withdrawn: PreferenceConsent[] };
+type PreferencePlan = { purposes: PreferencePurposePlan[]; recipientRequests: PreferenceSharingRequest[]; ownerRequests: PreferenceSharingRequest[] };
+type PreferenceRestrictionFact = { kind: 'consent-withdrawn' | 'sharing-request-retired'; scope: Record<string, string> };
+async function preferenceConsentChanged(ctx: AppContext, account: string, purpose: PreferencePurpose,
+    granted: unknown, policy: unknown): Promise<boolean> {
+    const current = await ctx.db.one<{ id: string; policy_version: string }>(`SELECT id,policy_version FROM consents
+        WHERE account_id=? AND purpose=? AND status='granted' AND revoked_at IS NULL
+          AND (expires_at IS NULL OR expires_at>?) ORDER BY created_at DESC,id LIMIT 1`, account, purpose, ctx.now());
+    return !(granted && current?.policy_version === policy);
+}
+const preferenceGrantedConsents = (ctx: AppContext, account: string, purpose: PreferencePurpose) =>
+    ctx.db.all<PreferenceConsent>("SELECT account_id,id,purpose FROM consents WHERE account_id=? AND purpose=? AND status='granted' ORDER BY id", account, purpose);
+const preferenceSharingRequests = (ctx: AppContext, account: string, direction: 'sender_id' | 'recipient_id') =>
+    ctx.db.all<PreferenceSharingRequest>(`SELECT id,sender_id,recipient_id FROM sharing_requests WHERE ${direction}=? AND status='accepted' ORDER BY id`, account);
+async function preferencePlan(ctx: AppContext, account: string, payload: Record<string, unknown>): Promise<PreferencePlan> {
+    const purposes: PreferencePurposePlan[] = [];
+    for (const [field, purpose] of [['processing_consent', 'photo_processing'], ['photo_matching_consent', 'photo_matching']] as const) {
+        if (payload[field] == null) continue;
+        const changed = await preferenceConsentChanged(ctx, account, purpose, payload[field], payload.policy_version);
+        purposes.push({ field, purpose, changed, withdrawn: changed ? await preferenceGrantedConsents(ctx, account, purpose) : [] });
+    }
+    const matchingChanged = purposes.some(p => p.purpose === 'photo_matching' && p.changed);
+    const processingChanged = purposes.some(p => p.purpose === 'photo_processing' && p.changed);
+    return { purposes,
+        recipientRequests: payload.receive_matches === false || matchingChanged ? await preferenceSharingRequests(ctx, account, 'recipient_id') : [],
+        ownerRequests: processingChanged ? await preferenceSharingRequests(ctx, account, 'sender_id') : [] };
+}
+function preferenceFacts(plan: PreferencePlan): PreferenceRestrictionFact[] {
+    const facts: PreferenceRestrictionFact[] = [
+        ...plan.purposes.flatMap(p => p.withdrawn.map<PreferenceRestrictionFact>(consent => ({ kind: 'consent-withdrawn',
+            scope: { account_id: consent.account_id, consent_id: consent.id, purpose: consent.purpose } }))),
+        ...[...plan.recipientRequests, ...plan.ownerRequests].map<PreferenceRestrictionFact>(request => ({ kind: 'sharing-request-retired',
+            scope: { sender_id: request.sender_id, recipient_id: request.recipient_id, request_id: request.id } })),
+    ];
+    return [...new Map(facts.map(fact => [stable(fact), fact])).entries()]
+        .sort(([a], [b]) => a < b ? -1 : a > b ? 1 : 0).map(([, fact]) => fact);
+}
 async function preferences(request: Request, ctx: AppContext, actor: Actor): Promise<Response> {
     const payload = await jsonBody(request);
     if (typeof payload.policy_version !== 'string' || !payload.policy_version.trim() || payload.policy_version.length > 100)
         throw new ApiError(400, 'policy_version_required');
-    if (payload.policy_version !== currentPhotoPolicy(ctx))
-        throw new ApiError(400, 'photo_policy_changed');
+    const assertCurrentPolicy = () => {
+        if (payload.policy_version !== currentPhotoPolicy(ctx))
+            throw new ApiError(400, 'photo_policy_changed');
+    };
+    assertCurrentPolicy();
     for (const field of ['receive_matches', 'processing_consent', 'photo_matching_consent'])
         if (payload[field] != null && typeof payload[field] !== 'boolean')
             throw new ApiError(400, 'invalid_preferences');
     const intent = await prepareOperation('photo.preferences', payload, 'account');
-    return ok((await executeOperation(ctx, actor, intent, async () => {
+    assertCurrentPolicy();
+    return ok((await executeOperation(ctx, actor, intent, async restore => {
         (await assertMediaActor(ctx, actor));
+        assertCurrentPolicy();
+        const plan = await preferencePlan(ctx, actor.accountId, payload), facts = preferenceFacts(plan);
+        // One saved preference action is atomic. Preserve the complete old
+        // episodes; do not silently fit a prefix into a bounded journal plan.
+        if (facts.length > 32) throw new ApiError(503, 'photo_preference_restriction_capacity');
+        for (const fact of facts) await restore.restrict(fact.kind, fact.scope);
+        if (stable(await preferencePlan(ctx, actor.accountId, payload)) !== stable(plan))
+            throw new ApiError(409, 'photo_preference_authority_changed');
+        assertCurrentPolicy();
         (await ctx.db.run('INSERT OR IGNORE INTO account_preferences(account_id,receive_matches,download_photos,updated_at) VALUES(?,0,0,?)', actor.accountId, ctx.now()));
         let matchingChanged = false, processingChanged = false;
         for (const [field, purpose] of [['processing_consent', 'photo_processing'], ['photo_matching_consent', 'photo_matching']] as const) {
             if (payload[field] == null)
                 continue;
-            const current = (await ctx.db.one<{
-                id: string;
-                policy_version: string;
-            }>(`SELECT id,policy_version FROM consents
-        WHERE account_id=? AND purpose=? AND status='granted' AND revoked_at IS NULL
-          AND (expires_at IS NULL OR expires_at>?) ORDER BY created_at DESC,id LIMIT 1`, actor.accountId, purpose, ctx.now()));
+            const changed = await preferenceConsentChanged(ctx, actor.accountId, purpose, payload[field], payload.policy_version);
+            const expected = plan.purposes.find(p => p.field === field)!;
+            if (changed !== expected.changed || changed && stable(await preferenceGrantedConsents(ctx, actor.accountId, purpose)) !== stable(expected.withdrawn))
+                throw new ApiError(409, 'photo_preference_authority_changed');
             // A routine save of unchanged granted policy keeps the same consent episode
             // and existing valid approvals. New policy/opt-out requires fresh matching.
-            if (payload[field] && current?.policy_version === payload.policy_version)
+            if (!changed)
                 continue;
             if (purpose === 'photo_matching')
                 matchingChanged = true;
             else
                 processingChanged = true;
+            assertCurrentPolicy();
             (await ctx.db.run(`UPDATE consents SET status='revoked',revoked_at=? WHERE account_id=? AND purpose=? AND status='granted'`, ctx.now(), actor.accountId, purpose));
             if (payload[field]) {
                 await assertAudienceCapability(ctx, actor.accountId, purpose);
+                assertCurrentPolicy();
                 const id = crypto.randomUUID();
                 (await ctx.db.run(`INSERT INTO consents(id,account_id,purpose,policy_version,status,created_at) VALUES(?,?,?,?,'granted',?)`, id, actor.accountId, purpose, payload.policy_version, ctx.now()));
                 if (purpose === 'photo_matching')
@@ -169,12 +223,16 @@ async function preferences(request: Request, ctx: AppContext, actor: Actor): Pro
         if (payload.receive_matches === true && !(await hasConsent(ctx, actor.accountId, 'photo_matching')))
             throw new ApiError(403, 'matching_consent_required');
         if (payload.receive_matches === false || matchingChanged) {
+            if (stable(await preferenceSharingRequests(ctx, actor.accountId, 'recipient_id')) !== stable(plan.recipientRequests))
+                throw new ApiError(409, 'photo_preference_authority_changed');
             // Changing the consent episode never restores old matching proposals or access.
             (await ctx.db.run(`UPDATE candidates SET status='invalidated' WHERE recipient_id=?`, actor.accountId));
             (await ctx.db.run('UPDATE media_grants SET active=0,revoked_at=? WHERE recipient_id=? AND active=1', ctx.now(), actor.accountId));
             (await ctx.db.run(`UPDATE sharing_requests SET status='revoked',updated_at=? WHERE recipient_id=? AND status='accepted'`, ctx.now(), actor.accountId));
         }
         if (processingChanged) {
+            if (stable(await preferenceSharingRequests(ctx, actor.accountId, 'sender_id')) !== stable(plan.ownerRequests))
+                throw new ApiError(409, 'photo_preference_authority_changed');
             (await ctx.db.run(`UPDATE candidates SET status='invalidated' WHERE owner_id=?`, actor.accountId));
             (await ctx.db.run('UPDATE media_grants SET active=0,revoked_at=? WHERE owner_id=? AND active=1', ctx.now(), actor.accountId));
             (await ctx.db.run(`UPDATE sharing_requests SET status='revoked',updated_at=? WHERE sender_id=? AND status='accepted'`, ctx.now(), actor.accountId));
@@ -182,8 +240,10 @@ async function preferences(request: Request, ctx: AppContext, actor: Actor): Pro
         const pref = (await ctx.db.one<{
             receive_matches: number;
         }>('SELECT receive_matches FROM account_preferences WHERE account_id=?', actor.accountId));
-        return { receive_matches: pref?.receive_matches === 1, processing_consent: (await hasConsent(ctx, actor.accountId, 'photo_processing')),
+        const result = { receive_matches: pref?.receive_matches === 1, processing_consent: (await hasConsent(ctx, actor.accountId, 'photo_processing')),
             photo_matching_consent: (await hasConsent(ctx, actor.accountId, 'photo_matching')), policy_version: payload.policy_version };
+        assertCurrentPolicy();
+        return result;
     })));
 }
 async function reserve(request: Request, ctx: AppContext, actor: Actor): Promise<Response> {
