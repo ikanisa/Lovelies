@@ -1,6 +1,7 @@
 import { accountRoles, assertRefreshActor, assertPrivacyActor, base64url, decodeBase64url, insertPreparedSession, prepareSession, revokeSessionAuthority,
     type AccountRow, type SessionRow } from './auth.ts';
 import { ApiError, digest, ok, stable, type Actor, type AppContext } from './types.ts';
+import { sessionRetirementScope } from './session-retirement.ts';
 
 export const REFRESH_DELIVERY_PROTOCOL = 'lovelies-refresh-delivery-v1';
 const DELIVERY_MS = 24 * 60 * 60 * 1000;
@@ -28,6 +29,19 @@ type Input = { refresh_token: string; rotation_key: string; secretHash: string }
 function invalid(): never { throw new ApiError(401, 'refresh_invalid'); }
 function actor(session: SessionRow, account: AccountRow, roles = accountRoles(account.roles_json)): Actor {
     return {accountId:account.id,sessionId:session.id,roles,expiresAt:session.expires_at,authEpoch:session.auth_epoch,authMethod:session.auth_method};
+}
+/** The capability retires one exchange, not an independently active device or
+ * another session's push registration. Push is device-scoped, so an unrevoked
+ * peer or an unknown device/account generation prevents that broader cleanup. */
+async function retireRefreshSession(session: SessionRow, account: AccountRow, ctx: AppContext): Promise<void> {
+    const scope = await sessionRetirementScope(ctx, session);
+    const peer = session.device_id === null ? null : await ctx.db.one<{id:string}>(`SELECT id FROM sessions
+        WHERE account_id=? AND device_id=? AND id<>? AND revoked_at IS NULL LIMIT 1`, session.account_id, session.device_id, session.id);
+    const exactDevice = session.auth_method === 'registered_face' && session.device_id !== null && session.device_revision !== null &&
+        session.revoked_at === null && session.refresh_consumed_at === null && account.disabled_at === null &&
+        account.auth_epoch === session.auth_epoch && account.identity_state === session.auth_method &&
+        scope.device !== null && scope.device.status === 'active' && scope.device.revision === session.device_revision;
+    await revokeSessionAuthority(session.id, account.id, ctx, { ...scope, clearDevicePush: exactDevice && peer === null });
 }
 async function input(body: Record<string, unknown>): Promise<Input> {
     if(body.protocol!==REFRESH_DELIVERY_PROTOCOL || Object.keys(body).length!==4 ||
@@ -137,13 +151,13 @@ export async function cancelRefreshDelivery(body: Record<string, unknown>, ctx: 
                 const next=prior.successor_session_id&&await ctx.db.one<SessionRow>('SELECT * FROM sessions WHERE id=? AND account_id=?',prior.successor_session_id,account.id);
                 // A retired successor cannot authorize cleanup of a newer
                 // session's same-device work or push registration.
-                if(next&&next.revoked_at===null&&next.refresh_consumed_at===null)await revokeSessionAuthority(next.id,account.id,ctx);
+                if(next&&next.revoked_at===null&&next.refresh_consumed_at===null)await retireRefreshSession(next,account,ctx);
                 await ctx.db.run("UPDATE refresh_delivery_receipts SET state='cancelled',ciphertext=NULL,iv=NULL WHERE original_session_id=?",old.id);
             }
         }else{
             if(old.refresh_consumed_at!==null||await ctx.db.one('SELECT original_session_id FROM refresh_delivery_receipts WHERE rotation_key=?',request.rotation_key))invalid();
             await assertPrivacyActor(actor(old,account),ctx,true);
-            await revokeSessionAuthority(old.id,account.id,ctx);
+            await retireRefreshSession(old,account,ctx);
             await ctx.db.run(`INSERT INTO refresh_delivery_receipts(original_session_id,account_id,rotation_key,secret_hash,state,created_at,expires_at)
                 VALUES(?,?,?,?,'cancelled',?,?)`,old.id,account.id,request.rotation_key,request.secretHash,ctx.now(),Math.min(ctx.now()+DELIVERY_MS,old.refresh_expires_at));
         }

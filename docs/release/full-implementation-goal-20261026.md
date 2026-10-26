@@ -75,7 +75,7 @@ PostgreSQL, 64 focused photo-access cases and 66 own-session cases pass; the
 schema-12 upgrade/preservation and non-superuser fresh-chain checks also pass.
 The first photo-access run had 27 fixture failures because a synthetic Apple
 transaction lacked the required three-part format; that failure is preserved,
-and the corrected run passed. The combined schema-13 API suite passed 779 of 780
+and the corrected run passed. The initial combined schema-13 API suite passed 779 of 780
 tests, with one optional model test skipped and no failures; all 94 operator tests
 also passed. A separate local encrypted backup reconstruction passed 13 checks,
 including exact ticket text preservation and quarantine of an older marker. The
@@ -88,7 +88,7 @@ Evidence:
 `/Volumes/PRO-G40/Projects/Lovelies/verification/exact-media-authority-20261027/root-focused-v3-02/result.json`,
 `/Volumes/PRO-G40/Projects/Lovelies/verification/restore-own-session-20261027/root-focused-v4-01/result.json`,
 `/Volumes/PRO-G40/Projects/Lovelies/verification/media-authority-migration-20261027/`,
-and `/Volumes/PRO-G40/Projects/Lovelies/verification/encrypted-backup-schema13-20261027/attempt-01/result.json`.
+and `/Volumes/PRO-G40/Projects/Lovelies/verification/encrypted-backup-schema13-20261027/attempt-02/result.json`.
 The model receipt is
 `/Volumes/PRO-G40/Projects/Lovelies/verification/inference-packaging-20261026/private-inference-qualification/run-10/result.json`.
 The hosted migration receipt is
@@ -98,6 +98,23 @@ loopback Host while connecting to the Docker host. A disposable internal-network
 test verified the header and request/response preservation; actual Edge-to-gateway
 readiness remains open. Receipt:
 `/Volumes/PRO-G40/Projects/Lovelies/verification/edge-relay-host-20261027/result.json`.
+
+Refresh-delivery cancellation now checks the exact session and device generation,
+preserving a newer same-device session's push registration and pending lifecycle
+work. Two actual-PostgreSQL regressions reproduced the previous loss; the corrected
+refresh/logout set passed 84 cases, and seven peer/exclusive/first-dispatch/stale-
+generation cases passed separately. The subsequent full API run passed 786 of
+787 tests, with one optional model skip and no failures; all 94 operator tests
+also passed. Cancellation still needs its own independent restore-journal
+identity and restriction facts; this containment fix does not close R11. Evidence:
+`/Volumes/PRO-G40/Projects/Lovelies/verification/refresh-cancel-peer-regression-20261027/root-reproduction-01/result.json`,
+`/Volumes/PRO-G40/Projects/Lovelies/verification/refresh-cancel-peer-regression-20261027/root-corrected-02/result.json`,
+`/Volumes/PRO-G40/Projects/Lovelies/verification/refresh-cancel-peer-regression-20261027/root-peer-and-generation-04/result.json`,
+and `/Volumes/PRO-G40/Projects/Lovelies/verification/refresh-cancel-peer-regression-20261027/root-whole-05/result.json`.
+After this change, the isolated encrypted reconstruction again passed 13 checks
+and the private real-model engineering run passed 7/7. Receipts:
+`/Volumes/PRO-G40/Projects/Lovelies/verification/encrypted-backup-schema13-20261027/attempt-02/result.json`
+and `/Volumes/PRO-G40/Projects/Lovelies/verification/inference-packaging-20261026/private-inference-qualification/run-11/result.json`.
 
 Earlier collector/sharing, stable requested-deletion allocation and invocation
 lineage proof remains within its scope. Other lifecycle/indirect producers, durable

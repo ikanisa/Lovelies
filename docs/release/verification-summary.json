@@ -4117,9 +4117,14 @@
         "cleanup_error": false,
         "serving_restore_qualified": false,
         "receipt": {
+          "path": "/Volumes/PRO-G40/Projects/Lovelies/verification/encrypted-backup-schema13-20261027/attempt-02/result.json",
+          "sha256": "e3b0dc91b77562c3a32559523309e9e46ba0b18ee92d9e12a58dc70d595acb19"
+        },
+        "prior_receipt": {
           "path": "/Volumes/PRO-G40/Projects/Lovelies/verification/encrypted-backup-schema13-20261027/attempt-01/result.json",
           "sha256": "65cc845127a7848691d79900e3a713568e082e98db663583b023295843998d41"
-        }
+        },
+        "repeated_after_refresh_containment": true
       },
       "scope": "Local fixtures/reconstruction and hosted additive schema postflight; hosted backup custody, replay, API release and independent CI remain open.",
       "current_private_model_engineering": {
@@ -4133,7 +4138,7 @@
           "path": "/Volumes/PRO-G40/Projects/Lovelies/verification/inference-packaging-20261026/private-inference-qualification/run-10/result.json",
           "sha256": "1694fd32d9dcc3ab675aa41453ea4ed5c767328f84de1515a86497f53e1e505d"
         },
-        "scope": "Isolated PostgreSQL and loopback API, in-memory Storage, existing private service; no deployment, representative recognition, optical capture or store qualification."
+        "scope": "Pre-refresh-containment source snapshot; newer current-source engineering evidence is in refresh_cancellation_containment_20261027. No deployment, representative accuracy or physical/store qualification."
       },
       "hosted_postflight_receipt": {
         "path": "/Volumes/PRO-G40/Projects/Lovelies/verification/hosted-v13-20261027/result.json",
@@ -4146,6 +4151,15 @@
           "sha256": "6d358f954c780ad46173bfa379adec9805175fa3c66e1035bf098b83bb64c3b0"
         },
         "scope": "Disposable Docker internal network and synthetic HTTP recorder; actual Edge-to-gateway readiness remains open."
+      },
+      "gateway_launcher_offline_lifecycle": {
+        "tests": 21,
+        "passed": 21,
+        "receipt": {
+          "path": "/Volumes/PRO-G40/Projects/Lovelies/verification/inference-gateway-edge-schema13-20261027/offline-lifecycle-02/result.json",
+          "sha256": "99b626e6968cc1ea5124485f4611d28330843beb002d43419be615f8639b7a58"
+        },
+        "scope": "In-memory lifecycle only; actual Edge/gateway process cleanup and readiness remain open."
       }
     },
     "hosted_database_schema12_historical": {
@@ -4181,6 +4195,50 @@
         "sha256": "3c7714de872c675b61dcc9a4beaf08d318e127218dca35863a4db9fee57c8651"
       },
       "scope": "Hosted additive DDL/security/preservation/history only; no API cutover, journal serving clearance or store release."
+    },
+    "refresh_cancellation_containment_20261027": {
+      "previous_failure_reproduced": true,
+      "previous_failure_receipt": {
+        "path": "/Volumes/PRO-G40/Projects/Lovelies/verification/refresh-cancel-peer-regression-20261027/root-reproduction-01/result.json",
+        "sha256": "a6b321046f49e54ca12c20bbb17e857180f38f6fa3bc6d2ce32d4d9459bb539e"
+      },
+      "refresh_and_logout_tests_passed": 84,
+      "focused_receipt": {
+        "path": "/Volumes/PRO-G40/Projects/Lovelies/verification/refresh-cancel-peer-regression-20261027/root-corrected-02/result.json",
+        "sha256": "69a423131b5fd58cd7ef917b3473eb071fdba772e95bdd459018bced037fdc90"
+      },
+      "peer_exclusive_and_generation_cases_passed": 7,
+      "generation_receipt": {
+        "path": "/Volumes/PRO-G40/Projects/Lovelies/verification/refresh-cancel-peer-regression-20261027/root-peer-and-generation-04/result.json",
+        "sha256": "c10d2826832fba698d273cf43b388e947654e2d1ccd1f4f4218e9235f8d646d9"
+      },
+      "independent_journal_identity_and_facts_implemented": false,
+      "scope": "Local PostgreSQL/API containment only; separately owned device-control fencing, journal/replay, hosted deployment and store qualification remain open.",
+      "combined_after_fix": {
+        "api_tests": 787,
+        "api_passed": 786,
+        "api_failed": 0,
+        "optional_model_skipped": 1,
+        "operator_tests_passed": 94,
+        "source_inputs_unchanged": true,
+        "receipt": {
+          "path": "/Volumes/PRO-G40/Projects/Lovelies/verification/refresh-cancel-peer-regression-20261027/root-whole-05/result.json",
+          "sha256": "01b2a55ad0897d793434be3bb8e87bb29e98d130cffe7b306e5fe7d74bc482c5"
+        }
+      },
+      "current_private_model_engineering": {
+        "tests": 7,
+        "passed": 7,
+        "source_files_sealed": 113,
+        "engineering_jpegs": 19,
+        "source_unchanged": true,
+        "temporary_credentials_removed": true,
+        "receipt": {
+          "path": "/Volumes/PRO-G40/Projects/Lovelies/verification/inference-packaging-20261026/private-inference-qualification/run-11/result.json",
+          "sha256": "1a9257120579e107b5fd09372b89b55aef956ae7333973c9ab68420414317084"
+        },
+        "scope": "Local API and PostgreSQL, in-memory Storage, existing private inference binding; no deployment, physical or store qualification."
+      }
     }
   }
 }

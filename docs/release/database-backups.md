@@ -187,6 +187,8 @@ unknown ticket-authority values, retained the constrained private role and RLS,
 and quarantined an older restored marker. The existing synthetic key was reused,
 the source seal was unchanged, and the owned disposable databases were cleaned
 up. The independent journal in this test was an in-memory fixture. Receipt:
-`/Volumes/PRO-G40/Projects/Lovelies/verification/encrypted-backup-schema13-20261027/attempt-01/result.json`.
+`/Volumes/PRO-G40/Projects/Lovelies/verification/encrypted-backup-schema13-20261027/attempt-02/result.json`.
+This repeat includes the later refresh-cancellation source change; attempt-01
+remains preserved as the preceding source-bound result.
 Hosted/off-site custody, Storage reconstruction, replay and serving clearance
 remain open.

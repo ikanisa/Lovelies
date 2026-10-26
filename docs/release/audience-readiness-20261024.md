@@ -21,7 +21,7 @@ versions match and Security Advisor reports no issues. No import, deletion,
 backfill or runtime marker bootstrap occurred. Evidence:
 `/Volumes/PRO-G40/Projects/Lovelies/verification/hosted-v13-20261027/result.json`.
 
-Current API:780 tests/779 pass/zero fail/one optional actual-model skip; current
+Current API:787 tests/786 pass/zero fail/one optional actual-model skip; current
 types and earlier focused collector/sharing/PG checkpoint/race checks pass. All94
 operator tests also pass on the same frozen API source. Actual PostgreSQL17.11
 and verified-local-TLS Deno entrypoint are included. Evidence:

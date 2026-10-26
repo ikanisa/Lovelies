@@ -265,11 +265,13 @@ function actorForSession(session: SessionRow, account: AccountRow): Actor {
 }
 /** Caller must establish revocation authority and hold the transaction. */
 export async function revokeSessionAuthority(sessionId: string, accountId: string, ctx: AppContext,
-    options: { cancelDeviceLifecycle?: boolean; cancelSessionChallenges?: boolean } = {}): Promise<void> {
+    options: { cancelDeviceLifecycle?: boolean; cancelSessionChallenges?: boolean; clearDevicePush?: boolean } = {}): Promise<void> {
     const device = (await ctx.db.one<{device_id: string | null}>('SELECT device_id FROM sessions WHERE id=? AND account_id=?', sessionId, accountId))?.device_id ?? null;
     if (options.cancelDeviceLifecycle !== false) await cancelDeviceLifecycle(accountId, device, ctx);
-    await ctx.db.run("UPDATE push_devices SET active=0,token_value='',updated_at=? WHERE account_id=? AND auth_device_id=?",ctx.now(),accountId,device);
-    await ctx.db.run("UPDATE notification_deliveries SET status='cancelled',updated_at=? WHERE device_id IN(SELECT id FROM push_devices WHERE account_id=? AND auth_device_id=?) AND status<>'accepted'",ctx.now(),accountId,device);
+    if (options.clearDevicePush !== false) {
+        await ctx.db.run("UPDATE push_devices SET active=0,token_value='',updated_at=? WHERE account_id=? AND auth_device_id=?",ctx.now(),accountId,device);
+        await ctx.db.run("UPDATE notification_deliveries SET status='cancelled',updated_at=? WHERE device_id IN(SELECT id FROM push_devices WHERE account_id=? AND auth_device_id=?) AND status<>'accepted'",ctx.now(),accountId,device);
+    }
     await ctx.db.run('UPDATE sessions SET revoked_at=coalesce(revoked_at,?),refresh_consumed_at=coalesce(refresh_consumed_at,?) WHERE id=? AND account_id=?',ctx.now(),ctx.now(),sessionId,accountId);
     if (options.cancelSessionChallenges !== false) await ctx.db.run("UPDATE auth_challenges SET status='cancelled',used_at=? WHERE account_id=? AND session_id=? AND used_at IS NULL",ctx.now(),accountId,sessionId);
 }
