@@ -21,11 +21,11 @@ supported history versions match; CLI Security Advisor reports no issues. No
 import/deletion/backfill or runtime marker bootstrap occurred. Evidence:
 `/Volumes/PRO-G40/Projects/Lovelies/verification/hosted-v12-20261026/result.json`.
 
-Current API:408 tests/407 pass/zero fail/one optional actual-model skip; current
+Current API:432 tests/431 pass/zero fail/one optional actual-model skip; current
 types and41 focused collector/sharing/PG checkpoint/race checks pass. All94
 operator tests also pass on the same frozen API source. Actual PostgreSQL17.11
 and verified-local-TLS Deno entrypoint are included. Evidence:
-`/Volumes/PRO-G40/Projects/Lovelies/verification/restore-privacy-face-20261026/whole-api-05/result.json`.
+`/Volumes/PRO-G40/Projects/Lovelies/verification/restore-face-cancel-control-20261026/root-whole-02/result.json`.
 The earlier344- and329-case passes and preserved failures retain their scopes. Stable deletion-request IDs/requested facts and HTTP/queue invocation lineage fencing are now integrated. Eight dedicated actualPG lineage cases pass after fixing test teardown order; the timed-out cleanup-failure run and type-only maintenance inference correction remain preserved.
 
 The journal protocol's34 local SQLiteDO checks remain valid. The API now collects
@@ -34,7 +34,7 @@ SQL changes, with stable actor/source/key operation IDs and separately bound
 payload hashes. Receipt retries and already-terminal transitions create no
 duplicate restriction. Lost prepare/commit/ack, restored accepted rows, nested/
 read-only/closed scopes, invalid registration and manifest bounds are covered.
-Stable deletion-request allocations and exact requested-stage facts also precede SQL effects; receipt/altered-input/lost-result cases pass. HTTP/queue/maintenance invocations bind their first verified database incarnation, reject stale/poisoned/escaped continuations and perform final admission before response release. Independent review closed a mutable-admission alias issue. Exact signed pause/resume/authentication-withdrawal/removal facts now pass. Independent delete review and stable final-erasure facts preserve minimal asset/hold evidence until fresh lease/hold/metadata/no-writer/verified-cleanup checks pass; a stale DELETE completion cannot downgrade a successor result. Initial focused and temporal test failures remain preserved alongside corrected final proof. Other non-action/indirect producers, durable capacity above32, stable resource allocations, external-effect generation fences, replay/object inventory/cleanup, computed completion and hosted journal custody remain open. Operated post-tombstone asset holds and request-hold ABA generation remain unqualified.
+Stable deletion-request allocations and exact requested-stage facts also precede SQL effects; receipt/altered-input/lost-result cases pass. HTTP/queue/maintenance invocations bind their first verified database incarnation, reject stale/poisoned/escaped continuations and perform final admission before response release. Independent review closed a mutable-admission alias issue. Exact signed pause/resume/authentication-withdrawal/removal facts now pass. Independent delete review and stable final-erasure facts preserve minimal asset/hold evidence until fresh lease/hold/metadata/no-writer/verified-cleanup checks pass; a stale DELETE completion cannot downgrade a successor result. Initial focused and temporal test failures remain preserved alongside corrected final proof. Other lifecycle/indirect producers, durable capacity above32, stable resource allocations, external-effect generation fences, replay/object inventory/cleanup, computed completion and hosted journal custody remain open. Operated post-tombstone asset holds and request-hold ABA generation remain unqualified.
 No recovery-clear endpoint or manual flag exists.
 
 Inference d815 preserves the qualified982e runtime payload/config. Provider
@@ -43,15 +43,15 @@ A separate seven-case run now passes using the actual deployed model through
 an authenticated private account ServiceBinding, actual PostgreSQL and production
 API HTTP handler. It covers signed same-account enrollment/login, wrong-face/
 replay denial, exact sharing, and held-result profile/consent/session/source/
-lease fences. The refreshed run-04 seals100 source inputs and19 declared engineering JPEGs. All actual model-consumer inputs remain unchanged; a later terminal-test assertion change is outside its executed/imported suite. Storage is controlled in-memory; cleanup assertions in this run do not
+lease fences. The refreshed run-05 seals101 source inputs and19 declared engineering JPEGs. All sealed inputs remain unchanged at completion. Storage is controlled in-memory; cleanup assertions in this run do not
 qualify Supabase Storage DELETE or provider custody. This is not representative
 recognition quality, physical capture or hosted application acceptance.
 The first local gateway attempt stopped before the suite because nested JSON
 was escaped by dotenv; the causal typed-config fix and original failure remain
 preserved. The successful run removed task-local credentials and preserved the
 source credential files. Evidence:
-`/Volumes/PRO-G40/Projects/Lovelies/verification/inference-packaging-20261026/private-inference-qualification/run-04/result.json`.
-The earlier root-client HTTPS403/1010 was not retried or disguised. Actual Supabase Edge→configured inference HTTPS readiness now returns200 with exact identity and401 unauthorized control. Its temporary diagnostic was removed; shared secrets and other functions were preserved. This is readiness transport only; hosted image/Storage consumers and API cutover remain unqualified. Receipt: `/Volumes/PRO-G40/Projects/Lovelies/verification/supabase-inference-egress-20261026/result.json`.
+`/Volumes/PRO-G40/Projects/Lovelies/verification/inference-packaging-20261026/private-inference-qualification/run-05/result.json`.
+The earlier root-client HTTPS403/1010 was not retried or disguised. Actual Supabase Edge→configured inference HTTPS readiness now returns200 with exact identity and401 unauthorized control. Its temporary diagnostic was removed; shared secrets and other functions were preserved. This is readiness transport only; hosted image/application-Storage journeys and API cutover remain unqualified. Receipt: `/Volumes/PRO-G40/Projects/Lovelies/verification/supabase-inference-egress-20261026/result.json`.
 
 Current iOS: original1020 host checks, separate101 guest-deletion/35 private-media
 checks and108 focused LocalAuthentication fixtures pass. Canonical21-source
@@ -213,3 +213,13 @@ All paths below are under
 
 Public preview staging/deployment/rendering and failed readbacks are retained in
 `verification/supabase-release-20261023/store-draft-20261024/public-site-preview-v2/`.
+
+
+Superseding Storage transport checkpoint: the unchanged production adapter passes
+actual tiny-object upload/read/hash/metadata and unsigned denials on all three
+selected private buckets. Observed PUT/DELETE statuses are200 and all exact keys
+are API-absent afterward; helper inventory is restored to zero. The original
+70-byte fixture was reconciled using provider POST200 logs and explicitly cleaned
+without replaying its upload. V1 failure/native cancellation proof remain saved.
+This is Storage plumbing, not app/RLS-user-matrix/distributed-recovery or physical
+blob/custody acceptance. Receipt: `/Volumes/PRO-G40/Projects/Lovelies/verification/supabase-storage-probe-20261026/repair-v2/hosted-result.json`.

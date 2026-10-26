@@ -36,19 +36,19 @@ v12, new restore_control empty, six supported history versions matched and Secur
 Advisor reporting no issues. No imports/deletions or serving-marker bootstrap.
 Current receipt: `/Volumes/PRO-G40/Projects/Lovelies/verification/hosted-v12-20261026/result.json`.
 
-Current whole API:408 tests,407 pass, zero fail, one optional model skip;
+Current whole API:432 tests,431 pass, zero fail, one optional model skip;
 current production types and all94 operator tests pass. Signed pause/resume,
 authentication withdrawal and removal now register exact old consent/profile
 revision facts before mutation. Delete review records the exact independent
 decision; terminal erasure records a stable fact only after fresh holds/lease,
-metadata erasure, no pending writers and verified request cleanup. Minimal asset
+metadata erasure, no pending writers and verified request cleanup. Signed cancellation and valid control renewal now record exact unused pending-authentication consent episodes; malformed cross-account/other-purpose references fail closed. Initial control creation adds no cancellation. Minimal asset
 and hold evidence survives cleanup; stale workers cannot downgrade a successor's
 verified result. The seven initial focused test failures and one later temporal
 assertion failure remain preserved with their corrected final proof.
-Receipt: `/Volumes/PRO-G40/Projects/Lovelies/verification/restore-privacy-face-20261026/whole-api-05/result.json`.
+Receipt: `/Volumes/PRO-G40/Projects/Lovelies/verification/restore-face-cancel-control-20261026/root-whole-02/result.json`.
 
 Earlier collector/sharing, stable requested-deletion allocation and invocation
-lineage proof remains within its scope. Non-action/indirect producers, durable
+lineage proof remains within its scope. Other lifecycle/indirect producers, durable
 capacity above32, other resource allocations, external generation fences,
 replay/object inventory and computed completion remain unfinished. Operated
 post-tombstone asset holds and request-hold ABA also remain unqualified. No
@@ -79,8 +79,7 @@ constraints. A supported private
 ServiceBinding passes missing/wrong401 and authenticated200 loaded readiness,
 validated against exact engine/processing/model hashes/capabilities/limits. A separate seven-case engineering run passes through that private binding
 using the actual model/PostgreSQL/API HTTP and controlled in-memory Storage,
-with100 sealed source files and19 declared JPEGs in the refreshed run-04. The only later delta in that broad seal is the unexecuted terminal-test assertion; all real-model consumer/runtime inputs remain unchanged. Representative recognition,
-actual Storage and representative recognition remain unqualified. A later actual Supabase Edge invocation verifies the configured HTTPS inference readiness with the exact artifact/processing identity; an unauthorized control returns 401. The temporary diagnostic is removed with zero functions remaining and shared secrets preserved. This proves readiness transport only, not hosted image requests or API cutover. The earlier root-client403/1010 remains preserved and was not retried/disguised. Receipt: `/Volumes/PRO-G40/Projects/Lovelies/verification/supabase-inference-egress-20261026/result.json`. No API
+with101 sealed source files and19 declared JPEGs in the refreshed run-05, including current cancellation/control code. Representative recognition remains unqualified. A later actual Supabase Edge invocation verifies the configured HTTPS inference readiness with the exact artifact/processing identity; an unauthorized control returns 401. The temporary diagnostic is removed with zero functions remaining and shared secrets preserved. This proves readiness transport only, not hosted image requests or API cutover. The earlier root-client403/1010 remains preserved and was not retried/disguised. Receipt: `/Volumes/PRO-G40/Projects/Lovelies/verification/supabase-inference-egress-20261026/result.json`. No API
 cutover, store submission or live/stable replacement is claimed. See the current
 [integration checkpoint](audience-readiness-20261024.md) for source-bound receipts
 and preserved failures. GitHub billing remains parked without a substitute CI pass.
@@ -160,3 +159,14 @@ The journal foundation alone does not close row08. Implement and test the follow
 ## Initial next actions
 
 Continue other exact restriction producers, stable resource allocations, external generation fencing and recovery/replay/verified cleanup. Retain the deployed image/loaded readiness and seven-case private model proof; retain the qualified actual Supabase HTTPS readiness path and qualify hosted image/Storage consumers. Qualify physical iOS LocalAuthentication and Android API24/25 compatibility, then complete independent operator/provider/public/store work. Reuse the completed hosted v9–v12 checkpoint. Keep GitHub billing unchanged and retain the unrelated untracked `-` file.
+
+
+The actual three-bucket Storage plumbing checkpoint now passes tiny synthetic
+upload/read/metadata/hash, unsigned denial, observed HTTP200 DELETE and fresh API
+absence. All four old/new synthetic objects are API-absent and all temporary
+functions were removed; shared secrets were preserved. The v1 diagnostic's
+cancellation-after-success failure, native Deno causal proof, provider200 receipt
+and bounded explicit cleanup remain preserved. No production Storage adapter
+change was needed. Application authorization/RLS role matrix, hosted image/user
+journeys, distributed writers, physical backing blobs and custody remain open.
+Receipt: `/Volumes/PRO-G40/Projects/Lovelies/verification/supabase-storage-probe-20261026/repair-v2/hosted-result.json`.

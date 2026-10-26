@@ -6,7 +6,7 @@ import { hasConsent } from './gallery.ts';
 import { flushPrivacyCleanup } from './privacy.ts';
 import { policy, verifyKey, challengeResponse, getChallenge, captures, manifest, activeFaceVerifiers, type Profile, type Challenge, type Device } from './face-auth.ts';
 import { selectedGeneration, assertGeneration } from './inference-generation.ts';
-import { restoreOperationID } from './restore-transaction.ts';
+import { restoreOperationID, type RestoreTransactionScope } from './restore-transaction.ts';
 const PROTOCOL = 'lovelies-face-profile-v1';
 const DEVICE_PROTOCOL = 'lovelies-face-profile-device-v1';
 const CONTROL_MS = 365 * 86400000;
@@ -284,8 +284,36 @@ async function maintainOwnCleanup(row: Control, ctx: AppContext): Promise<void> 
         (await finishLifecycleCleanup(ctx));
     }
 }
+type PendingConsent = { account_id: string; id: string; purpose: string; status: string };
+async function unusedPendingConsents(account: string, ctx: AppContext, deviceId?: string, operationKey?: string): Promise<PendingConsent[]> {
+    // Mirror the UPDATE scope, including the profile-reference exclusion. Do not
+    // silently filter a malformed reference and then let cancellation revoke it.
+    const rows = await ctx.db.all<PendingConsent>(`SELECT c.account_id,c.id,c.purpose,c.status FROM consents c
+        WHERE c.id IN(SELECT consent_id FROM face_profile_operations WHERE account_id=? AND state='pending'
+            AND (? IS NULL OR control_device_id=?) AND (? IS NULL OR operation_key=?))
+        AND NOT EXISTS(SELECT 1 FROM face_profiles p WHERE p.auth_consent_id=c.id)`,
+    account, deviceId ?? null, deviceId ?? null, operationKey ?? null, operationKey ?? null);
+    if (rows.some(row => row.account_id !== account || row.purpose !== 'face_authentication'))
+        throw new ApiError(409, 'face_profile_pending_consent_invalid');
+    return rows;
+}
+async function restrictPendingCancellation(restore: RestoreTransactionScope, account: string,
+    source: 'face-profile.cancel-v1' | 'face-profile.control-renew-v1', key: string, hash: string,
+    ctx: AppContext, deviceId: string, operationKey?: string): Promise<void> {
+    const rows = await unusedPendingConsents(account, ctx, deviceId, operationKey);
+    const selected = [...new Map(rows.filter(row => row.status !== 'revoked').map(row => [row.id, row])).values()]
+        .sort((a, b) => a.id < b.id ? -1 : a.id > b.id ? 1 : 0);
+    if (selected.length > 32)
+        throw new ApiError(503, 'face_profile_restriction_capacity');
+    restore.operation({ operation_id: await restoreOperationID(account, source, key), input_hash: hash, allocations: {} });
+    for (const row of selected)
+        await restore.restrict('consent-withdrawn', { account_id: row.account_id, consent_id: row.id, purpose: row.purpose });
+}
 async function revokePendingConsent(account: string, ctx: AppContext, deviceId?: string, operationKey?: string): Promise<void> {
-    (await ctx.db.run("UPDATE consents SET status='revoked',revoked_at=COALESCE(revoked_at,?) WHERE id IN(SELECT consent_id FROM face_profile_operations WHERE account_id=? AND state='pending' AND (? IS NULL OR control_device_id=?) AND (? IS NULL OR operation_key=?)) AND NOT EXISTS(SELECT 1 FROM face_profiles p WHERE p.auth_consent_id=consents.id)", ctx.now(), account, deviceId ?? null, deviceId ?? null, operationKey ?? null, operationKey ?? null));
+    await ctx.db.transaction(async () => {
+        await unusedPendingConsents(account, ctx, deviceId, operationKey);
+        (await ctx.db.run("UPDATE consents SET status='revoked',revoked_at=COALESCE(revoked_at,?) WHERE id IN(SELECT consent_id FROM face_profile_operations WHERE account_id=? AND state='pending' AND (? IS NULL OR control_device_id=?) AND (? IS NULL OR operation_key=?)) AND NOT EXISTS(SELECT 1 FROM face_profiles p WHERE p.auth_consent_id=consents.id)", ctx.now(), account, deviceId ?? null, deviceId ?? null, operationKey ?? null, operationKey ?? null));
+    });
 }
 export async function cancelDeviceLifecycle(account: string, deviceId: string | null, ctx: AppContext): Promise<void> {
     if (!deviceId)
@@ -350,7 +378,7 @@ async function createControl(request: Request, ctx: AppContext): Promise<Respons
         throw new ApiError(403, 'face_profile_scope_invalid');
     await verifyKey(JSON.parse(device.public_jwk), envelope(input, 'control'), input.device_signature);
     const controlHash = await digest(key), keyDigest = await digest(device.public_jwk), creationHash = await inputHash(input);
-    (await ctx.db.transaction(async () => {
+    (await ctx.db.transaction(async restore => {
         (await assertRegisteredActor(ctx, actor));
         (await noDeletion(account, ctx));
         const still = (await ctx.db.one<Device>('SELECT * FROM auth_devices WHERE account_id=? AND id=?', account, deviceId));
@@ -366,6 +394,7 @@ async function createControl(request: Request, ctx: AppContext): Promise<Respons
             else {
                 if (!renewing || old.device_revision !== device.revision || old.public_jwk !== device.public_jwk || old.public_key_digest !== keyDigest || controlHash === old.control_hash || operationKey === old.control_operation_key || old.expires_at > ctx.now() || old.control_operation_key !== uuid(input.previous_control_operation_key))
                     throw new ApiError(409, 'face_profile_control_exists');
+                await restrictPendingCancellation(restore, account, 'face-profile.control-renew-v1', operationKey, creationHash, ctx, deviceId);
                 (await cancelDeviceLifecycle(account, deviceId, ctx));
                 (await ctx.db.run('UPDATE face_profile_controls SET control_hash=?,control_operation_key=?,creation_hash=?,device_revision=?,public_key_digest=?,public_jwk=?,created_at=?,expires_at=? WHERE account_id=? AND device_id=?', controlHash, operationKey, creationHash, device.revision, keyDigest, device.public_jwk, ctx.now(), ctx.now() + CONTROL_MS, account, deviceId));
             }
@@ -496,8 +525,8 @@ async function action(request: Request, ctx: AppContext): Promise<Response> {
 async function cancel(request: Request, ctx: AppContext): Promise<Response> {
     const input = await jsonBody(request, 4096);
     exact(input, ['operation_key']);
-    const row = await signed(input, 'cancel', ctx), key = uuid(input.operation_key);
-    const result = (await ctx.db.transaction(async () => {
+    const row = await signed(input, 'cancel', ctx), key = uuid(input.operation_key), hash = await inputHash(input);
+    const result = (await ctx.db.transaction(async restore => {
         nonce(input, ctx);
         (await controlAuthority(row, ctx));
         const op = (await operation(row.account_id, key, ctx));
@@ -506,6 +535,7 @@ async function cancel(request: Request, ctx: AppContext): Promise<Response> {
         if (op.control_device_id !== row.device_id || op.control_revision !== row.device_revision)
             throw new ApiError(403, 'face_profile_scope_invalid');
         if (op.state === 'pending') {
+            await restrictPendingCancellation(restore, row.account_id, 'face-profile.cancel-v1', key, hash, ctx, row.device_id, key);
             (await revokePendingConsent(op.account_id, ctx, row.device_id, key));
             if (op.challenge_id)
                 (await ctx.db.run("UPDATE auth_challenges SET status='cancelled',used_at=COALESCE(used_at,?) WHERE id=?", ctx.now(), op.challenge_id));

@@ -114,7 +114,7 @@
     "api_or_supporting_services_deployed_at_original_schema_checkpoint": false,
     "application_runtime_serving": false,
     "disabled_inference_worker_uploaded": false,
-    "current_deployment_limit": "Schema12/69 and six history entries qualified; actual Supabase HTTPS inference readiness qualified. Full API/journal, hosted photo/Storage consumers and serving recovery remain unfinished.",
+    "current_deployment_limit": "Schema12/69, actual Supabase HTTPS inference readiness and private tiny-object Storage plumbing qualified. Application API/journal binding, hosted image/user journeys and serving recovery remain unfinished.",
     "application_edge_function_count": 0,
     "custom_application_secret_count": 7,
     "current_cli_checkpoint": {
@@ -184,7 +184,22 @@
         "maintenance scheduler"
       ]
     },
-    "inference_worker_container_deployed": true
+    "inference_worker_container_deployed": true,
+    "actual_private_storage_plumbing": {
+      "status": "qualified_tiny_object_plumbing_only",
+      "buckets": 3,
+      "accepted_puts": 3,
+      "accepted_deletes": 3,
+      "all_old_and_new_synthetic_keys_API_absent": true,
+      "temporary_helper_functions_remaining": 0,
+      "shared_secret_mutations": false,
+      "app_authorization_RLS_role_matrix_or_journeys_qualified": false,
+      "physical_backing_blob_backup_or_custody_qualified": false,
+      "receipt": {
+        "path": "/Volumes/PRO-G40/Projects/Lovelies/verification/supabase-storage-probe-20261026/repair-v2/hosted-result.json",
+        "sha256": "dffe095f5bdeef713657c2b4805b3cf00bb4f5422d5b5e4e4c1fef0d35420e8b"
+      }
+    }
   },
   "local_verification": {
     "backend": {
@@ -3666,17 +3681,16 @@
         "tests": 7,
         "pass": 7,
         "fail": 0,
-        "source_files_at_run": 100,
+        "source_files_at_run": 101,
         "declared_engineering_jpegs": 19,
         "input_seal_unchanged_at_completion": true,
         "storage": "controlled memory Storage",
         "real_supabase_image_requests": false,
         "representative_quality_qualified": false,
         "receipt": {
-          "path": "/Volumes/PRO-G40/Projects/Lovelies/verification/inference-packaging-20261026/private-inference-qualification/run-04/result.json",
-          "sha256": "71953b9ee6ca4d0bf5ba16fba5eb55488029ce7ccc751fffbb0e21a3d7a5ef61"
-        },
-        "later_nonconsumer_test_delta": "Only restore-privacy-terminal-runtime.test.mjs assertion/injection changed after this run; it is not imported or executed by openface-http.test.mjs. All production/model consumer inputs remain unchanged."
+          "path": "/Volumes/PRO-G40/Projects/Lovelies/verification/inference-packaging-20261026/private-inference-qualification/run-05/result.json",
+          "sha256": "2a220227c64f243df0147301735de000bac5ebbb93da9e7659f30f2d893c8bf6"
+        }
       }
     },
     "restore_journal": {
@@ -3712,9 +3726,11 @@
       "operated_post_tombstone_asset_holds_qualified": false,
       "request_hold_aba_generation_complete": false,
       "current_producer_receipt": {
-        "path": "/Volumes/PRO-G40/Projects/Lovelies/verification/restore-privacy-face-20261026/whole-api-05/result.json",
-        "sha256": "566c1a588c85e0865ae7f36e4c100d162fd06632233f102480234ca1e22fe46a"
-      }
+        "path": "/Volumes/PRO-G40/Projects/Lovelies/verification/restore-face-cancel-control-20261026/root-whole-02/result.json",
+        "sha256": "043bd36ac8df28ec4c55cda7328a90482323bd5fd0a8b334239bf2886a48d3a4"
+      },
+      "exact_signed_cancel_and_control_renewal_producers": true,
+      "pending_consent_ownership_and_purpose_fail_closed": true
     },
     "push_private_files": {
       "local_provider_tests": 31,
@@ -3775,19 +3791,19 @@
     },
     "scope": "Current26October scoped results supersede historical contradictions. Readiness/serving/physical/provider/store/CI completion remains unproved. No overall completion percentage.",
     "api": {
-      "tests": 408,
-      "pass": 407,
+      "tests": 432,
+      "pass": 431,
       "fail": 0,
       "skipped": 1,
       "skip_scope": "Optional actual-model HTTP test; separate recognition/hosted acceptance remains open",
       "types_pass": true,
-      "source_inputs": 134,
+      "source_inputs": 135,
       "source_unchanged": true,
       "actual_native_postgres_version": "17.11",
       "actual_deno_tls_journal_handler": true,
       "receipt": {
-        "path": "/Volumes/PRO-G40/Projects/Lovelies/verification/restore-privacy-face-20261026/whole-api-05/result.json",
-        "sha256": "566c1a588c85e0865ae7f36e4c100d162fd06632233f102480234ca1e22fe46a"
+        "path": "/Volumes/PRO-G40/Projects/Lovelies/verification/restore-face-cancel-control-20261026/root-whole-02/result.json",
+        "sha256": "043bd36ac8df28ec4c55cda7328a90482323bd5fd0a8b334239bf2886a48d3a4"
       },
       "first_failed_329_case_run_preserved": {
         "path": "/Volumes/PRO-G40/Projects/Lovelies/verification/restore-pg-integration-20261026/full-api-final/result.json",
@@ -3801,7 +3817,8 @@
       "preserved_failed_runs": [
         "/Volumes/PRO-G40/Projects/Lovelies/verification/restore-privacy-face-20261026/focused-01/result.json",
         "/Volumes/PRO-G40/Projects/Lovelies/verification/restore-privacy-face-20261026/whole-api-03/result.json"
-      ]
+      ],
+      "preserved_cancel_control_failure": "/Volumes/PRO-G40/Projects/Lovelies/verification/restore-face-cancel-control-20261026/root-focused-01/result.json"
     },
     "current_encrypted_backup_reconstruction": {
       "checks": 11,
@@ -3809,11 +3826,27 @@
       "schema": 12,
       "tables": 69,
       "source_inputs": 53,
-      "source_unchanged": true,
       "hosted_custody_or_serving_restore_qualified": false,
       "receipt": {
         "path": "/Volumes/PRO-G40/Projects/Lovelies/verification/encrypted-backup-schema12-20261026/attempt-05/result.json",
         "sha256": "e496611312b2cb6486e74b39ec994f491c92f44c5e0ebd2a8bfa686c2a0ef94c"
+      },
+      "source_unchanged_at_execution": true,
+      "scope": "Unchanged backup/encryption/schema/fence proof; later face cancel/control code was not exercised by this reconstruction. Full serving recovery remains open."
+    },
+    "actual_hosted_storage": {
+      "status": "qualified_tiny_object_plumbing_only",
+      "buckets": 3,
+      "accepted_puts": 3,
+      "accepted_deletes": 3,
+      "all_old_and_new_synthetic_keys_API_absent": true,
+      "temporary_helper_functions_remaining": 0,
+      "shared_secret_mutations": false,
+      "app_authorization_RLS_role_matrix_or_journeys_qualified": false,
+      "physical_backing_blob_backup_or_custody_qualified": false,
+      "receipt": {
+        "path": "/Volumes/PRO-G40/Projects/Lovelies/verification/supabase-storage-probe-20261026/repair-v2/hosted-result.json",
+        "sha256": "dffe095f5bdeef713657c2b4805b3cf00bb4f5422d5b5e4e4c1fef0d35420e8b"
       }
     }
   }
