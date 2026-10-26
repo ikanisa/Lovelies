@@ -4160,6 +4160,23 @@
           "sha256": "99b626e6968cc1ea5124485f4611d28330843beb002d43419be615f8639b7a58"
         },
         "scope": "In-memory lifecycle only; actual Edge/gateway process cleanup and readiness remain open."
+      },
+      "isolated_edge_attempt1": {
+        "status": "startup_failed_local_storage_test_token_expired",
+        "edge_resources_absent": true,
+        "owned_services_restored_stopped": true,
+        "gateway_credentials_removed": true,
+        "edge_readiness_qualified": false,
+        "hosted_supabase_credential_failure": false,
+        "runtime_receipt": {
+          "path": "/Volumes/PRO-G40/Projects/Lovelies/verification/isolated-supabase-edge-schema13-20261027-attempt1/runtime.json",
+          "sha256": "54a02d3a73b0b831128cea2125c1fa14e011fb58a97fb043fc54517fed2ced3b"
+        },
+        "service_cleanup_receipt": {
+          "path": "/Volumes/PRO-G40/Projects/Lovelies/verification/isolated-edge-owned-services-schema13-20261027/stop.json",
+          "sha256": "74b9d840017bf851a326554e3d892b708c74384639461c5d6e95e105685bfdaf"
+        },
+        "scope": "Isolated local Edge/Storage preflight only; no hosted migration, deployment or store action."
       }
     },
     "hosted_database_schema12_historical": {

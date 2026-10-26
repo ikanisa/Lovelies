@@ -98,6 +98,12 @@ loopback Host while connecting to the Docker host. A disposable internal-network
 test verified the header and request/response preservation; actual Edge-to-gateway
 readiness remains open. Receipt:
 `/Volumes/PRO-G40/Projects/Lovelies/verification/edge-relay-host-20261027/result.json`.
+The first schema-13 Edge attempt stopped during local Storage preflight because
+the retained local test service token had expired. Its temporary Edge resources
+were absent afterward, the gateway removed its new credentials and the two owned
+test services were returned to their prior stopped state. This is not a hosted
+Supabase credential failure or an Edge readiness pass. Evidence:
+`/Volumes/PRO-G40/Projects/Lovelies/verification/isolated-supabase-edge-schema13-20261027-attempt1/runtime.json`.
 
 Refresh-delivery cancellation now checks the exact session and device generation,
 preserving a newer same-device session's push registration and pending lifecycle
