@@ -75,7 +75,7 @@ await listen(tcpServer(client=>{
   client.pipe(upstream);upstream.pipe(client);
 }),54324);
 
-function gateway({label,port,host,upstreamPort,requestLimit,responseLimit,strip=''}){
+function gateway({label,port,host,upstreamPort,requestLimit,responseLimit,strip='',upstreamHostHeader=host+':'+upstreamPort}){
   const server=httpServer({maxHeaderSize:32*1024},(incoming,outgoing)=>{
     if(closing||active>=MAX_CONNECTIONS){reject(outgoing,503);incoming.resume();return;}
     const path=incoming.url??'';
@@ -89,7 +89,7 @@ function gateway({label,port,host,upstreamPort,requestLimit,responseLimit,strip=
     active++;metrics[label+'_requests']++;
     // Forward every end-to-end header, including Authorization/apikey and
     // metadata. Only gateway framing/Host changes; private bytes stay streamed.
-    const headers={...incoming.headers,host:host+':'+upstreamPort};
+    const headers={...incoming.headers,host:upstreamHostHeader};
     delete headers.connection;delete headers['proxy-connection'];
     const upstream=httpRequest({hostname:host,port:upstreamPort,
       path:strip?path.slice(strip.length):path,method:incoming.method,headers,agent:false},response=>{
@@ -119,7 +119,7 @@ function gateway({label,port,host,upstreamPort,requestLimit,responseLimit,strip=
 await gateway({label:'storage',port:54322,host:storageHost,upstreamPort:5000,
   requestLimit:24*1024*1024,responseLimit:24*1024*1024,strip:'/storage/v1'});
 await gateway({label:'ml',port:54323,host:'host.docker.internal',upstreamPort:mlPort,
-  requestLimit:40*1024*1024,responseLimit:6*1024*1024});
+  upstreamHostHeader:'127.0.0.1:'+mlPort,requestLimit:40*1024*1024,responseLimit:6*1024*1024});
 
 async function close(code=0){
   if(closing)return;closing=true;

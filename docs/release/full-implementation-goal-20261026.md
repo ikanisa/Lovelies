@@ -93,6 +93,11 @@ The model receipt is
 `/Volumes/PRO-G40/Projects/Lovelies/verification/inference-packaging-20261026/private-inference-qualification/run-10/result.json`.
 The hosted migration receipt is
 `/Volumes/PRO-G40/Projects/Lovelies/verification/hosted-v13-20261027/result.json`.
+The isolated Edge test relay now forwards the qualified inference gateway's
+loopback Host while connecting to the Docker host. A disposable internal-network
+test verified the header and request/response preservation; actual Edge-to-gateway
+readiness remains open. Receipt:
+`/Volumes/PRO-G40/Projects/Lovelies/verification/edge-relay-host-20261027/result.json`.
 
 Earlier collector/sharing, stable requested-deletion allocation and invocation
 lineage proof remains within its scope. Other lifecycle/indirect producers, durable

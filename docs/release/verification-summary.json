@@ -4138,6 +4138,14 @@
       "hosted_postflight_receipt": {
         "path": "/Volumes/PRO-G40/Projects/Lovelies/verification/hosted-v13-20261027/result.json",
         "sha256": "e015eb4b762b125350e3f5829896fb8e504756307e07136d8047616852ba0353"
+      },
+      "isolated_relay_transport": {
+        "checks_passed": 4,
+        "receipt": {
+          "path": "/Volumes/PRO-G40/Projects/Lovelies/verification/edge-relay-host-20261027/result.json",
+          "sha256": "6d358f954c780ad46173bfa379adec9805175fa3c66e1035bf098b83bb64c3b0"
+        },
+        "scope": "Disposable Docker internal network and synthetic HTTP recorder; actual Edge-to-gateway readiness remains open."
       }
     },
     "hosted_database_schema12_historical": {
