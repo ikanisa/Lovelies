@@ -51,6 +51,24 @@ Audience redeclaration, independent adulthood review and guardian expiry/withdra
 
 The27October continuation adds exact logout session/pending-consent facts and exact preference-consent/accepted-request retirement facts through the existing stable operation scope. Current session/policy and selected rows are rechecked before effects; local policy drift rolls back, unchanged saves/new grants/unrelated rows survive, and old receipts cannot revive authority. All28 logout and37 preference cases pass, including real PostgreSQL rollback/COMMIT/ack uncertainty. The complete combined run passes543 tests/542 pass/zero fail/one optional model skip, plus94 operator cases and current types. A separate actual-model run passes7/7 on104 sealed inputs/19 engineering JPEGs with memory Storage. These remain local/engineering scopes. Distributed policy-generation fencing, other lifecycle callers, durable large manifests, resource inventory/replay and computed recovery remain open.
 
+The subsequent admin-session and logout work selects exact session authority and
+preserves ambiguous device generations, linked challenges and shared consent
+references. Current backend types and the sealed PostgreSQL-backed API suite
+passed 627 of 628 cases, with one optional model test skipped and no failures.
+Eighteen additional consent-reference cases passed separately after that suite;
+their added tests did not change production source. Original retirement-plan
+replay does not repeat domain effects, though the enclosing transaction can still
+record a generic empty checkpoint. Evidence:
+`/Volumes/PRO-G40/Projects/Lovelies/verification/restore-admin-upload-20261027/root-whole-10/`
+and `/Volumes/PRO-G40/Projects/Lovelies/verification/restore-consent-reference-20261027/root-focused-01/`.
+These results do not qualify the still-unapplied own-session candidate, shared
+device-control fencing, production recovery, hosted deployment or store release.
+The separate current-source real-model engineering run passed 7/7 cases with an
+unchanged 108-file seal, isolated PostgreSQL, loopback API and in-memory Storage.
+It used the existing private inference service, removed task-local credentials
+and made no deployment. Receipt:
+`/Volumes/PRO-G40/Projects/Lovelies/verification/inference-packaging-20261026/private-inference-qualification/run-09/result.json`.
+
 Earlier collector/sharing, stable requested-deletion allocation and invocation
 lineage proof remains within its scope. Other lifecycle/indirect producers, durable
 capacity above32, other resource allocations, external generation fences,
@@ -63,8 +81,20 @@ application serving unavailable. All temporary diagnostics are removed; all9
 custom bindings and the persistent Worker/namespace remain preserved. See
 `/Volumes/PRO-G40/Projects/Lovelies/verification/supabase-journal-hosted-20261026/result.json`.
 
+Exact session retirement invalidates the selected session, not its independent
+device-signed control. That control can remain usable while the device revision
+is active, even after pending lifecycle cancellation. Qualify explicit device
+retirement and held-completion/control-recreation fencing separately, preserving
+other devices and newer revisions. Likewise, exact photo-ticket authorization
+must bind the relevant consent and reviewed-grant episodes through held reads;
+grant replacement and processing-consent renewal must not revive old tickets.
+The external ticket candidate and migration remain under review, not deployed.
+
 Original1020 Swift hosts, separate101 guest/35 media hosts and108 focused OS-auth
-fixtures pass; current21-source Debug/unsignedRelease app and XCTest target build.
+fixtures pass. Fresh local Debug simulator and unsigned Release device builds
+include the updated English and Kinyarwanda camera permission text; bundle
+readback matched the source. The earlier XCTest build predates this text update.
+Final signed artifacts, physical permission prompts and store review remain open.
 Physical OS/new/legacy key behavior and App Review remain unqualified. Six exact
 Release preflight URL/signature gates remain. Push gateway/private-file/independent SQLite ledger integration passes46 local
 checks, expanded syntax and Worker dry run; actual providers/host/EU custody/
@@ -99,7 +129,7 @@ Rows retain qualified substeps and the remaining outcomes; the checkpoint above 
 
 | # | Work package and original IDs | Required remaining outcome / acceptance |
 |---|---|---|
-| 01 | iOS authentication — A01/A02/S03/S07 | Resolve the recorded returning-authentication architecture decision using current official store guidance; implement and test the agreed supported approach while retaining the owner's signed-selfie enrollment, matching, consent and same-account requirements. Do not silently change the product or treat a presumed policy interpretation as a proven store rejection. |
+| 01 | iOS authentication — A01/A02/S03/S07 | Qualify the implemented LocalAuthentication and returning-selfie architecture against current official store guidance and actual review. If changes are required, implement and test a supported approach retaining the owner's signed-selfie enrollment, matching, consent and same-account requirements. Do not silently change the product or treat a presumed policy interpretation as a proven store rejection. |
 | 02 | Hosted database — SP01/SP03 | Hosted v9–v11 and v12 preservation/security/history postflight are qualified by the26October checkpoint. Retain schema12/69 private forced-RLS tables, expected policies/backend grants, zero client/public access and unknown/test rows/holds. Qualify subsequent schema changes against affected consumers; no migration repetition, baseline replay or blind db push. |
 | 03 | Inference artifact and gateway — SP02/SP07/B01/B02/B03 | Reconcile exact image/SBOM/identity/security dispositions and ML cleanup delivery; retain completed native fixtures and raw scan. Test affected gateway consumers after source changes. Any new payload/dependency/ABI change requires affected artifact proof; an unchanged qualified image does not need rebuilding for an old threshold or fake approval field. |
 | 04 | Recognition quality — A05/B04 | Use permissioned representative calibration and held-out data separately for enrollment consistency, returning authentication and matching. Record accepted thresholds/error rates/relevant device-demographic conditions, monitoring and rollback without claims of liveness/civil identity. |

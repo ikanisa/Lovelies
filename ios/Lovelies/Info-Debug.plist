@@ -57,7 +57,7 @@
 	<key>NSFaceIDUsageDescription</key>
 	<string>Use Face ID to authorize protected Lovelies requests on this device. Your selfies are verified separately.</string>
 	<key>NSCameraUsageDescription</key>
-	<string>Take your guided Lovelies face-registration selfies and photos you choose to upload.</string>
+	<string>Take selfies for face verification when setting up your profile, signing in or recovering your account, and take photos you choose to upload to Lovelies.</string>
 	<key>NSPhotoLibraryAddUsageDescription</key>
 	<string>Save photos only after Lovelies verifies your current access and download entitlement.</string>
 	<key>NSPhotoLibraryUsageDescription</key>

@@ -180,6 +180,18 @@ async function executeAuthorizedOperation<T extends Record<string, unknown>>(ctx
 export async function executeOperation<T extends Record<string, unknown>>(ctx: AppContext, actor: Actor, intent: PreparedOperation, callback: (restore: RestoreTransactionScope) => T | Promise<T>, subjectIds: readonly string[] = []): Promise<T> {
     return (await executeAuthorizedOperation(ctx, actor, intent, callback, subjectIds, async () => (await assertRegisteredActor(ctx, actor))));
 }
+/** Stable upload metadata IDs remain subject to registered/current authority;
+ * neither an allocation nor a private object prefix grants access. Prior SQL
+ * receipts return before allocation, preserving accepted legacy random IDs. */
+export async function executeUploadReservationOperation<T extends Record<string, unknown>>(ctx: AppContext, actor: Actor, intent: PreparedOperation, callback: (restore: RestoreTransactionScope, assetID: string, version: string) => T | Promise<T>): Promise<T> {
+    if (intent.action !== 'photo.upload.reserve' || intent.source !== 'personal')
+        throw new ApiError(400, 'operation_scope_invalid');
+    return (await executeAuthorizedOperation(ctx, actor, intent,
+        (restore, allocations) => callback(restore, allocations.id_0, allocations.id_1), [],
+        async () => (await assertRegisteredActor(ctx, actor)),
+        async operationID => ({ id_0: await restoreAllocationID(operationID, 'id_0'),
+            id_1: await restoreAllocationID(operationID, 'id_1') })));
+}
 /** Anonymous admission is confined to deleting the actor's own account. The
  * fixed allocation is created only for a new callback, never for a SQL receipt. */
 export async function executeAccountDeletionOperation<T extends Record<string, unknown>>(ctx: AppContext, actor: Actor, intent: PreparedOperation, callback: (restore: RestoreTransactionScope, requestID: string) => T | Promise<T>): Promise<T> {

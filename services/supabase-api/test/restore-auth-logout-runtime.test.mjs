@@ -5,6 +5,7 @@ import { createApp, createHandler } from '../src/index.ts';
 import { restoreOperationID } from '../src/restore-transaction.ts';
 import { enroll, captureProofs, faceVerifierFixture, sign, encode, stable } from './runtime-harness.mjs';
 import { fixture, digest, unavailable } from './restore-database-fixture.mjs';
+import { addConsentReference, assertIsolatedReference, assertSurvivingSecuritySession, historicalRevokedNull, referenceRows } from './restore-consent-reference-fixtures.mjs';
 
 const AUTH_POLICY = 'face-policy-fixture-v1';
 const PHOTO_POLICY = 'photo-policy-fixture-v1';
@@ -64,7 +65,7 @@ async function logoutFixture(t, { registered = false } = {}) {
     return { consentID, operationKey, deviceID };
   };
   let control;
-  const realPending = async () => {
+  const realPending = async (token = person.token) => {
     assert(registered);
     control ??= { key: 'lfl_' + encode(crypto.getRandomValues(new Uint8Array(32))), operationKey: randomUUID() };
     const signed = async (step, fields, creation = false) => {
@@ -72,7 +73,7 @@ async function logoutFixture(t, { registered = false } = {}) {
         ...(!creation ? { request_nonce: randomUUID(), request_expires_at: Date.now() + 45000 } : {}), ...fields };
       return { ...body, device_signature: await sign(person.keys.privateKey, { protocol: DEVICE_PROTOCOL, step, ...body }) };
     };
-    await h.json('/auth/face/profile/control', { token: person.token, body: await signed('control', { control_operation_key: control.operationKey }, true) }, 201);
+    await h.json('/auth/face/profile/control', { token, body: await signed('control', { control_operation_key: control.operationKey }, true) }, 201);
     const state = await h.db.one('SELECT version FROM face_profile_states WHERE account_id=?', person.accountId);
     const key = randomUUID();
     await h.json('/auth/face/profile/challenge', { body: await signed('challenge', { operation_key: key, action: 'replace', expected_version: state.version,
@@ -130,11 +131,24 @@ test('anonymous no-device logout journals exactly its current session and cannot
   assert.equal(await cursor(f), 1);
 });
 
+for (const binding of ['owned', 'foreign', 'missing']) test('anonymous logout checks ' + binding + ' enrollment challenge device', async t => {
+  const f = await logoutFixture(t), id = randomUUID(), device = binding === 'missing' ? randomUUID() : await f.otherDevice();
+  let revision = randomUUID();
+  if (binding !== 'missing') {
+    await f.h.db.run("UPDATE auth_devices SET status='pending' WHERE id=?", device);
+    revision = (await f.h.db.one('SELECT revision FROM auth_devices WHERE id=?', device)).revision;
+    if (binding === 'foreign') { const foreign = await f.h.anonymous({ adult: true }); await f.h.db.run('UPDATE auth_devices SET account_id=? WHERE id=?', foreign.account_id, device); }
+  }
+  await f.h.db.run(`INSERT INTO auth_challenges(id,account_id,device_id,purpose,nonce,policy_version,expires_at,created_at,session_id,auth_epoch,device_revision)
+    VALUES(?,?,?,'registration',?,?,?,?,?,?,?)`, id, f.person.accountId, device, 'synthetic-' + randomUUID(), AUTH_POLICY,
+    f.now() + 120000, f.now(), f.sessionID, f.original.auth_epoch, revision);
+  const before = await f.h.db.one('SELECT * FROM auth_challenges WHERE id=?', id); await f.logout(); await assertPlan(f, [sessionFact(f)]);
+  const after = await f.h.db.one('SELECT * FROM auth_challenges WHERE id=?', id);
+  if (binding === 'owned') assert.equal(after.status, 'cancelled'); else assert.deepEqual(after, before);
+});
+
 test('registered logout journals the actual pending challenge consent while preserving the profile and active authentication device', async t => {
   const f = await logoutFixture(t, { registered: true }), pending = await f.realPending(), push = await f.seedPush();
-  const peerChallenge = await f.h.json('/auth/face/challenge', { body: { face_handle: f.person.faceHandle, device_id: f.person.deviceId } }, 201);
-  const peer = await f.h.json('/auth/face/complete', { body: await captureProofs(f.h, peerChallenge, f.person.keys.privateKey) });
-  assert.notEqual(sessionID(peer.access_token), f.sessionID);
   const device = await f.h.db.one('SELECT * FROM auth_devices WHERE id=?', f.person.deviceId), before = await snapshot(f);
   await f.logout(); await assertPlan(f, [sessionFact(f), consentFact(f, pending.consent_id)]);
   assert.equal((await f.h.db.one('SELECT state FROM face_profile_operations WHERE operation_key=?', pending.operation_key)).state, 'cancelled');
@@ -146,11 +160,54 @@ test('registered logout journals the actual pending challenge consent while pres
   assert(!JSON.stringify((await f.journal.lookup(await logoutID(f))).plan).includes(push.value));
   for (const delivery of push.deliveries) assert.equal((await f.h.db.one('SELECT status FROM notification_deliveries WHERE id=?', delivery.id)).status, delivery.status === 'accepted' ? 'accepted' : 'cancelled');
   assert.deepEqual((await snapshot(f)).sessions.filter(row => row.id !== f.sessionID), before.sessions.filter(row => row.id !== f.sessionID));
-  assert.equal((await f.h.json('/me', { token: peer.access_token })).authenticated, true);
   const challenge = await f.h.json('/auth/face/challenge', { body: { face_handle: f.person.faceHandle, device_id: f.person.deviceId } }, 201);
   const fresh = await f.h.json('/auth/face/complete', { body: await captureProofs(f.h, challenge, f.person.keys.privateKey) });
   assert.equal(fresh.account_id, f.person.accountId); assert.notEqual(sessionID(fresh.access_token), f.sessionID);
 });
+
+for (const drift of ['future-control', 'future-epoch', 'linked-device', 'linked-epoch', 'linked-owner', 'later-session', 'older-session', 'peer-after-operation', 'shared-consent', 'shared-challenge', 'shared-linked-challenge'])
+  test('logout preserves unrelated ' + drift + ' lifecycle authority', async t => {
+    const f = await logoutFixture(t, { registered: true });
+    let peer;
+    if (drift === 'later-session' || drift === 'older-session') {
+      const challenge = await f.h.json('/auth/face/challenge', { body: { face_handle: f.person.faceHandle, device_id: f.person.deviceId } }, 201);
+      peer = await f.h.json('/auth/face/complete', { body: await captureProofs(f.h, challenge, f.person.keys.privateKey) });
+      if (drift === 'older-session') await f.h.db.run('UPDATE sessions SET created_at=? WHERE id=?', f.original.created_at - 1, sessionID(peer.access_token));
+    }
+    const pending = await f.realPending(peer?.access_token);
+    if (drift === 'peer-after-operation') {
+      const challenge = await f.h.json('/auth/face/challenge', { body: { face_handle: f.person.faceHandle, device_id: f.person.deviceId } }, 201);
+      peer = await f.h.json('/auth/face/complete', { body: await captureProofs(f.h, challenge, f.person.keys.privateKey) });
+    }
+    if (drift === 'future-control') await f.h.db.run('UPDATE face_profile_operations SET control_revision=? WHERE operation_key=?', randomUUID(), pending.operation_key);
+    if (drift === 'future-epoch') await f.h.db.run('UPDATE face_profile_operations SET auth_epoch=auth_epoch+1 WHERE operation_key=?', pending.operation_key);
+    if (drift === 'linked-device') await f.h.db.run('UPDATE auth_challenges SET device_revision=? WHERE id=?', randomUUID(), pending.challenge_id);
+    if (drift === 'linked-epoch') await f.h.db.run('UPDATE auth_challenges SET auth_epoch=auth_epoch+1 WHERE id=?', pending.challenge_id);
+    if (drift === 'linked-owner') {
+      const foreign = await f.h.anonymous({ adult: true });
+      await f.h.db.run('UPDATE auth_challenges SET account_id=? WHERE id=?', foreign.account_id, pending.challenge_id);
+    }
+    if (drift === 'shared-consent') await f.pending({ consentID: pending.consent_id, deviceID: await f.otherDevice() });
+    if (drift === 'shared-linked-challenge') {
+      const other = await f.pending({ deviceID: await f.otherDevice() });
+      await f.h.db.run('UPDATE face_profile_operations SET challenge_id=?,generation=1 WHERE operation_key=?', pending.challenge_id, other.operationKey);
+    }
+    if (drift === 'shared-challenge') {
+      const device = await f.otherDevice();
+      await f.h.db.run(`INSERT INTO auth_challenges(id,account_id,device_id,purpose,nonce,profile_revision,profile_id,policy_version,expires_at,status,created_at,session_id,auth_epoch,consent_id,device_revision)
+        SELECT ?,account_id,?,purpose,?,profile_revision,profile_id,policy_version,expires_at,'pending',created_at,NULL,auth_epoch,consent_id,device_revision FROM auth_challenges WHERE id=?`,
+        randomUUID(), device, 'synthetic-' + randomUUID(), pending.challenge_id);
+    }
+    const push = await f.seedPush(), before = await snapshot(f);
+    await f.logout(); await assertPlan(f, [sessionFact(f)]);
+    const after = await snapshot(f);
+    for (const table of ['consents', 'auth_devices', 'auth_challenges', 'face_profile_operations', 'face_profiles'])
+      assert.deepEqual(after[table], before[table], table + ' preserves unrelated authority');
+    assert.notEqual((await session(f)).revoked_at, null);
+    assert.equal((await f.h.db.one('SELECT active FROM push_devices WHERE id=?', push.id)).active, 0);
+    if (peer) assert.equal((await f.h.json('/me', { token: peer.access_token })).authenticated, true);
+    await f.logout(401);
+  });
 
 test('logout deduplicates exact old pending episodes and preserves revoked, profile-bound, other-device and other-account authority', async t => {
   const f = await logoutFixture(t, { registered: true }), first = await f.pending(), expired = await f.pending({ status: 'expired' });
@@ -215,6 +272,17 @@ test('logout rechecks expiration after fact collection and before any lifecycle,
     if (kind === 'session-retired') { observed = true; f.setClock(f.original.expires_at + 1); }
   } }), intent);
   await f.logout(401); f.setClock(now); assert.equal(observed, true);
+  assert.deepEqual(await snapshot(f), before); assert.equal(await f.journal.lookup(await logoutID(f)), null);
+});
+
+test('linked challenge generation drift after fact collection rolls back logout', async t => {
+  const f = await logoutFixture(t, { registered: true }), pending = await f.realPending(); await f.seedPush();
+  const before = await snapshot(f), transaction = f.db.transaction.bind(f.db); let observed = false;
+  f.db.transaction = (callback, intent) => transaction(restore => callback({ operation: value => restore.operation(value), restrict: async (kind, scope) => {
+    await restore.restrict(kind, scope);
+    if (kind === 'session-retired' && !observed) { observed = true; await f.db.run('UPDATE auth_challenges SET device_revision=? WHERE id=?', randomUUID(), pending.challenge_id); }
+  } }), intent);
+  assert.equal((await f.logout(409)).error.code, 'logout_authority_changed'); assert.equal(observed, true);
   assert.deepEqual(await snapshot(f), before); assert.equal(await f.journal.lookup(await logoutID(f)), null);
 });
 
@@ -301,4 +369,46 @@ for (const mode of ['outage', 'prepare-before', 'prepare-after', 'commit-result-
   } else { assert.equal(f.faults.reply, undefined); assert.equal(saved.status, mode === 'ack-after' ? 'committed' : 'pending'); }
   await f.logout(401); const committed = await assertPlan(f, facts); assert.equal(committed.plan_hash, saved.plan_hash);
   assert.equal(await cursor(f), facts.length);
+});
+
+
+// Reference-class regressions are externally prepared and unexecuted. The
+// operation fixtures are intentionally independent of the profile-bound consent.
+for (const kind of ['enrollment', 'recovery', 'session']) for (const consentStatus of ['granted', 'historical-revoked-null'])
+  test(`logout preserves ${kind} consent reference with ${consentStatus} consent`, async t => {
+    const f = await logoutFixture(t, { registered: true });
+    const pending = await f.pending({ status: consentStatus === 'granted' ? 'granted' : 'revoked' });
+    const reference = await addConsentReference(f, kind, pending.consentID);
+    if (consentStatus === 'historical-revoked-null') await historicalRevokedNull(f, pending.consentID);
+    await assertIsolatedReference(f, reference); await assertSurvivingSecuritySession(f, reference);
+    const push = await f.seedPush(), before = await snapshot(f), referencesBefore = await referenceRows(f);
+    assert.deepEqual(await f.logout(), { status: 'logged_out' });
+    const saved = await assertPlan(f, [sessionFact(f)]), after = await snapshot(f);
+    for (const table of ['consents', 'auth_devices', 'auth_challenges', 'face_profile_operations', 'face_profiles'])
+      assert.deepEqual(after[table], before[table], table + ' preserves the independent reference');
+    assert.deepEqual(await referenceRows(f), referencesBefore);
+    assert.deepEqual(after.sessions.filter(row => row.id !== f.sessionID), before.sessions.filter(row => row.id !== f.sessionID));
+    assert.notEqual((await session(f)).revoked_at, null); assert.notEqual((await session(f)).refresh_consumed_at, null);
+    assert.equal(after.face_profile_operations.find(row => row.operation_key === pending.operationKey).state, 'pending');
+    assert.equal((await f.h.db.one('SELECT active FROM push_devices WHERE id=?', push.id)).active, 0);
+    if (consentStatus === 'historical-revoked-null') assert.equal(after.consents.find(row => row.id === pending.consentID).revoked_at, null);
+    await assertSurvivingSecuritySession(f, reference);
+    await f.logout(401); assert.deepEqual(await f.journal.lookup(await logoutID(f)), saved); assert.equal(await cursor(f), 1);
+  });
+
+for (const kind of ['enrollment', 'recovery', 'session']) test(`logout still cancels unshared work when the ${kind} reference was already revoked`, async t => {
+  const f = await logoutFixture(t, { registered: true }), pending = await f.pending();
+  const reference = await addConsentReference(f, kind, pending.consentID, { revoked: true });
+  await assertIsolatedReference(f, reference);
+  const before = await snapshot(f), referencesBefore = await referenceRows(f);
+  await f.logout(); await assertPlan(f, [sessionFact(f), consentFact(f, pending.consentID)]);
+  const after = await snapshot(f);
+  assert.equal(after.consents.find(row => row.id === pending.consentID).status, 'revoked');
+  assert.notEqual(after.consents.find(row => row.id === pending.consentID).revoked_at, null);
+  assert.equal(after.face_profile_operations.find(row => row.operation_key === pending.operationKey).state, 'cancelled');
+  assert.deepEqual(after.consents.filter(row => row.id !== pending.consentID), before.consents.filter(row => row.id !== pending.consentID));
+  assert.deepEqual(await referenceRows(f), referencesBefore);
+  assert.deepEqual(after.sessions.filter(row => row.id !== f.sessionID), before.sessions.filter(row => row.id !== f.sessionID));
+  assert.deepEqual(after.auth_devices, before.auth_devices); assert.deepEqual(after.face_profiles, before.face_profiles);
+  assert.equal(await cursor(f), 2);
 });

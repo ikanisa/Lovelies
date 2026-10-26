@@ -70,11 +70,16 @@ source credential files. Evidence:
 The earlier root-client HTTPS403/1010 was not retried or disguised. Actual Supabase Edge→configured inference HTTPS readiness now returns200 with exact identity and401 unauthorized control. Its temporary diagnostic was removed; shared secrets and other functions were preserved. This is readiness transport only; hosted image/application-Storage journeys and API cutover remain unqualified. Receipt: `/Volumes/PRO-G40/Projects/Lovelies/verification/supabase-inference-egress-20261026/result.json`.
 
 Current iOS: original1020 host checks, separate101 guest-deletion/35 private-media
-checks and108 focused LocalAuthentication fixtures pass. Canonical21-source
-Simulator Debug and unsigned iOS Release builds pass; the complete XCTest target
-also builds with the updated physical opt-in signer/real OS-authorizer adapter.
+checks and108 focused LocalAuthentication fixtures pass. Fresh local Simulator
+Debug and unsigned iOS Release builds include the updated camera permission text;
+bundled base and localized strings match their source. The earlier complete
+XCTest build preceded that text update. The updated English and Kinyarwanda descriptions identify face verification for setup,
+sign-in and recovery, and selected photo uploads. Four source files pass plist
+validation and both localized strings pass binary round-trip checks; the actual
+system prompt, spoken Kinyarwanda and human language review remain open.
 No test/device prompt was launched by those builds. Source-bound proof is under
-`/Volumes/PRO-G40/Projects/Lovelies/verification/native-local-auth-20261026/`.
+`/Volumes/PRO-G40/Projects/Lovelies/verification/native-local-auth-20261026/`
+and `/Volumes/PRO-G40/Projects/Lovelies/verification/ios-camera-purpose-20261027/current-builds-01/result.json`.
 The exact Release bundle still has six preflight gates: published link host,
 privacy/terms/support/deletion URLs and distribution signature. Physical
 FaceID/TouchID/passcode, new/legacy key ACL, lifecycle and App Review remain open.
@@ -181,9 +186,16 @@ provider retention, backup expiry, monitored cleanup or trained review operation
    declarations, genuine assets and passing remote CI/final whole-app source sealing. The bounded
    earlier backend source is delivered; both CI runs stop before jobs due to the
    billing hold the owner has parked. Preserve that unresolved remote-CI gate.
-   Resolve Apple2.5.13
-   account-authentication architecture: current iOS code does not use
-   LocalAuthentication; age13+ alone does not resolve that store requirement.
+   Qualify the current iOS authentication architecture against Apple guideline
+   2.5.13. The production signer now uses LocalAuthentication and a protected
+   device key; its signed account-login flow also performs the separately
+   consented selfie/reference comparison. The configured user-presence policy
+   can use device biometrics or a device passcode when available. Prove the
+   physical-device behavior, recovery and review experience, and obtain the
+   actual App Review outcome; neither the implementation nor a 13+ audience
+   alone proves acceptance of the combined flow. Apple's current guidance is
+   [App Review guideline 2.5.13](https://developer.apple.com/app-store/review/guidelines/)
+   and [LocalAuthentication guidance](https://developer.apple.com/documentation/localauthentication/logging-a-user-into-your-app-with-face-id-or-touch-id).
 7. Refresh all-track store build maxima; build and inspect signed AAB/archive,
    qualify in-place updates over store installations without reset/uninstall,
    perform testing/review submission and verify both live updates. Retire the

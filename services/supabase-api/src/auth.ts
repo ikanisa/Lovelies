@@ -3,6 +3,7 @@ import { cancelDeviceLifecycle, unusedPendingConsents } from './face-profile.ts'
 import { cancelRefreshDelivery, refreshWithDelivery } from './refresh-delivery.ts';
 import { ApiError, digest, jsonBody, ok, stable, uuid, type Actor, type AppContext } from './types.ts';
 import { restoreOperationID } from './restore-transaction.ts';
+import { sessionRetirementScope, type RetirementSession } from './session-retirement.ts';
 const ACCESS_MS = 900000;
 const REFRESH_MS = 30 * 24 * 60 * 60 * 1000;
 const ISSUER = 'lovelies-supabase';
@@ -263,29 +264,36 @@ function actorForSession(session: SessionRow, account: AccountRow): Actor {
         expiresAt: session.expires_at, authEpoch: session.auth_epoch, authMethod: session.auth_method };
 }
 /** Caller must establish revocation authority and hold the transaction. */
-export async function revokeSessionAuthority(sessionId: string, accountId: string, ctx: AppContext): Promise<void> {
+export async function revokeSessionAuthority(sessionId: string, accountId: string, ctx: AppContext,
+    options: { cancelDeviceLifecycle?: boolean; cancelSessionChallenges?: boolean } = {}): Promise<void> {
     const device = (await ctx.db.one<{device_id: string | null}>('SELECT device_id FROM sessions WHERE id=? AND account_id=?', sessionId, accountId))?.device_id ?? null;
-    await cancelDeviceLifecycle(accountId, device, ctx);
+    if (options.cancelDeviceLifecycle !== false) await cancelDeviceLifecycle(accountId, device, ctx);
     await ctx.db.run("UPDATE push_devices SET active=0,token_value='',updated_at=? WHERE account_id=? AND auth_device_id=?",ctx.now(),accountId,device);
     await ctx.db.run("UPDATE notification_deliveries SET status='cancelled',updated_at=? WHERE device_id IN(SELECT id FROM push_devices WHERE account_id=? AND auth_device_id=?) AND status<>'accepted'",ctx.now(),accountId,device);
     await ctx.db.run('UPDATE sessions SET revoked_at=coalesce(revoked_at,?),refresh_consumed_at=coalesce(refresh_consumed_at,?) WHERE id=? AND account_id=?',ctx.now(),ctx.now(),sessionId,accountId);
-    await ctx.db.run("UPDATE auth_challenges SET status='cancelled',used_at=? WHERE session_id=? AND used_at IS NULL",ctx.now(),sessionId);
+    if (options.cancelSessionChallenges !== false) await ctx.db.run("UPDATE auth_challenges SET status='cancelled',used_at=? WHERE account_id=? AND session_id=? AND used_at IS NULL",ctx.now(),accountId,sessionId);
 }
 type LogoutFact = { kind: 'session-retired' | 'consent-withdrawn'; scope: Record<string, string> };
-type LogoutSession = Pick<SessionRow, 'id' | 'account_id' | 'device_id' | 'device_revision' | 'revoked_at' | 'refresh_consumed_at'>;
-async function logoutRetirement(actor: Actor, ctx: AppContext): Promise<{ session: LogoutSession; pending: Awaited<ReturnType<typeof unusedPendingConsents>>; facts: LogoutFact[] }> {
+type LogoutSession = RetirementSession;
+async function logoutRetirement(actor: Actor, ctx: AppContext) {
     await assertPrivacyActor(actor, ctx);
-    const session = await ctx.db.one<LogoutSession>('SELECT id,account_id,device_id,device_revision,revoked_at,refresh_consumed_at FROM sessions WHERE id=? AND account_id=?', actor.sessionId, actor.accountId);
+    const session = await ctx.db.one<LogoutSession>(`SELECT id,account_id,auth_method,auth_epoch,device_id,device_revision,revoked_at,
+        refresh_consumed_at,created_at FROM sessions WHERE id=? AND account_id=?`, actor.sessionId, actor.accountId);
     if (!session || session.revoked_at !== null) throw new ApiError(401, 'session_invalid');
+    // An anonymous credential cannot establish authority over an attached
+    // device's push registration; preserve anomalous bindings rather than
+    // silently changing another lifecycle during logout.
+    if (session.auth_method === 'anonymous' && session.device_id !== null) throw new ApiError(409, 'logout_authority_changed');
+    const scope = await sessionRetirementScope(ctx, session);
     // Null means no device lifecycle work. Do not turn an anonymous logout into
     // the selector's optional all-device scope.
-    const pending = session.device_id === null ? [] : await unusedPendingConsents(actor.accountId, ctx, session.device_id);
+    const pending = !scope.cancelDeviceLifecycle || session.device_id === null ? [] : await unusedPendingConsents(actor.accountId, ctx, session.device_id);
     const facts: LogoutFact[] = [
         { kind: 'session-retired', scope: { account_id: actor.accountId, session_id: session.id } },
         ...pending.filter(row => row.status !== 'revoked').map<LogoutFact>(row => ({ kind: 'consent-withdrawn',
             scope: { account_id: row.account_id, consent_id: row.id, purpose: row.purpose } })),
     ];
-    return { session, pending: [...pending].sort((a, b) => a.id < b.id ? -1 : a.id > b.id ? 1 : 0),
+    return { session, scope, pending: [...pending].sort((a, b) => a.id < b.id ? -1 : a.id > b.id ? 1 : 0),
         facts: [...new Map(facts.map(fact => [stable(fact), fact])).entries()]
             .sort(([a], [b]) => a < b ? -1 : a > b ? 1 : 0).map(([, fact]) => fact) };
 }
@@ -358,7 +366,7 @@ export async function handleAuth(request: Request, ctx: AppContext): Promise<Res
                     session_id: selected.session.id, device_id: selected.session.device_id, device_revision: selected.session.device_revision })), allocations: {} });
             for (const fact of selected.facts) await restore.restrict(fact.kind, fact.scope);
             if (stable(await logoutRetirement(actor, ctx)) !== stable(selected)) throw new ApiError(409, 'logout_authority_changed');
-            await revokeSessionAuthority(actor.sessionId,actor.accountId,ctx);
+            await revokeSessionAuthority(actor.sessionId,actor.accountId,ctx, selected.scope);
             // This terminal self-revocation cannot use a current-session postguard.
             // No private response or new credential is released by logout.
         }));

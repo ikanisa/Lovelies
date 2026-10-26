@@ -3851,7 +3851,30 @@
         "Published support URL",
         "Published account deletion URL",
         "Distribution signature"
-      ]
+      ],
+      "updated_camera_purpose_and_builds_20261027": {
+        "source_uses_local_authentication": true,
+        "camera_purpose_source_and_binary_validation": {
+          "path": "/Volumes/PRO-G40/Projects/Lovelies/verification/ios-camera-purpose-20261027/binary-roundtrip-01.json",
+          "sha256": "951a75a4611dacf7e679249b0cbaaa9eb52f15126a7fa4076d31de0831a056bd"
+        },
+        "unsigned_debug_simulator_and_release_device_builds": {
+          "path": "/Volumes/PRO-G40/Projects/Lovelies/verification/ios-camera-purpose-20261027/current-builds-01/result.json",
+          "sha256": "2b49bf05d85bda570364af9decb85dc61718957ce3358e3bcb5fd55b7633eb43"
+        },
+        "bundle_identifier": "com.lovelies.memories",
+        "source_inputs_unchanged_during_build": true,
+        "localized_camera_text_readback_matches": true,
+        "physical_device_inventory": {
+          "path": "/Volumes/PRO-G40/Projects/Lovelies/verification/physical-ios-auth-20261027/inventory-01/result.json",
+          "sha256": "b0f891c29d8fee7c72e718e48b85d8611c8bc2c15285d83d74cd2bdb05a9f100"
+        },
+        "physical_prompt_qualified": false,
+        "native_speaker_spoken_review_qualified": false,
+        "signed_archive_qualified": false,
+        "store_review_qualified": false,
+        "scope": "Local source and unsigned build evidence only; actual physical prompts and store acceptance remain open."
+      }
     },
     "scope": "Current26October scoped results supersede historical contradictions. Readiness/serving/physical/provider/store/CI completion remains unproved. No overall completion percentage.",
     "api": {
@@ -3936,8 +3959,13 @@
         "test_sha256": "9ba3b352b4ea7090cef5af08a4733ab9dab70edfa6bf19f3e2263363b0ef87d8",
         "independent_source_review": "accepted",
         "prepared_cases": 32,
-        "runtime_tests_executed": false,
-        "repository_applied": false
+        "runtime_tests_executed": true,
+        "repository_applied": true,
+        "historical_candidate_hashes_scope": "Original external candidate; current source may include subsequent fixes.",
+        "current_source_sha256": "0e8615f0d21acf34cec6e529b075a212b0f852f7e5f9c17984d6d7c7b638196e",
+        "current_test_sha256": "8851f8f02d0d2d9552e1c21c47ef775da2030e521a10e162a553d576c68bae16",
+        "shared_scope_helper_sha256": "b7b73e1e4f16e9295788d6f70a9121f24919d3ae57dffc93b81687bf2b6d552a",
+        "subsequent_generation_and_reference_fixes": true
       },
       {
         "boundary": "stable upload reservation allocations",
@@ -3947,10 +3975,55 @@
         "test_sha256": "fc8b36bc5fa5c9fca005e39048cf9cad3984a43bb7b764235c4c4f3ba4b0453e",
         "independent_source_review": "accepted",
         "prepared_cases": 29,
-        "syntax_checks_only": true,
-        "runtime_tests_executed": false,
-        "repository_applied": false
+        "syntax_checks_only": false,
+        "runtime_tests_executed": true,
+        "repository_applied": true,
+        "historical_candidate_hashes_scope": "Original external candidate; current source may include subsequent fixes."
       }
-    ]
+    ],
+    "session_retirement_and_upload_20261027": {
+      "api_suite": {
+        "tests": 628,
+        "passed": 627,
+        "failed": 0,
+        "optional_model_skipped": 1,
+        "sealed_inputs_unchanged": true,
+        "receipt": {
+          "path": "/Volumes/PRO-G40/Projects/Lovelies/verification/restore-admin-upload-20261027/root-whole-10/result.json",
+          "sha256": "35a05ea420194e81b3cd807f212f2406e1cff22492dfbbf845adab8d28219b80"
+        },
+        "counts_receipt": {
+          "path": "/Volumes/PRO-G40/Projects/Lovelies/verification/restore-admin-upload-20261027/root-whole-10/reporter-counts.json",
+          "sha256": "2cd3da7aac9bc5d1add7e1aca44642e68588544cf1b225d8791e9be519f92dea"
+        }
+      },
+      "additional_consent_reference_cases": {
+        "tests": 18,
+        "passed": 18,
+        "receipt": {
+          "path": "/Volumes/PRO-G40/Projects/Lovelies/verification/restore-consent-reference-20261027/root-focused-01/result.json",
+          "sha256": "498b4ede70b9028e51fbd6fa5ca7f2997f1794ecd3edaa3fc8017ff8d7ada3f6"
+        },
+        "helper_seal_supplement": {
+          "path": "/Volumes/PRO-G40/Projects/Lovelies/verification/restore-consent-reference-20261027/root-focused-01/helper-seal-supplement.json",
+          "sha256": "b4ec93dbb1f29a059402ae359176ae95d31573ecb48d74edf3dbf59feec34d92"
+        },
+        "scope": "Added tests ran after the full suite; production source did not change."
+      },
+      "scope": "Local isolated PostgreSQL fixtures. Exact session retirement is not independent device-control fencing; logout still disables associated push registrations. No application API deployment or store acceptance.",
+      "current_private_model_engineering": {
+        "tests": 7,
+        "passed": 7,
+        "source_files_sealed": 108,
+        "engineering_jpegs": 19,
+        "input_seal_unchanged": true,
+        "task_local_credentials_removed": true,
+        "receipt": {
+          "path": "/Volumes/PRO-G40/Projects/Lovelies/verification/inference-packaging-20261026/private-inference-qualification/run-09/result.json",
+          "sha256": "98e1b136a112a6588d4763e1888e19d405243629587aabfae74166535f2f8bed"
+        },
+        "scope": "Isolated PostgreSQL, local API, in-memory Storage and existing private model binding. No deployment, representative accuracy or physical/store qualification."
+      }
+    }
   }
 }

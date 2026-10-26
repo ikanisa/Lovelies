@@ -1,8 +1,9 @@
 import { audienceProjection } from './audience.ts';
 import { accountRoles, base64url, decodeBase64url } from './auth.ts';
-import { cancelDeviceLifecycle } from './face-profile.ts';
+import { cancelDeviceLifecycle, unusedPendingConsents } from './face-profile.ts';
 import { executeOperation, prepareOperation } from './operations.ts';
 import { requireOperator } from './operators.ts';
+import { sessionRetirementScope, type RetirementSession } from './session-retirement.ts';
 import { ApiError, jsonBody, ok, stable, uuid, type Actor, type AppContext } from './types.ts';
 type Account = {
     id: string;
@@ -225,18 +226,43 @@ async function revokeSession(request: Request, id: string, ctx: AppContext, acto
         // can return its stored receipt. Deletion/demotion never restores authority.
         (await requireFreshFace(ctx, actor));
         (await manageableAccount(ctx, actor, id));
-        return (await executeOperation(ctx, actor, intent, async () => {
-            const session = (await ctx.db.one<{
-                revoked_at: number | null;
-                device_id: string | null;
-            }>('SELECT revoked_at,device_id FROM sessions WHERE id=? AND account_id=?', sessionId, id));
+        return (await executeOperation(ctx, actor, intent, async restore => {
+            const session = await ctx.db.one<RetirementSession>(`SELECT id,account_id,auth_method,auth_epoch,device_id,device_revision,
+                revoked_at,refresh_consumed_at,created_at FROM sessions WHERE id=? AND account_id=?`, sessionId, id);
             if (!session)
                 throw new ApiError(404, 'session_not_found');
             const changed = session.revoked_at === null;
             if (changed) {
-                (await cancelDeviceLifecycle(id, session.device_id, ctx));
+                // This route retires one session, not its still-active device.
+                // Match cancelDeviceLifecycle's exact unused-consent scope;
+                // null must never broaden the selector to every device.
+                const scope = await sessionRetirementScope(ctx, session);
+                const pending = !scope.cancelDeviceLifecycle || session.device_id === null ? [] : await unusedPendingConsents(id, ctx, session.device_id);
+                const facts: { kind: 'session-retired' | 'consent-withdrawn'; scope: Record<string, string> }[] = [
+                    { kind: 'session-retired', scope: { account_id: id, session_id: sessionId } },
+                    ...pending.filter(row => row.status !== 'revoked').map(row => ({ kind: 'consent-withdrawn' as const,
+                        scope: { account_id: row.account_id, consent_id: row.id, purpose: row.purpose } })),
+                ];
+                const ordered = [...new Map(facts.map(fact => [stable(fact), fact])).entries()]
+                    .sort(([a], [b]) => a < b ? -1 : a > b ? 1 : 0).map(([, fact]) => fact);
+                if (ordered.length > 32)
+                    throw new ApiError(503, 'admin_session_restriction_capacity');
+                // executeOperation owns the stable identity and has already
+                // checked the original SQL receipt before this new callback.
+                for (const fact of ordered)
+                    await restore.restrict(fact.kind, fact.scope);
+                await requireFreshFace(ctx, actor);
+                await manageableAccount(ctx, actor, id);
+                const current = await ctx.db.one<RetirementSession>(`SELECT id,account_id,auth_method,auth_epoch,device_id,device_revision,
+                    revoked_at,refresh_consumed_at,created_at FROM sessions WHERE id=? AND account_id=?`, sessionId, id);
+                const currentScope = current ? await sessionRetirementScope(ctx, current) : null;
+                const currentPending = !currentScope?.cancelDeviceLifecycle || session.device_id === null ? [] : await unusedPendingConsents(id, ctx, session.device_id);
+                const pendingSnapshot = (rows: typeof pending) => stable([...rows].sort((a, b) => a.id < b.id ? -1 : a.id > b.id ? 1 : 0));
+                if (stable(current) !== stable(session) || stable(currentScope) !== stable(scope) || pendingSnapshot(currentPending) !== pendingSnapshot(pending))
+                    throw new ApiError(409, 'admin_session_authority_changed');
+                if (scope.cancelDeviceLifecycle) await cancelDeviceLifecycle(id, session.device_id, ctx);
                 (await ctx.db.run('UPDATE sessions SET revoked_at=?,refresh_consumed_at=coalesce(refresh_consumed_at,?) WHERE id=? AND account_id=?', ctx.now(), ctx.now(), sessionId, id));
-                (await ctx.db.run("UPDATE auth_challenges SET status='cancelled',used_at=coalesce(used_at,?) WHERE account_id=? AND session_id=? AND used_at IS NULL", ctx.now(), id, sessionId));
+                if (scope.cancelSessionChallenges) await ctx.db.run("UPDATE auth_challenges SET status='cancelled',used_at=coalesce(used_at,?) WHERE account_id=? AND session_id=? AND used_at IS NULL", ctx.now(), id, sessionId);
             }
             (await audit(ctx, actor, 'admin.user.session.revoke', id, sessionId, { reason, sessions_revoked: changed ? 1 : 0 }));
             return { account_id: id, session_id: sessionId, status: 'revoked', sessions_revoked: changed ? 1 : 0, account_disabled: false };

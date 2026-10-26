@@ -2,7 +2,7 @@ import { audienceContext, assertAudienceCapability } from './audience.ts';
 import { accountRoles } from './auth.ts';
 import { ApiError, digest, jsonBody, ok, stable, uuid, type Actor, type AppContext } from './types.ts';
 import { assertMediaActor, currentAsset, hasConsent, currentPhotoPolicy, mediaSource, sourceAllowed, type Asset, type MediaSource } from './gallery.ts';
-import { beginMediaWrite, executeOperation, prepareOperation, settleMediaWrite } from './operations.ts';
+import { beginMediaWrite, executeOperation, executeUploadReservationOperation, prepareOperation, settleMediaWrite } from './operations.ts';
 import { assembleUpload, cancelUpload, createUploadTransfer, uploadChunk, uploadStatusAsset, uploadStatusFields, uploadTransfer, validateResumable } from './upload-transfers.ts';
 import { selectedGeneration, assertGeneration } from './inference-generation.ts';
 const MAX_SOURCE_BYTES = 20 * 1024 * 1024;
@@ -259,11 +259,10 @@ async function reserve(request: Request, ctx: AppContext, actor: Actor): Promise
     if (captured != null && !Number.isFinite(captured))
         throw new ApiError(400, 'invalid_metadata');
     const intent = await prepareOperation('photo.upload.reserve', payload, source);
-    return ok((await executeOperation(ctx, actor, intent, async () => {
+    return ok((await executeUploadReservationOperation(ctx, actor, intent, async (_restore, id, version) => {
         (await assertMediaActor(ctx, actor));
         if (!(await hasConsent(ctx, actor.accountId, 'photo_processing')))
             throw new ApiError(403, 'processing_consent_required');
-        const id = crypto.randomUUID(), version = crypto.randomUUID();
         const objectKey = `source/${actor.accountId}/${id}/${version}`;
         (await ctx.db.run(`INSERT INTO assets(id,owner_id,source,batch_id,status,object_key,content_type,byte_size,version,title,captured_at,created_at)
       VALUES(?,?,?,?,'uploading',?,?,?,?,?,?,?)`, id, actor.accountId, source, batch, objectKey, type, size, version, payload.title ?? null, captured, ctx.now()));
