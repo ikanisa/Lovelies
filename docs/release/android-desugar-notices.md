@@ -68,10 +68,14 @@ revision `73170c345e6a762fc6a1f0301bb15218850023ef`:
 
 The companion [R8 preparation revision
 `c331a820ddae7dea41f41a04375b784486d0f705`](https://r8.googlesource.com/r8.git/+/c331a820ddae7dea41f41a04375b784486d0f705%5E!/)
-prepares configuration version 2.1.5 and records the OpenJDK source archive SHA-1
-`e4c206c7bdfe1415cd2716a1d59d699a80bc63dd`. That historical SHA-1 is upstream
-provenance, not a new security-hash choice or a verification performed on that
-archive by this notice work. The configuration notice copied here is the actual
+prepares configuration version 2.1.5 and records an input-archive SHA-1 pointer
+`e4c206c7bdfe1415cd2716a1d59d699a80bc63dd` at
+`third_party/openjdk/desugar_jdk_libs_11.tar.gz.sha1`. The archive contents have
+not been retrieved or established here as complete source. The build script
+reads a separate `desugar_jdk_libs_hash` inside the expanded input directory to
+select Google sources, removes `DesugarDateTimeFormatterBuilder.java`, and
+applies an R8 Undesugar transform. The historical SHA-1 is upstream provenance,
+not a new security-hash choice or a completed source/build verification. The configuration notice copied here is the actual
 JAR's BSD 3-Clause text, copyright 2016 the R8 project authors.
 
 These references establish the upstream version association. They do **not**
@@ -104,6 +108,24 @@ No Android build, package extraction, device run, website staging/deployment,
 store upload or legal approval was performed in this notice slice. Earlier
 website manifests, hosted previews and Debug APK evidence do not validate these
 new notice bytes.
+
+## Source-material checkpoint, 26 October
+
+The external preparation at
+`/Volumes/PRO-G40/Projects/Lovelies/verification/android-desugar-source-20261026/`
+retains the pinned Google runtime archive and all 9,124 regular files match its
+Git tree. Its 31-file manifest SHA-256 is
+`b89ac43d365e767d6569d025eedfca2c08939655307c34795aa651b3dcc14c22`.
+The separate `companion-followup/` traces configuration 101→200 conversion,
+API 33/API 34 generation controls, all 17 pinned source candidates associated with
+the configuration JAR's 29 classes, and the JDK8/ASM conversion producer. Its
+45-file manifest SHA-256 is
+`7256e87c8fe805ce03c387e41d938500f5174883c1989e415a9ade5602794760`.
+Both manifests were read back against their files; the original 31-file set is
+unchanged. These are partial source/build candidates, not binary correspondence
+or an operated source distribution. Complete inputs/toolchains, generated-output
+comparison and recipient access remain below. The upstream JUnit conversion
+check can upload artifacts on failure; it was not executed as an offline check.
 
 ## Remaining release gates
 

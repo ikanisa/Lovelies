@@ -278,13 +278,16 @@ export async function operatorPrivacyRows(ctx: AppContext, subject: string): Pro
         throw new ApiError(413, 'privacy_export_too_large');
     return rows;
 }
-export async function eraseOperatorSubject(db: Database, subject: string, now: number): Promise<void> {
+export async function eraseOperatorSubject(db: Database, subject: string, now: number, preserveHolds = false): Promise<void> {
     (await db.run('DELETE FROM support_requests WHERE account_id=?', subject));
     (await db.run("UPDATE safety_reports SET reason='Erased personal content',review_notes=NULL WHERE reporter_id=? OR subject_id=? OR asset_id IN(SELECT id FROM assets WHERE owner_id=?) OR candidate_id IN(SELECT id FROM candidates WHERE owner_id=? OR recipient_id=?)", subject, subject, subject, subject, subject));
     (await db.run('UPDATE safety_reports SET candidate_id=NULL WHERE candidate_id IN(SELECT id FROM candidates WHERE owner_id=? OR recipient_id=?)', subject, subject));
     (await db.run('UPDATE safety_reports SET asset_id=NULL WHERE asset_id IN(SELECT id FROM assets WHERE owner_id=?)', subject));
-    // Delete asset holds before deleting assets. Clearing just the asset column
-    // would violate a subject-or-asset CHECK for specific-asset holds.
-    (await db.run('DELETE FROM moderation_holds WHERE asset_id IN(SELECT id FROM assets WHERE owner_id=?)', subject));
-    (await db.run('UPDATE moderation_holds SET active=0,cleared_at=?,reason=? WHERE subject_id=?', now, 'Erased subject', subject));
+    // Reviewed account erasure keeps these facts and their asset mapping through
+    // external cleanup. It never clears a hold on the authority of the deletion.
+    if (!preserveHolds) {
+        // Clearing just the asset column would violate the subject-or-asset CHECK.
+        (await db.run('DELETE FROM moderation_holds WHERE asset_id IN(SELECT id FROM assets WHERE owner_id=?)', subject));
+        (await db.run('UPDATE moderation_holds SET active=0,cleared_at=?,reason=? WHERE subject_id=?', now, 'Erased subject', subject));
+    }
 }

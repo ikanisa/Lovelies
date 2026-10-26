@@ -5,8 +5,8 @@ import { assertPrivacyActor } from './auth.ts';
 import { entitlementPrivacyRows, eraseEntitlementSubject } from './entitlements.ts';
 import { operatorPrivacyRows, eraseOperatorSubject } from './operators.ts';
 import { notificationPrivacyRows, eraseNotificationSubject } from './notifications.ts';
-import { retentionPrivacyRows, retentionPrivateKeys, eraseRetentionSubject } from './retention.ts';
-import type { RestoreTransactionScope } from './restore-transaction.ts';
+import { retentionPrivacyRows, retentionPrivateKeys, eraseRetentionSubject, accountErasureHoldFingerprint } from './retention.ts';
+import { restoreOperationID, type RestoreTransactionScope } from './restore-transaction.ts';
 type PrivacyRequest = {
     id: string;
     subject_id: string;
@@ -191,13 +191,17 @@ export async function reviewPrivacyRequest(ctx: AppContext, actor: Actor, id: st
     exact(body, ['reason', 'operation_key']);
     const rationale = reason(body, decision === 'reject');
     const intent = await prepareOperation('privacy.review.' + decision, { ...body, request_id: id }, 'privacy');
-    return (await executeOperation(ctx, actor, intent, async () => {
+    return (await executeOperation(ctx, actor, intent, async restore => {
         (await requireAdmin(ctx, actor));
         const request = (await currentRequest(ctx, id));
         if (request.status !== 'pending_approval' || request.request_type !== 'delete' && request.expires_at <= ctx.now())
             throw new ApiError(409, 'privacy_review_conflict');
         if (request.subject_id === actor.accountId)
             throw new ApiError(403, 'independent_privacy_review_required');
+        if (request.request_type === 'delete')
+            await restore.restrict('account-deletion-reviewed', { account_id: request.subject_id,
+                deletion_request_id: request.id, reviewer_id: actor.accountId,
+                decision: decision === 'approve' ? 'approved' : 'rejected' });
         const now = ctx.now(), status = decision === 'approve' ? 'queued' : 'rejected';
         (await ctx.db.run('UPDATE privacy_requests SET status=?,reviewed_by=?,reviewed_at=?,review_reason=? WHERE id=?', status, actor.accountId, now, rationale, id));
         // The terminal outcome and its read-only status window share one commit;
@@ -270,6 +274,8 @@ async function authorizedProcess(ctx: AppContext, actor: ExecutionAuthority, id:
         throw new ApiError(409, 'privacy_execution_unavailable');
     if (kind === 'delete' && request.legal_hold)
         throw new ApiError(409, 'privacy_legal_hold');
+    if (kind === 'delete')
+        await accountErasureHoldFingerprint(ctx, request.subject_id);
     const subject = (await ctx.db.one<{
         identity_state: string;
         disabled_at: number | null;
@@ -317,15 +323,19 @@ function mentions(value: unknown, subject: string): boolean {
 }
 /** Metadata erasure is one synchronous transaction. External object deletions
  * remain durable cleanup intents and must be verified before completion. */
-export async function beginAccountErasure(ctx: AppContext, actor: ExecutionAuthority, id: string): Promise<{
+export async function beginAccountErasure(ctx: AppContext, actor: ExecutionAuthority, id: string, token: string): Promise<{
     subjectId: string;
     cleanupIds: string[];
+    holdFingerprint: string;
 }> {
     return (await ctx.db.transaction(async () => {
-        const request = (await authorizedProcess(ctx, actor, id, 'delete')), subject = request.subject_id, now = ctx.now();
+        const request = (await executionLease(ctx, actor, id, token)), subject = request.subject_id, now = ctx.now();
+        if (request.request_type !== 'delete')
+            throw new ApiError(409, 'privacy_execution_unavailable');
+        const holdFingerprint = await accountErasureHoldFingerprint(ctx, subject);
         (await ctx.db.run('UPDATE privacy_requests SET status=?,failure_code=NULL WHERE id=?', 'processing', id));
         if (request.metadata_erased_at !== null)
-            return { subjectId: subject, cleanupIds: (await ctx.db.all<{
+            return { subjectId: subject, holdFingerprint, cleanupIds: (await ctx.db.all<{
                     id: string;
                 }>("SELECT id FROM cleanup_intents WHERE request_id=? AND status<>'verified'", id)).map(row => row.id) };
         (await ctx.db.run('UPDATE accounts SET disabled_at=coalesce(disabled_at,?),auth_epoch=auth_epoch+1 WHERE id=?', now, subject));
@@ -384,9 +394,10 @@ export async function beginAccountErasure(ctx: AppContext, actor: ExecutionAutho
             affectedEntities.add(row.id);
         for (const object of (await retentionPrivateKeys(ctx.db, subject)))
             (await cleanup(ctx, request, object.bucket, object.object_key));
-        (await eraseRetentionSubject(ctx.db, subject));
+        // Retention rules/jobs and moderation facts remain attached to minimal
+        // asset tombstones until every exact cleanup key has been verified.
         (await eraseNotificationSubject(ctx.db, subject));
-        (await eraseOperatorSubject(ctx.db, subject, now));
+        (await eraseOperatorSubject(ctx.db, subject, now, true));
         (await eraseEntitlementSubject(ctx.db, subject));
         (await ctx.db.run('DELETE FROM media_tickets WHERE account_id=? OR asset_id IN(SELECT id FROM assets WHERE owner_id=?)', subject, subject));
         // Retire grants, preserving their managed marker; do not grant legacy access.
@@ -468,7 +479,7 @@ export async function beginAccountErasure(ctx: AppContext, actor: ExecutionAutho
         (await ctx.db.run('DELETE FROM photo_job_outbox WHERE asset_id IN(SELECT id FROM assets WHERE owner_id=?)', subject));
         (await ctx.db.run('DELETE FROM renditions WHERE asset_id IN(SELECT id FROM assets WHERE owner_id=?)', subject));
         (await ctx.db.run('DELETE FROM processing_attempts WHERE asset_id IN(SELECT id FROM assets WHERE owner_id=?)', subject));
-        (await ctx.db.run('DELETE FROM assets WHERE owner_id=?', subject));
+        (await ctx.db.run("UPDATE assets SET status='privacy_erasure',batch_id=NULL,title=NULL,captured_at=NULL,width=NULL,height=NULL,content_type='application/octet-stream',byte_size=1,created_at=0,deleted_at=coalesce(deleted_at,?) WHERE owner_id=?", now, subject));
         (await ctx.db.run('DELETE FROM auth_capture_proofs WHERE challenge_id IN(SELECT id FROM auth_challenges WHERE account_id=?)', subject));
         (await ctx.db.run('DELETE FROM face_profile_retirements WHERE account_id=?', subject));
         (await ctx.db.run('DELETE FROM face_profile_operations WHERE account_id=?', subject));
@@ -488,9 +499,9 @@ export async function beginAccountErasure(ctx: AppContext, actor: ExecutionAutho
         (await ctx.db.run("UPDATE accounts SET name='Deleted user',roles_json='[]' WHERE id=?", subject));
         (await ctx.db.run('UPDATE privacy_requests SET reason=NULL,review_reason=NULL WHERE subject_id=?', subject));
         (await ctx.db.run('UPDATE privacy_requests SET metadata_erased_at=? WHERE id=?', now, id));
-        (await audit(ctx, actor, subject, 'privacy.erasure.metadata', id, { inventory_version: 'cloudflare-account-erasure-v1', retained: ['financial_records', 'minimal_audit', 'cleanup_intents', 'disabled_account_tombstone'] }));
+        (await audit(ctx, actor, subject, 'privacy.erasure.metadata', id, { inventory_version: 'cloudflare-account-erasure-v1', retained: ['financial_records', 'minimal_audit', 'cleanup_intents', 'disabled_account_tombstone', 'temporary_cleanup_asset_tombstones', 'retention_hold_evidence'] }));
         (await requireAdmin(ctx, actor));
-        return { subjectId: subject, cleanupIds: (await ctx.db.all<{
+        return { subjectId: subject, holdFingerprint, cleanupIds: (await ctx.db.all<{
                 id: string;
             }>('SELECT id FROM cleanup_intents WHERE request_id=? AND status<>? ORDER BY id', id, 'verified')).map(row => row.id) };
     }));
@@ -502,7 +513,8 @@ type CleanupRow = {
     bucket: 'PHOTOS' | 'QUARANTINE' | 'PRIVACY_EXPORTS';
     object_key: string;
 };
-async function cleanupAuthority(ctx: AppContext, row: CleanupRow, actor?: ExecutionAuthority): Promise<void> {
+type CleanupExecution = { token: string; holdFingerprint: string };
+async function cleanupAuthority(ctx: AppContext, row: CleanupRow, actor?: ExecutionAuthority, execution?: CleanupExecution): Promise<string | null> {
     const current=await ctx.db.one<CleanupRow>('SELECT id,request_id,subject_id,bucket,object_key FROM cleanup_intents WHERE id=?',row.id);
     if(!current||current.subject_id!==row.subject_id||current.bucket!==row.bucket||current.object_key!==row.object_key)throw new ApiError(409,'cleanup_authority_changed');
     row=current;
@@ -520,12 +532,18 @@ async function cleanupAuthority(ctx: AppContext, row: CleanupRow, actor?: Execut
         (await requireAdmin(ctx, actor));
     if (actor && jobAuthority(actor) && actor.requestId !== row.request_id)
         throw new ApiError(403, 'privacy_job_scope_invalid');
+    let holdFingerprint: string | null = null;
     if (row.request_id) {
-        const request = (await currentRequest(ctx, row.request_id));
+        const request = execution && actor ? await executionLease(ctx, actor, row.request_id, execution.token) : (await currentRequest(ctx, row.request_id));
         if (request.subject_id !== row.subject_id || !request.reviewed_by || request.reviewed_by === request.subject_id || request.reviewed_at === null)
             throw new ApiError(403, 'cleanup_authority_invalid');
         if (request.request_type === 'delete' && (request.legal_hold || request.metadata_erased_at === null))
             throw new ApiError(409, 'privacy_cleanup_unavailable');
+        if (request.request_type === 'delete') {
+            holdFingerprint = await accountErasureHoldFingerprint(ctx, request.subject_id);
+            if (execution && holdFingerprint !== execution.holdFingerprint)
+                throw new ApiError(409, 'privacy_cleanup_authority_changed');
+        }
     }
     else {
         // Auth/processing orphan cleanup also uses this table. It is admissible only
@@ -553,29 +571,43 @@ async function cleanupAuthority(ctx: AppContext, row: CleanupRow, actor?: Execut
     }
     if ((await ctx.db.one("SELECT id FROM media_write_intents WHERE account_id=? AND bucket=? AND object_key=? AND status='pending' LIMIT 1", row.subject_id, row.bucket, row.object_key)))
         throw new ApiError(503, 'privacy_writer_unresolved');
+    return holdFingerprint;
 }
-async function cleanObject(ctx: AppContext, row: CleanupRow, actor?: ExecutionAuthority): Promise<void> {
-    (await ctx.db.transaction(async () => (await cleanupAuthority(ctx, row, actor))));
+async function cleanObject(ctx: AppContext, row: CleanupRow, actor?: ExecutionAuthority, execution?: CleanupExecution): Promise<void> {
+    const holdFingerprint = await ctx.db.transaction(async () => await cleanupAuthority(ctx, row, actor, execution));
+    const currentAuthority = async () => {
+        if (await cleanupAuthority(ctx, row, actor, execution) !== holdFingerprint)
+            throw new ApiError(409, 'privacy_cleanup_authority_changed');
+    };
     try {
         await ctx.env[row.bucket].delete(row.object_key);
-        (await ctx.db.transaction(async () => (await cleanupAuthority(ctx, row, actor))));
+        (await ctx.db.transaction(currentAuthority));
         if (await ctx.env[row.bucket].head(row.object_key))
             throw new ApiError(503, 'privacy_cleanup_unconfirmed');
         (await ctx.db.transaction(async () => {
-            (await cleanupAuthority(ctx, row, actor));
+            await currentAuthority();
             (await ctx.db.run("UPDATE cleanup_intents SET status='verified',attempts=attempts+1,verified_at=? WHERE id=?", ctx.now(), row.id));
         }));
     }
     catch (error) {
-        // Failure evidence must survive a revoked executor; this grants no access.
-        (await ctx.db.transaction(async () => (await ctx.db.run("UPDATE cleanup_intents SET status='failed',attempts=attempts+1 WHERE id=?", row.id))));
+        // Retain failure evidence without regressing a successor's verified
+        // cleanup or letting an expired/replaced process lease write its state.
+        const executionPredicate = execution ? ` AND request_id=? AND EXISTS(SELECT 1 FROM privacy_requests r
+            WHERE r.id=cleanup_intents.request_id AND r.subject_id=cleanup_intents.subject_id
+            AND r.status='processing' AND r.execution_token=? AND r.lease_until>?)` : '';
+        (await ctx.db.transaction(async () => {
+            const executionBindings = execution ? [row.request_id, execution.token, ctx.now()] : [];
+            await ctx.db.run(`UPDATE cleanup_intents SET status='failed',attempts=attempts+1
+            WHERE id=? AND subject_id=? AND bucket=? AND object_key=? AND status<>'verified'${executionPredicate}`,
+            row.id, row.subject_id, row.bucket, row.object_key, ...executionBindings);
+        }));
         throw error;
     }
 }
-async function drainCleanup(ctx: AppContext, actor: ExecutionAuthority, id: string): Promise<void> {
+async function drainCleanup(ctx: AppContext, actor: ExecutionAuthority, id: string, execution: CleanupExecution): Promise<void> {
     const rows = (await ctx.db.all<CleanupRow>("SELECT id,request_id,subject_id,bucket,object_key FROM cleanup_intents WHERE request_id=? AND status<>'verified' ORDER BY created_at,id LIMIT 100", id));
     for (const row of rows)
-        await cleanObject(ctx, row, actor);
+        await cleanObject(ctx, row, actor, execution);
 }
 async function executionLease(ctx: AppContext, actor: ExecutionAuthority, id: string, token: string): Promise<PrivacyRequest> {
     const request = (await authorizedProcess(ctx, actor, id, (await currentRequest(ctx, id)).request_type));
@@ -603,10 +635,14 @@ export async function processPrivacyRequest(ctx: AppContext, actor: ExecutionAut
     }));
     try {
         if (request.request_type === 'delete') {
-            (await beginAccountErasure(ctx, actor, id));
-            await drainCleanup(ctx, actor, id);
-            return (await ctx.db.transaction(async () => {
+            const erasure = await beginAccountErasure(ctx, actor, id, token);
+            await drainCleanup(ctx, actor, id, { token, holdFingerprint: erasure.holdFingerprint });
+            return (await ctx.db.transaction(async restore => {
                 const current = (await executionLease(ctx, actor, id, token));
+                if (current.metadata_erased_at === null)
+                    throw new ApiError(409, 'privacy_erasure_unconfirmed');
+                if (await accountErasureHoldFingerprint(ctx, current.subject_id) !== erasure.holdFingerprint)
+                    throw new ApiError(409, 'privacy_cleanup_authority_changed');
                 const remaining = (await ctx.db.one<{
                     n: number;
                 }>("SELECT count(*) n FROM cleanup_intents WHERE request_id=? AND status<>'verified'", id))!.n;
@@ -617,6 +653,16 @@ export async function processPrivacyRequest(ctx: AppContext, actor: ExecutionAut
                     (await failLease(ctx, id, token, writers ? 'privacy_writer_unresolved' : 'privacy_cleanup_remaining'));
                     return { privacy_request: summary((await currentRequest(ctx, id)), ctx.now()), cleanup_remaining: remaining, writers_remaining: writers };
                 }
+                // Only now may inactive asset evidence be minimized. Active facts
+                // were checked under this transaction's lock and never cleared by
+                // account deletion. Subject hold history remains independently held.
+                await eraseRetentionSubject(ctx.db, current.subject_id);
+                await ctx.db.run('DELETE FROM moderation_holds WHERE active=0 AND asset_id IN(SELECT id FROM assets WHERE owner_id=?)', current.subject_id);
+                await ctx.db.run('DELETE FROM assets WHERE owner_id=?', current.subject_id);
+                restore.operation({ operation_id: await restoreOperationID(current.subject_id, 'privacy-erasure-system-v1', 'privacy.erasure.completed:' + current.id),
+                    input_hash: await digest(stable({ protocol: 'lovelies-privacy-erasure-completed-v1', action: 'privacy.erasure.completed',
+                        account_id: current.subject_id, deletion_request_id: current.id })), allocations: {} });
+                await restore.restrict('account-erased', { account_id: current.subject_id, deletion_request_id: current.id });
                 const completedAt = ctx.now();
                 (await ctx.db.run("UPDATE privacy_requests SET status='completed',completed_at=?,failure_code=NULL,execution_token=NULL,lease_until=NULL WHERE id=?", completedAt, id));
                 await ctx.db.run('UPDATE privacy_deletion_status_receipts SET expires_at=? WHERE request_id=? AND revoked_at IS NULL', completedAt + deletionReceiptTtl, id);

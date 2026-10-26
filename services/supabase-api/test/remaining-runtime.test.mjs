@@ -107,7 +107,7 @@ test('actual PostgreSQL/R2 retention honors a legal hold, retires source access 
   }finally{await h.close();}
 });
 
-test('privacy export excludes new provider/push/private media secrets and owner erasure clears report/hold FKs',async()=>{
+test('privacy export excludes provider/push/private media secrets and erasure minimizes independently released hold FKs',async()=>{
   const proofs=new Map(),h=await startHarness({faceVerifier:faceVerifierFixture,photoProcessor:processor,storeVerifier:verifier(proofs),vars});try{
     const owner=await enroll(h),admin=await administrator(h);await preferences(h,owner);const photo=await upload(h,owner);proofs.set('store.transaction.payload',tx(owner.accountId));await subscribe(h,owner);await h.json('/me/push-devices',{token:owner.token,body:{platform:'ios',push_token:'private-push-token-'+crypto.randomUUID(),operation_key:key('push')}});
     const report=await h.json('/safety/reports',{token:owner.token,body:{asset_id:photo.asset_id,reason:'Please review this specific photograph',operation_key:key('report')}},201);await h.json('/admin/safety/reports/'+report.id+'/resolve',{token:admin.token,body:{action:'hold',expected_revision:1,reason:'Reviewed scope hold',operation_key:key('hold')}});
@@ -117,6 +117,9 @@ test('privacy export excludes new provider/push/private media secrets and owner 
     // authoritative result instead of requiring a second competing executor.
     await until(()=>h.json('/privacy-requests/'+exported.id,{token:admin.token}),value=>value.privacy_request.status==='completed');
     const grant=await h.json('/privacy-exports/'+exported.id+'/grant',{token:owner.token,body:{}});const response=await h.request(grant.grant_path,{token:owner.token}),text=await response.text();assert.equal(response.status,200);for(const secret of ['private-push-token','store.transaction.payload','template_key','payload_json','token_hash','profiles_json'])assert(!text.includes(secret),secret);assert(text.includes('store_transactions'));
+    // Account deletion cannot clear this independently imposed evidence hold.
+    // Its qualified operator must release it through the supported review path.
+    await h.json('/admin/safety/reports/'+report.id+'/resolve',{token:admin.token,body:{action:'release',expected_revision:2,reason:'Independent review permits the requested erasure',operation_key:key('release-hold')}});
     const erased=(await h.json('/privacy/account-deletion',{token:owner.token,body:{operation_key:key('erase')}},201)).privacy_request;await h.json('/privacy-requests/'+erased.id+'/approve',{token:admin.token,body:{operation_key:key('review')}});await until(()=>h.json('/privacy-requests/'+erased.id,{token:admin.token}),value=>value.privacy_request.status==='completed');assert.equal((await h.storage.exec('SELECT asset_id,reason FROM safety_reports WHERE id=?',report.id))[0].asset_id,null);assert.equal((await h.storage.exec('SELECT count(*) n FROM moderation_holds WHERE asset_id=?',photo.asset_id))[0].n,0);assert.deepEqual(await h.storage.exec('SELECT c.conname FROM pg_constraint c JOIN pg_namespace n ON n.oid=c.connamespace WHERE n.nspname=\'lovelies_private\' AND c.contype=\'f\' AND NOT c.convalidated'),[]);assert.equal((await h.storage.exec('SELECT active FROM store_subscriptions WHERE account_id=?',owner.accountId))[0].active,0);await h.json('/me',{token:owner.token},401);
   }finally{await h.close();}
 });

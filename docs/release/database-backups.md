@@ -170,3 +170,12 @@ unmodified runner in `attempt-04/`: all11 actualPG checks pass with53 unchanged
 inputs. This supersedes attempt03 for the affected current database/operation
 closure, retaining every earlier failure and receipt. Hosted custody, source/
 media inventory and serving recovery remain unqualified.
+
+
+The26October `attempt-05` refresh passes the same11 actual native PostgreSQL17.11
+schema12/69-table encryption/reconstruction/expiry/quarantine checks against the
+current deletion/consent/retention source. The qualified runner is unchanged
+(`4f33a39577a5af1308bca023e99bc7672aebfec7825af6712cffb0e422a668b4`);
+all53 sealed inputs remain unchanged and the existing synthetic key was reused.
+Receipt: `/Volumes/PRO-G40/Projects/Lovelies/verification/encrypted-backup-schema12-20261026/attempt-05/result.json`.
+This does not establish hosted/off-site custody, media replay or serving clearance.

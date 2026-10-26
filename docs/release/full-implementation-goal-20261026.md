@@ -36,15 +36,23 @@ v12, new restore_control empty, six supported history versions matched and Secur
 Advisor reporting no issues. No imports/deletions or serving-marker bootstrap.
 Current receipt: `/Volumes/PRO-G40/Projects/Lovelies/verification/hosted-v12-20261026/result.json`.
 
-Whole API366/365 pass/zero fail/one optional model skip, current types and94
-operator tests pass. Forty-one focused collector/sharing/PG checkpoint/race
-checks pass. Exact sharing-retirement and requested-deletion facts, one-slot deletion-request
-allocation and HTTP/queue invocation lineage fences are implemented with stable
-logical IDs and immutable bounded manifests. Eight dedicated actualPG invocation
-cases also pass. Other restriction producers,
-resource allocations, external generation fences, replay/object cleanup and
-computed completion remain unfinished. No hosted journal or recovery clearance
-is established.
+Current whole API:408 tests,407 pass, zero fail, one optional model skip;
+current production types and all94 operator tests pass. Signed pause/resume,
+authentication withdrawal and removal now register exact old consent/profile
+revision facts before mutation. Delete review records the exact independent
+decision; terminal erasure records a stable fact only after fresh holds/lease,
+metadata erasure, no pending writers and verified request cleanup. Minimal asset
+and hold evidence survives cleanup; stale workers cannot downgrade a successor's
+verified result. The seven initial focused test failures and one later temporal
+assertion failure remain preserved with their corrected final proof.
+Receipt: `/Volumes/PRO-G40/Projects/Lovelies/verification/restore-privacy-face-20261026/whole-api-05/result.json`.
+
+Earlier collector/sharing, stable requested-deletion allocation and invocation
+lineage proof remains within its scope. Non-action/indirect producers, durable
+capacity above32, other resource allocations, external generation fences,
+replay/object inventory and computed completion remain unfinished. Operated
+post-tombstone asset holds and request-hold ABA also remain unqualified. No
+hosted journal binding or recovery clearance is established.
 
 Original1020 Swift hosts, separate101 guest/35 media hosts and108 focused OS-auth
 fixtures pass; current21-source Debug/unsignedRelease app and XCTest target build.
@@ -71,8 +79,8 @@ constraints. A supported private
 ServiceBinding passes missing/wrong401 and authenticated200 loaded readiness,
 validated against exact engine/processing/model hashes/capabilities/limits. A separate seven-case engineering run passes through that private binding
 using the actual model/PostgreSQL/API HTTP and controlled in-memory Storage,
-with98 source files and19 declared JPEGs sealed. Representative recognition,
-actual Storage and Supabase public HTTPS remain unqualified. The403/1010 public route is unresolved and was not retried/disguised. No API
+with100 sealed source files and19 declared JPEGs in the refreshed run-04. The only later delta in that broad seal is the unexecuted terminal-test assertion; all real-model consumer/runtime inputs remain unchanged. Representative recognition,
+actual Storage and representative recognition remain unqualified. A later actual Supabase Edge invocation verifies the configured HTTPS inference readiness with the exact artifact/processing identity; an unauthorized control returns 401. The temporary diagnostic is removed with zero functions remaining and shared secrets preserved. This proves readiness transport only, not hosted image requests or API cutover. The earlier root-client403/1010 remains preserved and was not retried/disguised. Receipt: `/Volumes/PRO-G40/Projects/Lovelies/verification/supabase-inference-egress-20261026/result.json`. No API
 cutover, store submission or live/stable replacement is claimed. See the current
 [integration checkpoint](audience-readiness-20261024.md) for source-bound receipts
 and preserved failures. GitHub billing remains parked without a substitute CI pass.
@@ -111,7 +119,7 @@ Rows retain qualified substeps and the remaining outcomes; the checkpoint above 
 | 26 | Accessibility/localisation — Q01/Q02/Q03/N01/U01 | Resolve demonstrated remaining contrast/text/focus findings and independently observe spoken TalkBack/VoiceOver, announcements/dialogs, actual EN/RW journeys, zero/one/many/long content and enlarged text. Retain successful round8 action proof; inventory/AX callbacks are not spoken acceptance. |
 | 27 | Devices and resilience — Q03/Q04/Q05/Q07/U06 | Verify supported phone/tablet/foldable/window/safe-area/rotation/motion/haptics/keyboard behavior, process/background/account restoration and physical low-memory/storage/permission/OS/provider/session/device/consent/block/partial-operation faults. Diagnose recorded failures without relabelling them passes. |
 | 28 | Performance — Q06/B08 | Measure release-device cold/warm startup, frame misses, viewer decoding/cache/memory, responsiveness and10,000+ assets on recorded supported tiers; use agreed budgets and real CPU/peak-memory measurements, not desktop/Debug timing substitutions. |
-| 29 | Supported-device coverage — R08 | Compare actual store device catalogs and resolve recorded Android API24→26 support change; record iPhone/iPad/minimum-OS/TLS coverage and any intended compatibility change before rollout. |
+| 29 | Supported-device coverage — R08 | Compare actual store device catalogs against the restored Android minimum24 and its qualified API24/25 virtual checks; qualify final package/device coverage and record iPhone/iPad/minimum-OS/TLS coverage before rollout. |
 | 30 | Final signed packages — U02/N01/N02/N03/N04/N05/N06/N07 | Produce exact release-signed AAB/generated APK set and Apple archive using existing lineage. Inspect versions/URLs/secrets exclusion/icons/entitlements/privacy manifest/API reasons/SDK notices/encryption/16KB ELF+ZIP+runtime/target-SDK and store-upload validation. Release launches exclude fixtures/catalog/debug entry points and show truthful progress. |
 | 31 | Existing-install replacement — R01/R02/R09/R10 | Refresh upload maxima and permissions immediately before upload; preserve existing listing/package/team/certificates. Prove clean and store-installed Memories→Lovelies updates without uninstall/reset across relevant anonymous/registered/purchase/offline/recovery states, with compatible callback/API/link upgrade window and one Supabase writer. |
 | 32 | Store preparation and test distribution — R01/R02/S01/S02/S03/S04/S05 | Complete accurate categories/copy/release notes/genuine candidate screenshots/feature graphic, territories/trader/audience/rating/Data safety/Apple privacy/encryption forms; provide reviewer-owned capture/private sharing/purchase access. Upload through existing records to Play testing/TestFlight, test exact candidates and resolve actual prelaunch/crash/reviewer feedback. |
@@ -151,4 +159,4 @@ The journal foundation alone does not close row08. Implement and test the follow
 
 ## Initial next actions
 
-Continue other exact restriction producers, stable resource allocations, external generation fencing and recovery/replay/verified cleanup. Retain the deployed image/loaded readiness and seven-case private model proof; resolve the legitimate Supabase public HTTPS access path without repeating denied requests. Qualify physical iOS LocalAuthentication and Android API24/25 compatibility, then complete independent operator/provider/public/store work. Reuse the completed hosted v9–v12 checkpoint. Keep GitHub billing unchanged and retain the unrelated untracked `-` file.
+Continue other exact restriction producers, stable resource allocations, external generation fencing and recovery/replay/verified cleanup. Retain the deployed image/loaded readiness and seven-case private model proof; retain the qualified actual Supabase HTTPS readiness path and qualify hosted image/Storage consumers. Qualify physical iOS LocalAuthentication and Android API24/25 compatibility, then complete independent operator/provider/public/store work. Reuse the completed hosted v9–v12 checkpoint. Keep GitHub billing unchanged and retain the unrelated untracked `-` file.

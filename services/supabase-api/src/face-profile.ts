@@ -6,6 +6,7 @@ import { hasConsent } from './gallery.ts';
 import { flushPrivacyCleanup } from './privacy.ts';
 import { policy, verifyKey, challengeResponse, getChallenge, captures, manifest, activeFaceVerifiers, type Profile, type Challenge, type Device } from './face-auth.ts';
 import { selectedGeneration, assertGeneration } from './inference-generation.ts';
+import { restoreOperationID } from './restore-transaction.ts';
 const PROTOCOL = 'lovelies-face-profile-v1';
 const DEVICE_PROTOCOL = 'lovelies-face-profile-device-v1';
 const CONTROL_MS = 365 * 86400000;
@@ -402,7 +403,7 @@ async function action(request: Request, ctx: AppContext): Promise<Response> {
         authConsent(input.consent, ctx, 'photo_matching');
     else if (input.consent != null)
         throw new ApiError(400, 'face_profile_input_invalid');
-    const op = (await ctx.db.transaction(async () => {
+    const op = (await ctx.db.transaction(async restore => {
         nonce(input, ctx);
         (await controlAuthority(row, ctx));
         const old = (await previous(input, hash, row, ctx));
@@ -411,6 +412,43 @@ async function action(request: Request, ctx: AppContext): Promise<Response> {
         const profile = (await ctx.db.one<Profile>('SELECT * FROM face_profiles WHERE account_id=?', row.account_id));
         if (!profile || profile.status !== 'active')
             throw new ApiError(409, 'face_profile_unavailable');
+        restore.operation({ operation_id: await restoreOperationID(row.account_id, 'face-profile.action-v1', uuid(input.operation_key)),
+            input_hash: hash, allocations: {} });
+        const withdrawMatching = ['pause', 'resume', 'remove'].includes(input.action);
+        const withdrawAuthentication = ['withdraw_authentication', 'remove'].includes(input.action);
+        // Select the old episodes before storeOperation or cancelPending writes.
+        // In particular, a pending operation cannot withdraw the consent already
+        // referenced by the current profile. Keep that shared helper predicate.
+        const withdrawn = (await ctx.db.all<{ account_id: string; id: string; purpose: string }>(`SELECT c.account_id,c.id,c.purpose FROM consents c
+            WHERE (c.account_id=? AND c.status='granted' AND ((?=1 AND c.purpose='photo_matching') OR (?=1 AND c.purpose='face_authentication')))
+            OR (c.status<>'revoked' AND c.id IN(SELECT consent_id FROM face_profile_operations WHERE account_id=? AND state='pending')
+                AND NOT EXISTS(SELECT 1 FROM face_profiles p WHERE p.auth_consent_id=c.id))`,
+        row.account_id, withdrawMatching ? 1 : 0, withdrawAuthentication ? 1 : 0, row.account_id));
+        const withdrawnIDs = new Set(withdrawn.map(consent => consent.id));
+        const survivingConsent = async (purpose: 'face_authentication' | 'photo_matching'): Promise<boolean> => {
+            // hasConsent retains the current audience gate. Its exact current
+            // policy/expiry predicate below then excludes pending cancellations.
+            if (!(await hasConsent(ctx, row.account_id, purpose)))
+                return false;
+            const required = purpose === 'face_authentication' ? policy(ctx) : photoPolicy(ctx);
+            return (await ctx.db.all<{ id: string }>(`SELECT id FROM consents WHERE account_id=? AND purpose=? AND status='granted'
+                AND revoked_at IS NULL AND (expires_at IS NULL OR expires_at>?) AND policy_version=?`,
+            row.account_id, purpose, ctx.now(), required)).some(consent => !withdrawnIDs.has(consent.id));
+        };
+        const selectedRetirement = input.action === 'remove' || ['withdraw_authentication', 'pause'].includes(input.action) &&
+            !(await survivingConsent('face_authentication')) && !(await survivingConsent('photo_matching'));
+        const facts: { kind: 'consent-withdrawn' | 'profile-retired'; scope: Record<string, string> }[] = withdrawn.map(consent => ({
+            kind: 'consent-withdrawn', scope: { account_id: consent.account_id, consent_id: consent.id, purpose: consent.purpose } }));
+        if (selectedRetirement)
+            facts.push({ kind: 'profile-retired', scope: { account_id: row.account_id, profile_id: profile.id, profile_revision: profile.revision } });
+        // One action is atomic. Until durable batching exists, fail before any
+        // SQL mutation rather than silently journal only a prefix of episodes.
+        const orderedFacts = [...new Map(facts.map(fact => [stable(fact), fact])).entries()]
+            .sort(([a], [b]) => a < b ? -1 : a > b ? 1 : 0).map(([, fact]) => fact);
+        if (orderedFacts.length > 32)
+            throw new ApiError(503, 'face_profile_restriction_capacity');
+        for (const fact of orderedFacts)
+            await restore.restrict(fact.kind, fact.scope);
         const value = (await storeOperation(input, hash, row, input.action, ctx));
         // Terminal transitions assert precise resulting authority instead of using
         // executeOperation's registered-session postguard after self-revocation.
@@ -438,6 +476,8 @@ async function action(request: Request, ctx: AppContext): Promise<Response> {
             (await ctx.db.run('UPDATE accounts SET auth_epoch=auth_epoch+1 WHERE id=?', row.account_id));
         }
         const retireUnusedAuthentication = ['withdraw_authentication', 'pause'].includes(input.action) && !(await hasConsent(ctx, row.account_id, 'face_authentication')) && !(await hasConsent(ctx, row.account_id, 'photo_matching'));
+        if ((input.action === 'remove' || retireUnusedAuthentication) !== selectedRetirement)
+            throw new ApiError(409, 'face_profile_operation_changed');
         if (input.action === 'remove' || retireUnusedAuthentication) {
             (await ctx.db.run("UPDATE face_profiles SET status='revoked',auth_enabled=0 WHERE account_id=?", row.account_id));
             (await ctx.db.run('UPDATE face_profile_states SET matching_paused=1 WHERE account_id=?', row.account_id));

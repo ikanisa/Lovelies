@@ -114,7 +114,7 @@
     "api_or_supporting_services_deployed_at_original_schema_checkpoint": false,
     "application_runtime_serving": false,
     "disabled_inference_worker_uploaded": false,
-    "current_deployment_limit": "Schema12/69 and six history entries qualified. Private actualmodel7case proof passes against98sourcefiles; Supabase publicHTTPS unqualified. Sharing/requesteddeletion facts, stable deletionID allocation and HTTP/queue invocation fencing locally pass366/365+one optionalmodelskip and94operator. Otherproducers,holds/effectfencing/replay/cleanup,hostedjournal/provider/scheduler/backupoperation/APIcutover remain open.",
+    "current_deployment_limit": "Schema12/69 and six history entries qualified; actual Supabase HTTPS inference readiness qualified. Full API/journal, hosted photo/Storage consumers and serving recovery remain unfinished.",
     "application_edge_function_count": 0,
     "custom_application_secret_count": 7,
     "current_cli_checkpoint": {
@@ -3600,28 +3600,30 @@
       "container_application": "a032803f-78a2-40f2-b011-24abaeb599ed",
       "immutable_platform_manifest": "sha256:d815c57f43cb4f1e26d624e68d8b5f43db5a76723e1c1de8d88a341273b68ffe",
       "serving_qualified": false,
-      "running_instances": 0,
-      "provider_failure": "runtime failed unpacking image",
+      "running_instances": 1,
+      "provider_failure": null,
       "independent_https_failure": "403/1010 browser_signature_banned; no unchanged retry/disguised user agent",
-      "biometric_request_sent": false,
+      "biometric_request_sent": true,
       "supabase_custom_secrets_total": 7,
       "initial_three_secrets_preserved": true,
       "receipt": {
-        "path": "/Volumes/PRO-G40/Projects/Lovelies/verification/inference-packaging-20261026/provider-trial/provider-readback.json",
-        "sha256": "564ca7c2c02509c1915d263a790b738839e051ada76d0686bacd616bb156c8da"
+        "path": "/Volumes/PRO-G40/Projects/Lovelies/verification/inference-packaging-20261026/private-inference-qualification/provider-after-run02/validated.json",
+        "sha256": "8bee6c2be08ef73f000e343bb2aa6bfd25a38b530ee3cd7a80a4870e7987358b"
       },
       "original_runtime_manifest_preserved": "sha256:982e2ed7bb66b17db17979495495892579f1b734c55d93516a2aeedbf70e1c6c",
       "packaging_only_same_files_and_runtime": true,
       "app_version": 2,
       "provider_health": {
-        "healthy": 1,
-        "failed": 0,
-        "starting": 0,
-        "active": 0,
+        "active": 1,
         "assigned": 0,
+        "healthy": 0,
+        "stopped": 0,
+        "failed": 0,
+        "scheduling": 0,
+        "starting": 0,
         "errors": []
       },
-      "provider_unpack_failure": "Prior error preserved; new provider image preparation reports healthy, not loaded model readiness",
+      "provider_unpack_failure": "Initial failure preserved in historical_initial_failed_provider_trial; later exact image and loaded readiness passed.",
       "runtime_model_ready": true,
       "packaging_lineage": {
         "path": "/Volumes/PRO-G40/Projects/Lovelies/verification/inference-packaging-20261026/result.json",
@@ -3634,7 +3636,48 @@
         "path": "/Volumes/PRO-G40/Projects/Lovelies/verification/inference-packaging-20261026/private-binding-probe/exact-readiness.json",
         "sha256": "f015264b02f97c4ada751570d0b1b3dd9260b3377a36560ed6f76ee964956581"
       },
-      "supabase_public_https_consumer_qualified": false
+      "supabase_public_https_consumer_qualified": false,
+      "historical_initial_failed_provider_trial": {
+        "running_instances": 0,
+        "failure": "runtime failed unpacking image",
+        "receipt": {
+          "path": "/Volumes/PRO-G40/Projects/Lovelies/verification/inference-packaging-20261026/provider-trial/provider-readback.json",
+          "sha256": "564ca7c2c02509c1915d263a790b738839e051ada76d0686bacd616bb156c8da"
+        }
+      },
+      "running_instances_scope": "Last recorded provider-after-run02 counter; not a fresh counter from the later Supabase readiness test.",
+      "biometric_request_scope": "Seven private-binding real-model engineering cases with actual PostgreSQL/API HTTP and controlled memory Storage; not hosted Supabase image requests or representative accuracy.",
+      "actual_supabase_https_readiness": {
+        "qualified": true,
+        "unauthorized_status": 401,
+        "authenticated_status": 200,
+        "exact_loaded_identity": true,
+        "temporary_function_removed": true,
+        "other_functions_unchanged": true,
+        "shared_secrets_changed": false,
+        "images_or_database_or_storage_touched": false,
+        "receipt": {
+          "path": "/Volumes/PRO-G40/Projects/Lovelies/verification/supabase-inference-egress-20261026/result.json",
+          "sha256": "40fd54c69c7e3048e8d542a7987884c9c676b0a183748de3588d5f9aea9f59d3"
+        },
+        "scope": "Readiness transport only; full consumer/journeys remain unqualified."
+      },
+      "actual_model_engineering": {
+        "tests": 7,
+        "pass": 7,
+        "fail": 0,
+        "source_files_at_run": 100,
+        "declared_engineering_jpegs": 19,
+        "input_seal_unchanged_at_completion": true,
+        "storage": "controlled memory Storage",
+        "real_supabase_image_requests": false,
+        "representative_quality_qualified": false,
+        "receipt": {
+          "path": "/Volumes/PRO-G40/Projects/Lovelies/verification/inference-packaging-20261026/private-inference-qualification/run-04/result.json",
+          "sha256": "71953b9ee6ca4d0bf5ba16fba5eb55488029ce7ccc751fffbb0e21a3d7a5ef61"
+        },
+        "later_nonconsumer_test_delta": "Only restore-privacy-terminal-runtime.test.mjs assertion/injection changed after this run; it is not imported or executed by openface-http.test.mjs. All production/model consumer inputs remain unchanged."
+      }
     },
     "restore_journal": {
       "local_service_tests": 34,
@@ -3660,7 +3703,18 @@
       "external_effect_generation_fences_complete": false,
       "replay_object_inventory_cleanup_computed_completion_complete": false,
       "recovery_clear_endpoint": false,
-      "scope": "Empty-event mutation checkpoints alone are not complete deletion/withdrawal suppression; hosted custody/restore qualification remains open."
+      "scope": "Empty-event mutation checkpoints alone are not complete deletion/withdrawal suppression; hosted custody/restore qualification remains open.",
+      "exact_signed_face_action_producer": true,
+      "independent_delete_review_and_terminal_erasure_facts": true,
+      "hold_evidence_preserved_until_verified_cleanup": true,
+      "stale_worker_cannot_regress_verified_cleanup": true,
+      "producer_scope_complete": false,
+      "operated_post_tombstone_asset_holds_qualified": false,
+      "request_hold_aba_generation_complete": false,
+      "current_producer_receipt": {
+        "path": "/Volumes/PRO-G40/Projects/Lovelies/verification/restore-privacy-face-20261026/whole-api-05/result.json",
+        "sha256": "566c1a588c85e0865ae7f36e4c100d162fd06632233f102480234ca1e22fe46a"
+      }
     },
     "push_private_files": {
       "local_provider_tests": 31,
@@ -3721,23 +3775,45 @@
     },
     "scope": "Current26October scoped results supersede historical contradictions. Readiness/serving/physical/provider/store/CI completion remains unproved. No overall completion percentage.",
     "api": {
-      "tests": 329,
-      "pass": 328,
+      "tests": 408,
+      "pass": 407,
       "fail": 0,
       "skipped": 1,
       "skip_scope": "Optional actual-model HTTP test; separate recognition/hosted acceptance remains open",
       "types_pass": true,
-      "source_inputs": 95,
+      "source_inputs": 134,
       "source_unchanged": true,
       "actual_native_postgres_version": "17.11",
       "actual_deno_tls_journal_handler": true,
       "receipt": {
-        "path": "/Volumes/PRO-G40/Projects/Lovelies/verification/restore-pg-integration-20261026/full-api-final-v2/result.json",
-        "sha256": "d2de7aedd8029ca292c667f082aebd911edcdd7be68d1066db4dc5e80efb6236"
+        "path": "/Volumes/PRO-G40/Projects/Lovelies/verification/restore-privacy-face-20261026/whole-api-05/result.json",
+        "sha256": "566c1a588c85e0865ae7f36e4c100d162fd06632233f102480234ca1e22fe46a"
       },
       "first_failed_329_case_run_preserved": {
         "path": "/Volumes/PRO-G40/Projects/Lovelies/verification/restore-pg-integration-20261026/full-api-final/result.json",
         "sha256": "903142c6135e7180c4f6835de835e1daff04e3592c132064f8f2a1d1220656d7"
+      },
+      "independent_operator_tests": {
+        "tests": 94,
+        "pass": 94,
+        "fail": 0
+      },
+      "preserved_failed_runs": [
+        "/Volumes/PRO-G40/Projects/Lovelies/verification/restore-privacy-face-20261026/focused-01/result.json",
+        "/Volumes/PRO-G40/Projects/Lovelies/verification/restore-privacy-face-20261026/whole-api-03/result.json"
+      ]
+    },
+    "current_encrypted_backup_reconstruction": {
+      "checks": 11,
+      "pass": 11,
+      "schema": 12,
+      "tables": 69,
+      "source_inputs": 53,
+      "source_unchanged": true,
+      "hosted_custody_or_serving_restore_qualified": false,
+      "receipt": {
+        "path": "/Volumes/PRO-G40/Projects/Lovelies/verification/encrypted-backup-schema12-20261026/attempt-05/result.json",
+        "sha256": "e496611312b2cb6486e74b39ec994f491c92f44c5e0ebd2a8bfa686c2a0ef94c"
       }
     }
   }
