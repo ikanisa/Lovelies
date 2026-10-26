@@ -13,16 +13,16 @@ reviewed guardian authorization for ages 13–17. There is no OTP or liveness/PA
 ## Current27October execution delta
 
 This section supersedes conflicting25October descriptions below within its exact
-source/environment scopes. Hosted v9–v11 and v12 are applied: schema12/69 private
-forced-RLS tables/backend policies, zero client/public access/backend membership.
-The v12 transaction preserves all67 old non-version table fingerprints and adds
-only empty restore_control; only expected schema-version rows changed. All6
-supported history versions match; CLI Security Advisor reports no issues. No
-import/deletion/backfill or runtime marker bootstrap occurred. Evidence:
-`/Volumes/PRO-G40/Projects/Lovelies/verification/hosted-v12-20261026/result.json`.
+source/environment scopes. Hosted v9–v13 are applied: schema13 has 69 private
+forced-RLS tables and backend policies, zero client/public access or backend
+membership. The v13 transaction preserved all 68 prior non-version table
+projections; only schema-version rows changed. All seven supported history
+versions match and Security Advisor reports no issues. No import, deletion,
+backfill or runtime marker bootstrap occurred. Evidence:
+`/Volumes/PRO-G40/Projects/Lovelies/verification/hosted-v13-20261027/result.json`.
 
-Current API:543 tests/542 pass/zero fail/one optional actual-model skip; current
-types and41 focused collector/sharing/PG checkpoint/race checks pass. All94
+Current API:780 tests/779 pass/zero fail/one optional actual-model skip; current
+types and earlier focused collector/sharing/PG checkpoint/race checks pass. All94
 operator tests also pass on the same frozen API source. Actual PostgreSQL17.11
 and verified-local-TLS Deno entrypoint are included. Evidence:
 `/Volumes/PRO-G40/Projects/Lovelies/verification/restore-preferences-producers-20261026/root-whole-02/result.json`.

@@ -28,21 +28,19 @@
   "hosted_infrastructure": {
     "project": "ltqfplqevxztlswlzexn",
     "schema": {
-      "status": "schema12_69_private_tables_preservation_history_security_verified",
+      "status": "schema13_69_private_tables_preservation_history_security_verified",
       "project": "ltqfplqevxztlswlzexn",
-      "version": 12,
+      "version": 13,
       "tables": 69,
       "forced_rls_tables": 69,
       "backend_only_policies": 69,
       "client_public_acl_entries": 0,
       "client_backend_memberships": [],
       "accounts": 0,
-      "old_non_version_table_fingerprints_preserved": 67,
+      "old_non_version_table_fingerprints_preserved": 68,
       "expected_changed_old_tables": [
         "schema_versions"
       ],
-      "new_table": "restore_control",
-      "new_control_empty": true,
       "runtime_marker_seeded": false,
       "bootstrap_or_clearance": false,
       "no_imports_or_deletions": true,
@@ -52,14 +50,22 @@
         "20261024170000",
         "20261024180000",
         "20261024190000",
-        "20261026132612"
+        "20261026132612",
+        "20261026224211"
       ],
       "security_advisor_items": 0,
       "receipt": {
-        "path": "/Volumes/PRO-G40/Projects/Lovelies/verification/hosted-v12-20261026/result.json",
-        "sha256": "3c7714de872c675b61dcc9a4beaf08d318e127218dca35863a4db9fee57c8651"
+        "path": "/Volumes/PRO-G40/Projects/Lovelies/verification/hosted-v13-20261027/result.json",
+        "sha256": "e015eb4b762b125350e3f5829896fb8e504756307e07136d8047616852ba0353"
       },
-      "scope": "Hosted additive DDL/security/preservation/history only; no API cutover, journal serving clearance or store release."
+      "scope": "Hosted additive DDL/security/preservation/history only; no API cutover, journal serving clearance or store release.",
+      "new_columns": [
+        "media_tickets.authority_json",
+        "download_tickets.authority_json"
+      ],
+      "new_columns_nullable_text_without_defaults": true,
+      "legacy_ticket_columns_excluded_from_projection": true,
+      "restore_control_empty": true
     },
     "storage_role": {
       "scope": "Actual hosted PostgreSQL read-only result through visible Supabase editor; not API/media/provider acceptance",
@@ -145,7 +151,8 @@
       "client_public_schema_and_table_acl_entries": 0,
       "api_functions_deployed": 0,
       "all_63_application_row_fingerprints_preserved_during_history_repair": true,
-      "staged_v9_v11_executed": false
+      "staged_v9_v11_executed": false,
+      "scope": "Historical CLI checkpoint; current hosted schema13 is recorded in hosted_infrastructure.schema."
     },
     "historical_v7_v8_schema_receipt": {
       "status": "applied_and_schema_read_back",
@@ -199,6 +206,40 @@
         "path": "/Volumes/PRO-G40/Projects/Lovelies/verification/supabase-storage-probe-20261026/repair-v2/hosted-result.json",
         "sha256": "dffe095f5bdeef713657c2b4805b3cf00bb4f5422d5b5e4e4c1fef0d35420e8b"
       }
+    },
+    "schema12_historical": {
+      "status": "schema12_69_private_tables_preservation_history_security_verified",
+      "project": "ltqfplqevxztlswlzexn",
+      "version": 12,
+      "tables": 69,
+      "forced_rls_tables": 69,
+      "backend_only_policies": 69,
+      "client_public_acl_entries": 0,
+      "client_backend_memberships": [],
+      "accounts": 0,
+      "old_non_version_table_fingerprints_preserved": 67,
+      "expected_changed_old_tables": [
+        "schema_versions"
+      ],
+      "new_table": "restore_control",
+      "new_control_empty": true,
+      "runtime_marker_seeded": false,
+      "bootstrap_or_clearance": false,
+      "no_imports_or_deletions": true,
+      "supported_history_versions": [
+        "20261023162016",
+        "20261023210000",
+        "20261024170000",
+        "20261024180000",
+        "20261024190000",
+        "20261026132612"
+      ],
+      "security_advisor_items": 0,
+      "receipt": {
+        "path": "/Volumes/PRO-G40/Projects/Lovelies/verification/hosted-v12-20261026/result.json",
+        "sha256": "3c7714de872c675b61dcc9a4beaf08d318e127218dca35863a4db9fee57c8651"
+      },
+      "scope": "Hosted additive DDL/security/preservation/history only; no API cutover, journal serving clearance or store release."
     }
   },
   "local_verification": {
@@ -973,7 +1014,8 @@
       "old_marker_quarantine_and_guarded_read_denial": true,
       "seven_day_authenticated_expiry": true,
       "original_failed_attempt_retained": true,
-      "scope": "Actual native pg_dump/encryption/operator CLI/isolated pg_restore with exact all-row hashes and RLS/client-access assertions. Journal uses production handler over controlled in-memory HTTP; no hosted custody/scheduling/media replay or serving recovery."
+      "scope": "Actual native pg_dump/encryption/operator CLI/isolated pg_restore with exact all-row hashes and RLS/client-access assertions. Journal uses production handler over controlled in-memory HTTP; no hosted custody/scheduling/media replay or serving recovery.",
+      "scope_note": "Historical schema12 checkpoint; see schema13_local_20261027 and hosted schema13 receipt for the newer bounded evidence."
     }
   },
   "receipts": {
@@ -3576,21 +3618,19 @@
     "github_billing_parked": true,
     "required_independent_ci_pass": false,
     "hosted_database": {
-      "status": "schema12_69_private_tables_preservation_history_security_verified",
+      "status": "schema13_69_private_tables_preservation_history_security_verified",
       "project": "ltqfplqevxztlswlzexn",
-      "version": 12,
+      "version": 13,
       "tables": 69,
       "forced_rls_tables": 69,
       "backend_only_policies": 69,
       "client_public_acl_entries": 0,
       "client_backend_memberships": [],
       "accounts": 0,
-      "old_non_version_table_fingerprints_preserved": 67,
+      "old_non_version_table_fingerprints_preserved": 68,
       "expected_changed_old_tables": [
         "schema_versions"
       ],
-      "new_table": "restore_control",
-      "new_control_empty": true,
       "runtime_marker_seeded": false,
       "bootstrap_or_clearance": false,
       "no_imports_or_deletions": true,
@@ -3600,14 +3640,22 @@
         "20261024170000",
         "20261024180000",
         "20261024190000",
-        "20261026132612"
+        "20261026132612",
+        "20261026224211"
       ],
       "security_advisor_items": 0,
       "receipt": {
-        "path": "/Volumes/PRO-G40/Projects/Lovelies/verification/hosted-v12-20261026/result.json",
-        "sha256": "3c7714de872c675b61dcc9a4beaf08d318e127218dca35863a4db9fee57c8651"
+        "path": "/Volumes/PRO-G40/Projects/Lovelies/verification/hosted-v13-20261027/result.json",
+        "sha256": "e015eb4b762b125350e3f5829896fb8e504756307e07136d8047616852ba0353"
       },
-      "scope": "Hosted additive DDL/security/preservation/history only; no API cutover, journal serving clearance or store release."
+      "scope": "Hosted additive DDL/security/preservation/history only; no API cutover, journal serving clearance or store release.",
+      "new_columns": [
+        "media_tickets.authority_json",
+        "download_tickets.authority_json"
+      ],
+      "new_columns_nullable_text_without_defaults": true,
+      "legacy_ticket_columns_excluded_from_projection": true,
+      "restore_control_empty": true
     },
     "inference": {
       "worker_deployed": true,
@@ -4026,7 +4074,7 @@
       }
     },
     "schema13_local_20261027": {
-      "hosted_applied": false,
+      "hosted_applied": true,
       "api_deployed": false,
       "store_submitted": false,
       "migration_scope": "Additive nullable private ticket authority columns; no backfill or deletion.",
@@ -4073,7 +4121,7 @@
           "sha256": "65cc845127a7848691d79900e3a713568e082e98db663583b023295843998d41"
         }
       },
-      "scope": "Local fixtures and reconstruction only; hosted custody, replay, release and independent CI remain open.",
+      "scope": "Local fixtures/reconstruction and hosted additive schema postflight; hosted backup custody, replay, API release and independent CI remain open.",
       "current_private_model_engineering": {
         "tests": 7,
         "passed": 7,
@@ -4086,7 +4134,45 @@
           "sha256": "1694fd32d9dcc3ab675aa41453ea4ed5c767328f84de1515a86497f53e1e505d"
         },
         "scope": "Isolated PostgreSQL and loopback API, in-memory Storage, existing private service; no deployment, representative recognition, optical capture or store qualification."
+      },
+      "hosted_postflight_receipt": {
+        "path": "/Volumes/PRO-G40/Projects/Lovelies/verification/hosted-v13-20261027/result.json",
+        "sha256": "e015eb4b762b125350e3f5829896fb8e504756307e07136d8047616852ba0353"
       }
+    },
+    "hosted_database_schema12_historical": {
+      "status": "schema12_69_private_tables_preservation_history_security_verified",
+      "project": "ltqfplqevxztlswlzexn",
+      "version": 12,
+      "tables": 69,
+      "forced_rls_tables": 69,
+      "backend_only_policies": 69,
+      "client_public_acl_entries": 0,
+      "client_backend_memberships": [],
+      "accounts": 0,
+      "old_non_version_table_fingerprints_preserved": 67,
+      "expected_changed_old_tables": [
+        "schema_versions"
+      ],
+      "new_table": "restore_control",
+      "new_control_empty": true,
+      "runtime_marker_seeded": false,
+      "bootstrap_or_clearance": false,
+      "no_imports_or_deletions": true,
+      "supported_history_versions": [
+        "20261023162016",
+        "20261023210000",
+        "20261024170000",
+        "20261024180000",
+        "20261024190000",
+        "20261026132612"
+      ],
+      "security_advisor_items": 0,
+      "receipt": {
+        "path": "/Volumes/PRO-G40/Projects/Lovelies/verification/hosted-v12-20261026/result.json",
+        "sha256": "3c7714de872c675b61dcc9a4beaf08d318e127218dca35863a4db9fee57c8651"
+      },
+      "scope": "Hosted additive DDL/security/preservation/history only; no API cutover, journal serving clearance or store release."
     }
   }
 }

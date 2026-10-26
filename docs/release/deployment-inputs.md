@@ -11,7 +11,7 @@ existing connector still lacks project access, but it is no longer the only
 usable configuration path. The owner's authorization remains in effect, and
 GitHub billing remains parked.
 
-The current qualified Supabase schema reads back at version12. All69 tables
+The current qualified Supabase schema reads back at version13. All69 tables
 have forced RLS/backend-only policies; the three private buckets have exact 20 MiB
 limits/MIME restrictions and no client Storage policies. The existing RLS event
 trigger's client execution grants were restricted, and the post-change Security
@@ -22,7 +22,9 @@ not a deployed application or store release.
 The later v12 preserves all67 old non-version table fingerprints and adds only an
 empty private restore_control table. There was no import/deletion/backfill or
 serving-marker bootstrap. All six migration-history entries match. Do not repeat
-completed DDL/grants. New receipt: `/Volumes/PRO-G40/Projects/Lovelies/verification/hosted-v12-20261026/result.json`.
+completed DDL/grants. The subsequent v13 adds nullable ticket authority fields,
+preserves prior table projections and records the seventh migration. Current
+receipt: `/Volumes/PRO-G40/Projects/Lovelies/verification/hosted-v13-20261027/result.json`.
 
 ## Selected and observed public inputs
 

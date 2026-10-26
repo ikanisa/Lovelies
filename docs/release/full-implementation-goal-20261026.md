@@ -30,13 +30,13 @@ The exact immutable Linux AMD64 inference platform manifest is `sha256:982e2ed7b
 ### Execution checkpoint, 26–27 October 2026
 
 Newer receipts supersede the initial baseline only within their tested scopes.
-Hosted v9–v11 and v12 are applied: schema12/69 private forced-RLS tables/policies,
-zero client/public access, all67 old non-version table fingerprints preserved by
-v12, new restore_control empty, six supported history versions matched and Security
-Advisor reporting no issues. No imports/deletions or serving-marker bootstrap.
-Current receipt: `/Volumes/PRO-G40/Projects/Lovelies/verification/hosted-v12-20261026/result.json`.
+Hosted v9–v13 are applied: schema13 has 69 private forced-RLS tables and policies,
+zero client/public access, preserved existing table projections and an empty
+restore_control. All seven supported history versions match and Security Advisor
+reports no issues. No imports/deletions or serving-marker bootstrap occurred.
+Current receipt: `/Volumes/PRO-G40/Projects/Lovelies/verification/hosted-v13-20261027/result.json`.
 
-Current whole API:543 tests,542 pass, zero fail, one optional model skip;
+An earlier whole API checkpoint had 543 tests, 542 pass, zero fail and one optional model skip;
 current production types and all94 operator tests pass. Signed pause/resume,
 authentication withdrawal and removal now register exact old consent/profile
 revision facts before mutation. Delete review records the exact independent
@@ -79,8 +79,9 @@ and the corrected run passed. The combined schema-13 API suite passed 779 of 780
 tests, with one optional model test skipped and no failures; all 94 operator tests
 also passed. A separate local encrypted backup reconstruction passed 13 checks,
 including exact ticket text preservation and quarantine of an older marker. The
-database change is local only; hosted backup custody, hosted migration, replay and
-deployment remain open. The separate current-source private-model engineering run
+database change was subsequently applied to hosted Supabase and passed the
+preservation/security postflight. Hosted backup custody, replay and API deployment
+remain open. The separate current-source private-model engineering run
 passed 7/7 cases with isolated PostgreSQL, loopback API and in-memory Storage; it
 made no deployment and removed its temporary credentials.
 Evidence:
@@ -90,6 +91,8 @@ Evidence:
 and `/Volumes/PRO-G40/Projects/Lovelies/verification/encrypted-backup-schema13-20261027/attempt-01/result.json`.
 The model receipt is
 `/Volumes/PRO-G40/Projects/Lovelies/verification/inference-packaging-20261026/private-inference-qualification/run-10/result.json`.
+The hosted migration receipt is
+`/Volumes/PRO-G40/Projects/Lovelies/verification/hosted-v13-20261027/result.json`.
 
 Earlier collector/sharing, stable requested-deletion allocation and invocation
 lineage proof remains within its scope. Other lifecycle/indirect producers, durable
@@ -110,8 +113,8 @@ retirement and held-completion/control-recreation fencing separately, preserving
 other devices and newer revisions. Likewise, exact photo-ticket authorization
 must bind the relevant consent and reviewed-grant episodes through held reads;
 grant replacement and processing-consent renewal must not revive old tickets.
-The ticket candidate and migration are locally integrated and tested; hosted
-rollout and full recovery qualification remain open.
+The ticket candidate is locally integrated and tested, and the additive migration
+is applied; hosted API rollout and full recovery qualification remain open.
 
 Original1020 Swift hosts, separate101 guest/35 media hosts and108 focused OS-auth
 fixtures pass. Fresh local Debug simulator and unsigned Release device builds
@@ -220,7 +223,7 @@ The journal foundation alone does not close row08. Implement and test the follow
 
 ## Initial next actions
 
-Continue other exact restriction producers, stable resource allocations, external generation fencing and recovery/replay/verified cleanup. Retain the deployed image/loaded readiness and seven-case private model proof; retain the qualified actual Supabase HTTPS readiness path and qualify hosted image/Storage consumers. Qualify physical iOS LocalAuthentication and Android API24/25 compatibility, then complete independent operator/provider/public/store work. Reuse the completed hosted v9–v12 checkpoint. Keep GitHub billing unchanged and retain the unrelated untracked `-` file.
+Continue other exact restriction producers, stable resource allocations, external generation fencing and recovery/replay/verified cleanup. Retain the deployed image/loaded readiness and seven-case private model proof; retain the qualified actual Supabase HTTPS readiness path and qualify hosted image/Storage consumers. Qualify physical iOS LocalAuthentication and Android API24/25 compatibility, then complete independent operator/provider/public/store work. Reuse the completed hosted v9–v13 checkpoint. Keep GitHub billing unchanged and retain the unrelated untracked `-` file.
 
 
 The actual three-bucket Storage plumbing checkpoint now passes tiny synthetic
@@ -245,3 +248,11 @@ facts. The decision input at
 `/Volumes/PRO-G40/Projects/Lovelies/verification/restore-capacity-design-20261027/decision-input.md`
 records unresolved snapshot, authority, recovery, intent and bounded-work semantics;
 neither a larger finite cap nor an unqualified paged design closes R11.
+
+The proposed independent upload write inventory is documented at
+`/Volumes/PRO-G40/Projects/Lovelies/verification/restore-write-inventory-design-20261027/design.md`.
+It is a design, not an implemented recovery controller. Before implementation,
+bind the callback's operation and descriptor hashes to the committed plan rather
+than inventing a plan hash before preparation, and include delayed DELETE as well
+as PUT in any writer barrier. Historical coverage, old-writer quiescence, object
+replay and recovery clearance remain open.

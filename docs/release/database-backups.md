@@ -15,8 +15,8 @@ contents. A successful producer exit without warnings is required. The CLI then
 uses `pg_restore --list` to inspect the recovered archive without executing SQL.
 
 The producer selects the whole private schema, with no fixed table list or table
-exclusions. Hosted schema v12 and the locally qualified v13 candidate each have
-69 private tables, including `restore_control`.
+exclusions. Hosted schema v13 and the locally qualified candidate each have 69
+private tables, including `restore_control`.
 Its empty state or populated database/incarnation/checkpoint/cursor and operation
 receipt fields are opaque backup data: they must be reconstructed exactly, never
 replaced with a new marker, cleared or treated as independent serving authority.
