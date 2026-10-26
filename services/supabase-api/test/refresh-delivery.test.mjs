@@ -200,7 +200,7 @@ test('frozen v7 baseline remains byte-identical and v8 receipt alone adds forced
  const folder=new URL('../../../supabase/migrations/',import.meta.url),source=fs.readFileSync(new URL('20261023162016_lovelies_private_core.sql',folder));
  assert.equal(createHash('sha256').update(source).digest('hex'),'ccd7d4b23b21bc65088fce436ade9019f0513e622140eb4e89c0048793bd9a6b');
  const h=await startHarness({consumeQueue:false});try{
-  assert.equal((await h.db.one('SELECT max(version) version FROM schema_versions')).version,12);
+  assert.equal((await h.db.one('SELECT max(version) version FROM schema_versions')).version,13);
   const rls=(await h.engine.query("SELECT relrowsecurity,relforcerowsecurity FROM pg_class WHERE oid='lovelies_private.refresh_delivery_receipts'::regclass")).rows[0];assert.deepEqual(rls,{relrowsecurity:true,relforcerowsecurity:true});
   for(const role of ['anon','authenticated'])assert.equal((await h.engine.query("SELECT has_table_privilege($1,'lovelies_private.refresh_delivery_receipts','SELECT') permitted",[role])).rows[0].permitted,false);
  }finally{await h.close();}

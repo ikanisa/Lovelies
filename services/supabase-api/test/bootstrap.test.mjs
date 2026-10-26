@@ -11,6 +11,6 @@ test('PostgreSQL schema, anonymous-first session and three signed captures upgra
  const me=await h.json('/functions/v1/lovelies-api/me',{token:person.token});
  assert.equal(me.user_id,person.accountId);assert.equal(me.authenticated,true);
  const claims=JSON.parse(Buffer.from(person.token.split('.')[1],'base64url').toString());assert.equal(claims.iss,'lovelies-supabase');
- const health=await h.json('/health');assert.equal(health.database,'supabase_postgresql');assert.equal(health.schema_version,12);
+ const health=await h.json('/health');assert.equal(health.database,'supabase_postgresql');assert.equal(health.schema_version,13);
  await h.close();
 });

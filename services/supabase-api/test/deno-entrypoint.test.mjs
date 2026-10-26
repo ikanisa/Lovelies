@@ -12,7 +12,7 @@ test('actual Deno Edge entrypoint uses PostgreSQL ALS and current anonymous/refr
  const local=await isolatedPostgres(process.env.TEST_DATABASE_URL),folder=path.resolve(import.meta.dirname,'../../../supabase/functions/lovelies-api');
  let reserve,child,closed,spawnError,failure,failed=false,journal;
  try{
- const migrations=fs.readdirSync(new URL('../../../supabase/migrations/',import.meta.url)).filter(x=>/_lovelies_private_core\.sql$|_refresh_delivery\.sql$|_audience_retention\.sql$|_inference_generation\.sql$|_retention_scan_cursors\.sql$|_restore_control\.sql$/.test(x)).sort();
+ const migrations=fs.readdirSync(new URL('../../../supabase/migrations/',import.meta.url)).filter(x=>/_lovelies_private_core\.sql$|_refresh_delivery\.sql$|_audience_retention\.sql$|_inference_generation\.sql$|_retention_scan_cursors\.sql$|_restore_control\.sql$|_lovelies_media_authority\.sql$/.test(x)).sort();
  for(const migration of migrations)await local.engine.exec(fs.readFileSync(new URL('../../../supabase/migrations/'+migration,import.meta.url),'utf8'));
  journal=await startRestoreJournalHTTPSFixture();
  const initial=await journal.bootstrap();
@@ -34,7 +34,7 @@ test('actual Deno Edge entrypoint uses PostgreSQL ALS and current anonymous/refr
   const deadline=Date.now()+20000;let health;
   while(Date.now()<deadline){if(spawnError)throw spawnError;if(child.exitCode!==null)break;try{health=await request('/health');if(health.status===200)break;}catch{}await new Promise(resolve=>setTimeout(resolve,40));}
   assert.equal(health?.status,200,'Deno startup failed: '+output.replaceAll(local.url,'[private test DB]').replaceAll(fixtureSecret,'[fixture secret]'));
-  assert.equal(health.body.database,'supabase_postgresql');assert.equal(health.body.schema_version,12);
+  assert.equal(health.body.database,'supabase_postgresql');assert.equal(health.body.schema_version,13);
   assert.equal((await request('/ready')).status,503,'fixture has no Storage/model/provider qualification');
   const anonymous=await request('/auth/anonymous',{body:{}});assert.equal(anonymous.status,201);assert.equal(anonymous.body.auth_method,'anonymous');
   const account=await request('/me',{token:anonymous.body.access_token});assert.equal(account.status,200);assert.equal(account.body.user_id,anonymous.body.account_id);assert.equal(account.body.authenticated,false);

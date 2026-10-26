@@ -35,7 +35,7 @@ const PROCESSING='e5366532fe94660257f2228e59e5d6032fd35d45ee41733d82c84aee440a26
 // Registry image manifest and package artifact are deliberately distinct.
 // Root supplies/verifies the external image receipt; /ready verifies the loaded
 // artifact, processing generation, model hashes, capabilities and limits here.
-const EXTERNAL_IMAGE_MANIFEST='982e2ed7bb66b17db17979495495892579f1b734c55d93516a2aeedbf70e1c6c';
+const EXTERNAL_IMAGE_MANIFEST='d815c57f43cb4f1e26d624e68d8b5f43db5a76723e1c1de8d88a341273b68ffe';
 const BUCKETS=['lovelies-photos','lovelies-quarantine','lovelies-privacy-exports'];
 const FILE_LIMIT=20*1024*1024;
 const MIGRATIONS=[
@@ -43,6 +43,7 @@ const MIGRATIONS=[
   '20261024170000_audience_retention.sql','20261024180000_inference_generation.sql',
   '20261024190000_retention_scan_cursors.sql',
   '20261026132612_restore_control.sql',
+  '20261026224211_lovelies_media_authority.sql',
 ];
 const JOURNAL_CA_TARGET='/run/lovelies-journal/ca.pem';
 const JOURNAL_ORIGIN='https://127.0.0.1:54324';
@@ -444,7 +445,7 @@ try{
   redactions.push(database.url);
   for(const name of MIGRATIONS){shutdown.signal.throwIfAborted();await database.engine.exec(await readFile(join(root,'supabase/migrations',name),'utf8'));}
   const versions=(await database.engine.query('SELECT version FROM lovelies_private.schema_versions ORDER BY version')).rows.map(row=>Number(row.version));
-  assert.deepEqual(versions,[7,8,9,10,11,12],'All six actual production migrations required');report.database.schema_version=12;report.database.applied_versions=versions;
+  assert.deepEqual(versions,[7,8,9,10,11,12,13],'All seven canonical migrations required');report.database.schema_version=13;report.database.applied_versions=versions;
   shutdown.signal.throwIfAborted();journal=await startRestoreJournalHTTPSFixture();redactions.push(journal.token);
   assert(Number.isSafeInteger(journal.port)&&journal.port>=1024&&journal.port<=65535,'Bounded exact HTTPS fixture port required');
   assert.equal(journal.url,'https://127.0.0.1:'+journal.port,'Only the controlled local HTTPS fixture may be relayed');
@@ -525,11 +526,11 @@ try{
     }catch{}
     await pause(250);
   }
-  assert(health?.status==='ok'&&health.database==='supabase_postgresql'&&health.database_ready===true&&health.schema_version===12,
-    'Only production PostgreSQL/schema-12 health can establish API readiness');
+  assert(health?.status==='ok'&&health.database==='supabase_postgresql'&&health.database_ready===true&&health.schema_version===13,
+    'Only production PostgreSQL/schema-13 health can establish API readiness');
   const readyResponse=await fetch(apiOrigin+'/ready',{redirect:'manual',signal:AbortSignal.timeout(20000)});
   assert.equal(readyResponse.status,200,'Production Edge readiness required');readiness=await boundedJson(readyResponse);
-  assert(readiness.status==='ok'&&readiness.database==='supabase_postgresql'&&readiness.schema_version===12&&
+  assert(readiness.status==='ok'&&readiness.database==='supabase_postgresql'&&readiness.schema_version===13&&
     readiness.inference_ready===true&&Array.isArray(readiness.missing)&&readiness.missing.length===0,'Complete production inference readiness required');
   const currentControl=(await journal.control()).control;
   assert(currentControl.state==='serving'&&currentControl.marker.database_id===initial.database_id&&currentControl.marker.incarnation_id===initial.incarnation_id,

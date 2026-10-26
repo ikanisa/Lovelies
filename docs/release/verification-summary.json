@@ -4024,6 +4024,69 @@
         },
         "scope": "Isolated PostgreSQL, local API, in-memory Storage and existing private model binding. No deployment, representative accuracy or physical/store qualification."
       }
+    },
+    "schema13_local_20261027": {
+      "hosted_applied": false,
+      "api_deployed": false,
+      "store_submitted": false,
+      "migration_scope": "Additive nullable private ticket authority columns; no backfill or deletion.",
+      "focused_media": {
+        "tests": 64,
+        "passed": 64,
+        "receipt": {
+          "path": "/Volumes/PRO-G40/Projects/Lovelies/verification/exact-media-authority-20261027/root-focused-v3-02/result.json",
+          "sha256": "648d721ddee61eb5fbe7dd767171bde94529a49d8e20ed3c928c62294daf5752"
+        },
+        "prior_failed_fixture_run_preserved": {
+          "path": "/Volumes/PRO-G40/Projects/Lovelies/verification/exact-media-authority-20261027/root-focused-v3-01/result.json",
+          "sha256": "cdcabf3e14d32d54d918be7885640721f600bc7a6705955b712426c246608d66"
+        }
+      },
+      "focused_own_session": {
+        "tests": 66,
+        "passed": 66,
+        "receipt": {
+          "path": "/Volumes/PRO-G40/Projects/Lovelies/verification/restore-own-session-20261027/root-focused-v4-01/result.json",
+          "sha256": "564e0c4ff62917752be58f7d9e5451bff4a43372957635ae1b481207ba115653"
+        }
+      },
+      "combined": {
+        "api_tests": 780,
+        "api_passed": 779,
+        "api_optional_model_skipped": 1,
+        "api_failed": 0,
+        "operator_tests_passed": 94,
+        "source_inputs_unchanged": true,
+        "receipt": {
+          "path": "/Volumes/PRO-G40/Projects/Lovelies/verification/media-authority-migration-20261027/root-whole-05/result.json",
+          "sha256": "bf84bdb76cbc2f6cac8c6d5df2fd8333ef1760dadae14f6bd404f4d23702a413"
+        },
+        "post_run_change": "The isolated Edge runner image-manifest metadata was updated after this suite; its syntax passed, and the Edge qualification remains open. API/operator source from the run was unchanged."
+      },
+      "local_encrypted_reconstruction": {
+        "checks_passed": 13,
+        "source_unchanged": true,
+        "cleanup_error": false,
+        "serving_restore_qualified": false,
+        "receipt": {
+          "path": "/Volumes/PRO-G40/Projects/Lovelies/verification/encrypted-backup-schema13-20261027/attempt-01/result.json",
+          "sha256": "65cc845127a7848691d79900e3a713568e082e98db663583b023295843998d41"
+        }
+      },
+      "scope": "Local fixtures and reconstruction only; hosted custody, replay, release and independent CI remain open.",
+      "current_private_model_engineering": {
+        "tests": 7,
+        "passed": 7,
+        "source_files_sealed": 112,
+        "engineering_jpegs": 19,
+        "source_unchanged": true,
+        "temporary_credentials_removed": true,
+        "receipt": {
+          "path": "/Volumes/PRO-G40/Projects/Lovelies/verification/inference-packaging-20261026/private-inference-qualification/run-10/result.json",
+          "sha256": "1694fd32d9dcc3ab675aa41453ea4ed5c767328f84de1515a86497f53e1e505d"
+        },
+        "scope": "Isolated PostgreSQL and loopback API, in-memory Storage, existing private service; no deployment, representative recognition, optical capture or store qualification."
+      }
     }
   }
 }

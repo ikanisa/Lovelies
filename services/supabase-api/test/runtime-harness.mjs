@@ -33,7 +33,7 @@ export async function startHarness({faceVerifier,photoProcessor,storeVerifier,pu
   const engine=localDatabase?.engine??await PGlite.create();
   try{
     if(!localDatabase)await engine.exec('CREATE ROLE anon; CREATE ROLE authenticated;');
-    const migrations=fs.readdirSync(new URL('../../../supabase/migrations/',import.meta.url)).filter(x=>/_lovelies_private_core\.sql$|_refresh_delivery\.sql$|_audience_retention\.sql$|_inference_generation\.sql$|_retention_scan_cursors\.sql$|_restore_control\.sql$/.test(x)).sort();
+    const migrations=fs.readdirSync(new URL('../../../supabase/migrations/',import.meta.url)).filter(x=>/_lovelies_private_core\.sql$|_refresh_delivery\.sql$|_audience_retention\.sql$|_inference_generation\.sql$|_retention_scan_cursors\.sql$|_restore_control\.sql$|_lovelies_media_authority\.sql$/.test(x)).sort();
     for(const migration of migrations)await engine.exec(fs.readFileSync(new URL('../../../supabase/migrations/'+migration,import.meta.url),'utf8'));
   }catch(error){
     if(localDatabase)try{await engine.close();}catch(cleanupError){try{if(error instanceof Error&&Object.isExtensible(error))Object.defineProperty(error,'cleanupErrors',{value:[cleanupError],configurable:true});}catch{}}

@@ -1,7 +1,7 @@
 import { accountRoles } from './auth.ts';
 import { ApiError, digest, jsonBody, ok, record, stable, uuid, type Actor, type AppContext, type Database } from './types.ts';
 import { assertRegisteredActor, executeOperation, prepareOperation, type PreparedOperation } from './operations.ts';
-import { protectedRendition, type Asset } from './gallery.ts';
+import { parseMediaAuthority, protectedRendition, type Asset, type MediaAuthority } from './gallery.ts';
 import { mediaHeld } from './operators.ts';
 import { enqueueNotification } from './notifications.ts';
 // Pure provider cryptography/API helpers only; no historical router or database adapter.
@@ -27,7 +27,7 @@ export const entitlementsSchemaStatements: readonly string[] = [
     `CREATE TABLE IF NOT EXISTS store_subscriptions(id TEXT PRIMARY KEY,account_id TEXT NOT NULL REFERENCES accounts(id),provider TEXT NOT NULL CHECK(provider IN('apple','google')),app_identity TEXT NOT NULL,original_id TEXT NOT NULL,product_id TEXT NOT NULL,billing_environment TEXT NOT NULL CHECK(billing_environment IN('production','sandbox')),active INTEGER NOT NULL CHECK(active IN(0,1)),starts_at INTEGER NOT NULL,expires_at INTEGER NOT NULL CHECK(expires_at>starts_at),observed_at INTEGER NOT NULL,transaction_id TEXT NOT NULL,version INTEGER NOT NULL DEFAULT 1,acknowledged INTEGER NOT NULL DEFAULT 1 CHECK(acknowledged IN(0,1)),UNIQUE(provider,billing_environment,original_id))`,
     `CREATE TABLE IF NOT EXISTS store_transactions(id TEXT PRIMARY KEY,subscription_id TEXT NOT NULL REFERENCES store_subscriptions(id),account_id TEXT NOT NULL REFERENCES accounts(id),provider TEXT NOT NULL,transaction_id TEXT NOT NULL,billing_environment TEXT NOT NULL,product_id TEXT NOT NULL,starts_at INTEGER NOT NULL,expires_at INTEGER NOT NULL,observed_at INTEGER NOT NULL,payload_hash TEXT NOT NULL,active INTEGER NOT NULL,financial_eligible INTEGER NOT NULL CHECK(financial_eligible IN(0,1)),UNIQUE(provider,billing_environment,transaction_id))`,
     `CREATE TABLE IF NOT EXISTS store_notifications(provider TEXT NOT NULL,event_id TEXT NOT NULL,payload_hash TEXT NOT NULL,account_id TEXT REFERENCES accounts(id),status TEXT NOT NULL,created_at INTEGER NOT NULL,PRIMARY KEY(provider,event_id))`,
-    `CREATE TABLE IF NOT EXISTS download_tickets(id TEXT PRIMARY KEY,account_id TEXT NOT NULL REFERENCES accounts(id),session_id TEXT NOT NULL REFERENCES sessions(id),asset_id TEXT NOT NULL REFERENCES assets(id),asset_version TEXT NOT NULL,source_checksum TEXT NOT NULL,subscription_id TEXT NOT NULL REFERENCES store_subscriptions(id),subscription_version INTEGER NOT NULL,expires_at INTEGER NOT NULL,created_at INTEGER NOT NULL)`,
+    `CREATE TABLE IF NOT EXISTS download_tickets(id TEXT PRIMARY KEY,account_id TEXT NOT NULL REFERENCES accounts(id),session_id TEXT NOT NULL REFERENCES sessions(id),asset_id TEXT NOT NULL REFERENCES assets(id),asset_version TEXT NOT NULL,source_checksum TEXT NOT NULL,subscription_id TEXT NOT NULL REFERENCES store_subscriptions(id),subscription_version INTEGER NOT NULL,expires_at INTEGER NOT NULL,created_at INTEGER NOT NULL,authority_json TEXT CHECK(authority_json IS NULL OR (json_valid(authority_json) AND json_type(authority_json)='object')))`,
     `CREATE TABLE IF NOT EXISTS download_records(id TEXT PRIMARY KEY,ticket_id TEXT NOT NULL UNIQUE,account_id TEXT NOT NULL REFERENCES accounts(id),asset_id TEXT NOT NULL REFERENCES assets(id),subscription_id TEXT NOT NULL REFERENCES store_subscriptions(id),created_at INTEGER NOT NULL,financial_eligible INTEGER NOT NULL CHECK(financial_eligible IN(0,1)))`,
     `CREATE INDEX IF NOT EXISTS store_account ON store_subscriptions(account_id,active,expires_at)`,
 ];
@@ -209,11 +209,12 @@ export async function entitlementSummary(ctx: AppContext, actor: Actor): Promise
     const subscription = (await ctx.db.one<any>("SELECT id,provider,product_id,starts_at,expires_at,version FROM store_subscriptions WHERE account_id=? AND billing_environment='production' AND active=1 AND acknowledged=1 AND starts_at<=? AND expires_at>? AND ((provider='apple' AND app_identity=? AND product_id=?) OR (provider='google' AND app_identity=? AND product_id=?)) ORDER BY expires_at DESC,id LIMIT 1", actor.accountId, ctx.now(), ctx.now(), appleIdentity, ctx.env.APPLE_SUBSCRIPTION_PRODUCT_ID ?? '', ctx.env.GOOGLE_PLAY_PACKAGE_NAME ?? '', ctx.env.GOOGLE_PLAY_SUBSCRIPTION_PRODUCT_ID ?? ''));
     return { pro_active: !!subscription, download_photos: !!subscription, high_res_access: !!subscription, source: subscription ? 'verified_store' : 'none', subscription: subscription ? { ...subscription, expires_at: new Date(subscription.expires_at).toISOString() } : null };
 }
-export async function originalDownloadAccess(ctx: AppContext, actor: Actor, assetId: string): Promise<{
+export async function originalDownloadAccess(ctx: AppContext, actor: Actor, assetId: string, expected?: MediaAuthority): Promise<{
     asset: Asset;
     subscription: any;
+    authority: MediaAuthority;
 }> {
-    const access = (await protectedRendition(ctx, actor, assetId));
+    const access = (await protectedRendition(ctx, actor, assetId, expected));
     if ((await mediaHeld(ctx, actor.accountId, assetId)) || (await mediaHeld(ctx, access.asset.owner_id, assetId)))
         throw new ApiError(423, 'fraud_hold');
     const summary = (await entitlementSummary(ctx, actor));
@@ -222,7 +223,7 @@ export async function originalDownloadAccess(ctx: AppContext, actor: Actor, asse
     const subscription = summary.subscription;
     if (!access.asset.checksum_sha256 || access.asset.byte_size <= 0 || access.asset.byte_size > 25 * 1024 * 1024)
         throw new ApiError(404, 'source_unverified');
-    return { asset: access.asset, subscription };
+    return { asset: access.asset, subscription, authority: access.authority };
 }
 async function replay(ctx: AppContext, actor: Actor, intent: PreparedOperation): Promise<Record<string, unknown> | null> {
     return (await ctx.db.transaction(async () => { (await assertRegisteredActor(ctx, actor)); if (!(await ctx.db.one('SELECT action FROM operations WHERE actor_id=? AND source=? AND operation_key=?', actor.accountId, intent.source, intent.key)))
@@ -346,11 +347,12 @@ async function storeNotification(request: Request, ctx: AppContext, provider: 'a
     })));
 }
 async function originalBytes(ctx: AppContext, ticket: any): Promise<Response> {
+    const authority = parseMediaAuthority(ticket.authority_json);
     const session = (await ctx.db.one<any>('SELECT s.*,a.roles_json FROM sessions s JOIN accounts a ON a.id=s.account_id WHERE s.id=? AND s.account_id=?', ticket.session_id, ticket.account_id));
     if (!session)
         throw new ApiError(403, 'download_expired');
     const actor: Actor = { accountId: ticket.account_id, sessionId: session.id, roles: accountRoles(session.roles_json), expiresAt: session.expires_at, authEpoch: session.auth_epoch, authMethod: session.auth_method };
-    const check = async () => { const access = (await originalDownloadAccess(ctx, actor, ticket.asset_id)); if (ticket.expires_at <= ctx.now() || access.asset.version !== ticket.asset_version || access.asset.checksum_sha256 !== ticket.source_checksum || access.subscription.id !== ticket.subscription_id || access.subscription.version !== ticket.subscription_version)
+    const check = async () => { const access = (await originalDownloadAccess(ctx, actor, ticket.asset_id, authority)); if (ticket.expires_at <= ctx.now() || access.asset.version !== ticket.asset_version || access.asset.checksum_sha256 !== ticket.source_checksum || access.subscription.id !== ticket.subscription_id || access.subscription.version !== ticket.subscription_version)
         throw new ApiError(403, 'download_authority_changed'); return access; };
     const initial = (await ctx.db.transaction(check)), object = await ctx.env.QUARANTINE.get(initial.asset.object_key);
     let bytes: Uint8Array | undefined;
@@ -360,7 +362,10 @@ async function originalBytes(ctx: AppContext, ticket: any): Promise<Response> {
             throw new ApiError(404, 'source_unverified');
         bytes = new Uint8Array(await object.arrayBuffer());
         const heldBytes = bytes;
-        const checksum = await digest(heldBytes), head = await ctx.env.QUARANTINE.head(initial.asset.object_key);
+        await ctx.db.transaction(check);
+        const checksum = await digest(heldBytes);
+        await ctx.db.transaction(check);
+        const head = await ctx.env.QUARANTINE.head(initial.asset.object_key);
         (await ctx.db.transaction(async () => {
             const current = (await check());
             if (heldBytes.byteLength !== current.asset.byte_size || checksum !== current.asset.checksum_sha256 || !head || head.etag !== object.etag || head.customMetadata?.source_version !== current.asset.version || head.customMetadata?.source_checksum_sha256 !== checksum)
@@ -406,7 +411,7 @@ export async function handleEntitlements(request: Request, ctx: AppContext): Pro
     const asset = uuid(body.asset_id), intent = await prepareOperation('download.sign', body, 'media');
     return ok((await executeOperation(ctx, actor, intent, async () => {
         const access = (await originalDownloadAccess(ctx, actor, asset)), id = crypto.randomUUID(), expires = Math.min(ctx.now() + 120000, actor.expiresAt, Date.parse(access.subscription.expires_at));
-        (await ctx.db.run('INSERT INTO download_tickets(id,account_id,session_id,asset_id,asset_version,source_checksum,subscription_id,subscription_version,expires_at,created_at) VALUES(?,?,?,?,?,?,?,?,?,?)', id, actor.accountId, actor.sessionId, asset, access.asset.version, access.asset.checksum_sha256, access.subscription.id, access.subscription.version, expires, ctx.now()));
+        (await ctx.db.run('INSERT INTO download_tickets(id,account_id,session_id,asset_id,asset_version,source_checksum,subscription_id,subscription_version,expires_at,created_at,authority_json) VALUES(?,?,?,?,?,?,?,?,?,?,?)', id, actor.accountId, actor.sessionId, asset, access.asset.version, access.asset.checksum_sha256, access.subscription.id, access.subscription.version, expires, ctx.now(), stable(access.authority)));
         return { method: 'GET', download_url: (ctx.env.PUBLIC_API_BASE_URL ?? url.origin) + '/downloads/' + id, expires_in: Math.max(0, Math.floor((expires - ctx.now()) / 1000)), source_version: access.asset.version };
     })));
 }

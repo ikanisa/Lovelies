@@ -17,7 +17,7 @@ async function rows(h){
   return hashes;
 }
 
-for(const version of [8,13,null])test(`database schema ${version??'missing'} gates existing and new requests without changing any private rows`,async()=>{
+for(const version of [8,12,14,null])test(`database schema ${version??'missing'} gates existing and new requests without changing any private rows`,async()=>{
   const h=await startHarness({consumeQueue:false});
   try{
     const guest=await h.anonymous({adult:true});

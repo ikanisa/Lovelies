@@ -15,7 +15,8 @@ contents. A successful producer exit without warnings is required. The CLI then
 uses `pg_restore --list` to inspect the recovered archive without executing SQL.
 
 The producer selects the whole private schema, with no fixed table list or table
-exclusions. Current schema v12 has 69 private tables, including `restore_control`.
+exclusions. Hosted schema v12 and the locally qualified v13 candidate each have
+69 private tables, including `restore_control`.
 Its empty state or populated database/incarnation/checkpoint/cursor and operation
 receipt fields are opaque backup data: they must be reconstructed exactly, never
 replaced with a new marker, cleared or treated as independent serving authority.
@@ -179,3 +180,13 @@ current deletion/consent/retention source. The qualified runner is unchanged
 all53 sealed inputs remain unchanged and the existing synthetic key was reused.
 Receipt: `/Volumes/PRO-G40/Projects/Lovelies/verification/encrypted-backup-schema12-20261026/attempt-05/result.json`.
 This does not establish hosted/off-site custody, media replay or serving clearance.
+
+The 27 October local schema-13 reconstruction passed 13 checks on PostgreSQL
+17.11. It preserved all 69 table hashes and the exact text of NULL, known and
+unknown ticket-authority values, retained the constrained private role and RLS,
+and quarantined an older restored marker. The existing synthetic key was reused,
+the source seal was unchanged, and the owned disposable databases were cleaned
+up. The independent journal in this test was an in-memory fixture. Receipt:
+`/Volumes/PRO-G40/Projects/Lovelies/verification/encrypted-backup-schema13-20261027/attempt-01/result.json`.
+Hosted/off-site custody, Storage reconstruction, replay and serving clearance
+remain open.

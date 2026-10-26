@@ -98,8 +98,7 @@ async function fixture(t, { seed = true } = {}) {
   let db;
   t.after(async () => { try { await db?.close(); } finally { await h.close(); } });
   const version = Number((await privateRows(h, 'SELECT max(version) AS n FROM lovelies_private.schema_versions'))[0].n);
-  if (version === 11) await h.engine.exec(migration);
-  else assert.equal(version, 12);
+  assert.equal(version, 13);
   assert.equal(await rowCount(h, 'restore_control'), 0, 'default harness must never seed serving admission');
   let tick = 1_000;
   const rawJournal = async (path, body) => handleOperationRequest(new Request('https://journal.invalid' + path, {

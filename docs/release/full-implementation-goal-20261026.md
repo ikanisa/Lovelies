@@ -61,13 +61,35 @@ replay does not repeat domain effects, though the enclosing transaction can stil
 record a generic empty checkpoint. Evidence:
 `/Volumes/PRO-G40/Projects/Lovelies/verification/restore-admin-upload-20261027/root-whole-10/`
 and `/Volumes/PRO-G40/Projects/Lovelies/verification/restore-consent-reference-20261027/root-focused-01/`.
-These results do not qualify the still-unapplied own-session candidate, shared
-device-control fencing, production recovery, hosted deployment or store release.
-The separate current-source real-model engineering run passed 7/7 cases with an
+Those earlier results did not qualify the then-unapplied own-session candidate,
+shared device-control fencing, production recovery, hosted deployment or store release.
+The separate real-model engineering run at that checkpoint passed 7/7 cases with an
 unchanged 108-file seal, isolated PostgreSQL, loopback API and in-memory Storage.
 It used the existing private inference service, removed task-local credentials
 and made no deployment. Receipt:
 `/Volumes/PRO-G40/Projects/Lovelies/verification/inference-packaging-20261026/private-inference-qualification/run-09/result.json`.
+
+The next local checkpoint introduces schema 13 and binds photo reads and tickets
+to their original processing-consent and reviewed-grant episodes. On isolated
+PostgreSQL, 64 focused photo-access cases and 66 own-session cases pass; the
+schema-12 upgrade/preservation and non-superuser fresh-chain checks also pass.
+The first photo-access run had 27 fixture failures because a synthetic Apple
+transaction lacked the required three-part format; that failure is preserved,
+and the corrected run passed. The combined schema-13 API suite passed 779 of 780
+tests, with one optional model test skipped and no failures; all 94 operator tests
+also passed. A separate local encrypted backup reconstruction passed 13 checks,
+including exact ticket text preservation and quarantine of an older marker. The
+database change is local only; hosted backup custody, hosted migration, replay and
+deployment remain open. The separate current-source private-model engineering run
+passed 7/7 cases with isolated PostgreSQL, loopback API and in-memory Storage; it
+made no deployment and removed its temporary credentials.
+Evidence:
+`/Volumes/PRO-G40/Projects/Lovelies/verification/exact-media-authority-20261027/root-focused-v3-02/result.json`,
+`/Volumes/PRO-G40/Projects/Lovelies/verification/restore-own-session-20261027/root-focused-v4-01/result.json`,
+`/Volumes/PRO-G40/Projects/Lovelies/verification/media-authority-migration-20261027/`,
+and `/Volumes/PRO-G40/Projects/Lovelies/verification/encrypted-backup-schema13-20261027/attempt-01/result.json`.
+The model receipt is
+`/Volumes/PRO-G40/Projects/Lovelies/verification/inference-packaging-20261026/private-inference-qualification/run-10/result.json`.
 
 Earlier collector/sharing, stable requested-deletion allocation and invocation
 lineage proof remains within its scope. Other lifecycle/indirect producers, durable
@@ -88,7 +110,8 @@ retirement and held-completion/control-recreation fencing separately, preserving
 other devices and newer revisions. Likewise, exact photo-ticket authorization
 must bind the relevant consent and reviewed-grant episodes through held reads;
 grant replacement and processing-consent renewal must not revive old tickets.
-The external ticket candidate and migration remain under review, not deployed.
+The ticket candidate and migration are locally integrated and tested; hosted
+rollout and full recovery qualification remain open.
 
 Original1020 Swift hosts, separate101 guest/35 media hosts and108 focused OS-auth
 fixtures pass. Fresh local Debug simulator and unsigned Release device builds
@@ -210,13 +233,13 @@ change was needed. Application authorization/RLS role matrix, hosted image/user
 journeys, distributed writers, physical backing blobs and custody remain open.
 Receipt: `/Volumes/PRO-G40/Projects/Lovelies/verification/supabase-storage-probe-20261026/repair-v2/hosted-result.json`.
 
-The next source candidates are prepared externally and independently reviewed,
-with no repository application/runtime qualification yet: administrator session
-retirement (32 prepared cases) in
+The original external administrator session retirement and immutable upload
+reservation candidates were subsequently integrated and locally tested. Their
+preparation history remains in
 `/Volumes/PRO-G40/Projects/Lovelies/verification/restore-admin-session-20261026/`,
-and immutable upload-reservation IDs (29 prepared cases) in
+and
 `/Volumes/PRO-G40/Projects/Lovelies/verification/restore-upload-allocation-20261026/`.
-Root owns application and affected verification. Large restriction capacity
+Large restriction capacity
 remains an actual functional gate: valid accepted-request history can exceed257
 facts. The decision input at
 `/Volumes/PRO-G40/Projects/Lovelies/verification/restore-capacity-design-20261027/decision-input.md`

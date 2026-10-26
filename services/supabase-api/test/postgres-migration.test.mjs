@@ -78,6 +78,17 @@ test('private schema migration succeeds under a non-superuser CREATEROLE databas
   await assert.rejects(()=>local.engine.exec("INSERT INTO lovelies_private.retention_scan_cursors(scan,entity_id) VALUES('support','source-one')"),/duplicate key/);
   await assert.rejects(()=>local.engine.exec("INSERT INTO lovelies_private.retention_scan_cursors(scan,entity_id) VALUES('support',NULL)"),/not-null constraint/);
   await assert.rejects(()=>local.engine.exec("UPDATE lovelies_private.retention_scan_cursors SET last_at=NULL WHERE scan='support' AND entity_id='source-one'"),/check constraint/);
+  await local.engine.exec('SET ROLE '+owner);
+  const checkpoint=fs.readFileSync(new URL('../../../supabase/migrations/20261026132612_restore_control.sql',import.meta.url),'utf8').replaceAll('lovelies_api',backend);
+  const authority=fs.readFileSync(new URL('../../../supabase/migrations/20261026224211_lovelies_media_authority.sql',import.meta.url),'utf8').replaceAll('lovelies_api',backend);
+  await local.engine.exec(checkpoint); await local.engine.exec(authority);
+  assert.equal((await local.engine.query('SELECT current_user role')).rows[0].role,owner);
+  assert.equal((await local.engine.query("SELECT count(*)::int n FROM pg_tables WHERE schemaname='lovelies_private'")).rows[0].n,69);
+  const authorityColumns=(await local.engine.query("SELECT table_name,data_type,is_nullable,column_default FROM information_schema.columns WHERE table_schema='lovelies_private' AND column_name='authority_json' ORDER BY table_name")).rows;
+  assert.deepEqual([...authorityColumns].map(row=>({...row})),['download_tickets','media_tickets'].map(table_name=>({table_name,data_type:'text',is_nullable:'YES',column_default:null})));
+  await local.engine.exec('SET ROLE '+backend);
+  assert.equal(Number((await local.engine.query('SELECT max(version) version FROM lovelies_private.schema_versions')).rows[0].version),13);
+  assert.equal(Number((await local.engine.query('SELECT count(*) n FROM lovelies_private.restore_control')).rows[0].n),0,'v13 does not seed restore authority');
   await local.engine.exec('RESET ROLE');
   assert.equal((await local.engine.query('SELECT pg_has_role($1,$2,$3) permitted',['postgres',backend,'MEMBER'])).rows[0].permitted,true);
  }finally{

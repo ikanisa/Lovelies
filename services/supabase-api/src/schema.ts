@@ -5,7 +5,7 @@ import { retentionSchemaStatements } from './retention.ts';
 import { uploadSchemaStatements } from './upload-schema.ts';
 import { refreshDeliverySchemaStatements } from './refresh-delivery.ts';
 import { audienceSchemaStatements } from './audience.ts';
-export const currentSchemaVersion = 12;
+export const currentSchemaVersion = 13;
 export const extensionSchemaStatements: readonly string[] = [
     ...entitlementsSchemaStatements, ...operatorsSchemaStatements, ...notificationsSchemaStatements, ...retentionSchemaStatements, ...refreshDeliverySchemaStatements, ...audienceSchemaStatements,
 ];
@@ -260,7 +260,8 @@ export const schemaStatements: readonly string[] = [
     `CREATE TABLE IF NOT EXISTS media_tickets(
     id TEXT PRIMARY KEY, account_id TEXT NOT NULL REFERENCES accounts(id), session_id TEXT NOT NULL REFERENCES sessions(id),
     asset_id TEXT NOT NULL REFERENCES assets(id), rendition_id TEXT NOT NULL REFERENCES renditions(id),
-    asset_version TEXT NOT NULL, rendition_version TEXT NOT NULL, expires_at INTEGER NOT NULL
+    asset_version TEXT NOT NULL, rendition_version TEXT NOT NULL, expires_at INTEGER NOT NULL,
+    authority_json TEXT CHECK(authority_json IS NULL OR (json_valid(authority_json) AND json_type(authority_json)='object'))
   )`,
     `CREATE TABLE IF NOT EXISTS operations(
     actor_id TEXT NOT NULL REFERENCES accounts(id), source TEXT NOT NULL, operation_key TEXT NOT NULL,

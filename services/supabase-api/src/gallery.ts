@@ -1,7 +1,7 @@
 import { audienceContext, audiencePurposes, type AudiencePurpose } from './audience.ts';
-import { asyncSome, asyncFilter, asyncMap } from './async-collections.ts';
+import { asyncFilter, asyncMap } from './async-collections.ts';
 import { accountRoles } from './auth.ts';
-import { ApiError, jsonBody, ok, record, uuid, type Actor, type AppContext } from './types.ts';
+import { ApiError, jsonBody, ok, record, stable, uuid, type Actor, type AppContext } from './types.ts';
 import { entitlementSummary } from './entitlements.ts';
 // The retired source remains typed only to read and erase historical records.
 // New requests accept personal sources exclusively.
@@ -150,13 +150,88 @@ export function sameBinding(left: MatchBinding | null, right: MatchBinding): boo
     return !!left && ['asset_id', 'recipient_id', 'version', 'candidate_id', 'origin_id', 'source_version',
         'source_checksum_sha256', 'profile_id', 'profile_version', 'model_version', 'matching_consent_id', 'profile_digest'].every(key => left[key as keyof MatchBinding] === right[key as keyof MatchBinding]);
 }
-export async function availableGrant(ctx: AppContext, accountId: string, assetId: string, requestId?: string): Promise<boolean> {
+/** Private authority snapshot. A different later approval never substitutes for
+ * the reviewed grant that admitted a ticket or an in-flight byte read. */
+export type MediaAuthority = {
+    protocol: 'lovelies-media-authority-v1';
+    origin: 'owner';
+    owner_id: string;
+    asset_id: string;
+    processing_consent_id: string;
+    processing_consent_policy_version: string;
+    processing_consent_created_at: number;
+    processing_consent_expires_at: number | null;
+} | {
+    protocol: 'lovelies-media-authority-v1';
+    origin: 'reviewed_grant';
+    grant_id: string;
+    request_id: string;
+    approval_id: string;
+    owner_id: string;
+    recipient_id: string;
+    asset_id: string;
+    processing_consent_id: string;
+    processing_consent_policy_version: string;
+    processing_consent_created_at: number;
+    processing_consent_expires_at: number | null;
+};
+const processingConsentKeys = ['processing_consent_id', 'processing_consent_policy_version',
+    'processing_consent_created_at', 'processing_consent_expires_at'] as const;
+type ProcessingConsentBinding = Pick<MediaAuthority, typeof processingConsentKeys[number]>;
+type ReviewedGrantAuthority = Extract<MediaAuthority, { origin: 'reviewed_grant' }>;
+// Metadata admission supplies the selected grant tuple; tickets and held reads
+// additionally supply the exact processing episode that first admitted them.
+type ReviewedGrantSelection = Pick<ReviewedGrantAuthority, 'grant_id' | 'request_id' | 'approval_id' | 'owner_id'>
+    & Partial<ProcessingConsentBinding>;
+const authorityUUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
+async function processingConsentEpisode(ctx: AppContext, ownerId: string,
+    expected?: Partial<ProcessingConsentBinding>): Promise<ProcessingConsentBinding | null> {
+    if (!await audienceContext(ctx, ownerId, 'photo_processing')) return null;
+    const row = await ctx.db.one<{ id: string; policy_version: string; created_at: number; expires_at: number | null }>(
+      `SELECT id,policy_version,created_at,expires_at FROM consents WHERE account_id=? AND purpose='photo_processing'
+      AND status='granted' AND revoked_at IS NULL AND (expires_at IS NULL OR expires_at>?) AND policy_version=?
+      AND (? IS NULL OR id=?) ORDER BY created_at DESC,id LIMIT 1`, ownerId, ctx.now(), currentPhotoPolicy(ctx),
+      expected?.processing_consent_id ?? null, expected?.processing_consent_id ?? null);
+    if (!row || !authorityUUID.test(row.id) || !Number.isSafeInteger(row.created_at) || row.created_at < 0
+        || (row.expires_at !== null && (!Number.isSafeInteger(row.expires_at) || row.expires_at < 0))) return null;
+    const binding: ProcessingConsentBinding = { processing_consent_id: row.id, processing_consent_policy_version: row.policy_version,
+        processing_consent_created_at: row.created_at, processing_consent_expires_at: row.expires_at };
+    // A later independent consent does not invalidate a still-current C1. C2 or
+    // a changed C1 row may not substitute for the originally admitted episode.
+    if (expected?.processing_consent_id && processingConsentKeys.some(key => binding[key] !== expected[key])) return null;
+    return binding;
+}
+function isMediaAuthority(value: unknown): value is MediaAuthority {
+    if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
+    const row = value as Record<string, unknown>;
+    if (row.protocol !== 'lovelies-media-authority-v1' || (row.origin !== 'owner' && row.origin !== 'reviewed_grant')) return false;
+    const ids = row.origin === 'owner' ? ['owner_id', 'asset_id', 'processing_consent_id']
+        : ['grant_id', 'request_id', 'approval_id', 'owner_id', 'recipient_id', 'asset_id', 'processing_consent_id'];
+    const keys = ['protocol', 'origin', ...ids, 'processing_consent_policy_version', 'processing_consent_created_at', 'processing_consent_expires_at'];
+    return Object.keys(row).length === keys.length && keys.every(key => Object.prototype.hasOwnProperty.call(row, key))
+        && ids.every(key => typeof row[key] === 'string' && authorityUUID.test(row[key] as string))
+        && typeof row.processing_consent_policy_version === 'string' && /^[A-Za-z0-9._-]{1,128}$/.test(row.processing_consent_policy_version)
+        && Number.isSafeInteger(row.processing_consent_created_at) && (row.processing_consent_created_at as number) >= 0
+        && (row.processing_consent_expires_at === null || Number.isSafeInteger(row.processing_consent_expires_at)
+            && (row.processing_consent_expires_at as number) >= 0)
+        && (row.origin !== 'reviewed_grant' || row.owner_id !== row.recipient_id);
+}
+export function parseMediaAuthority(raw: unknown): MediaAuthority {
+    // Historical NULL/unknown bindings remain stored; none may adopt the current
+    // owner or a newly accepted grant when an old ticket is consumed.
+    if (typeof raw === 'string' && raw.length <= 1536) {
+        try { const value: unknown = JSON.parse(raw); if (isMediaAuthority(value)) return value; } catch { /* fail closed */ }
+    }
+    throw new ApiError(403, 'photo_authority_changed');
+}
+async function reviewedGrant(ctx: AppContext, accountId: string, assetId: string, requestId?: string,
+    expected?: ReviewedGrantSelection): Promise<ReviewedGrantAuthority | null> {
     const grants = (await ctx.db.all<{
-        owner_id: string;
-        pair_json: string;
-        origin_id: string;
-    }>(`SELECT g.owner_id,
-    p.pairs_json pair_json,ap.origin_id FROM media_grants g
+        grant_id: string; request_id: string; approval_id: string;
+        owner_id: string; recipient_id: string; asset_id: string;
+        pair_json: string; origin_id: string; candidate_id: string; pair_version: string; asset_ids_json: string;
+    }>(`SELECT g.id grant_id,g.request_id,g.approval_id,g.owner_id,g.recipient_id,g.asset_id,
+    p.pairs_json pair_json,ap.origin_id,ap.candidate_id,ap.pair_version,r.asset_ids_json FROM media_grants g
     JOIN sharing_approvals ap ON ap.id=g.approval_id AND ap.asset_id=g.asset_id
       AND ap.recipient_id=g.recipient_id AND ap.request_id=g.request_id AND ap.owner_id=g.owner_id
     JOIN sharing_requests r ON r.id=g.request_id AND r.status='accepted' AND r.sender_id=g.owner_id
@@ -164,14 +239,35 @@ export async function availableGrant(ctx: AppContext, accountId: string, assetId
     JOIN sharing_previews p ON p.id=r.preview_id
       AND p.owner_id=g.owner_id AND p.source=r.source
     WHERE g.active=1 AND g.revoked_at IS NULL AND g.review_managed=1 AND g.recipient_id=? AND g.asset_id=?
-    ${requestId ? 'AND g.request_id=?' : ''}`, accountId, assetId, ...(requestId ? [requestId] : [])));
-    return (await asyncSome(grants, async (grant) => {
-        const bindings = JSON.parse(grant.pair_json) as MatchBinding[];
-        const approved = bindings.find(pair => pair.asset_id === assetId && pair.recipient_id === accountId && pair.origin_id === grant.origin_id);
-        // Origin expiry limits new approvals. Accepted access still requires the exact
-        // current source/profile/consent, and is revoked independently of review expiry.
-        return !!approved && sameBinding((await currentPair(ctx, grant.owner_id, assetId, accountId, false)), approved);
-    }));
+    ${requestId ? 'AND g.request_id=?' : ''}
+    ${expected ? 'AND g.id=? AND g.request_id=? AND g.approval_id=? AND g.owner_id=?' : ''}
+    ORDER BY g.created_at DESC,g.id`, accountId, assetId, ...(requestId ? [requestId] : []),
+        ...(expected ? [expected.grant_id, expected.request_id, expected.approval_id, expected.owner_id] : [])));
+    for (const grant of grants) {
+        let bindings: unknown, requested: unknown;
+        try { bindings = JSON.parse(grant.pair_json); requested = JSON.parse(grant.asset_ids_json); }
+        catch { continue; }
+        if (!Array.isArray(bindings) || !Array.isArray(requested) || !requested.length
+            || !requested.every(id => typeof id === 'string' && authorityUUID.test(id))
+            || new Set(requested).size !== requested.length || !requested.includes(assetId)) continue;
+        const approved = bindings.find(pair => pair && typeof pair === 'object' && pair.asset_id === assetId
+            && pair.recipient_id === accountId && pair.origin_id === grant.origin_id
+            && pair.candidate_id === grant.candidate_id && pair.version === grant.pair_version) as MatchBinding | undefined;
+        if (!approved || !sameBinding((await currentPair(ctx, grant.owner_id, assetId, accountId, false)), approved)) continue;
+        const consent = await processingConsentEpisode(ctx, grant.owner_id, expected);
+        if (!consent) continue;
+        const authority: ReviewedGrantAuthority = { protocol: 'lovelies-media-authority-v1', origin: 'reviewed_grant',
+            grant_id: grant.grant_id, request_id: grant.request_id, approval_id: grant.approval_id,
+            owner_id: grant.owner_id, recipient_id: grant.recipient_id, asset_id: grant.asset_id,
+            ...consent };
+        // Review expiry limits new approvals. Accepted access requires the exact
+        // current source/profile/matching consent and the retained processing episode.
+        if (isMediaAuthority(authority)) return authority;
+    }
+    return null;
+}
+export async function availableGrant(ctx: AppContext, accountId: string, assetId: string, requestId?: string): Promise<boolean> {
+    return !!(await reviewedGrant(ctx, accountId, assetId, requestId));
 }
 export function assetMetadata(asset: Asset, rendition?: Rendition | null): Record<string, unknown> {
     return { id: asset.id, version: asset.version, media_source: asset.source,
@@ -181,9 +277,10 @@ export function assetMetadata(asset: Asset, rendition?: Rendition | null): Recor
         captured_at: asset.captured_at == null ? null : new Date(asset.captured_at).toISOString(),
         created_at: new Date(asset.created_at).toISOString(), rendition_version: rendition?.version ?? null };
 }
-export async function protectedRendition(ctx: AppContext, actor: Actor, assetId: string): Promise<{
+export async function protectedRendition(ctx: AppContext, actor: Actor, assetId: string, expected?: MediaAuthority): Promise<{
     asset: Asset;
     rendition: Rendition;
+    authority: MediaAuthority;
 }> {
     (await assertMediaActor(ctx, actor));
     const asset = (await currentAsset(ctx, assetId));
@@ -192,18 +289,32 @@ export async function protectedRendition(ctx: AppContext, actor: Actor, assetId:
     if ((await ctx.db.one(`SELECT id FROM moderation_holds WHERE active=1
     AND (subject_id=? OR subject_id=? OR asset_id=?) LIMIT 1`, actor.accountId, asset.owner_id, asset.id)))
         throw new ApiError(403, 'photo_under_review');
+    if (expected && (!isMediaAuthority(expected) || expected.asset_id !== assetId
+        || (expected.origin === 'owner' ? expected.owner_id : expected.recipient_id) !== actor.accountId))
+        throw new ApiError(403, 'photo_authority_changed');
+    let authority: MediaAuthority;
     if (asset.owner_id === actor.accountId) {
-        if (!sourceAllowed(actor, asset) || !(await hasConsent(ctx, actor.accountId, 'photo_processing')))
+        const consent = await processingConsentEpisode(ctx, asset.owner_id, expected);
+        if (!consent) throw new ApiError(403, 'photo_forbidden');
+        authority = { protocol: 'lovelies-media-authority-v1', origin: 'owner', owner_id: asset.owner_id, asset_id: asset.id,
+            ...consent };
+        if (!isMediaAuthority(authority) || (expected && stable(expected) !== stable(authority)))
+            throw new ApiError(403, 'photo_authority_changed');
+        if (!sourceAllowed(actor, asset))
             throw new ApiError(403, 'photo_forbidden');
     }
-    else if (!(await availableGrant(ctx, actor.accountId, assetId)))
-        throw new ApiError(403, 'photo_forbidden');
+    else {
+        if (expected?.origin === 'owner') throw new ApiError(403, 'photo_authority_changed');
+        const grant = await reviewedGrant(ctx, actor.accountId, assetId, undefined, expected);
+        if (!grant) throw new ApiError(403, 'photo_forbidden');
+        authority = grant;
+    }
     const rendition = (await ctx.db.one<Rendition>(`SELECT * FROM renditions WHERE asset_id=? AND kind='preview'
     AND status='ready' AND verified_at IS NOT NULL AND source_version=? AND source_checksum_sha256=?`, asset.id, asset.version, asset.checksum_sha256));
     if (!rendition || rendition.byte_size <= 0 || rendition.byte_size > 4 * 1024 * 1024
         || !/^image\/(jpeg|png|webp|gif)$/.test(rendition.content_type))
         throw new ApiError(404, 'preview_unavailable');
-    return { asset, rendition };
+    return { asset, rendition, authority };
 }
 export async function galleryAction(action: string, payload: Record<string, any>, ctx: AppContext, actor: Actor): Promise<unknown | null> {
     if (['people', 'person', 'person.photos', 'photo.people'].includes(action))
@@ -352,34 +463,49 @@ async function previewBytes(ctx: AppContext, actor: Actor, assetId: string, expe
     asset_version: string;
     rendition_id: string;
     rendition_version: string;
+    expires_at: number;
+    authority_json: unknown;
 }): Promise<Response> {
+    const expectedAuthority = expected ? parseMediaAuthority(expected.authority_json) : undefined;
     const initial = (await ctx.db.transaction(async () => {
-        const access = (await protectedRendition(ctx, actor, assetId));
-        if (expected && (access.asset.version !== expected.asset_version || access.rendition.id !== expected.rendition_id
-            || access.rendition.version !== expected.rendition_version))
+        const access = (await protectedRendition(ctx, actor, assetId, expectedAuthority));
+        if (expected && (expected.expires_at <= ctx.now() || access.asset.version !== expected.asset_version
+            || access.rendition.id !== expected.rendition_id || access.rendition.version !== expected.rendition_version))
             throw new ApiError(403, 'preview_changed');
         return access;
     }));
+    const check = async () => {
+        const current = await protectedRendition(ctx, actor, assetId, initial.authority);
+        if ((expected && expected.expires_at <= ctx.now()) || current.asset.version !== initial.asset.version
+            || current.rendition.id !== initial.rendition.id || current.rendition.version !== initial.rendition.version)
+            throw new ApiError(403, 'preview_changed');
+        await assertMediaActor(ctx, actor);
+        return current;
+    };
     const sourceHead = await ctx.env.QUARANTINE.head(initial.asset.object_key);
-    (await ctx.db.transaction(async () => { (await protectedRendition(ctx, actor, assetId)); (await assertMediaActor(ctx, actor)); }));
+    await ctx.db.transaction(check);
     if (!sourceHead || sourceHead.size !== initial.asset.byte_size || sourceHead.customMetadata?.source_version !== initial.asset.version
         || sourceHead.customMetadata?.source_checksum_sha256 !== initial.asset.checksum_sha256)
         throw new ApiError(404, 'source_unverified');
     const object = await ctx.env.PHOTOS.get(initial.rendition.object_key);
-    (await ctx.db.transaction(async () => { (await protectedRendition(ctx, actor, assetId)); (await ctx.assertActor(actor)); }));
-    if (!object || object.size !== initial.rendition.byte_size || object.httpMetadata?.contentType !== initial.rendition.content_type
-        || object.customMetadata?.source_checksum_sha256 !== initial.asset.checksum_sha256
-        || object.customMetadata?.rendition_version !== initial.rendition.version)
-        throw new ApiError(404, 'preview_unverified');
-    const bytes = new Uint8Array(await object.arrayBuffer());
+    let bytes: Uint8Array<ArrayBuffer> | undefined;
     try {
-        const hash = [...new Uint8Array(await crypto.subtle.digest('SHA-256', bytes))].map(byte => byte.toString(16).padStart(2, '0')).join('');
+        await ctx.db.transaction(check);
+        if (!object || object.size !== initial.rendition.byte_size || object.httpMetadata?.contentType !== initial.rendition.content_type
+            || object.customMetadata?.source_checksum_sha256 !== initial.asset.checksum_sha256
+            || object.customMetadata?.rendition_version !== initial.rendition.version)
+            throw new ApiError(404, 'preview_unverified');
+        bytes = new Uint8Array(await object.arrayBuffer());
+        const heldBytes = bytes;
+        await ctx.db.transaction(check);
+        const hash = [...new Uint8Array(await crypto.subtle.digest('SHA-256', heldBytes))].map(byte => byte.toString(16).padStart(2, '0')).join('');
+        await ctx.db.transaction(check);
         const head = await ctx.env.PHOTOS.head(initial.rendition.object_key);
+        await ctx.db.transaction(check);
         const finalSource = await ctx.env.QUARANTINE.head(initial.asset.object_key);
         (await ctx.db.transaction(async () => {
-            const current = (await protectedRendition(ctx, actor, assetId));
-            if (current.asset.version !== initial.asset.version || current.rendition.version !== initial.rendition.version
-                || current.rendition.checksum_sha256 !== hash || bytes.byteLength !== current.rendition.byte_size
+            const current = await check();
+            if (current.rendition.checksum_sha256 !== hash || heldBytes.byteLength !== current.rendition.byte_size
                 || !head || head.etag !== object.etag || head.customMetadata?.rendition_version !== current.rendition.version
                 || head.customMetadata?.source_checksum_sha256 !== current.asset.checksum_sha256
                 || !finalSource || finalSource.etag !== sourceHead.etag
@@ -388,11 +514,12 @@ async function previewBytes(ctx: AppContext, actor: Actor, assetId: string, expe
                 throw new ApiError(403, 'preview_changed');
             (await assertMediaActor(ctx, actor));
         }));
-        return new Response(bytes.slice().buffer, { headers: { 'Content-Type': initial.rendition.content_type,
-                'Cache-Control': 'private, no-store', 'X-Content-Type-Options': 'nosniff', 'Content-Length': String(bytes.byteLength) } });
+        return new Response(heldBytes.slice().buffer, { headers: { 'Content-Type': initial.rendition.content_type,
+                'Cache-Control': 'private, no-store', 'X-Content-Type-Options': 'nosniff', 'Content-Length': String(heldBytes.byteLength) } });
     }
     finally {
-        bytes.fill(0);
+        bytes?.fill(0);
+        if (object?.body && !object.body.locked) void object.body.cancel().catch(() => { });
     }
 }
 export async function handleGallery(request: Request, ctx: AppContext): Promise<Response | null> {
@@ -405,8 +532,12 @@ export async function handleGallery(request: Request, ctx: AppContext): Promise<
                 grant_id: string;
                 candidate_id: string;
                 asset_id: string;
+                request_id: string;
+                approval_id: string;
+                owner_id: string;
+                recipient_id: string;
             }>(`SELECT g.id grant_id,
-        ap.candidate_id,g.asset_id FROM media_grants g JOIN sharing_approvals ap ON ap.id=g.approval_id
+        ap.candidate_id,g.asset_id,g.request_id,g.approval_id,g.owner_id,g.recipient_id FROM media_grants g JOIN sharing_approvals ap ON ap.id=g.approval_id
         WHERE g.recipient_id=? AND g.active=1 AND g.revoked_at IS NULL ORDER BY g.created_at DESC,g.id`, actor.accountId));
             const seen = new Set<string>();
             const gallery: unknown[] = [];
@@ -414,7 +545,10 @@ export async function handleGallery(request: Request, ctx: AppContext): Promise<
                 if (seen.has(row.asset_id))
                     continue;
                 try {
-                    const { asset, rendition } = (await protectedRendition(ctx, actor, row.asset_id));
+                    const selected = await reviewedGrant(ctx, actor.accountId, row.asset_id, undefined, {
+                        grant_id: row.grant_id, request_id: row.request_id, approval_id: row.approval_id, owner_id: row.owner_id });
+                    if (!selected) throw new ApiError(403, 'photo_forbidden');
+                    const { asset, rendition } = (await protectedRendition(ctx, actor, row.asset_id, selected));
                     gallery.push({ ...assetMetadata(asset, rendition), id: row.grant_id, media_asset_id: asset.id,
                         match_id: row.candidate_id, visibility: 'visible' });
                     seen.add(row.asset_id);
@@ -442,11 +576,11 @@ export async function handleGallery(request: Request, ctx: AppContext): Promise<
         const payload = await jsonBody(request);
         const assetId = uuid(payload.asset_id);
         return ok((await ctx.db.transaction(async () => {
-            const { asset, rendition } = (await protectedRendition(ctx, actor, assetId));
+            const { asset, rendition, authority } = (await protectedRendition(ctx, actor, assetId));
             const id = crypto.randomUUID();
             const expires = Math.min(ctx.now() + 60000, actor.expiresAt);
-            (await ctx.db.run(`INSERT INTO media_tickets(id,account_id,session_id,asset_id,rendition_id,asset_version,rendition_version,expires_at)
-        VALUES(?,?,?,?,?,?,?,?)`, id, actor.accountId, actor.sessionId, asset.id, rendition.id, asset.version, rendition.version, expires));
+            (await ctx.db.run(`INSERT INTO media_tickets(id,account_id,session_id,asset_id,rendition_id,asset_version,rendition_version,expires_at,authority_json)
+        VALUES(?,?,?,?,?,?,?,?,?)`, id, actor.accountId, actor.sessionId, asset.id, rendition.id, asset.version, rendition.version, expires, stable(authority)));
             (await ctx.assertActor(actor));
             return { preview_url: `${ctx.env.PUBLIC_API_BASE_URL ?? url.origin}/previews/${id}`, expires_in: Math.max(1, Math.floor((expires - ctx.now()) / 1000)),
                 version: asset.version, rendition_version: rendition.version };
