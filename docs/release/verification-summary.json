@@ -114,7 +114,7 @@
     "api_or_supporting_services_deployed_at_original_schema_checkpoint": false,
     "application_runtime_serving": false,
     "disabled_inference_worker_uploaded": false,
-    "current_deployment_limit": "Schema12/69 and six history entries qualified. Exact deployed model private-binding engineering seven-case proof passes with realPG/API HTTP and memoryStorage; public Supabase HTTPS unqualified. Shared collector/exact sharing-retirement producer locally passes. Other restore producers/allocations/fences/replay/cleanup, hosted journal/provider/scheduler/backup operation and API cutover remain unfinished.",
+    "current_deployment_limit": "Schema12/69 and six history entries qualified. Private actualmodel7case proof passes against98sourcefiles; Supabase publicHTTPS unqualified. Sharing/requesteddeletion facts, stable deletionID allocation and HTTP/queue invocation fencing locally pass366/365+one optionalmodelskip and94operator. Otherproducers,holds/effectfencing/replay/cleanup,hostedjournal/provider/scheduler/backupoperation/APIcutover remain open.",
     "application_edge_function_count": 0,
     "custom_application_secret_count": 7,
     "current_cli_checkpoint": {
@@ -216,23 +216,23 @@
         }
       },
       "current_schema12_checkpoint": {
-        "tests": 344,
-        "pass": 343,
+        "tests": 366,
+        "pass": 365,
         "fail": 0,
         "skipped": 1,
-        "skip_scope": "Optional model aggregate test; separate seven-case deployed-model/private-binding proof retained without relabelling aggregate counts",
+        "skip_scope": "Aggregate optional model test remains skipped; separate7-case actualmodel/privatebinding proof qualified against98sourcefiles",
         "types_pass": true,
-        "source_inputs": 130,
+        "source_inputs": 132,
         "source_unchanged": true,
         "actual_native_postgres_version": "17.11",
         "actual_deno_tls_journal_handler": true,
-        "focused_actual_pg_collector_sharing_checks_pass": 41,
+        "dedicated_invocation_cases_pass": 8,
         "operator_tests_pass": 94,
         "receipt": {
-          "path": "/Volumes/PRO-G40/Projects/Lovelies/verification/restore-sharing-producer-20261026/whole-api-01/result.json",
-          "sha256": "8db349970b4bf7f0b2a7da474da589f9de1e4b5b4eb84058348686eeba5b5721"
+          "path": "/Volumes/PRO-G40/Projects/Lovelies/verification/restore-deletion-invocation-20261026/whole-api-04/result.json",
+          "sha256": "f809b738399a2dd5defcd37940146bcf9168c02ce2e17dcf824108b48c21d8e5"
         },
-        "implemented_producer": "Exact sharing retirement only; other producers/allocations/external fences/recovery remain open"
+        "implemented_producers": "Sharing retirement; stable requested-deletion allocation/fact; HTTP/queue/maintenance invocation lineage. Other producers/direct-domain wrappers/external effects/recovery remain open."
       },
       "historical_first_schema12_checkpoint": {
         "tests": 329,
@@ -253,6 +253,25 @@
           "path": "/Volumes/PRO-G40/Projects/Lovelies/verification/restore-pg-integration-20261026/full-api-final/result.json",
           "sha256": "903142c6135e7180c4f6835de835e1daff04e3592c132064f8f2a1d1220656d7"
         }
+      },
+      "historical_sharing_only_checkpoint": {
+        "tests": 344,
+        "pass": 343,
+        "fail": 0,
+        "skipped": 1,
+        "skip_scope": "Optional model aggregate test; separate seven-case deployed-model/private-binding proof retained without relabelling aggregate counts",
+        "types_pass": true,
+        "source_inputs": 130,
+        "source_unchanged": true,
+        "actual_native_postgres_version": "17.11",
+        "actual_deno_tls_journal_handler": true,
+        "focused_actual_pg_collector_sharing_checks_pass": 41,
+        "operator_tests_pass": 94,
+        "receipt": {
+          "path": "/Volumes/PRO-G40/Projects/Lovelies/verification/restore-sharing-producer-20261026/whole-api-01/result.json",
+          "sha256": "8db349970b4bf7f0b2a7da474da589f9de1e4b5b4eb84058348686eeba5b5721"
+        },
+        "implemented_producer": "Exact sharing retirement only; other producers/allocations/external fences/recovery remain open"
       }
     },
     "operator_client": {
@@ -374,6 +393,34 @@
         "runtime_checkpoint": "verification/supabase-release-20261023/android-test-only-correction/focused-runtime-checkpoint.json",
         "independent_review": "verification/supabase-release-20261023/android-test-only-correction/focused-runtime-review.json",
         "original_failure_cause": "unexplained; diagnosticbranchunexercised on both passing25retakes"
+      },
+      "current_api24_25_compatibility_checkpoint": {
+        "receipt_root": "/Volumes/PRO-G40/Projects/Lovelies/verification/android-min24-compatibility-20261026",
+        "app_sha256": "78113b2c18a960878ad2e607423bb392e783c75632eb7384fc116436d52c3a48",
+        "test_sha256": "1787c96a3dcf909c34dde0c79a0198c0685595f49d17da61233f3f0bfece488d",
+        "minimum_sdk": 24,
+        "target_sdk": 36,
+        "debug_lint_errors": 0,
+        "jvm_tests_pass": 197,
+        "virtual_arm64_api24": {
+          "denied": true,
+          "granted": true,
+          "checks_per_mode": 8
+        },
+        "virtual_arm64_api25": {
+          "denied": true,
+          "granted": true,
+          "checks_per_mode": 8
+        },
+        "owned_processes_stopped": true,
+        "permission_state_restored": true,
+        "debug_v2_signature": "verified",
+        "zip_alignment_16kb": "pass",
+        "native_libraries": 8,
+        "decompressed_apk_members_checked": 372,
+        "four_known_server_secrets_absent": true,
+        "preserved_failures": true,
+        "scope": "Installed desugared protocol/Keystore/vault/NIO/FileProvider/legacyMediaStore/localnotification on owned virtual devices; no actualHTTPrefresh/recovery/physicalcamera/hardwarebacking/provider/spoken/fullreference/finalsigning/storeupdate acceptance. ReleaseNIOattribution/source/publicavailability remains."
       }
     },
     "ios": {
@@ -779,13 +826,13 @@
       "representative_threshold_or_hosted_qualification": false,
       "source_scope": "Retained pre-OpenFace tested source snapshot; not acceptance of concurrent consumer integration.",
       "current_private_binding_engineering_checkpoint": {
-        "receipt": "/Volumes/PRO-G40/Projects/Lovelies/verification/inference-packaging-20261026/private-inference-qualification/run-02/result.json",
-        "sha256": "acfa90a2e5e2395ebcfef2210be1cbc8e73910f225ce08d96255a71cc837e3c2",
+        "receipt": "/Volumes/PRO-G40/Projects/Lovelies/verification/inference-packaging-20261026/private-inference-qualification/run-03/result.json",
+        "sha256": "dafa11980b8eeb14e5f1d4f848ba06ae6f28dae634fb610e687d82af92b768f1",
         "tests": 7,
         "pass": 7,
         "fail": 0,
         "skipped": 0,
-        "input_source_files": 96,
+        "input_source_files": 98,
         "engineering_jpegs": 19,
         "input_seal_unchanged": true,
         "transport": {
@@ -901,7 +948,7 @@
       "ios_readback_receipt": "verification/supabase-release-20261023/post-localization-ui/caption-scroll-build/release-readback.json"
     },
     "current_schema12_encrypted_backup_checkpoint": {
-      "receipt": "/Volumes/PRO-G40/Projects/Lovelies/verification/encrypted-backup-schema12-20261026/attempt-03/result.json",
+      "receipt": "/Volumes/PRO-G40/Projects/Lovelies/verification/encrypted-backup-schema12-20261026/attempt-04/result.json",
       "checks_pass": 11,
       "source_inputs": 53,
       "source_unchanged": true,

@@ -1,5 +1,5 @@
 import { ApiError, digest, stable } from './types.ts';
-import type { DatabaseFence, SqlConnection } from './database.ts';
+import type { DatabaseFence, DatabaseLineage, SqlConnection } from './database.ts';
 import {
   RESTORE_PROJECT_ID, validateRestoreMarker, validateRestoreOperationInput,
   type RestoreJournalClient, type RestoreMarker, type RestoreOperationInput, type RestoreOperationRecord,
@@ -21,6 +21,7 @@ const hash=/^[0-9a-f]{64}$/;
  * assumes an abort, bootstraps a row or fabricates replay/cleanup clearance. */
 export class RestoreDatabaseFence implements DatabaseFence{
   private readonly admissions=new WeakSet<object>();
+  private readonly lineages=new WeakMap<object,DatabaseLineage>();
   private readonly reservations=new WeakSet<object>();
   constructor(private readonly journal:JournalPort){}
   private async local(connection:SqlConnection):Promise<Admission>{
@@ -47,7 +48,15 @@ export class RestoreDatabaseFence implements DatabaseFence{
       }
     }
     await this.journal.admission(admission.marker);
-    this.admissions.add(admission);return admission;
+    this.admissions.add(admission);
+    this.lineages.set(admission,Object.freeze({database_id:admission.marker.database_id,incarnation_id:admission.marker.incarnation_id}));
+    return admission;
+  }
+  lineage(rawAdmission:unknown):DatabaseLineage {
+    if(!rawAdmission||typeof rawAdmission!=='object'||!this.admissions.has(rawAdmission))return unavailable();
+    const lineage=this.lineages.get(rawAdmission);
+    if(!lineage)return unavailable();
+    return lineage;
   }
   async prepare(connection:SqlConnection,rawAdmission:unknown,rawIntent?:unknown):Promise<unknown>{
     if(!rawAdmission||typeof rawAdmission!=='object'||!this.admissions.has(rawAdmission))return unavailable();

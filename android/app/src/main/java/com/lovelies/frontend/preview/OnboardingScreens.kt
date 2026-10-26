@@ -204,8 +204,8 @@ private fun FaceEnrollment(state: PreviewState) {
             .clickable(role = Role.Button) {
                 state.selfieCount += 1
                 if(state.selfieCount >= 3) { state.selfieCount = 0; state.navigate(8) }
-                else state.toast(uiContext.getString(R.string.copy_selfie_1_s_of_3_captured_in_this_pre_b9989903, state.selfieCount))
-            }.semantics { contentDescription = uiContext.getString(R.string.copy_capture_simulated_selfie_1_s_of_3_88ac9758, state.selfieCount + 1) }, contentAlignment = Alignment.Center) {
+                else state.toast(uiContext.getString(R.string.copy_selfie_1_s_of_3_captured_in_this_pre_b9989903, state.selfieCount.toString()))
+            }.semantics { contentDescription = uiContext.getString(R.string.copy_capture_simulated_selfie_1_s_of_3_88ac9758, (state.selfieCount + 1).toString()) }, contentAlignment = Alignment.Center) {
             Box(Modifier.size(54.dp).clip(CircleShape).background(Color.White))
         }
         BodyText(stringResource(R.string.copy_position_your_face_in_the_frame_d8080d72), Modifier.padding(top = 14.dp, bottom = 14.dp), size = 14)

@@ -67,47 +67,61 @@ export function normalizedRequest(request:Request):Request {
 }
 export function createHandler(ctx:AppContext):(request:Request)=>Promise<Response>{
   return async incoming=>{
-    const request=normalizedRequest(incoming),origin=request.headers.get('origin');
+    const origin=incoming.headers.get('origin');
     const allowed=new Set((ctx.env.ALLOWED_ORIGINS??'').split(',').map(x=>x.trim()).filter(Boolean));
     if(ctx.env.PUBLIC_APP_BASE_URL)allowed.add(ctx.env.PUBLIC_APP_BASE_URL);
-    let response:Response;
-    try{
-      if(origin&&!allowed.has(origin))throw new ApiError(403,'origin_not_allowed');
-      const path=new URL(request.url).pathname;
-      if(request.method==='OPTIONS'){
-        if(!origin)throw new ApiError(403,'origin_required');
-        response=new Response(null,{status:204,headers:{'Access-Control-Allow-Methods':'GET,POST,PUT,PATCH,DELETE,OPTIONS','Access-Control-Allow-Headers':'Authorization,Content-Type,X-Lovelies-Capture-SHA256,X-Lovelies-Device-Signature,X-Lovelies-Capture-Bytes,X-Lovelies-Chunk-SHA256','Access-Control-Max-Age':'600'}});
-      }else if(request.method==='GET'&&(path==='/health'||path==='/ready')){
-        const version=await databaseVersion(ctx),ready=version===currentSchemaVersion;
-        const missing=path==='/ready'?missingConfiguration(ctx.env):[];
-        let inferenceReady:boolean|undefined;
-        if(path==='/ready'){
-          inferenceReady=false;
-          if(ready)try{inferenceReady=!!ctx.env.MODEL_SERVICE_READINESS&&await ctx.env.MODEL_SERVICE_READINESS(request.signal)===true;}catch{inferenceReady=false;}
+    let response:Response|undefined,activeRequest:Request|undefined;
+    const decorate=(value:Response):Response=>{
+      const headers=new Headers(value.headers);headers.set('Cache-Control','no-store, private');headers.set('X-Content-Type-Options','nosniff');headers.set('Vary','Origin');
+      if(origin&&allowed.has(origin))headers.set('Access-Control-Allow-Origin',origin);else headers.delete('Access-Control-Allow-Origin');
+      return new Response(value.body,{status:value.status,statusText:value.statusText,headers});
+    };
+    try{return await ctx.db.invocation(async()=>{
+      const request=normalizedRequest(incoming);activeRequest=request;
+      try{
+        if(origin&&!allowed.has(origin))throw new ApiError(403,'origin_not_allowed');
+        const path=new URL(request.url).pathname;
+        if(request.method==='OPTIONS'){
+          if(!origin)throw new ApiError(403,'origin_required');
+          response=new Response(null,{status:204,headers:{'Access-Control-Allow-Methods':'GET,POST,PUT,PATCH,DELETE,OPTIONS','Access-Control-Allow-Headers':'Authorization,Content-Type,X-Lovelies-Capture-SHA256,X-Lovelies-Device-Signature,X-Lovelies-Capture-Bytes,X-Lovelies-Chunk-SHA256','Access-Control-Max-Age':'600'}});
+        }else if(request.method==='GET'&&(path==='/health'||path==='/ready')){
+          const version=await databaseVersion(ctx),ready=version===currentSchemaVersion;
+          const missing=path==='/ready'?missingConfiguration(ctx.env):[];
+          let inferenceReady:boolean|undefined;
+          if(path==='/ready'){
+            inferenceReady=false;
+            if(ready)try{inferenceReady=!!ctx.env.MODEL_SERVICE_READINESS&&await ctx.env.MODEL_SERVICE_READINESS(request.signal)===true;}catch{inferenceReady=false;}
+          }
+          const available=ready&&!missing.length&&inferenceReady!==false;
+          response=ok({status:available?'ok':'unavailable',service:'lovelies-supabase-api',database:'supabase_postgresql',database_ready:ready,schema_version:version,missing,
+            ...(path==='/ready'?{inference_ready:inferenceReady}:{}),verification:'registered_face_comparison',liveness_required:false,hosted_provider_acceptance:false},available?200:503);
+        }else if(path==='/_internal/maintenance'&&request.method==='POST'){
+          if(!await maintenanceAuthorized(request,ctx.env))throw new ApiError(404,'route_not_found');
+          await requireCurrentDatabase(ctx);
+          const result=await maintain(ctx);response=ok(result,result.maintenance_errors||result.failed?503:200);
+        }else{
+          if(path.startsWith('/_internal'))throw new ApiError(404,'route_not_found');
+          await requireCurrentDatabase(ctx);
+          if(path==='/auth/anonymous'&&request.method==='POST')await limitAuth(request,ctx,'anonymous');
+          if(path.startsWith('/auth/face/recovery/'))await limitAuth(request,ctx,'recovery');
+          if(path.startsWith('/auth/face/profile/'))await limitAuth(request,ctx,'profile');
+          let handled:Response|null=null;
+          for(const handler of [handleAuth,handleAudience,handleFaceProfile,handleFaceAuth,handleIdentity,handleProfile,handleProcessing,handleSharing,handleGallery,handleEntitlements,handleOperators,handleAdminUsers,handleNotifications,handleRetention,handlePrivacy]){
+            handled=await handler(request,ctx);if(handled)break;
+          }
+          if(!handled)throw new ApiError(404,'route_not_found');response=handled;
         }
-        const available=ready&&!missing.length&&inferenceReady!==false;
-        response=ok({status:available?'ok':'unavailable',service:'lovelies-supabase-api',database:'supabase_postgresql',database_ready:ready,schema_version:version,missing,
-          ...(path==='/ready'?{inference_ready:inferenceReady}:{}),verification:'registered_face_comparison',liveness_required:false,hosted_provider_acceptance:false},available?200:503);
-      }else if(path==='/_internal/maintenance'&&request.method==='POST'){
-        if(!await maintenanceAuthorized(request,ctx.env))throw new ApiError(404,'route_not_found');
-        await requireCurrentDatabase(ctx);
-        const result=await maintain(ctx);response=ok(result,result.maintenance_errors||result.failed?503:200);
-      }else{
-        if(path.startsWith('/_internal'))throw new ApiError(404,'route_not_found');
-        await requireCurrentDatabase(ctx);
-        if(path==='/auth/anonymous'&&request.method==='POST')await limitAuth(request,ctx,'anonymous');
-        if(path.startsWith('/auth/face/recovery/'))await limitAuth(request,ctx,'recovery');
-        if(path.startsWith('/auth/face/profile/'))await limitAuth(request,ctx,'profile');
-        let handled:Response|null=null;
-        for(const handler of [handleAuth,handleAudience,handleFaceProfile,handleFaceAuth,handleIdentity,handleProfile,handleProcessing,handleSharing,handleGallery,handleEntitlements,handleOperators,handleAdminUsers,handleNotifications,handleRetention,handlePrivacy]){
-          handled=await handler(request,ctx);if(handled)break;
-        }
-        if(!handled)throw new ApiError(404,'route_not_found');response=handled;
-      }
-    }catch(error){response=failure(error);}
-    finally{if(request.body&&!request.body.locked)await request.body.cancel().catch(()=>{});}
-    const headers=new Headers(response.headers);headers.set('Cache-Control','no-store, private');headers.set('X-Content-Type-Options','nosniff');headers.set('Vary','Origin');
-    if(origin&&allowed.has(origin))headers.set('Access-Control-Allow-Origin',origin);else headers.delete('Access-Control-Allow-Origin');
-    return new Response(response.body,{status:response.status,statusText:response.statusText,headers});
+      }catch(error){response=failure(error);}
+      finally{if(request.body&&!request.body.locked)await request.body.cancel().catch(()=>{});}
+      response=decorate(response);return response;
+    });}catch(error){
+      // The invocation's final admission can fail after a private response was
+      // constructed. Cancel that body before returning the same JSON/CORS error
+      // contract; no stale payload is released merely because its last query passed.
+      await response?.body?.cancel().catch(()=>{});
+      const body=(activeRequest??incoming).body;
+      if(body&&!body.locked)await body.cancel().catch(()=>{});
+      return decorate(failure(error));
+    }
   };
 }

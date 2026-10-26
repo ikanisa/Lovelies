@@ -70,15 +70,19 @@ class LoveliesMessagingService: FirebaseMessagingService() {
     override fun onMessageReceived(message: RemoteMessage) {
         if(!PushConfiguration.optedIn(this) || !PushConfiguration.permitted(this))return
         val id=runCatching { NativeProtocol.id(message.data["id"] ?: message.data["notification_id"]) }.getOrNull() ?: return
-        val manager=getSystemService(NotificationManager::class.java)
-        manager.createNotificationChannel(NotificationChannel("lovelies-updates",getString(R.string.notification_channel),NotificationManager.IMPORTANCE_DEFAULT).apply {
-            description=getString(R.string.controller_a6e0f9a6503b);lockscreenVisibility=android.app.Notification.VISIBILITY_PRIVATE
-        })
+        if(Build.VERSION.SDK_INT>=26) {
+            val manager=getSystemService(NotificationManager::class.java)
+            manager.createNotificationChannel(NotificationChannel("lovelies-updates",getString(R.string.notification_channel),NotificationManager.IMPORTANCE_DEFAULT).apply {
+                description=getString(R.string.controller_a6e0f9a6503b);lockscreenVisibility=android.app.Notification.VISIBILITY_PRIVATE
+            })
+        }
         val open=Intent(this,MainActivity::class.java).putExtra("notification_id",id).addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP or Intent.FLAG_ACTIVITY_CLEAR_TOP)
         val tap=PendingIntent.getActivity(this,id.hashCode(),open,PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
         val notification=NotificationCompat.Builder(this,"lovelies-updates").setSmallIcon(R.drawable.ic_notification)
             .setContentTitle(getString(R.string.notification_title)).setContentText(getString(R.string.notification_body))
             .setAutoCancel(true).setContentIntent(tap).setVisibility(NotificationCompat.VISIBILITY_PRIVATE).build()
-        if(PushConfiguration.permitted(this))NotificationManagerCompat.from(this).notify(id.hashCode(),notification)
+        if(!PushConfiguration.optedIn(this) || !PushConfiguration.permitted(this))return
+        try { NotificationManagerCompat.from(this).notify(id.hashCode(),notification) }
+        catch(_: SecurityException) { return } // Permission may change after the fresh check.
     }
 }

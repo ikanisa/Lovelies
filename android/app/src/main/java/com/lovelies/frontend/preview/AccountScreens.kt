@@ -124,7 +124,7 @@ private fun FaceManagement(state: PreviewState) {
             repeat(4) { index ->
                 Asset(state.referenceGrids[38]?.tiles?.getOrNull(index)?.asset ?: "person01.jpg",Modifier.weight(1f).aspectRatio(1f).clip(RoundedCornerShape(18.dp))
                     .border(if(index == 0)2.dp else 1.dp,if(index == 0)Pink else Hairline,RoundedCornerShape(18.dp))
-                    .clickable(role = Role.Button) { state.toast(uiContext.getString(R.string.copy_face_preview_1_s_selected_d1a49280, index+1)) },uiContext.getString(R.string.copy_face_preview_1_s_e5db5a2b, index+1))
+                    .clickable(role = Role.Button) { state.toast(uiContext.getString(R.string.copy_face_preview_1_s_selected_d1a49280, (index+1).toString())) },uiContext.getString(R.string.copy_face_preview_1_s_e5db5a2b, (index+1).toString()))
             }
         }
         PinkButton(uiContext.getString(R.string.copy_replace_face_ff6be360)) { state.selfieCount = 0;state.navigate(6) }
@@ -139,8 +139,8 @@ private fun ManagePeople(state: PreviewState) {
     val uiContext = androidx.compose.ui.platform.LocalContext.current
     val blocked = state.blockedPeople.distinct()
     val allowed = state.allowedPeople
-    val allowedLabel = uiContext.getString(R.string.copy_allowed_1_s_7b45c22f, allowed.size)
-    val blockedLabel = uiContext.getString(R.string.copy_blocked_1_s_1ca562ff, blocked.size)
+    val allowedLabel = uiContext.getString(R.string.copy_allowed_1_s_7b45c22f, allowed.size.toString())
+    val blockedLabel = uiContext.getString(R.string.copy_blocked_1_s_1ca562ff, blocked.size.toString())
     val viewingBlocked = state.peopleTab == "Blocked"
     Column(Modifier.fillMaxSize().padding(horizontal = 18.dp)) {
         ScreenHeader(uiContext.getString(R.string.copy_manage_people_a3539654),onBack = state::back)
@@ -310,7 +310,7 @@ private fun Storage(state: PreviewState) {
         }
         Spacer(Modifier.height(20.dp))
         listOf(Triple(uiContext.getString(R.string.copy_photos_cde554d0),uiContext.getString(R.string.copy_1_8_gb_3c1f5f9b),Pink),Triple(uiContext.getString(R.string.copy_matches_a7d4102e),uiContext.getString(R.string.copy_420_mb_4af1f110),Violet),
-            Triple(uiContext.getString(R.string.copy_cache_cc192185),uiContext.getString(R.string.copy_1_s_mb_ecb7b509, state.storageCacheMB),Color(0xFFE9E2CF)),Triple(uiContext.getString(R.string.copy_other_6e38ff95),uiContext.getString(R.string.copy_60_mb_544f6392),Color(0xFFE9E2CF))).forEach { (label,value,color) ->
+            Triple(uiContext.getString(R.string.copy_cache_cc192185),uiContext.getString(R.string.copy_1_s_mb_ecb7b509, state.storageCacheMB.toString()),Color(0xFFE9E2CF)),Triple(uiContext.getString(R.string.copy_other_6e38ff95),uiContext.getString(R.string.copy_60_mb_544f6392),Color(0xFFE9E2CF))).forEach { (label,value,color) ->
             Row(Modifier.fillMaxWidth().heightIn(min=36.dp).padding(vertical=4.dp),verticalAlignment = Alignment.CenterVertically) {
                 Box(Modifier.size(18.dp).clip(CircleShape).background(color))
                 Text(label,color = Color.White,fontSize = 15.sp,modifier = Modifier.padding(start = 15.dp).weight(1f))
@@ -319,7 +319,7 @@ private fun Storage(state: PreviewState) {
         }
         Spacer(Modifier.weight(.4f))
         PinkButton(uiContext.getString(R.string.copy_manage_storage_86726f67),Modifier.padding(bottom = 20.dp)) {
-            state.confirm(uiContext.getString(R.string.copy_manage_storage_86726f67),uiContext.getString(R.string.copy_clear_1_s_mb_of_sample_cache_your_ph_5c13d19e, state.storageCacheMB),uiContext.getString(R.string.copy_clear_cache_d8649644)) { state.clearCache() }
+            state.confirm(uiContext.getString(R.string.copy_manage_storage_86726f67),uiContext.getString(R.string.copy_clear_1_s_mb_of_sample_cache_your_ph_5c13d19e, state.storageCacheMB.toString()),uiContext.getString(R.string.copy_clear_cache_d8649644)) { state.clearCache() }
         }
     }
 }

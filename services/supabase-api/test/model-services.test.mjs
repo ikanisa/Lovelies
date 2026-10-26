@@ -452,7 +452,9 @@ test('public API readiness reports a sanitized live-probe boolean and health rem
     INFERENCE_ENGINE_IDENTITY:h.services.generation(),
     AUTH_SIGNING_SECRET:secret,MEDIA_SIGNING_SECRET:secret,INTERNAL_MAINTENANCE_SECRET:secret,
     FACE_AUTH_POLICY_VERSION:'registered-face-opencv-v1',PHOTO_MODEL_VERSION:INFERENCE_MODEL_ID,PUBLIC_API_BASE_URL:'https://api.example'};
-  const handler=createHandler(createApp({one:async()=>({version:currentSchemaVersion})},env));
+  // Bounded unfenced readiness unit port; this supplies no restore-admission
+  // authority and does not replace the PostgreSQL invocation/runtime checks.
+  const handler=createHandler(createApp({one:async()=>({version:currentSchemaVersion}),invocation:async callback=>callback()},env));
   const live=await handler(new Request('https://api.example/ready'));assert.equal(live.status,200);
   const value=await live.json();assert.equal(value.inference_ready,true);assert.equal(value.hosted_provider_acceptance,false);
   for(const key of [...bindingNames,'model_hashes','processing_fingerprint','capabilities'])assert(!Object.hasOwn(value,key));

@@ -21,12 +21,12 @@ supported history versions match; CLI Security Advisor reports no issues. No
 import/deletion/backfill or runtime marker bootstrap occurred. Evidence:
 `/Volumes/PRO-G40/Projects/Lovelies/verification/hosted-v12-20261026/result.json`.
 
-Current API:344 tests/343 pass/zero fail/one optional actual-model skip; current
+Current API:366 tests/365 pass/zero fail/one optional actual-model skip; current
 types and41 focused collector/sharing/PG checkpoint/race checks pass. All94
 operator tests also pass on the same frozen API source. Actual PostgreSQL17.11
 and verified-local-TLS Deno entrypoint are included. Evidence:
-`/Volumes/PRO-G40/Projects/Lovelies/verification/restore-sharing-producer-20261026/whole-api-01/result.json`.
-The earlier329-case pass and its initial nine-failure run retain their scopes.
+`/Volumes/PRO-G40/Projects/Lovelies/verification/restore-deletion-invocation-20261026/whole-api-04/result.json`.
+The earlier344- and329-case passes and preserved failures retain their scopes. Stable deletion-request IDs/requested facts and HTTP/queue invocation lineage fencing are now integrated. Eight dedicated actualPG lineage cases pass after fixing test teardown order; the timed-out cleanup-failure run and type-only maintenance inference correction remain preserved.
 
 The journal protocol's34 local SQLiteDO checks remain valid. The API now collects
 immutable exact sharing-request retirement facts before decline/withdraw/revoke
@@ -34,7 +34,7 @@ SQL changes, with stable actor/source/key operation IDs and separately bound
 payload hashes. Receipt retries and already-terminal transitions create no
 duplicate restriction. Lost prepare/commit/ack, restored accepted rows, nested/
 read-only/closed scopes, invalid registration and manifest bounds are covered.
-Independent source review found no concrete regression. Other domain producers,
+Stable deletion-request allocations and exact requested-stage facts also precede SQL effects; receipt/altered-input/lost-result cases pass. HTTP/queue/maintenance invocations bind their first verified database incarnation, reject stale/poisoned/escaped continuations and perform final admission before response release. Independent review closed a mutable-admission alias issue. Other domain producers,
 stable resource allocations, external-effect generation fences, replay/object
 inventory/cleanup, computed completion and hosted journal custody remain open.
 No recovery-clear endpoint or manual flag exists.
@@ -45,7 +45,7 @@ A separate seven-case run now passes using the actual deployed model through
 an authenticated private account ServiceBinding, actual PostgreSQL and production
 API HTTP handler. It covers signed same-account enrollment/login, wrong-face/
 replay denial, exact sharing, and held-result profile/consent/session/source/
-lease fences. All96 source inputs and19 declared engineering JPEGs match their
+lease fences. All98 source inputs and19 declared engineering JPEGs match their
 seal. Storage is controlled in-memory; cleanup assertions in this run do not
 qualify Supabase Storage DELETE or provider custody. This is not representative
 recognition quality, physical capture or hosted application acceptance.
@@ -53,7 +53,7 @@ The first local gateway attempt stopped before the suite because nested JSON
 was escaped by dotenv; the causal typed-config fix and original failure remain
 preserved. The successful run removed task-local credentials and preserved the
 source credential files. Evidence:
-`/Volumes/PRO-G40/Projects/Lovelies/verification/inference-packaging-20261026/private-inference-qualification/run-02/result.json`.
+`/Volumes/PRO-G40/Projects/Lovelies/verification/inference-packaging-20261026/private-inference-qualification/run-03/result.json`.
 The separate public HTTPS403/1010 route was not retried/disguised; Supabase public
 HTTPS connectivity and API cutover remain unqualified.
 
@@ -80,7 +80,7 @@ checks with53 unchanged inputs after the collector integration. All69 table hash
 reconstruct; seven-day expiry and old-marker quarantine pass. The original
 Result-array assertion failure is retained. Independent hosted custody/media
 replay/scheduling and serving recovery remain open. Evidence:
-`/Volumes/PRO-G40/Projects/Lovelies/verification/encrypted-backup-schema12-20261026/attempt-03/result.json`.
+`/Volumes/PRO-G40/Projects/Lovelies/verification/encrypted-backup-schema12-20261026/attempt-04/result.json`.
 
 Isolated Edge driver
 source now includes schema12, required TLS journal/CA and bounded relays; its

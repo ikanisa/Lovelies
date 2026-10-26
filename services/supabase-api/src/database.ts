@@ -44,10 +44,14 @@ export interface SqlConnection {
  * a missing database control row is never created by request handling. */
 export interface DatabaseFence {
   enter(connection:SqlConnection):Promise<unknown>;
+  lineage(admission:unknown):DatabaseLineage;
   prepare(connection:SqlConnection,admission:unknown,intent?:unknown):Promise<unknown>;
   committed(connection:SqlConnection,prepared:unknown):Promise<void>;
 }
+export type DatabaseLineage=Readonly<{database_id:string;incarnation_id:string}>;
 type TransactionFrame={connection:SqlConnection;readOnly:boolean;restore:RestoreTransactionScope};
+type InvocationFrame={lineage?:DatabaseLineage;closed:boolean;failed:boolean};
+const lineageID=/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
 
 /** Every mutation runs on one reserved PostgreSQL connection. The advisory lock
  * retains the original engine's single-authority serialization across isolates.
@@ -56,38 +60,81 @@ type TransactionFrame={connection:SqlConnection;readOnly:boolean;restore:Restore
  * retry a callback: it could include a deliberately prepared external effect. */
 export class PostgresDatabase implements Database {
   private readonly transactions=new AsyncLocalStorage<TransactionFrame>();
+  private readonly invocations=new AsyncLocalStorage<InvocationFrame>();
   constructor(private readonly connection:SqlConnection,private readonly fence?:DatabaseFence){}
+  private unavailable(frame=this.invocations.getStore()):never {
+    if(frame)frame.failed=true;
+    throw new ApiError(503,'restore_reconciliation_required');
+  }
+  private assertInvocation():InvocationFrame|undefined {
+    const frame=this.invocations.getStore();
+    if(frame&&(frame.closed||frame.failed))return this.unavailable(frame);
+    return frame;
+  }
+  private admitInvocation(admission:unknown):void {
+    const frame=this.assertInvocation();
+    if(!frame||!this.fence)return;
+    const next=this.fence.lineage(admission);
+    if(!next||Object.keys(next).sort().join(',')!=='database_id,incarnation_id'||
+      !lineageID.test(next.database_id)||!lineageID.test(next.incarnation_id))return this.unavailable(frame);
+    if(frame.lineage&&(frame.lineage.database_id!==next.database_id||frame.lineage.incarnation_id!==next.incarnation_id))return this.unavailable(frame);
+    frame.lineage??=Object.freeze({database_id:next.database_id,incarnation_id:next.incarnation_id});
+  }
+  /** One logical request/job retains its first independently admitted lineage
+   * across SQL transactions and awaited external work. Nested calls join it;
+   * neither a caught mismatch nor an escaped callback can open a fresh scope. */
+  async invocation<T>(callback:()=>T|Promise<T>):Promise<T> {
+    if(this.assertInvocation()){
+      const value=await callback();this.assertInvocation();return value;
+    }
+    // The final admission must be a fresh transaction, not a joined transaction
+    // whose admission happened before this logical invocation began.
+    if(this.transactions.getStore())throw new ApiError(500,'database_invocation_scope_invalid');
+    const frame:InvocationFrame={closed:false,failed:false};
+    return this.invocations.run(frame,async()=>{
+      try{
+        const value=await callback();this.assertInvocation();
+        if(frame.lineage)await this.read(()=>{});
+        this.assertInvocation();return value;
+      }finally{frame.closed=true;}
+    });
+  }
   async all<T=Record<string,unknown>>(source:string,...bindings:Binding[]):Promise<T[]> {
+    this.assertInvocation();
     if(bindings.length>100)throw new ApiError(500,'sql_binding_limit');
     const {sql,values}=postgresQuery(source,bindings);
     const frame=this.transactions.getStore();
     if(!frame)return this.read(()=>this.all<T>(source,...bindings));
-    return frame.connection.query<T>(sql,values);
+    const rows=await frame.connection.query<T>(sql,values);this.assertInvocation();return rows;
   }
   async one<T=Record<string,unknown>>(sql:string,...bindings:Binding[]):Promise<T|null> {
     const rows=await this.all<T>(sql,...bindings);
     if(rows.length>1)throw new ApiError(500,'non_unique_database_row');return rows[0]??null;
   }
   async run(sql:string,...bindings:Binding[]):Promise<void> {
+    this.assertInvocation();
     if(!this.transactions.getStore()){await this.transaction(()=>this.run(sql,...bindings));return;}
     if(this.transactions.getStore()!.readOnly)throw new ApiError(500,'read_only_transaction');
     await this.all(sql,...bindings);
   }
   async read<T>(callback:()=>T|Promise<T>):Promise<T>{
-    if(this.transactions.getStore())return await callback();
+    this.assertInvocation();
+    if(this.transactions.getStore()){const value=await callback();this.assertInvocation();return value;}
     return this.execute(callback,true);
   }
   async transaction<T>(callback:(restore:RestoreTransactionScope)=>T|Promise<T>,intent?:unknown):Promise<T> {
+    this.assertInvocation();
     const active=this.transactions.getStore();
     if(active){
       if(active.readOnly)throw new ApiError(500,'read_only_transaction');
       // A nested callback cannot install a different independent operation.
       if(intent!==undefined)throw new ApiError(500,'nested_restore_operation');
-      return await callback(active.restore);
+      const value=await callback(active.restore);this.assertInvocation();return value;
     }
     return this.execute(callback,false,intent);
   }
   private async execute<T>(callback:(restore:RestoreTransactionScope)=>T|Promise<T>,readOnly:boolean,intent?:unknown):Promise<T>{
+    this.assertInvocation();
     let prepared:unknown;
     const collector=new RestoreTransactionCollector(readOnly,intent!==undefined),restore=collector.scope;
     const result=await this.connection.begin(connection=>this.transactions.run({connection,readOnly,restore},async()=>{
@@ -98,13 +145,21 @@ export class PostgresDatabase implements Database {
         await connection.query('SELECT pg_advisory_xact_lock(704536419730718193::bigint)',[]);
         await connection.query('SET LOCAL ROLE lovelies_api',[]);
         await connection.query("SET LOCAL search_path TO lovelies_private, pg_catalog",[]);
-        const admission=await this.fence?.enter(connection);
+        let admission:unknown;
+        try{admission=await this.fence?.enter(connection);this.admitInvocation(admission);}
+        catch(error){const frame=this.invocations.getStore();if(frame)frame.failed=true;throw error;}
         const value=await callback(restore);
+        this.assertInvocation();
         const manifest=await collector.seal(intent);
+        this.assertInvocation();
         // SQL remains uncommitted until independent acknowledgement. Domain
         // effects must register exact restrictions and external ports must fence
         // effects; this adapter never automatically reruns a callback on error.
-        if(this.fence&&!readOnly)prepared=await this.fence.prepare(connection,admission,manifest);
+        if(this.fence&&!readOnly){
+          try{prepared=await this.fence.prepare(connection,admission,manifest);}
+          catch(error){const frame=this.invocations.getStore();if(frame)frame.failed=true;throw error;}
+        }
+        this.assertInvocation();
         return value;
       }finally{collector.close();}
     }));
@@ -112,14 +167,16 @@ export class PostgresDatabase implements Database {
       // The first transaction may have committed while its acknowledgement was
       // lost or taken over by another pool. Reacquire the same lock and reread
       // the actual PG marker; a cached pre-restore successor is insufficient.
-      await this.connection.begin(async connection=>{
+      this.assertInvocation();
+      try{await this.connection.begin(async connection=>{
         await connection.query('SET TRANSACTION READ ONLY',[]);
         await connection.query('SELECT pg_advisory_xact_lock(704536419730718193::bigint)',[]);
         await connection.query('SET LOCAL ROLE lovelies_api',[]);
         await connection.query("SET LOCAL search_path TO lovelies_private, pg_catalog",[]);
         await this.fence!.committed(connection,prepared);
-      });
+      });}catch(error){const frame=this.invocations.getStore();if(frame)frame.failed=true;throw error;}
     }
+    this.assertInvocation();
     return result;
   }
   async close():Promise<void>{await this.connection.close?.();}

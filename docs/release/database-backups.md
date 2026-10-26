@@ -164,3 +164,9 @@ runner and existing synthetic key. All11 checks pass again; all53 inputs,
 including the new collector, remain unchanged. This is the current source-bound
 schema12 backup result; attempts01/02 remain preserved. It does not close the
 hosted custody, scheduler, media replay or serving-recovery gates above.
+
+The subsequent invocation/deletion-allocation change is qualified by the same
+unmodified runner in `attempt-04/`: all11 actualPG checks pass with53 unchanged
+inputs. This supersedes attempt03 for the affected current database/operation
+closure, retaining every earlier failure and receipt. Hosted custody, source/
+media inventory and serving recovery remain unqualified.

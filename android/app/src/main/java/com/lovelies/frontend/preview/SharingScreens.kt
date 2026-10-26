@@ -94,7 +94,7 @@ private fun PhotoToPeople(state: PreviewState) {
     val uiContext = androidx.compose.ui.platform.LocalContext.current
     Column(Modifier.fillMaxSize()) {
         Box(Modifier.fillMaxWidth().weight(1f)) {
-            Asset(state.selectedPhotoAsset ?: photoAsset(state.selectedPhoto),Modifier.fillMaxSize(),uiContext.getString(R.string.copy_photo_1_s_b27fd7d6, state.selectedPhoto+1))
+            Asset(state.selectedPhotoAsset ?: photoAsset(state.selectedPhoto),Modifier.fillMaxSize(),uiContext.getString(R.string.copy_photo_1_s_b27fd7d6, (state.selectedPhoto+1).toString()))
             Row(Modifier.fillMaxWidth().padding(8.dp),verticalAlignment = Alignment.CenterVertically) {
                 IconAction(Glyph.BACK,uiContext.getString(R.string.back),onClick = state::back)
                 Spacer(Modifier.weight(1f))
@@ -155,7 +155,7 @@ private fun SelectSharePhotos(state: PreviewState) {
     val uiContext = androidx.compose.ui.platform.LocalContext.current
     Column(Modifier.fillMaxSize().padding(horizontal = 12.dp)) {
         ScreenHeader(if(state.route == 29)uiContext.getString(R.string.copy_select_photos_to_share_52f9b7e4) else uiContext.getString(R.string.copy_deselect_photos_d46d783f),onBack = state::back,
-            subtitle = uiContext.getString(R.string.copy_1_s_of_12_selected_6a4cdc17, state.selectedSharePhotos.size),right = { Overflow(state) })
+            subtitle = uiContext.getString(R.string.copy_1_s_of_12_selected_6a4cdc17, state.selectedSharePhotos.size.toString()),right = { Overflow(state) })
         if(state.referenceGrids.containsKey(29))SourcePhotoGrid(state,state.route,Modifier.weight(1f),selectable = true,
             selections = state.selectedSharePhotos,dimUnselected = state.route == 30,onPhotoClick = { index,_ -> state.togglePhoto(index) })
         else PhotoGrid(state,Modifier.weight(1f),photos = listOf(0,1,4,9,2,3,5,6,7,8,10,11),selectable = true,
@@ -163,7 +163,7 @@ private fun SelectSharePhotos(state: PreviewState) {
         Row(Modifier.fillMaxWidth().height(66.dp).clip(RoundedCornerShape(23.dp)).background(Panel)
             .padding(horizontal = 15.dp),verticalAlignment = Alignment.CenterVertically) {
             AppIcon(Glyph.SHARE,Modifier.size(27.dp))
-            Text(uiContext.getString(R.string.copy_1_s_selected_35eec3bf, state.selectedSharePhotos.size),color = Color.White,fontSize = 15.sp,textAlign = TextAlign.Center,
+            Text(uiContext.getString(R.string.copy_1_s_selected_35eec3bf, state.selectedSharePhotos.size.toString()),color = Color.White,fontSize = 15.sp,textAlign = TextAlign.Center,
                 modifier = Modifier.weight(1f))
             Box(Modifier.size(49.dp).clip(CircleShape).background(if(state.selectedSharePhotos.isNotEmpty())Pink else Hairline)
                 .clickable(enabled = state.selectedSharePhotos.isNotEmpty(),role = Role.Button) { state.navigate(31) }
@@ -180,7 +180,7 @@ private fun SelectRecipients(state: PreviewState) {
     val uiContext = androidx.compose.ui.platform.LocalContext.current
     Column(Modifier.fillMaxSize().padding(horizontal = 16.dp)) {
         ScreenHeader(if(state.route == 31)uiContext.getString(R.string.copy_choose_people_to_share_with_9173d5ed) else uiContext.getString(R.string.copy_deselect_people_a3a304bd),onBack = state::back,
-            subtitle = uiContext.getString(R.string.copy_1_s_of_2_s_selected_7695fb3c, state.eligibleSelectedRecipients.size, state.allowedPeople.size),right = { Overflow(state) })
+            subtitle = uiContext.getString(R.string.copy_1_s_of_2_s_selected_7695fb3c, state.eligibleSelectedRecipients.size.toString(), state.allowedPeople.size.toString()),right = { Overflow(state) })
         Column(Modifier.weight(1f).verticalScroll(rememberScrollState())) {
             state.allowedPeople.forEach { index ->
                 val name = PeopleNames[index]
@@ -222,13 +222,13 @@ private fun ReviewShare(state: PreviewState) {
             } else Row(Modifier.fillMaxWidth().height(155.dp),horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                 selected.firstOrNull()?.let { index ->
                     Asset(photoAsset(index),Modifier.weight(.34f).fillMaxHeight().clip(RoundedCornerShape(8.dp))
-                        .clickable(role = Role.Button) { state.openPhoto(index) },uiContext.getString(R.string.copy_photo_1_s_b27fd7d6, index+1))
+                        .clickable(role = Role.Button) { state.openPhoto(index) },uiContext.getString(R.string.copy_photo_1_s_b27fd7d6, (index+1).toString()))
                 }
                 Column(Modifier.weight(.66f),verticalArrangement = Arrangement.spacedBy(6.dp)) {
                     selected.drop(1).chunked(3).take(2).forEach { row ->
                         Row(Modifier.weight(1f),horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                             row.forEach { index -> Asset(photoAsset(index),Modifier.weight(1f).fillMaxHeight().clip(RoundedCornerShape(8.dp))
-                                .clickable(role = Role.Button) { state.openPhoto(index) },uiContext.getString(R.string.copy_photo_1_s_b27fd7d6, index+1)) }
+                                .clickable(role = Role.Button) { state.openPhoto(index) },uiContext.getString(R.string.copy_photo_1_s_b27fd7d6, (index+1).toString())) }
                         }
                     }
                 }

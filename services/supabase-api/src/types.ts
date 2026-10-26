@@ -2,6 +2,7 @@ import type { RestoreTransactionScope } from './restore-transaction.ts';
 
 export type Binding = string | number | null | ArrayBuffer;
 export interface Database {
+    invocation<T>(callback: () => T | Promise<T>): Promise<T>;
     all<T = Record<string, unknown>>(sql: string, ...bindings: Binding[]): Promise<T[]>;
     one<T = Record<string, unknown>>(sql: string, ...bindings: Binding[]): Promise<T | null>;
     run(sql: string, ...bindings: Binding[]): Promise<void>;

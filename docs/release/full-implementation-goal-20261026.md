@@ -36,10 +36,12 @@ v12, new restore_control empty, six supported history versions matched and Secur
 Advisor reporting no issues. No imports/deletions or serving-marker bootstrap.
 Current receipt: `/Volumes/PRO-G40/Projects/Lovelies/verification/hosted-v12-20261026/result.json`.
 
-Whole API344/343 pass/zero fail/one optional model skip, current types and94
+Whole API366/365 pass/zero fail/one optional model skip, current types and94
 operator tests pass. Forty-one focused collector/sharing/PG checkpoint/race
-checks pass. Exact sharing-retirement facts are implemented with stable logical
-operation IDs and immutable bounded manifests. Other restriction producers,
+checks pass. Exact sharing-retirement and requested-deletion facts, one-slot deletion-request
+allocation and HTTP/queue invocation lineage fences are implemented with stable
+logical IDs and immutable bounded manifests. Eight dedicated actualPG invocation
+cases also pass. Other restriction producers,
 resource allocations, external generation fences, replay/object cleanup and
 computed completion remain unfinished. No hosted journal or recovery clearance
 is established.
@@ -54,6 +56,14 @@ passes11 checks with all69 table hashes/control row, seven-day expiry and
 old-marker quarantine preserved. Hosted backup custody/media replay/operation
 remain open.
 
+
+Android minimum24 is restored with actual API24/25 ARM64 virtual compatibility
+checks passing in denied/granted media modes, eight checks per run. Debug lint,
+197 JVM tests, exact artifact/signature/alignment and server-secret exclusion
+pass. No physical/connected-provider/final-split/store-installed upgrade proof is
+inferred; current NIO notice/source-distribution work remains. See the Android
+release progress for the preserved failures and exact source/artifact receipts.
+
 The packaging-only d815 image is published and deployed with the exact982e
 payload/runtime preserved. After the seven-case run, Cloudflare appversion2 reads back the exactd815
 image, one active instance, no failures/pull errors, private network and EU/WEUR
@@ -61,7 +71,7 @@ constraints. A supported private
 ServiceBinding passes missing/wrong401 and authenticated200 loaded readiness,
 validated against exact engine/processing/model hashes/capabilities/limits. A separate seven-case engineering run passes through that private binding
 using the actual model/PostgreSQL/API HTTP and controlled in-memory Storage,
-with96 source files and19 declared JPEGs sealed. Representative recognition,
+with98 source files and19 declared JPEGs sealed. Representative recognition,
 actual Storage and Supabase public HTTPS remain unqualified. The403/1010 public route is unresolved and was not retried/disguised. No API
 cutover, store submission or live/stable replacement is claimed. See the current
 [integration checkpoint](audience-readiness-20261024.md) for source-bound receipts

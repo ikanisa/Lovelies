@@ -1,7 +1,7 @@
 import { assertAudienceCapability } from './audience.ts';
 import { ApiError, digest, stable, type Actor, type AppContext } from './types.ts';
 import { assertEnrollmentActor, assertPrivacyActor } from './auth.ts';
-import { restoreOperationID, type RestoreTransactionScope } from './restore-transaction.ts';
+import { restoreAllocationID, restoreOperationID, type RestoreTransactionScope } from './restore-transaction.ts';
 export type PreparedOperation = Readonly<{
     key: string;
     action: string;
@@ -124,9 +124,11 @@ function relatedSubjects(value: unknown, subjects: Set<string>, parent = ''): vo
         }
     }
 }
+type OperationAllocations = Readonly<Record<string, string>>;
+type AllocationFactory = (operationID: string) => OperationAllocations | Promise<OperationAllocations>;
 /** Uses the same durable key after ambiguity. The callback and all authorizing
  * reads/writes are awaited inside one PostgreSQL transaction. */
-async function executeAuthorizedOperation<T extends Record<string, unknown>>(ctx: AppContext, actor: Actor, intent: PreparedOperation, callback: (restore: RestoreTransactionScope) => T | Promise<T>, subjectIds: readonly string[], assertAuthority: () => void | Promise<void>): Promise<T> {
+async function executeAuthorizedOperation<T extends Record<string, unknown>>(ctx: AppContext, actor: Actor, intent: PreparedOperation, callback: (restore: RestoreTransactionScope, allocations: OperationAllocations) => T | Promise<T>, subjectIds: readonly string[], assertAuthority: () => void | Promise<void>, allocate?: AllocationFactory): Promise<T> {
     return (await ctx.db.transaction(async restore => {
         (await assertAuthority());
         const previous = (await ctx.db.one<{
@@ -149,9 +151,10 @@ async function executeAuthorizedOperation<T extends Record<string, unknown>>(ctx
         }
         // A SQL receipt retry above never re-prepares its committed independent
         // operation. New callbacks bind the logical key before collecting facts.
-        restore.operation({ operation_id: await restoreOperationID(actor.accountId, intent.source, intent.key),
-            input_hash: intent.hash, allocations: {} });
-        const result = await callback(restore);
+        const operationID = await restoreOperationID(actor.accountId, intent.source, intent.key);
+        const allocations: OperationAllocations = Object.freeze({ ...(allocate ? await allocate(operationID) : {}) });
+        restore.operation({ operation_id: operationID, input_hash: intent.hash, allocations });
+        const result = await callback(restore, allocations);
         if (!result || typeof result !== 'object' || Array.isArray(result) || typeof (result as {
             then?: unknown;
         }).then === 'function') {
@@ -177,11 +180,15 @@ async function executeAuthorizedOperation<T extends Record<string, unknown>>(ctx
 export async function executeOperation<T extends Record<string, unknown>>(ctx: AppContext, actor: Actor, intent: PreparedOperation, callback: (restore: RestoreTransactionScope) => T | Promise<T>, subjectIds: readonly string[] = []): Promise<T> {
     return (await executeAuthorizedOperation(ctx, actor, intent, callback, subjectIds, async () => (await assertRegisteredActor(ctx, actor))));
 }
-/** Anonymous admission is confined to deleting the actor's own account. */
-export async function executeAccountDeletionOperation<T extends Record<string, unknown>>(ctx: AppContext, actor: Actor, intent: PreparedOperation, callback: (restore: RestoreTransactionScope) => T | Promise<T>): Promise<T> {
+/** Anonymous admission is confined to deleting the actor's own account. The
+ * fixed allocation is created only for a new callback, never for a SQL receipt. */
+export async function executeAccountDeletionOperation<T extends Record<string, unknown>>(ctx: AppContext, actor: Actor, intent: PreparedOperation, callback: (restore: RestoreTransactionScope, requestID: string) => T | Promise<T>): Promise<T> {
     if (intent.action !== 'privacy.request.delete' || intent.source !== 'privacy')
         throw new ApiError(400, 'operation_scope_invalid');
-    return (await executeAuthorizedOperation(ctx, actor, intent, callback, [], async () => (await assertPrivacyActor(actor, ctx))));
+    return (await executeAuthorizedOperation(ctx, actor, intent,
+        (restore, allocations) => callback(restore, allocations.id_0), [],
+        async () => (await assertPrivacyActor(actor, ctx)),
+        async operationID => ({ id_0: await restoreAllocationID(operationID, 'id_0') })));
 }
 
 /** Restricted account controls never grant a product capability. */

@@ -85,7 +85,7 @@ private fun HomePhotoCollage(state: PreviewState, modifier: Modifier = Modifier)
             Asset(tile.asset, Modifier.offset(x = width * tile.x, y = height * tile.y)
                 .width(width * tile.width).height(height * tile.height).clip(RoundedCornerShape(7.dp))
                 .clickable(role = Role.Button) { state.openPhoto(tile.id - 1,asset = tile.asset) }
-                .semantics { contentDescription = uiContext.getString(R.string.copy_open_home_photo_1_s_53fbb99f, tile.id) }, null)
+                .semantics { contentDescription = uiContext.getString(R.string.copy_open_home_photo_1_s_53fbb99f, tile.id.toString()) }, null)
         }
     }
 }
@@ -126,7 +126,7 @@ private fun NewMatches(state: PreviewState) {
 private fun PhotoViewer(state: PreviewState) {
     val uiContext = androidx.compose.ui.platform.LocalContext.current
     Box(Modifier.fillMaxSize()) {
-        Asset(state.selectedPhotoAsset ?: photoAsset(state.selectedPhoto), Modifier.fillMaxSize(), uiContext.getString(R.string.copy_photo_1_s_b27fd7d6, state.selectedPhoto + 1))
+        Asset(state.selectedPhotoAsset ?: photoAsset(state.selectedPhoto), Modifier.fillMaxSize(), uiContext.getString(R.string.copy_photo_1_s_b27fd7d6, (state.selectedPhoto + 1).toString()))
         Row(Modifier.fillMaxWidth().padding(8.dp), verticalAlignment = Alignment.CenterVertically) {
             IconAction(Glyph.BACK, uiContext.getString(R.string.copy_back_to_gallery_b196a021), onClick = state::back)
             Spacer(Modifier.weight(1f))
@@ -187,7 +187,7 @@ private fun SourceAllLibrary(state: PreviewState, modifier: Modifier = Modifier)
                 photos.forEachIndexed { position, index ->
                     Asset(photoAsset(index), Modifier.fillMaxWidth().aspectRatio(1f / ratios[column][position])
                         .clip(RoundedCornerShape(9.dp)).clickable(role = Role.Button) { state.openPhoto(index) }
-                        .semantics { contentDescription = uiContext.getString(R.string.copy_open_photo_1_s_9b52d988, index+1) }, null)
+                        .semantics { contentDescription = uiContext.getString(R.string.copy_open_photo_1_s_9b52d988, (index+1).toString()) }, null)
                 }
             }
         }

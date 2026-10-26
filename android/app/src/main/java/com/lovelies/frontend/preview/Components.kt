@@ -149,7 +149,7 @@ fun Asset(name: String, modifier: Modifier = Modifier, description: String? = nu
 
 @Composable
 fun SourceHero(name: String, widthFraction: Float, aspectRatio: Float, modifier: Modifier = Modifier) {
-    BoxWithConstraints(modifier.fillMaxWidth(widthFraction)) {
+    Box(modifier.fillMaxWidth(widthFraction)) {
         Asset(name,Modifier.fillMaxWidth().aspectRatio(aspectRatio),scale = ContentScale.Fit)
     }
 }
@@ -276,7 +276,7 @@ fun PhotoGrid(state: PreviewState, modifier: Modifier = Modifier, photos: List<I
                 else Modifier.clickable(role=Role.Button){onPhotoClick(index)}
             Box(Modifier.fillMaxWidth().height((heights[position%heights.size] * when(columns){2->1.15f;4->.75f;else->1f}).dp)
                 .clip(RoundedCornerShape(9.dp)).then(interactionModifier)
-                .semantics { contentDescription = uiContext.getString(R.string.copy_photo_1_s_b27fd7d6, index+1) }) {
+                .semantics { contentDescription = uiContext.getString(R.string.copy_photo_1_s_b27fd7d6, (index+1).toString()) }) {
                 Asset(photoAsset(index),Modifier.fillMaxSize())
                 if(dimUnselected && index !in selections) Box(Modifier.fillMaxSize().background(Ink.copy(alpha=.5f)))
                 if(selectable || (favorites && index in state.favorites)) SelectionMark(
@@ -405,8 +405,9 @@ fun GlowSymbol(glyph: Glyph, modifier: Modifier = Modifier, ring: Boolean = true
 
 @Composable
 fun PinkToggle(checked: Boolean, label: String, interactive: Boolean = true, onToggle: () -> Unit) {
+    val context=LocalContext.current
     val thumbOffset by animateDpAsState(if(checked)21.dp else 0.dp,
-        animationSpec=tween(if(android.animation.ValueAnimator.areAnimatorsEnabled())120 else 0),label="Switch state")
+        animationSpec=tween(if(systemAnimatorsEnabled(context))120 else 0),label="Switch state")
     Box(Modifier.width(52.dp).height(48.dp)
         .then(if(interactive)Modifier.toggleable(value=checked,role=Role.Switch,onValueChange={onToggle()}).semantics { contentDescription=label }
             else Modifier.clearAndSetSemantics { }),contentAlignment=Alignment.Center) {

@@ -32,7 +32,7 @@ completed DDL/grants. New receipt: `/Volumes/PRO-G40/Projects/Lovelies/verificat
 | API base | `https://ltqfplqevxztlswlzexn.supabase.co/functions/v1/lovelies-api` |
 | Existing Android/iOS ID | `com.lovelies.memories` |
 | Apple app/team | `6786056510` / `63STJ5N27W` |
-| Candidate versions | Android 2.0.0/code18; iOS 1.1.0/build18 |
+| Candidate versions | Android 2.0.0/code18/minAPI24; iOS 1.1.0/build18 |
 | Inspected uploaded maxima | Play 16 / Apple 14; refresh immediately before upload |
 | Play upload key | Existing matching key is held privately in `.release-secrets/android/`; certificate/highest-code build guards exist |
 | Subscription product | Both stores verified `com.lovelies.memories.pro.monthly`: Google active auto-renewing monthlypro/175 regions; Apple approved one-month product6799678587/group22297275, available41/175 regions |
@@ -62,7 +62,7 @@ remote TLS certificate/hostname validation remains mandatory.
 | Jobs | Authenticated maintenance scheduler with bounded intervals, observability and retry/dead-letter/retention ownership. A healthy web endpoint does not drain its jobs. |
 | Purchases | Verified exact products/offers, Apple/Google validation and notification configuration, account ownership mapping and callback audiences. Store service-account/private keys enter secret stores only. |
 | Push | Private-key reading and selected independent SQLite receipt ledger are integrated. All46 local provider/transport/real Worker/Node tests, expanded syntax and Worker dry run pass. Private Node gateway/independent Worker host/EU binding/initialization/custody, separate service credentials, APNs team/key/topic/environment and FCM project/service-account authorization remain unqualified; no provider sends occurred. |
-| Restore | Independent restriction-journal protocol passes34 tests/syntax/Worker dry run with SQLite restart/fault proof; API/PostgreSQL checkpoint integration passes19 focused cases and whole API329/328-pass scope. Exact sharing-retirement producer and immutable typed collector now pass41 focused actualPG cases, whole API344/343+one optional model skip, and94 operator tests. Other domain producers/resource allocations, external-effect generation fences, replay/verified object cleanup and computed completion remain in progress; no hosted journal deployment or serving clearance is established. Local jurisdiction seam does not prove EU placement. |
+| Restore | Independent restriction-journal protocol passes34 tests/syntax/Worker dry run with SQLite restart/fault proof; API/PostgreSQL checkpoint integration passes19 focused cases and whole API329/328-pass scope. Exact sharing-retirement producer and immutable typed collector now pass41 focused actualPG cases, whole API366/365+one optional model skip, and94 operator tests. Stable deletion-request IDs/requested facts and HTTP/queue/maintenance incarnation fences now also pass; other domain producers/resource allocations, external-effect generation fences, replay/verified object cleanup and computed completion remain in progress; no hosted journal deployment or serving clearance is established. Local jurisdiction seam does not prove EU placement. |
 | Web/operator | Approved HTTPS operator origin/CORS, public app/link host, independently provisioned face-authorized operators, support/moderation/privacy ownership, alarms and backups/restore. |
 
 The active app uses **custom anonymous-first application sessions**. Supabase

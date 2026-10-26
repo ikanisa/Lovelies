@@ -141,7 +141,7 @@ private fun UploadSelection(state: PreviewState) {
     Column(Modifier.fillMaxSize().padding(horizontal = 11.dp)) {
         Row(Modifier.fillMaxWidth().heightIn(min=61.dp),verticalAlignment = Alignment.CenterVertically) {
             Text(uiContext.getString(R.string.copy_cancel_77dfd213),color = SoftPink,fontSize = 14.sp,modifier = Modifier.heightIn(min=48.dp).clickable(role = Role.Button) { state.navigate(20) }.padding(12.dp))
-            Text(uiContext.getString(R.string.copy_1_s_selected_35eec3bf, state.selectedUpload.size),color = Color.White,fontSize = 16.sp,fontWeight = FontWeight.Medium,textAlign=androidx.compose.ui.text.style.TextAlign.Center,modifier=Modifier.weight(1f).semantics { liveRegion=LiveRegionMode.Polite })
+            Text(uiContext.getString(R.string.copy_1_s_selected_35eec3bf, state.selectedUpload.size.toString()),color = Color.White,fontSize = 16.sp,fontWeight = FontWeight.Medium,textAlign=androidx.compose.ui.text.style.TextAlign.Center,modifier=Modifier.weight(1f).semantics { liveRegion=LiveRegionMode.Polite })
             Box(Modifier.heightIn(min=48.dp).clip(CircleShape).background(Panel).clickable(enabled = state.selectedUpload.isNotEmpty(),role = Role.Button) {
                 state.navigate(22)
             }.padding(horizontal = 15.dp,vertical = 8.dp)) { Text(uiContext.getString(R.string.next),color = if(state.selectedUpload.isNotEmpty())SoftPink else Muted,fontSize = 14.sp) }
@@ -165,7 +165,7 @@ private fun ReviewUpload(state: PreviewState) {
             Row(Modifier.fillMaxWidth().height(89.dp),horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                 state.selectedUpload.take(5).forEach { index ->
                     Asset(photoAsset(index),Modifier.weight(1f).fillMaxHeight().clip(RoundedCornerShape(8.dp))
-                        .clickable(role = Role.Button) { state.navigate(21) },uiContext.getString(R.string.copy_selected_photo_1_s_aecbd2eb, index + 1))
+                        .clickable(role = Role.Button) { state.navigate(21) },uiContext.getString(R.string.copy_selected_photo_1_s_aecbd2eb, (index + 1).toString()))
                 }
                 if(state.selectedUpload.size > 5) Box(Modifier.weight(1f).fillMaxHeight().clip(RoundedCornerShape(8.dp)).background(Panel)
                     .clickable(role = Role.Button) { state.navigate(21) },contentAlignment = Alignment.Center) {
@@ -213,7 +213,7 @@ private fun UploadProgress(state: PreviewState) {
                     Column(Modifier.weight(1f)) {
                         Text("IMG_${2931 + index}.${if(index == 2)"MOV" else"JPG"}",color = Color.White,fontSize = 14.sp)
                         val progress = listOf(.78f,.42f,.65f,0f,0f)[index]
-                        Text(if(progress > 0f)if(index == 2)uiContext.getString(R.string.copy_processing_0b398004) else uiContext.getString(R.string.copy_uploading_1_s_5f44088f, (progress * 100).toInt()) else uiContext.getString(R.string.copy_waiting_0658762e),
+                        Text(if(progress > 0f)if(index == 2)uiContext.getString(R.string.copy_processing_0b398004) else uiContext.getString(R.string.copy_uploading_1_s_5f44088f, (progress * 100).toInt().toString()) else uiContext.getString(R.string.copy_waiting_0658762e),
                             color = Muted,fontSize = 12.sp,modifier = Modifier.padding(top = 5.dp))
                         Box(Modifier.padding(top = 9.dp).fillMaxWidth().height(5.dp).clip(CircleShape).background(Hairline)) {
                             if(progress > 0f)Box(Modifier.fillMaxWidth((progress + step*.025f).coerceAtMost(1f)).fillMaxHeight().background(Pink))
@@ -248,7 +248,7 @@ private fun UploadComplete(state: PreviewState) {
         }
         Row(Modifier.fillMaxWidth().height(76.dp).horizontalScroll(rememberScrollState()),horizontalArrangement = Arrangement.spacedBy(5.dp)) {
             listOf(9,0,4,6,8,1).forEach { photo -> Asset(photoAsset(photo),Modifier.width(64.dp).fillMaxHeight().clip(RoundedCornerShape(6.dp))
-                .clickable(role = Role.Button) { state.openPhoto(photo) },uiContext.getString(R.string.copy_photo_1_s_b27fd7d6, photo+1)) }
+                .clickable(role = Role.Button) { state.openPhoto(photo) },uiContext.getString(R.string.copy_photo_1_s_b27fd7d6, (photo+1).toString())) }
         }
         Text(uiContext.resources.getQuantityString(R.plurals.copy_just_now_photo_count, state.selectedUpload.size, state.selectedUpload.size),color = Muted,fontSize = 12.sp,modifier = Modifier.align(Alignment.Start).padding(top = 9.dp,bottom = 20.dp))
     }

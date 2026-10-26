@@ -1,5 +1,47 @@
 # Android replacement readiness — 24 October 2026
 
+## 26 October 2026 — API24/25 compatibility checkpoint
+
+The candidate restores minimum Android API24 while preserving package
+`com.lovelies.memories`, version2.0.0/code18, target/compile36 and all four ABIs.
+Pinned official NIO desugaring2.1.5 preserves the existing strict Base64/Instant
+and secure-file logic. Pre26 notification/reduced-motion paths and launcher,
+API27 theme qualification, optional camera declarations and numeric formatting
+lint errors are corrected without changing displayed wording or workflows.
+
+Current Debug app SHA256 is
+`78113b2c18a960878ad2e607423bb392e783c75632eb7384fc116436d52c3a48`.
+Lint has zero errors, all197 JVM tests pass, and the opt-in test APK builds.
+The app byte hash remains unchanged through the test-only fixes. V2 Debug signing,
+minimum24/target36,16KB ZIP alignment, eight packaged native libraries and
+absence of the four known server secrets across372 decompressed APK members are
+verified. This is not final release signing or16KB runtime qualification.
+
+New, separately owned ARM64 API24 and25 virtual devices each pass denied and
+granted legacy-media runs with eight checks per run. Checks cover launcher/
+resume, installed desugared protocol handling, AndroidKeyStoreP256/AES vault,
+secure NIO create-new/expiry/symlink protection, exact private FileProvider bytes,
+MediaStore save and a private local notification. Granted-save byte inspection
+uses the test's exact new URI through instrumentation shell authority; the app
+receives no broader library-read permission. Notification appearance and removal
+are observed with bounded waits. These overlapping checks are not32 unique
+journeys. Owned cleanup and prior media permission restoration are confirmed;
+both owned emulator processes are stopped and their evidence/data retained.
+
+Failures remain preserved: initial lint findings, a verifier label mismatch,
+legacy MediaStore direct-read denial and immediate-notification observation race.
+They were corrected or causally reconciled; no blanket suppression or waiver.
+Actual HTTP refresh/recovery, optical camera, physical/hardware-backed security,
+provider delivery, spoken accessibility, current whole-reference matrix, all ABI/
+release splits, fresh store device catalog and store-installed in-place updates
+remain separate gates. NIO attribution/source-distribution preparation and final
+release/public availability remain N07 work.
+
+Receipts: `/Volumes/PRO-G40/Projects/Lovelies/verification/android-min24-compatibility-20261026/`
+(`build-02/`, `test-build-05/`, `artifact-check-02/`, each
+`runtime-api24|25/probe-final-05/result.json`).
+
+
 Current audience integration: [24 October checkpoint](release/audience-readiness-20261024.md). Its source-bound results and open regressions supersede earlier “current” descriptions below for modified API/native/operator/web files; earlier receipts retain their original scope. No release is accepted.
 
 The separate OpenFace physical Pixel HTTP sharing lane now passes22 checks with product8bbcd66c/test80540c1d after transport repair. This does not replace or extend the fcd/7123 reference UI matrix below; no new signing, store-installed update or spoken/provider acceptance is inferred. Its source-bound receipt is under `verification/openface-integration-20261024/continuation/android-main-after-resource-repair/`.

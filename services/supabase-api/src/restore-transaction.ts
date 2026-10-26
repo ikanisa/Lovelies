@@ -28,6 +28,12 @@ export async function restoreOperationID(actorID: string, source: string, key: s
   if (!UUID.test(actorID) || !/^[A-Za-z0-9._:-]{1,128}$/.test(source) || !/^[A-Za-z0-9._:-]{16,128}$/.test(key)) return invalid();
   return identifier('lovelies-database-logical-operation-v1', { actor_id: actorID, source, operation_key: key });
 }
+/** Deterministic resource identity is not durable acceptance. The operation's
+ * independently accepted plan must record the allocation before SQL can commit. */
+export async function restoreAllocationID(operationID: string, slot: string): Promise<string> {
+  if (!UUID.test(operationID) || !/^id_(?:[0-9]|[12][0-9]|3[01])$/.test(slot)) return invalid();
+  return identifier('lovelies-database-allocation-slot-v1', { operation_id: operationID, slot });
+}
 function identity(value: unknown): RestoreOperationIdentity {
   if (!plain(value) || Object.keys(value).sort().join(',') !== 'allocations,input_hash,operation_id' ||
       typeof value.operation_id !== 'string' || !UUID.test(value.operation_id) ||

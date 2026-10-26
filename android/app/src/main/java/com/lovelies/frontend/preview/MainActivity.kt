@@ -1,7 +1,11 @@
 package com.lovelies.frontend.preview
 
 import android.content.Context
+import android.animation.ValueAnimator
+import android.os.Build
 import android.os.Bundle
+import android.os.PowerManager
+import android.provider.Settings
 import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.SystemBarStyle
@@ -26,6 +30,16 @@ import androidx.compose.ui.semantics.paneTitle
 import androidx.compose.ui.semantics.isTraversalGroup
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.Alignment
+
+/** API24/25 retain the same system motion choice without calling the API26
+ * animator query. An unreadable setting leaves optional motion disabled. */
+internal fun systemAnimatorsEnabled(context: Context): Boolean {
+    if(Build.VERSION.SDK_INT>=26)return ValueAnimator.areAnimatorsEnabled()
+    return runCatching {
+        Settings.Global.getFloat(context.contentResolver,Settings.Global.ANIMATOR_DURATION_SCALE,1f)>0f &&
+            context.getSystemService(PowerManager::class.java)?.isPowerSaveMode!=true
+    }.getOrDefault(false)
+}
 
 class MainActivity : ComponentActivity() {
     private var activeState: PreviewState?=null
@@ -65,7 +79,7 @@ class MainActivity : ComponentActivity() {
             LaunchedEffect(state.reviewMode) { if(!state.reviewMode)state.live.start() }
             DisposableEffect(state) {
                 val observer=androidx.lifecycle.LifecycleEventObserver { _,event ->
-                    if(event==androidx.lifecycle.Lifecycle.Event.ON_RESUME)state.reduceMotion=!android.animation.ValueAnimator.areAnimatorsEnabled()
+                    if(event==androidx.lifecycle.Lifecycle.Event.ON_RESUME)state.reduceMotion=!systemAnimatorsEnabled(context)
                     if(!state.reviewMode)when(event) {
                         androidx.lifecycle.Lifecycle.Event.ON_RESUME -> state.live.foreground()
                         androidx.lifecycle.Lifecycle.Event.ON_PAUSE -> state.live.background()
@@ -136,7 +150,7 @@ class PreviewState(private val context: Context, initialRoute: Int, reviewMode: 
     var route by mutableIntStateOf(initialRoute.coerceIn(1, 48))
     private val history = mutableStateListOf<Int>()
     var catalogVisible by mutableStateOf(false)
-    var reduceMotion by mutableStateOf(!android.animation.ValueAnimator.areAnimatorsEnabled())
+    var reduceMotion by mutableStateOf(!systemAnimatorsEnabled(context))
     val canGoBack get()=catalogVisible || history.isNotEmpty() || fallbackBackRoute(route)!=null
     var dialog by mutableStateOf<PreviewDialog?>(null)
     var search by mutableStateOf("")

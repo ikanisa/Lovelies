@@ -2,4 +2,7 @@
     <instrumentation android:name="com.lovelies.frontend.preview.FrontendAccessibilityJourney"
         android:targetPackage="com.lovelies.memories"
         android:label="Lovelies reference accessibility review" />
+    <instrumentation android:name="com.lovelies.frontend.preview.Api24CompatibilityJourney"
+        android:targetPackage="com.lovelies.memories"
+        android:label="Lovelies owned API24/25 compatibility probe" />
 </manifest>

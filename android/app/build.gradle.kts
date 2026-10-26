@@ -21,7 +21,7 @@ android {
     compileSdk = 36
     defaultConfig {
         applicationId = "com.lovelies.memories"
-        minSdk = 26
+        minSdk = 24
         targetSdk = 36
         resourceConfigurations += listOf("en", "rw")
         versionCode = providers.gradleProperty("loveliesVersionCode").orElse("18").get().toInt().also { require(it >= 18) { "This replacement candidate starts at versionCode 18; verify the current Play Console maximum before release." } }
@@ -63,6 +63,9 @@ android {
         sourceSets.getByName("androidTest").assets.srcDir(it)
     }
     compileOptions {
+        // Keep API24/25 protocol dates/Base64 and secure NIO file handling on
+        // the same implementations; lowering minSdk alone is insufficient.
+        isCoreLibraryDesugaringEnabled = true
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
     }
@@ -100,6 +103,7 @@ val validateLoveliesRelease=tasks.register("validateLoveliesRelease") {
 tasks.matching { it.name=="preReleaseBuild" }.configureEach { dependsOn(validateLoveliesRelease) }
 
 dependencies {
+    coreLibraryDesugaring("com.android.tools:desugar_jdk_libs_nio:2.1.5")
     implementation(platform("androidx.compose:compose-bom:2025.10.01"))
     implementation("androidx.activity:activity-compose:1.11.0")
     implementation("androidx.compose.ui:ui")

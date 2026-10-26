@@ -211,7 +211,7 @@ fun SourcePhotoGrid(
             BoxWithConstraints(Modifier.offset(x = galleryWidth*tile.x,y = galleryHeight*tile.y)
                 .width(galleryWidth*tile.width).height(galleryHeight*tile.height)
                 .clip(RoundedCornerShape(8.dp)).then(interaction).semantics {
-                    contentDescription = uiContext.getString(R.string.copy_photo_1_s_b27fd7d6, tile.id+1)
+                    contentDescription = uiContext.getString(R.string.copy_photo_1_s_b27fd7d6, (tile.id+1).toString())
                 }) {
                 val image=images[tile.asset]
                 if(reflow && image!=null)Image(image.bitmap,null,Modifier.fillMaxSize(),contentScale=ContentScale.Fit)

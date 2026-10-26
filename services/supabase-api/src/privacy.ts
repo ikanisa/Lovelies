@@ -6,6 +6,7 @@ import { entitlementPrivacyRows, eraseEntitlementSubject } from './entitlements.
 import { operatorPrivacyRows, eraseOperatorSubject } from './operators.ts';
 import { notificationPrivacyRows, eraseNotificationSubject } from './notifications.ts';
 import { retentionPrivacyRows, retentionPrivateKeys, eraseRetentionSubject } from './retention.ts';
+import type { RestoreTransactionScope } from './restore-transaction.ts';
 type PrivacyRequest = {
     id: string;
     subject_id: string;
@@ -131,9 +132,14 @@ export async function createPrivacyRequest(ctx: AppContext, actor: Actor, kind: 
     else if (kind === 'delete' && actor.authMethod === 'anonymous')
         throw new ApiError(400, 'deletion_status_token_required');
     const intent = await prepareOperation('privacy.request.' + kind, normalized, 'privacy');
-    const execute = kind === 'delete' ? executeAccountDeletionOperation : executeRestrictedOperation;
-    return execute(ctx, actor, intent, async () => {
-        const id = crypto.randomUUID(), now = ctx.now();
+    const create = async (restore: RestoreTransactionScope, id: string) => {
+        const now = ctx.now();
+        if (kind === 'delete') {
+            // Record the requested episode before either creating its SQL row or
+            // retiring authority. This is not an independently reviewed erasure.
+            await restore.restrict('account-deletion-requested', {
+                account_id: actor.accountId, deletion_request_id: id });
+        }
         (await ctx.db.run('INSERT INTO privacy_requests(id,subject_id,requested_by,request_type,status,reason,created_at,expires_at) VALUES(?,?,?,?,?,?,?,?)', id, actor.accountId, actor.accountId, kind, 'pending_approval', rationale, now, now + (kind === 'delete' ? 30 * 86400000 : requestTtl)));
         if (kind === 'delete') {
             await revokeAudienceAuthority(ctx, actor.accountId, id);
@@ -156,7 +162,10 @@ export async function createPrivacyRequest(ctx: AppContext, actor: Actor, kind: 
                     subject_user_id: actor.accountId, requested_by: actor.accountId, reason: rationale } };
         }
         return { privacy_request: { id, request_type: kind, subject_user_id: actor.accountId, requested_by: actor.accountId, status: 'pending_approval', reason: rationale } };
-    });
+    };
+    if (kind === 'delete')
+        return executeAccountDeletionOperation(ctx, actor, intent, create);
+    return executeRestrictedOperation(ctx, actor, intent, restore => create(restore, crypto.randomUUID()));
 }
 async function retrieveDeletionStatus(request: Request, ctx: AppContext): Promise<Response> {
     if (new URL(request.url).search)

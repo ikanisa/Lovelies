@@ -375,8 +375,8 @@ private fun LiveUploadProgress(state: PreviewState) {
         if(record!=null && !record.finished && !record.cancelled)LiveToggle(uiContext.getString(R.string.copy_continue_with_background_scheduling_552c020e),uiContext.getString(R.string.copy_android_may_defer_work_each_accepted_44065179),live.backgroundUploads) { live.configureBackgroundUploads(!live.backgroundUploads) }
         if(record!=null && record.files.all { it.sha256!=null } && record.bytesTotal>0) {
             LinearProgressIndicator(progress=(record.bytesAcknowledged.toDouble()/record.bytesTotal).toFloat(),color=Pink,backgroundColor=Hairline,
-                modifier=Modifier.fillMaxWidth().padding(top=24.dp).semantics { contentDescription=uiContext.getString(R.string.copy_1_s_of_2_s_photo_bytes_saved_c04a54b3, record.bytesAcknowledged, record.bytesTotal) })
-            BodyText(uiContext.getString(R.string.copy_1_s_saved_1fcf155b, (record.bytesAcknowledged*100/record.bytesTotal)),Modifier.padding(top=10.dp),size=13)
+                modifier=Modifier.fillMaxWidth().padding(top=24.dp).semantics { contentDescription=uiContext.getString(R.string.copy_1_s_of_2_s_photo_bytes_saved_c04a54b3, record.bytesAcknowledged.toString(), record.bytesTotal.toString()) })
+            BodyText(uiContext.getString(R.string.copy_1_s_saved_1fcf155b, (record.bytesAcknowledged*100/record.bytesTotal).toString()),Modifier.padding(top=10.dp),size=13)
         } else if(live.busy)CircularProgressIndicator(color=Pink,modifier=Modifier.padding(top=24.dp).size(28.dp))
         Spacer(Modifier.height(28.dp))
         if(record?.finished==true)PinkButton(stringResource(R.string.copy_view_matches_731444f2),enabled=!live.busy) { live.reviewPhotos(batch=record.batch) }
@@ -599,7 +599,7 @@ private fun LiveUploadReview(state: PreviewState,choose: ()->Unit) {
     val uiContext = androidx.compose.ui.platform.LocalContext.current
     val live=state.live
     LivePage(state,if(state.route==22)uiContext.getString(R.string.copy_review_upload_da9297a6) else uiContext.getString(R.string.copy_select_photos_e7fbdbd6)) {
-        SectionTitle(uiContext.getString(R.string.copy_1_s_selected_35eec3bf, live.selectedUploads.size),trailing=uiContext.getString(R.string.copy_add_more_5d2a8a05),onTrailing=choose)
+        SectionTitle(uiContext.getString(R.string.copy_1_s_selected_35eec3bf, live.selectedUploads.size.toString()),trailing=uiContext.getString(R.string.copy_add_more_5d2a8a05),onTrailing=choose)
         LazyVerticalStaggeredGrid(columns=StaggeredGridCells.Fixed(3),modifier=Modifier.weight(1f),horizontalArrangement=Arrangement.spacedBy(6.dp),verticalItemSpacing=6.dp) {
             items(live.picked,key={it.toString()}) { uri ->
                 Box(Modifier.fillMaxWidth().aspectRatio(1f).clip(RoundedCornerShape(10.dp))
@@ -1113,7 +1113,7 @@ private fun LivePeopleSettings(state: PreviewState) {
         Column(Modifier.weight(1f).verticalScroll(rememberScrollState())) {
             BodyText(stringResource(R.string.copy_matched_people_are_allowed_by_defau_1cb367d3),
                 Modifier.padding(top=8.dp,bottom=16.dp),center=false,size=12)
-            SectionTitle(uiContext.getString(R.string.copy_blocked_1_s_1ca562ff, blockedIds.size))
+            SectionTitle(uiContext.getString(R.string.copy_blocked_1_s_1ca562ff, blockedIds.size.toString()))
             if(live.blocked.isEmpty())BodyText(stringResource(R.string.copy_no_blocked_people_dd602f71),Modifier.padding(vertical=22.dp))
             live.blocked.distinctBy { NativeProtocol.id(it["blocked_id"] ?: it["account_id"] ?: it["id"]) }.forEach { row ->
                 val name=row["name"] as? String ?: uiContext.getString(R.string.copy_blocked_person_5a9da67c)
@@ -1123,7 +1123,7 @@ private fun LivePeopleSettings(state: PreviewState) {
                     }
                 }
             }
-            SectionTitle(uiContext.getString(R.string.copy_matched_in_current_review_1_s_9b0006f9, candidates.size))
+            SectionTitle(uiContext.getString(R.string.copy_matched_in_current_review_1_s_9b0006f9, candidates.size.toString()))
             if(live.snapshot==null)BodyText(stringResource(R.string.copy_open_a_photo_review_to_see_its_matc_18b4a6ae),
                 Modifier.padding(vertical=12.dp),center=false,size=12)
             candidates.forEach { person -> SettingRow(person.name,subtitle=uiContext.getString(R.string.copy_can_share_with_09eae50e),trailing=uiContext.getString(R.string.copy_block_bd074002),icon=Glyph.PERSON,modifier=Modifier.padding(bottom=9.dp)) {
