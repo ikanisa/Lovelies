@@ -113,6 +113,11 @@ provider barriers and recovery clearance remain unimplemented. Evidence:
 `/Volumes/PRO-G40/Projects/Lovelies/verification/restore-v3-caller-binding-implementation-20261027/root-qualification-01/focused-result.json`,
 `/Volumes/PRO-G40/Projects/Lovelies/verification/restore-v3-caller-binding-implementation-20261027/root-qualification-01/native-result.json`,
 and `/Volumes/PRO-G40/Projects/Lovelies/verification/restore-v3-caller-binding-implementation-20261027/root-qualification-02/result.json`.
+An independently reviewed replacement native fixture subsequently passed six
+checks and failed all four requested interleavings with bounded fetch deadlines
+and unknown outcomes. It did not establish overlap or retry. Its exact source,
+results and retained original failures are in
+`/Volumes/PRO-G40/Projects/Lovelies/verification/restore-v3-caller-binding-implementation-20261027/root-qualification-03/result.json`.
 
 Refresh-delivery cancellation now collects exact restriction facts for the
 original session and its named delivered successor before tentative domain
@@ -153,6 +158,28 @@ are not ruled out by this change. Evidence:
 `/Volumes/PRO-G40/Projects/Lovelies/verification/api-request-cleanup-20261027/root-focused-02/result.json`,
 `/Volumes/PRO-G40/Projects/Lovelies/verification/api-request-cleanup-20261027/root-consumers-01/result.json`,
 and `/Volumes/PRO-G40/Projects/Lovelies/verification/api-request-cleanup-20261027/root-deno-01/result.json`.
+
+The shared JSON reader now copies and clears only owned byte views, rejects
+shared-memory and invalid views, bounds fragmented or stalled reads, and checks
+declared lengths for unencoded requests. Decoded provider responses retain their
+separate length treatment. Private store-verifier transport and unreadable receipt failures
+are reported as unavailable without implying that a dispatched acknowledgement
+failed or can safely be resent. Two original reader regressions failed before the
+change; 80 local parser cases and the affected store, push and processing checks
+passed after a processor fixture correction. API types and the Edge entrypoint
+check passed. The first broader PGlite run timed out after 695 reported passes
+and 14 skips; its continuation passed 290 cases, failed two and skipped two.
+Both failures reproduced with the original reader in the same PGlite setup. The
+two PGlite tests now use the same fenced adapter, and all 33 affected cases pass;
+the independent native PostgreSQL branch is unchanged and still needs current-
+source qualification. These local results do not establish provider outcomes.
+Evidence:
+`/Volumes/PRO-G40/Projects/Lovelies/verification/api-json-body-reader-20261027/root-qualification-01/pure-result-02.json`,
+`/Volumes/PRO-G40/Projects/Lovelies/verification/api-json-body-reader-20261027/root-qualification-01/consumer-result.json`,
+`/Volumes/PRO-G40/Projects/Lovelies/verification/api-json-body-reader-20261027/root-qualification-02/result.json`,
+`/Volumes/PRO-G40/Projects/Lovelies/verification/api-json-body-reader-20261027/root-integrated-whole-01/result.json`,
+`/Volumes/PRO-G40/Projects/Lovelies/verification/api-json-body-reader-20261027/root-continuation-01/result.json`,
+and `/Volumes/PRO-G40/Projects/Lovelies/verification/api-json-body-reader-20261027/root-pglite-adapter-integrated-01/result.json`.
 
 The second local Edge attempt failed at the missing-auth Storage control before
 starting Edge or its database. Docker stop commands succeeded, but their output
@@ -208,6 +235,19 @@ Evidence:
 `/Volumes/PRO-G40/Projects/Lovelies/verification/supabase-storage-auth-diagnostic-20261027/root-offline-attempt04-01/result.json`,
 `/Volumes/PRO-G40/Projects/Lovelies/verification/supabase-storage-auth-diagnostic-20261027/attempt-04/run-b/result.json`,
 and `/Volumes/PRO-G40/Projects/Lovelies/verification/supabase-storage-auth-diagnostic-20261027/attempt-04/run-b/root-independent-postflight.json`.
+After a no-secret observation isolated the child HOME mismatch, a corrected
+Storage fixture passed its native self-test. Its 16 local health attempts could
+not connect before an overly small diagnostic command budget stopped the run;
+no auth controls ran and exact disposable resources were removed. A separate
+health-only fixture later completed 20 attempts in about 17 seconds, observed no
+port-5000 listener at two snapshots and captured no Storage log text. That bounded
+observation does not establish the cause or prove the service unhealthy. All
+fresh containers, volumes, network and environment files were independently
+confirmed absent. Evidence:
+`/Volumes/PRO-G40/Projects/Lovelies/verification/supabase-storage-auth-diagnostic-20261027/attempt-05/run-b/result.json`,
+`/Volumes/PRO-G40/Projects/Lovelies/verification/supabase-storage-auth-diagnostic-20261027/attempt-05/run-b/root-independent-postflight.json`,
+`/Volumes/PRO-G40/Projects/Lovelies/verification/supabase-storage-startup-health-20261027/attempt-02/run-b/result.json`,
+and `/Volumes/PRO-G40/Projects/Lovelies/verification/supabase-storage-startup-health-20261027/attempt-02/run-b/root-independent-postflight.json`.
 
 Hosted v9–v13 are applied: schema13 has 69 private forced-RLS tables and policies,
 zero client/public access, preserved existing table projections and an empty

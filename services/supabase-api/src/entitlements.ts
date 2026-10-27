@@ -56,12 +56,24 @@ async function accountCurrent(ctx: AppContext, id: string): Promise<void> { if (
     throw new ApiError(403, 'store_account_unavailable'); }
 async function privateVerifier(ctx: AppContext, kind: string, input: Record<string, unknown>): Promise<any> {
     const inputHash = await digest(stable(input));
-    const response = await ctx.env.STORE_VERIFIER!.fetch('https://store-verifier.internal/' + kind, { method: 'POST', redirect: 'manual', headers: { 'Content-Type': 'application/json' }, body: stable({ protocol: 'lovelies-store-verifier-v1', input_hash: inputHash, input }) });
+    let response: Response;
+    try { response = await ctx.env.STORE_VERIFIER!.fetch('https://store-verifier.internal/' + kind, { method: 'POST', redirect: 'manual', headers: { 'Content-Type': 'application/json' }, body: stable({ protocol: 'lovelies-store-verifier-v1', input_hash: inputHash, input }) }); }
+    catch (error) {
+        if (error instanceof ApiError && error.status >= 500) throw error;
+        // No response is not proof that verification/acknowledgement was not
+        // dispatched. Report availability without claiming retry safety.
+        throw new ApiError(503, 'store_verifier_unavailable');
+    }
     if (response.redirected || response.status >= 300 && response.status < 400)
         throw new ApiError(503, 'store_provider_redirect_denied');
     if (!response.ok)
         throw new ApiError(response.status >= 500 ? 503 : 422, 'store_verification_failed');
-    const receipt = await jsonBody(response as unknown as Request, 131072);
+    let receipt: Record<string, any>;
+    try { receipt = await jsonBody(response, 131072); }
+    catch (error) {
+        if (error instanceof ApiError && error.status >= 500) throw error;
+        throw new ApiError(503, 'store_verifier_receipt_unavailable');
+    }
     if (receipt.protocol !== 'lovelies-store-verifier-v1' || receipt.input_hash !== inputHash || receipt.verified !== true || !receipt.payload)
         throw new ApiError(422, 'store_verification_unbound');
     return record(receipt.payload);
@@ -296,7 +308,10 @@ async function storeNotification(request: Request, ctx: AppContext, provider: 'a
             else
                 await configuredGoogleOidc(bearer[1], { audience, email });
         }
-        catch {
+        catch (error) {
+            if (error instanceof ApiError && error.status >= 500) throw error;
+            // Native verifier plain errors still require separate provider
+            // classification; only checked private-boundary 5xx is preserved.
             throw new ApiError(401, 'google_notification_unauthorized');
         }
         event = sourceString(body.message?.messageId, 256);

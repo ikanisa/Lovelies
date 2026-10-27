@@ -20,7 +20,10 @@ async function setup(t,{registered=false,delivered=false}={}){
  let clock=h.app.now();const handler=createHandler(createApp(f.db,h.env,()=>clock));
  const send=async(body=request)=>{const response=await handler(new Request('https://api.invalid/auth/session/refresh/cancel',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify(body)}));const bodyValue=await response.json();return {status:response.status,body:bodyValue};};
  const operation=()=>restoreOperationID(account,'auth.refresh-cancel-v1','refresh.cancel:'+oldID);
- return {...f,person,account,oldID,request,next,nextID:next?id(next.access_token):null,send,operation,setClock:value=>{clock=value;}};
+ // PGlite is a single engine: both invocations use one fenced adapter queue.
+ // Native PostgreSQL retains the original independent-pool race.
+ const refresh=body=>h.databaseUrl?h.request('/auth/session/refresh',{body}):handler(new Request('https://api.invalid/auth/session/refresh',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify(body)}));
+ return {...f,person,account,oldID,request,next,nextID:next?id(next.access_token):null,send,refresh,operation,setClock:value=>{clock=value;}};
 }
 async function domain(f){const result={};for(const table of ['accounts','sessions','refresh_delivery_receipts','auth_devices','face_profile_operations','auth_challenges','consents','push_devices','notification_deliveries']){
  const order=table==='refresh_delivery_receipts'?'original_session_id':table==='face_profile_operations'?'account_id,operation_key':'id';result[table]=await f.h.db.all('SELECT * FROM '+table+' ORDER BY '+order);}return result;}
@@ -136,7 +139,7 @@ for(const count of [30,31])test(`delivered cancellation preserves ${count} pendi
  assert.deepEqual(after.face_profile_operations,before.face_profile_operations);
 });
 test('concurrent first-dispatch cancel and refresh have one consistent winner',async t=>{
- const f=await setup(t,{registered:true});const [cancel,refresh]=await Promise.all([f.send(),f.h.request('/auth/session/refresh',{body:f.request})]);
+ const f=await setup(t,{registered:true});const [cancel,refresh]=await Promise.all([f.send(),f.refresh(f.request)]);
  const result=await refresh.json();assert.equal(cancel.status,200);assert([200,401].includes(refresh.status));
  const receipt=await f.h.db.one('SELECT * FROM refresh_delivery_receipts WHERE original_session_id=?',f.oldID);assert.equal(receipt.state,'cancelled');
  if(refresh.status===200){f.nextID=id(result.access_token);assert.equal(receipt.successor_session_id,f.nextID);}else assert.equal(receipt.successor_session_id,null);
@@ -144,7 +147,7 @@ test('concurrent first-dispatch cancel and refresh have one consistent winner',a
 });
 test('concurrent delivered cancellation and next refresh preserves independent later session when issued',async t=>{
  const f=await setup(t,{registered:true,delivered:true}),nextRequest=intent(f.next);
- const [cancel,refresh]=await Promise.all([f.send(),f.h.request('/auth/session/refresh',{body:nextRequest})]);const result=await refresh.json();
+ const [cancel,refresh]=await Promise.all([f.send(),f.refresh(nextRequest)]);const result=await refresh.json();
  assert.equal(cancel.status,200);assert([200,401].includes(refresh.status));await expectedPlan(f);
  if(refresh.status===200){const later=await f.h.db.one('SELECT * FROM sessions WHERE id=?',id(result.access_token));assert(later&&later.revoked_at===null&&later.refresh_consumed_at===null);}
 });
