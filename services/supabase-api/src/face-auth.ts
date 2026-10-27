@@ -1368,18 +1368,37 @@ export async function nextFaceRecoveryAt(ctx: AppContext): Promise<number | null
     SELECT CASE WHEN revoked_at IS NOT NULL OR consumed_at IS NOT NULL THEN created_at+?
       ELSE expires_at END due FROM face_recovery_keys)`, RECOVERY_RECEIPT_MS))?.due ?? null;
 }
+
+// A proof is scoped to its challenge's account, not to whichever worker scans
+// it. Keep the exact row when its owner or hold state cannot be established.
+async function faceProofCleanupOwner(ctx: AppContext, proof: Capture): Promise<string | null> {
+    const current = await ctx.db.one<{ account_id: string | null; held: boolean }>(`SELECT c.account_id,
+      (EXISTS(SELECT 1 FROM retention_settings WHERE id='default' AND legal_hold=1)
+       OR EXISTS(SELECT 1 FROM moderation_holds h WHERE h.active=1 AND h.subject_id=c.account_id)
+       OR EXISTS(SELECT 1 FROM privacy_requests r WHERE r.subject_id=c.account_id AND r.request_type='delete'
+         AND r.legal_hold=1 AND r.status NOT IN('completed','rejected','cancelled'))) AS held
+      FROM auth_capture_proofs p JOIN auth_challenges c ON c.id=p.challenge_id
+      WHERE p.challenge_id=? AND p.capture_index=? AND p.object_key=?
+        AND (c.expires_at<=? OR c.used_at IS NOT NULL OR c.status IN('failed','cancelled','used'))`,
+      proof.challenge_id, proof.capture_index, proof.object_key, ctx.now());
+    return current && typeof current.account_id === 'string' && current.account_id && current.held === false
+        ? current.account_id : null;
+}
+
 export async function cleanupFaceProofs(ctx: AppContext): Promise<void> {
     const rows = (await nextTerminalFaceProofs<Capture>(ctx));
     for (const row of rows) {
         try {
             const writerPending = () => ctx.db.one("SELECT id FROM media_write_intents WHERE bucket='QUARANTINE' AND object_key=? AND status='pending' LIMIT 1",row.object_key);
             if (activeFaceVerifiers(ctx).has(row.challenge_id) || await writerPending()) continue;
+            const owner = await faceProofCleanupOwner(ctx, row);
+            if (!owner) continue;
             await ctx.env.QUARANTINE.delete(row.object_key);
-            if (await writerPending() || await ctx.env.QUARANTINE.head(row.object_key))
+            if (await writerPending() || await faceProofCleanupOwner(ctx, row) !== owner || await ctx.env.QUARANTINE.head(row.object_key))
                 continue;
             (await ctx.db.transaction(async () => {
                 const challenge = (await getChallenge(row.challenge_id, ctx));
-                if (await writerPending() || activeFaceVerifiers(ctx).has(row.challenge_id)) return;
+                if (await writerPending() || activeFaceVerifiers(ctx).has(row.challenge_id) || await faceProofCleanupOwner(ctx, row) !== owner) return;
                 if (challenge.expires_at > ctx.now() && challenge.used_at === null && !['failed', 'cancelled', 'used'].includes(challenge.status))
                     return;
                 (await ctx.db.run('DELETE FROM auth_capture_proofs WHERE challenge_id=? AND capture_index=? AND object_key=?', row.challenge_id, row.capture_index, row.object_key));
