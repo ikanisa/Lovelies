@@ -173,6 +173,17 @@ or recovery clearance. Evidence:
 `/Volumes/PRO-G40/Projects/Lovelies/verification/storage-error-stream-20261027/root-focused-02/result.json`,
 and `/Volumes/PRO-G40/Projects/Lovelies/verification/storage-error-stream-20261027/root-deno-check-01/result.json`.
 
+Eight PGlite-only test registrations now require `TEST_DATABASE_URL` to be
+absent, matching their fixture assertions. A defined empty value previously
+caused a selected cleanup-scan case to fail before its fixture started. The
+affected local run passed 67 of 68 cases with the native multi-pool case skipped;
+with an empty or nonempty dummy URL, 58 PGlite cases and the native case skipped
+while nine independent reader cases passed. The 132 recorded source inputs were
+unchanged during the runs. These checks do not qualify native PostgreSQL or a
+hosted provider. Evidence:
+`/Volumes/PRO-G40/Projects/Lovelies/verification/pglite-guard-20261027/root-baseline-01/result.json`
+and `/Volumes/PRO-G40/Projects/Lovelies/verification/pglite-guard-20261027/root-validation-01/result.json`.
+
 API response teardown now initiates unused-stream cancellation without waiting
 indefinitely for an uncooperative source. Two 403/404 cases reproduced the prior
 hang; six focused cases now pass, including final-admission failure with a stale

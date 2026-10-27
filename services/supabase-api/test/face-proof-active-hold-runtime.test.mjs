@@ -5,7 +5,7 @@ import { cleanupFaceProofs } from '../src/face-auth.ts';
 import { startHarness, closeHarnesses } from './runtime-harness.mjs';
 
 after(closeHarnesses);
-const pgliteTest = process.env.TEST_DATABASE_URL ? test.skip : test;
+const pgliteTest = process.env.TEST_DATABASE_URL === undefined ? test : test.skip;
 const id = () => crypto.randomUUID();
 const data = Uint8Array.from([11, 22, 33, 44]);
 const hash = async bytes => Buffer.from(await crypto.subtle.digest('SHA-256', bytes)).toString('hex');

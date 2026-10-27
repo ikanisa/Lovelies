@@ -10,7 +10,7 @@ after(closeHarnesses);
 const CHUNK=262144,key=()=>crypto.randomUUID();
 // The runtime cases deliberately use PGlite. A native-PostgreSQL run exercises
 // its own fixtures and must not silently redirect these synthetic cases to it.
-const pgliteTest=process.env.TEST_DATABASE_URL?test.skip:test;
+const pgliteTest=process.env.TEST_DATABASE_URL===undefined?test:test.skip;
 const deferred=()=>{let resolve;const promise=new Promise(r=>{resolve=r;});return {promise,resolve};};
 async function within(promise,ms=5000){let timer;try{return await Promise.race([promise,new Promise((_,reject)=>{timer=setTimeout(()=>reject(Error('synthetic fixture barrier deadline')),ms);})]);}finally{clearTimeout(timer);}}
 async function setup(t,kind){

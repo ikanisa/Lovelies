@@ -6,7 +6,7 @@ import {connectPostgres} from '../src/database.ts';
 import {startHarness,closeHarnesses} from './runtime-harness.mjs';
 
 after(closeHarnesses);
-const pgliteTest=process.env.TEST_DATABASE_URL?test.skip:test;
+const pgliteTest=process.env.TEST_DATABASE_URL===undefined?test:test.skip;
 const id=()=>crypto.randomUUID();
 async function fixture(t){
  assert.equal(process.env.TEST_DATABASE_URL,undefined);

@@ -5,7 +5,7 @@ import {SupabasePrivateBucket} from '../src/storage.ts';
 import {startHarness,closeHarnesses,enroll,faceVerifierFixture,fixturePng,sha256} from './runtime-harness.mjs';
 after(closeHarnesses);
 // This fixture uses PGlite; a native PostgreSQL test run selects its own cases.
-const pgliteTest=process.env.TEST_DATABASE_URL?test.skip:test;
+const pgliteTest=process.env.TEST_DATABASE_URL===undefined?test:test.skip;
 const CHUNK=262144,key=()=>crypto.randomUUID();
 const deferred=()=>{let resolve;const promise=new Promise(r=>resolve=r);return {promise,resolve};};
 async function within(promise,ms=15000){let timer;try{return await Promise.race([promise,new Promise((_,reject)=>{timer=setTimeout(()=>reject(Error('synthetic fixture deadline')),ms);})]);}finally{clearTimeout(timer);}}

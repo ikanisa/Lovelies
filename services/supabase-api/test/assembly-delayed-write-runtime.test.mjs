@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import {after,test} from 'node:test';
 import {startHarness,closeHarnesses,enroll,faceVerifierFixture,fixturePng,sha256} from './runtime-harness.mjs';
 after(closeHarnesses);
-const pgliteTest=process.env.TEST_DATABASE_URL?test.skip:test;
+const pgliteTest=process.env.TEST_DATABASE_URL===undefined?test:test.skip;
 const key=()=>crypto.randomUUID();
 const deferred=()=>{let resolve;const promise=new Promise(r=>{resolve=r;});return {promise,resolve};};
 async function within(promise,ms=15000){let timer;try{return await Promise.race([promise,new Promise((_,reject)=>{timer=setTimeout(()=>reject(Error('synthetic deadline')),ms);})]);}finally{clearTimeout(timer);}}

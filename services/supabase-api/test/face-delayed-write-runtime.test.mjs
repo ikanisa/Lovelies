@@ -4,7 +4,7 @@ import {after,test} from 'node:test';
 import {delayedFaceStorage} from './face-delayed-storage-fixture.mjs';
 import {startHarness,closeHarnesses,faceVerifierFixture,captureProofs,fixturePng,deviceEnvelope,sign,sha256,encode} from './runtime-harness.mjs';
 after(closeHarnesses);
-const pgliteTest=process.env.TEST_DATABASE_URL?test.skip:test;
+const pgliteTest=process.env.TEST_DATABASE_URL===undefined?test:test.skip;
 const protocol='lovelies-face-enrollment-device-v1',policy='face-policy-fixture-v1';
 async function within(promise,ms=15000){let timer;try{return await Promise.race([promise,new Promise((_,reject)=>{timer=setTimeout(()=>reject(Error('synthetic face fixture deadline')),ms);})]);}finally{clearTimeout(timer);}}
 async function started(t){

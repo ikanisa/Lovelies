@@ -4,7 +4,7 @@ import {after,test} from 'node:test';
 import {startHarness,closeHarnesses} from './runtime-harness.mjs';
 import {settleMediaWrite} from '../src/operations.ts';
 after(closeHarnesses);
-const pgliteTest=process.env.TEST_DATABASE_URL?test.skip:test;
+const pgliteTest=process.env.TEST_DATABASE_URL===undefined?test:test.skip;
 const id=()=>crypto.randomUUID();
 async function within(promise,ms=30000){let timer;try{return await Promise.race([promise,new Promise((_,reject)=>{timer=setTimeout(()=>reject(Error('synthetic maintenance deadline')),ms);})]);}finally{clearTimeout(timer);}}
 
