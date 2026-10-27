@@ -42,10 +42,13 @@ The association Worker now responds directly with 405 for unsupported methods
 on the two association paths, avoiding a same-host passthrough when those paths
 are routed. Other paths and hosts still pass the original request through. All
 14 local unit cases, a synthetic-origin Worker runtime check and a Wrangler dry
-build passed. The hosted candidate is the older version; its latest recorded
-readback had no public route. Apple/Google retrieval and device taps remain unverified.
+build passed. The new code was uploaded as an inactive Worker version; provider
+readback shows the older version remains the active deployment and both public
+association paths still return 404. Its latest recorded route readback was empty;
+Apple/Google retrieval and device taps remain unverified.
 Current zone and Pages routing must be checked before attachment. Evidence:
-`/Volumes/PRO-G40/Projects/Lovelies/verification/link-association-methods-20261028/attempt-01/result.json`
+`/Volumes/PRO-G40/Projects/Lovelies/verification/link-association-methods-20261028/attempt-01/result.json`,
+`/Volumes/PRO-G40/Projects/Lovelies/verification/link-association-methods-20261028/attempt-01/staged-version/postflight.json`,
 and `/Volumes/PRO-G40/Projects/Lovelies/verification/link-association-routing-qualification-20261028/attempt-02/FINDINGS.md`.
 
 A bounded Storage metadata-body reader passed 91 local cases in an isolated

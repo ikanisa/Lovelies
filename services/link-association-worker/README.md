@@ -13,8 +13,12 @@ the existing Cloudflare account as version
 `f1249cc7-ce52-4e55-8e8e-8bff803a0eb0`; the dashboard showed it ready with no
 enabled URL, routes, domains or bindings. The existing site's three checked
 roots and the two unpublished association paths matched their earlier responses.
-That hosted version predates the local 405 handling and still forwards unsupported
-methods; it is not the current source.
+That active hosted version predates the local 405 handling and still forwards
+unsupported methods. The revised source was uploaded separately as version
+`11a0d465-98cb-4eb2-b170-9cd41de67055`, but was not deployed or routed. A
+postflight confirmed that the earlier version remained the active deployment
+and the two public paths still returned 404. Evidence:
+`/Volumes/PRO-G40/Projects/Lovelies/verification/link-association-methods-20261028/attempt-01/staged-version/postflight.json`.
 This does not qualify a hosted Worker request or site-wide preservation.
 Evidence: `/Volumes/PRO-G40/Projects/Lovelies/verification/link-association-hosted-20261027/attempt-01/hosted-readback.json`.
 The dashboard's HTTP preview returned a configuration error because the service
