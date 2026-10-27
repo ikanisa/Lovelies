@@ -295,6 +295,11 @@ Evidence:
 `/Volumes/PRO-G40/Projects/Lovelies/verification/cleanup-starvation-regression-20261027/root-consumers-01/result.json`,
 `/Volumes/PRO-G40/Projects/Lovelies/verification/native-postgres17-fixture-20261027/native-pg17-run-05/result.json`,
 and `/Volumes/PRO-G40/Projects/Lovelies/verification/native-postgres17-fixture-20261027/native-pg17-run-05/independent-postflight.json`.
+The earlier failed revision03 fixture had been preserved on `/private/tmp`,
+but a later read-only inventory found its exact runtime and data paths absent;
+the original failure/ownership receipts remain. The Mac restarted in between,
+but the cause of the disappearance is unproven. No cleanup or restorable backup
+of that fixture was performed after it disappeared.
 
 The initial preview/export delayed-write baseline used an expired maintenance
 clock to isolate export cleanup; the later active-window retry case separately
@@ -407,6 +412,15 @@ Source content and raw outputs remain private. Evidence:
 `/Volumes/PRO-G40/Projects/Lovelies/verification/docker-storage-source-extraction-20261027/attempt-02/run-source/result.json`,
 `/Volumes/PRO-G40/Projects/Lovelies/verification/docker-storage-source-extraction-20261027/attempt-02/run-source/root-independent-postflight.json`,
 and `/Volumes/PRO-G40/Projects/Lovelies/verification/docker-storage-source-reconciliation-20261027/attempt-01/run-reconcile/reconciliation.json`.
+A reviewed instrumented startup-phase fixture later passed 25 pure offline
+checks, but its fresh local execution failed at Docker daemon read before any
+container, volume or credential creation. It yielded no phase observations and
+its postflight was not run. The Docker data image is on a nearly full external
+drive; starting the stopped daemon may restart unrelated existing containers,
+so its safe startup and available capacity must be established before a fresh
+attempt. The failure is not evidence of hosted Storage behavior. Evidence:
+`/Volumes/PRO-G40/Projects/Lovelies/verification/storage-startup-phase-diagnostic-20261027/root-offline-attempt04-root-01/result.json`
+and `/Volumes/PRO-G40/Projects/Lovelies/verification/storage-startup-phase-diagnostic-20261027/attempt-04/run-phase/result.json`.
 
 Hosted v9–v13 are applied: schema13 has 69 private forced-RLS tables and policies,
 zero client/public access, preserved existing table projections and an empty
@@ -558,12 +572,15 @@ and preserved failures. GitHub billing remains parked without a substitute CI pa
 
 A read-only Supabase connector check on 27 October found project
 `ltqfplqevxztlswlzexn` active/healthy, all seven recorded migrations present,
-69 listed private tables with RLS enabled, and no deployed Edge Functions. The
-security advisor returned no findings; the performance advisor reported 82
-unindexed foreign-key observations and 27 unused-index observations. These are
-not a complete security or workload assessment, and unused indexes were not
-removed. Evidence:
-`/Volumes/PRO-G40/Projects/Lovelies/verification/supabase-live-readonly-20261027/attempt-01/result.json`.
+69 private tables with RLS enabled and forced, no client-role schema usage or
+DML table privileges in the checked roles, and no deployed Edge Functions. The
+restore-control table remains empty. The security advisor returned no findings;
+the performance advisor reported 82 unindexed foreign-key observations and 27
+unused-index observations. These checks do not establish policy logic, all
+privileges, recovery readiness or a complete workload assessment; unused
+indexes were not removed. Evidence:
+`/Volumes/PRO-G40/Projects/Lovelies/verification/supabase-live-readonly-20261027/attempt-01/result.json`
+and `/Volumes/PRO-G40/Projects/Lovelies/verification/supabase-live-readonly-20261027/attempt-02/result.json`.
 
 Supabase plans to disable four older TLS 1.2 CBC suites no earlier than 10 November 2026.
 Official Android API 24/25 and iOS 17+ defaults indicate overlap with retained
