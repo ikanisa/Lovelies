@@ -76,13 +76,16 @@ class LoveliesMessagingService: FirebaseMessagingService() {
                 description=getString(R.string.controller_a6e0f9a6503b);lockscreenVisibility=android.app.Notification.VISIBILITY_PRIVATE
             })
         }
-        val open=Intent(this,MainActivity::class.java).putExtra("notification_id",id).addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP or Intent.FLAG_ACTIVITY_CLEAR_TOP)
-        val tap=PendingIntent.getActivity(this,id.hashCode(),open,PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
+        // Intent extras do not participate in PendingIntent identity. Give each
+        // validated notification an exact action and a matching system tag.
+        val open=Intent(this,MainActivity::class.java).setAction("$packageName.notification.$id")
+            .putExtra("notification_id",id).addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP or Intent.FLAG_ACTIVITY_CLEAR_TOP)
+        val tap=PendingIntent.getActivity(this,0,open,PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
         val notification=NotificationCompat.Builder(this,"lovelies-updates").setSmallIcon(R.drawable.ic_notification)
             .setContentTitle(getString(R.string.notification_title)).setContentText(getString(R.string.notification_body))
             .setAutoCancel(true).setContentIntent(tap).setVisibility(NotificationCompat.VISIBILITY_PRIVATE).build()
         if(!PushConfiguration.optedIn(this) || !PushConfiguration.permitted(this))return
-        try { NotificationManagerCompat.from(this).notify(id.hashCode(),notification) }
+        try { NotificationManagerCompat.from(this).notify("lovelies-notification:$id",0,notification) }
         catch(_: SecurityException) { return } // Permission may change after the fresh check.
     }
 }

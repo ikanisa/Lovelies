@@ -47,7 +47,7 @@ class MainActivity : ComponentActivity() {
         super.onNewIntent(intent);setIntent(intent);dispatchLink(intent)
     }
     private fun dispatchLink(intent: android.content.Intent) {
-        val target=intent.dataString?.let { AppLink.parse(it) } ?: intent.getStringExtra("notification_id")?.let { runCatching { AppLink("notifications",NativeProtocol.id(it)) }.getOrNull() }
+        val target=AppLink.fromIntent(intent)
         if(target!=null)activeState?.live?.receiveLink(target)
     }
     override fun onCreate(savedInstanceState: Bundle?) {

@@ -38,18 +38,47 @@ The exact immutable Linux AMD64 inference platform manifest is `sha256:982e2ed7b
 ### Execution checkpoint, 26–28 October 2026
 
 Newer receipts supersede the initial baseline only within their tested scopes.
-The association Worker now responds directly with 405 for unsupported methods
-on the two association paths, avoiding a same-host passthrough when those paths
-are routed. Other paths and hosts still pass the original request through. All
-14 local unit cases, a synthetic-origin Worker runtime check and a Wrangler dry
-build passed. The new code was uploaded as an inactive Worker version; provider
-readback shows the older version remains the active deployment and both public
-association paths still return 404. Its latest recorded route readback was empty;
-Apple/Google retrieval and device taps remain unverified.
-Current zone and Pages routing must be checked before attachment. Evidence:
+The association Worker responds directly with 405 for unsupported methods on its
+two exact association paths. All 14 local unit cases passed. After inspecting the
+existing Pages deployment, custom domains, DNS and zone routes, version
+`11a0d465-98cb-4eb2-b170-9cd41de67055` was deployed and the two exact,
+queryless routes were added. Both public GETs and HEADs returned 200 with JSON;
+the GET bodies matched the reviewed documents and the sampled Pages, admin and
+photo roots retained their prior responses. Google Digital Asset Links returned
+the expected package and Play signing fingerprint; Apple's CDN returned the
+reviewed AASA document. Query-string variants still reach the original 404, as
+the routes have no wildcard. The iOS Release host is set to the verified domain;
+Android release must explicitly receive the same `loveliesLinkHost` property.
+Final signed artifacts and physical device taps remain unverified. Evidence:
+`/Volumes/PRO-G40/Projects/Lovelies/verification/link-association-publish-20261028/attempt-01/`,
 `/Volumes/PRO-G40/Projects/Lovelies/verification/link-association-methods-20261028/attempt-01/result.json`,
 `/Volumes/PRO-G40/Projects/Lovelies/verification/link-association-methods-20261028/attempt-01/staged-version/postflight.json`,
 and `/Volumes/PRO-G40/Projects/Lovelies/verification/link-association-routing-qualification-20261028/attempt-02/FINDINGS.md`.
+The Wrangler session can inspect the Worker but lacks Pages access and offers
+no route-list command. The subsequent authenticated dashboard inventory supplied
+the Pages, DNS and route observations used above. Earlier CLI limitation evidence:
+`/Volumes/PRO-G40/Projects/Lovelies/verification/link-association-readonly-inventory-20261028/attempt-01/FINDINGS.md`.
+
+Android notification posts and taps previously used a 32-bit UUID hash; two
+valid UUIDs were shown to collide, replacing a notification and retargeting its
+tap in a synthetic platform model. The source now uses a validated UUID in an
+explicit tap action and a tagged notification identity. The focused candidate
+passed seven modeled cases; the real project then built both Debug and its
+instrumentation package with unchanged inputs, and six focused release-readiness
+JVM tests passed. A newly created API 24 emulator
+passed the selected collision and legacy-tap instrumentation with Wi-Fi and
+mobile data disabled and the API on a closed loopback. Provider delivery,
+physical devices and the signed replacement remain separate checks.
+An opaque notification UUID becomes visible to authorized notification listeners;
+legacy untagged posts are preserved and a previously retargeted tap cannot be
+recovered. Token rotation remains unresolved: `rotation_pending` has no reader,
+and a lost registration acknowledgement can occupy the shared pending-operation
+slot. Evidence:
+`/Volumes/PRO-G40/Projects/Lovelies/verification/android-notification-identity-20261028/attempt-01/REVIEW.md`.
+Build evidence:
+`/Volumes/PRO-G40/Projects/Lovelies/verification/android-notification-integration-20261028/attempt-01/build-result.json`.
+Runtime evidence, including the earlier disk-capacity and ExFAT lock failures:
+`/Volumes/PRO-G40/Projects/Lovelies/verification/android-notification-integration-20261028/attempt-01/runtime-04/instrument-result.json`.
 
 A bounded Storage metadata-body reader passed 91 local cases in an isolated
 candidate, but a timeout after a dispatched DELETE could accelerate an unsafe
@@ -58,11 +87,12 @@ the app and retained for review. This does not establish that the current
 unbounded read or its retry behavior is release-safe; the independent deletion
 barrier remains required. Evidence:
 `/Volumes/PRO-G40/Projects/Lovelies/verification/storage-info-stream-20261028/candidate-01/REVIEW.md`.
-The hosted Storage catalog contains version-related bucket and object columns,
-but the follow-up read of bucket settings did not return before the tool wait
-was stopped. Column presence alone does not establish enabled versioning, the
-deployed API's exact-version support or a terminal DELETE outcome. Evidence:
-`/Volumes/PRO-G40/Projects/Lovelies/verification/supabase-storage-catalog-20261028/attempt-01/result.json`.
+The hosted Storage catalog contains version-related bucket and object columns.
+The first combined settings read did not return before its wait was stopped; a
+subsequent single read confirmed versioning disabled and no lifecycle
+configuration on each of the three Lovelies buckets. This does not establish
+the deployed API's exact-version support or a terminal DELETE outcome. Evidence:
+`/Volumes/PRO-G40/Projects/Lovelies/verification/supabase-storage-catalog-20261028/attempt-01/bucket-settings-readback.json`.
 An isolated independent SQLite coordinator exercised all four copied DELETE
 callers: 15 ledger and 12 handler cases passed with synthetic terminal proof.
 Without such proof, the candidate fails closed; a one-use export grant can be
@@ -70,6 +100,39 @@ consumed while its bytes are withheld. The coordinator is not integrated: real
 provider terminality, authenticated independent journal/ownership and complete
 hold/writer bindings are still missing. Evidence:
 `/Volumes/PRO-G40/Projects/Lovelies/verification/storage-delete-independent-barrier-20261028/attempt-01/REVIEW.md`.
+The next isolated ownership candidate preserved key-to-asset or nonasset source
+evidence before erasure and passed 17 ownership and 12 copied-handler cases
+with a synthetic verifier. It still lacks real independent attestation and
+ordered writer/hold admission; legacy keys without provenance fail closed and
+more than 200 bindings abort erasure. It remains unintegrated. Evidence:
+`/Volumes/PRO-G40/Projects/Lovelies/verification/storage-key-owner-fencing-20261028/attempt-01/REVIEW.md`.
+
+An iOS simulator reproduced a queued-notification tap being stranded after a
+prior lookup. A simple local drain passed three synthetic routing cases, but
+independent review found it could replace an open decision sheet or publish
+after background/session changes. The draft was removed from the shared app;
+the receipt and support consumers also need publication fencing. The test-only
+simulator reported a migration failure during boot, executed the selected tests,
+and was removed after evidence was saved. No physical APNs or UI acceptance is
+implied. Evidence:
+`/Volumes/PRO-G40/Projects/Lovelies/verification/ios-notification-routing-20261028/attempt-01/unintegrated-candidate/record.json`.
+An expanded isolated iOS candidate passed ten same-account simulator cases and
+three existing regressions, with one physical-device test skipped. A later
+audience-invalidation delta compiled but was not run. The candidate is still
+unintegrated because it does not yet safely invalidate or refresh gallery/media
+after a receipt decision. The test-owned simulator was removed; its boot-status
+timeout and other limits remain in the evidence:
+`/Volumes/PRO-G40/Projects/Lovelies/verification/ios-notification-complete-20261028/attempt-01/REVIEW.md`.
+An isolated journal worker accidentally opened `/tmp/v4-snippet-review-not-used`
+for writing; it is now empty. Its creation and modification timestamps match
+the reported write, but its prior existence or contents are not conclusively
+known. The path was left untouched after discovery.
+An isolated f4 journal and deletion-planning candidate preserves provisional
+plans over 31 facts; 69 selected local tests and TypeScript validation passed.
+It does not accept or complete those deletions. Trusted enumeration, sealing,
+recovery and native PostgreSQL concurrency remain unproved, and activating the
+candidate would fence existing v1 writers. It is not integrated. Evidence:
+`/Volumes/PRO-G40/Projects/Lovelies/verification/restore-v4-control-planning-20261028/attempt-01/REVIEW.md`.
 
 The next local checkpoint adds exact device-revocation facts and a bounded,
 independent journal inventory. Device retirement records the selected old device
@@ -1089,8 +1152,10 @@ Lovelies-host pattern, and the Lovelies CNAME was proxied to the Pages project.
 A narrowly scoped Worker route may avoid replacing the shared deployment, but
 route precedence, fallback, security behavior and real platform retrieval must
 be qualified first. Other routing and protection mechanisms were not inventoried.
-The current Play app-signing page's displayed Digital Asset Links statement
-matches the prepared local Android association JSON; it remains unpublished.
+The Play app-signing page's displayed Digital Asset Links statement matched the
+prepared Android association JSON at that inspection. The newer publication and
+provider readbacks at the execution checkpoint above supersede its unpublished
+status.
 Evidence:
 `/Volumes/PRO-G40/Projects/Lovelies/verification/public-link-user-agent-20261027/attempt-01/result.json`,
 `/Volumes/PRO-G40/Projects/Lovelies/verification/association-routing-readback-20261027/attempt-01/result.json`,
@@ -1102,17 +1167,16 @@ installs. That count does not establish real customers, photos or subscriptions,
 and does not change the owner's no-legacy-data-import direction. Preserve
 installed state and refresh the maximum and track state before a build or upload.
 Evidence: `/Volumes/PRO-G40/Projects/Lovelies/verification/play-version-readback-20261027/attempt-01/result.json`.
-The route-free link-association Worker candidate serves the two prepared JSON
+The original route-free link-association Worker candidate served the two prepared JSON
 documents on the exact HTTPS origin and hands other requests to `fetch`.
 Ten Node cases, one local Worker-runtime scenario with a synthetic origin, and
 a Wrangler dry build passed. The candidate was subsequently uploaded as version
 `f1249cc7-ce52-4e55-8e8e-8bff803a0eb0`; provider readback showed no URLs,
 routes or bindings, and five selected public responses matched their prior
 bytes and status. Actual Pages passthrough, security filtering, existing-statement
-merging and platform retrieval remain open. The account, service version and
-cost must be checked before any update or routing. Android's release host
-property and iOS's `LOVELIES_LINK_HOST`
-remain unset in the recorded release inputs. Evidence:
+merging and platform retrieval remained open at that checkpoint. The later exact
+route publication and provider checks are recorded above. Android's release
+host property still needs to be supplied in the final build. Evidence:
 `/Volumes/PRO-G40/Projects/Lovelies/verification/link-association-worker-20261027/attempt-04/result.json`,
 `/Volumes/PRO-G40/Projects/Lovelies/verification/association-worker-name-readback-20261027/attempt-01/result.json`,
 and `/Volumes/PRO-G40/Projects/Lovelies/verification/link-association-hosted-20261027/attempt-01/hosted-readback.json`.
@@ -1177,7 +1241,7 @@ Rows retain qualified substeps and the remaining outcomes; the checkpoint above 
 | 21 | Support and moderation — U09/D06/B09 | Operate support creation/history/status, real mailbox ownership/request handling, reports/blocks/incorrect matches/objectionable content, fresh independent review, holds/revocation, denial/conflict/interruption and accessible escalation. |
 | 22 | Purchases — R06/P01/P02 | Reconcile intended territories; configure real verifiers/callbacks/OIDC/account binding. Exercise actual sandbox eligibility/purchase/pending/cancel/failure/restore/renewal/refund/revocation/replay/interrupted originals; sandbox evidence grants no production entitlement. |
 | 23 | Notifications — P03/P04/SP09 | Configure APNs/FCM private credentials, correct environment/topic, gateway and independent dispatch ledger. Test real-device registration/rotation/removal, permissions-off/logout, actual delivery/tap routing, opt-out/no-device/invalid-token and ambiguous-send receipt reconciliation. |
-| 24 | Links — P05/N05 | Publish/read back HTTPS AASA/assetlinks and exact platform paths; verify signed entitlements/profile and physical authenticated taps with deleted/expired/revoked fallbacks. |
+| 24 | Links — P05/N05 | Association files and Google/Apple provider readbacks are complete at the verified host; supply the Android release host and verify signed entitlements/profile and physical authenticated taps with deleted/expired/revoked fallbacks. |
 | 25 | Public notices — D01/D05/D07/S02/S03 | Finalise actual processors/locations, retention/backup/guardian/support operation, contact/controller/territory/trader facts; publish accurate production privacy/terms/support/deletion pages and verify app/store URLs and request handling. Do not publish draft or unresolved promises as facts. |
 | 26 | Accessibility/localisation — Q01/Q02/Q03/N01/U01 | Resolve demonstrated remaining contrast/text/focus findings and independently observe spoken TalkBack/VoiceOver, announcements/dialogs, actual EN/RW journeys, zero/one/many/long content and enlarged text. Retain successful round8 action proof; inventory/AX callbacks are not spoken acceptance. |
 | 27 | Devices and resilience — Q03/Q04/Q05/Q07/U06 | Verify supported phone/tablet/foldable/window/safe-area/rotation/motion/haptics/keyboard behavior, process/background/account restoration and physical low-memory/storage/permission/OS/provider/session/device/consent/block/partial-operation faults. Diagnose recorded failures without relabelling them passes. |

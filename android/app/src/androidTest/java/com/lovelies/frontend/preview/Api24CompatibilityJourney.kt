@@ -31,7 +31,7 @@ class Api24CompatibilityJourney : Instrumentation() {
     private lateinit var args: Bundle
     private val checks=mutableListOf<WireObject>()
     private val owned=mutableListOf<File>()
-    private val notificationIds=mutableListOf<Int>()
+    private val notificationTags=mutableListOf<String>()
     private var activity: Activity?=null
     private var keyAlias: String?=null
     private var vault: SecureSession?=null
@@ -172,14 +172,18 @@ class Api24CompatibilityJourney : Instrumentation() {
             PushConfiguration.setOptedIn(notificationContext,true)
             val service=LoveliesMessagingService()
             ContextWrapper::class.java.getDeclaredMethod("attachBaseContext",Context::class.java).apply { isAccessible=true }.invoke(service,notificationContext)
-            val id=UUID.randomUUID().toString();notificationIds.add(id.hashCode())
-            service.onMessageReceived(RemoteMessage.Builder("owned-local-compatibility-probe").addData("id",id).build())
+            val id=UUID.randomUUID().toString();val tag="lovelies-notification:$id"
             val manager=context.getSystemService(NotificationManager::class.java)
+            check(manager.activeNotifications.none { it.tag==tag && it.id==0 }) { "Notification identity already exists; preserve it" }
+            val tapIntent=Intent(context,MainActivity::class.java).setAction("${context.packageName}.notification.$id")
+            check(android.app.PendingIntent.getActivity(context,0,tapIntent,android.app.PendingIntent.FLAG_NO_CREATE or android.app.PendingIntent.FLAG_IMMUTABLE)==null) { "Notification tap already exists; preserve it" }
+            notificationTags.add(tag)
+            service.onMessageReceived(RemoteMessage.Builder("owned-local-compatibility-probe").addData("id",id).build())
             val postedDeadline=android.os.SystemClock.uptimeMillis()+3000L
-            var shown=manager.activeNotifications.singleOrNull { it.id==id.hashCode() }
+            var shown=manager.activeNotifications.singleOrNull { it.tag==tag && it.id==0 }
             while(shown==null && android.os.SystemClock.uptimeMillis()<postedDeadline) {
                 android.os.SystemClock.sleep(25L)
-                shown=manager.activeNotifications.singleOrNull { it.id==id.hashCode() }
+                shown=manager.activeNotifications.singleOrNull { it.tag==tag && it.id==0 }
             }
             check(shown!=null) { "Owned local notification was not posted within the bounded observation window" }
             check(shown.notification.visibility==android.app.Notification.VISIBILITY_PRIVATE)
@@ -190,11 +194,16 @@ class Api24CompatibilityJourney : Instrumentation() {
             runCatching { activity?.let { runOnMainSync { it.finish() } } }.onFailure { cleanupFailure=true }
             runCatching {
                 val manager=targetContext.getSystemService(NotificationManager::class.java)
-                notificationIds.forEach(manager::cancel)
+                notificationTags.forEach { tag ->
+                    manager.cancel(tag,0)
+                    val id=tag.removePrefix("lovelies-notification:")
+                    val tapIntent=Intent(targetContext,MainActivity::class.java).setAction("${targetContext.packageName}.notification.$id")
+                    android.app.PendingIntent.getActivity(targetContext,0,tapIntent,android.app.PendingIntent.FLAG_NO_CREATE or android.app.PendingIntent.FLAG_IMMUTABLE)?.cancel()
+                }
                 val absentDeadline=android.os.SystemClock.uptimeMillis()+3000L
-                while(manager.activeNotifications.any { it.id in notificationIds } && android.os.SystemClock.uptimeMillis()<absentDeadline)
+                while(manager.activeNotifications.any { it.id==0 && it.tag in notificationTags } && android.os.SystemClock.uptimeMillis()<absentDeadline)
                     android.os.SystemClock.sleep(25L)
-                check(manager.activeNotifications.none { it.id in notificationIds })
+                check(manager.activeNotifications.none { it.id==0 && it.tag in notificationTags })
             }.onFailure { cleanupFailure=true }
             mediaUri?.let { uri -> runCatching { check(targetContext.contentResolver.delete(uri,null,null)==1) }.onFailure { cleanupFailure=true } }
             pushPreferences?.let { name -> runCatching { check(targetContext.deleteSharedPreferences(name)) }.onFailure { cleanupFailure=true } }

@@ -4,4 +4,5 @@ compatibility_date = "2026-07-21"
 workers_dev = false
 preview_urls = false
 
-# No production routes are configured; public routing remains unqualified.
+# The two exact production routes are managed in the Cloudflare dashboard.
+# Keep route keys absent so Wrangler does not replace dashboard-managed routes.

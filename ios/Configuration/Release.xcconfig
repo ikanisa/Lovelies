@@ -6,8 +6,8 @@ CURRENT_PROJECT_VERSION = 18
 LOVELIES_APNS_ENVIRONMENT = production
 LOVELIES_SUBSCRIPTION_PRODUCT = com.lovelies.memories.pro.monthly
 LOVELIES_API_ORIGIN = https:/$()/ltqfplqevxztlswlzexn.supabase.co/functions/v1/lovelies-api
-// Configure only after domain ownership and AASA are verified.
-LOVELIES_LINK_HOST =
+// Public association and Apple CDN were verified on 28 October 2026.
+LOVELIES_LINK_HOST = lovelies.ikanisa.com
 
 // Public app-policy URLs are supplied only after content/hosting qualification.
 LOVELIES_PRIVACY_POLICY_URL =

@@ -99,7 +99,10 @@ confirm zero client/public access. No client schema grants were added.
 ## Release configuration and acceptance
 
 - Native policy/terms/support/deletion URLs must point to the approved published
-  edition. Draft pages and association files are prepared locally. Final inference
+  edition. Draft pages are prepared locally. The association files are published
+  at `lovelies.ikanisa.com` and have Google/Apple provider readbacks; supply
+  `loveliesLinkHost=lovelies.ikanisa.com` for the Android release and inspect the
+  signed artifacts and device links. Final inference
   operator/location, retention/backup, audiences/territories and mailbox operation
   affect those notices and both store disclosures.
 - Supply verified Android Firebase/product/link properties and the observed upload
