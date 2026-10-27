@@ -1,3 +1,4 @@
+import { UploadBodyReader, UPLOAD_BODY_CHUNK_TOTAL_MS, UPLOAD_MAX_SOURCE_BYTES } from './upload-body.ts';
 import { ApiError, digest, jsonBody, ok, type Actor, type AppContext } from './types.ts';
 import { assertMediaActor, currentAsset, hasConsent, type Asset } from './gallery.ts';
 import { beginMediaWrite, executeOperation, prepareOperation, settleMediaWrite } from './operations.ts';
@@ -215,27 +216,22 @@ export async function uploadChunk(request: Request, ctx: AppContext, actor: Acto
     const initial = (await ctx.db.transaction(async () => (await pending(ctx, actor, id))));
     if (request.headers.get('content-type') !== initial.asset.content_type)
         throw new ApiError(415, 'image_required');
+    if (!Number.isSafeInteger(initial.asset.byte_size) || initial.asset.byte_size < 1 || initial.asset.byte_size > UPLOAD_MAX_SOURCE_BYTES)
+        throw new ApiError(413, 'image_too_large');
     if (offset >= initial.asset.byte_size || offset % UPLOAD_CHUNK_BYTES !== 0)
         throw new ApiError(409, 'upload_offset_conflict');
     const expected = Math.min(UPLOAD_CHUNK_BYTES, initial.asset.byte_size - offset);
-    const reader = request.body?.getReader();
-    if (!reader)
-        throw new ApiError(400, 'image_required');
     const bytes = new Uint8Array(expected);
+    const reader = new UploadBodyReader(request, UPLOAD_BODY_CHUNK_TOTAL_MS);
     let size = 0, writtenKey: string | null = null;
     try {
         for (;;) {
-            const next = await reader.read();
+            const next = await reader.readInto(bytes, size, 'upload_chunk_too_large');
             (await ctx.db.transaction(async () => (await pending(ctx, actor, id))));
+            reader.guard();
             if (next.done)
                 break;
-            if (size + next.value.length > expected) {
-                next.value.fill(0);
-                throw new ApiError(413, 'upload_chunk_too_large');
-            }
-            bytes.set(next.value, size);
-            size += next.value.length;
-            next.value.fill(0);
+            size += next.length;
         }
         if (size !== expected)
             throw new ApiError(400, 'upload_chunk_size_mismatch');
@@ -253,6 +249,7 @@ export async function uploadChunk(request: Request, ctx: AppContext, actor: Acto
                 throw new ApiError(409, 'upload_offset_conflict');
             return false;
         }));
+        reader.guard();
         if (!replay) {
             writtenKey = chunkPrefix(initial.asset) + offset + '/' + crypto.randomUUID();
             const write = (await beginMediaWrite(ctx, actor, 'QUARANTINE', writtenKey));
@@ -289,10 +286,9 @@ export async function uploadChunk(request: Request, ctx: AppContext, actor: Acto
     }
     finally {
         bytes.fill(0);
+        reader.close();
         if (writtenKey)
             (await ctx.db.transaction(async () => (await retireKey(ctx, actor.accountId, writtenKey!))));
-        void reader.cancel().catch(() => { });
-        reader.releaseLock();
     }
 }
 export async function cancelUpload(request: Request, ctx: AppContext, actor: Actor, id: string): Promise<Response> {

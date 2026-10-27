@@ -181,6 +181,22 @@ Evidence:
 `/Volumes/PRO-G40/Projects/Lovelies/verification/api-json-body-reader-20261027/root-continuation-01/result.json`,
 and `/Volumes/PRO-G40/Projects/Lovelies/verification/api-json-body-reader-20261027/root-pglite-adapter-integrated-01/result.json`.
 
+The direct and resumable upload readers now snapshot incoming bytes before
+awaited authority checks, bound fragmented or stalled acquisition, and validate
+the stored size before allocating. Local regression cases reproduced five
+failures in the previous readers. The integrated source passed 65 focused,
+upload-recovery and restore-allocation tests, with no skips; TypeScript and the
+Supabase Edge entrypoint check also passed. When a PostgreSQL test URL is set,
+the 13 PGlite-specific cases skip rather than use that database; nine pure reader
+cases still pass. The time and fragment limits need qualification on actual
+devices and proxies. An abort during write-intent creation can still race a
+Storage PUT, and cancellation after dispatch has an uncertain provider outcome;
+these results do not establish production writer fencing or recovery clearance.
+Isolated candidate and prior-failure evidence:
+`/Volumes/PRO-G40/Projects/Lovelies/verification/upload-binary-stream-test-candidate-20261027/root-reproduction-01/result.json`,
+`/Volumes/PRO-G40/Projects/Lovelies/verification/upload-binary-stream-implementation-20261027/root-qualification-01/result.json`,
+and `/Volumes/PRO-G40/Projects/Lovelies/verification/upload-binary-stream-implementation-20261027/root-qualification-01/restore-consumer-03.json`.
+
 The second local Edge attempt failed at the missing-auth Storage control before
 starting Edge or its database. Docker stop commands succeeded, but their output
 did not match the coordinator's expected acknowledgement, so it retained the

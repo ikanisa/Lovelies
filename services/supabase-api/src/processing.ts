@@ -1,3 +1,4 @@
+import { UploadBodyReader, UPLOAD_BODY_SOURCE_TOTAL_MS, UPLOAD_MAX_SOURCE_BYTES } from './upload-body.ts';
 import { audienceContext, assertAudienceCapability } from './audience.ts';
 import { accountRoles } from './auth.ts';
 import { ApiError, digest, jsonBody, ok, stable, uuid, type Actor, type AppContext } from './types.ts';
@@ -5,7 +6,7 @@ import { assertMediaActor, currentAsset, hasConsent, currentPhotoPolicy, mediaSo
 import { beginMediaWrite, executeOperation, executeUploadReservationOperation, prepareOperation, settleMediaWrite } from './operations.ts';
 import { assembleUpload, cancelUpload, createUploadTransfer, uploadChunk, uploadStatusAsset, uploadStatusFields, uploadTransfer, validateResumable } from './upload-transfers.ts';
 import { selectedGeneration, assertGeneration } from './inference-generation.ts';
-const MAX_SOURCE_BYTES = 20 * 1024 * 1024;
+const MAX_SOURCE_BYTES = UPLOAD_MAX_SOURCE_BYTES;
 const MAX_PREVIEW_BYTES = 4 * 1024 * 1024;
 type CapturedProfile = {
     profile_id: string;
@@ -284,42 +285,32 @@ async function sourceBytes(request: Request, ctx: AppContext, actor: Actor, id: 
             throw new ApiError(415, 'image_required');
         return asset;
     }));
-    const reader = request.body?.getReader();
-    if (!reader)
-        throw new ApiError(400, 'image_required');
-    const chunks: Uint8Array[] = [];
+    if (!Number.isSafeInteger(initial.byte_size) || initial.byte_size < 1 || initial.byte_size > MAX_SOURCE_BYTES)
+        throw new ApiError(413, 'image_too_large');
+    const bytes = new Uint8Array(initial.byte_size);
+    const reader = new UploadBodyReader(request, UPLOAD_BODY_SOURCE_TOTAL_MS);
     let size = 0;
-    let bytes: Uint8Array | undefined;
     let writtenKey: string | null = null;
     try {
         for (;;) {
-            const next = await reader.read();
+            const next = await reader.readInto(bytes, size, 'image_too_large');
             (await ctx.db.transaction(async () => {
                 const current = (await sourceAsset(ctx, actor, id));
                 if (current.version !== initial.version || current.status !== 'uploading')
                     throw new ApiError(409, 'source_changed');
             }));
+            reader.guard();
             if (next.done)
                 break;
-            size += next.value.byteLength;
-            if (size > initial.byte_size || size > MAX_SOURCE_BYTES) {
-                next.value.fill(0);
-                throw new ApiError(413, 'image_too_large');
-            }
-            chunks.push(next.value);
+            size += next.length;
         }
         if (size !== initial.byte_size)
             throw new ApiError(400, 'image_size_mismatch');
-        bytes = new Uint8Array(size);
-        let offset = 0;
-        for (const chunk of chunks) {
-            bytes.set(chunk, offset);
-            offset += chunk.byteLength;
-        }
         if (!imageMagic(bytes, initial.content_type))
             throw new ApiError(415, 'image_invalid');
         const checksum = await digest(bytes);
         (await ctx.db.transaction(async () => (await sourceAsset(ctx, actor, id))));
+        reader.guard();
         // Concurrent PUTs write separate private keys. Only the winning current
         // transaction can bind its bytes to the asset; a late writer cannot replace it.
         writtenKey = `${initial.object_key}/${crypto.randomUUID()}`;
@@ -342,13 +333,10 @@ async function sourceBytes(request: Request, ctx: AppContext, actor: Actor, id: 
         return ok({ asset_id: id, version: initial.version, status: 'uploaded' });
     }
     finally {
+        bytes.fill(0);
+        reader.close();
         if (writtenKey)
             await ctx.env.QUARANTINE.delete(writtenKey).catch(() => { });
-        bytes?.fill(0);
-        for (const chunk of chunks)
-            chunk.fill(0);
-        void reader.cancel().catch(() => { });
-        reader.releaseLock();
     }
 }
 async function profilesForCapture(ctx: AppContext, ownerId: string, model: string): Promise<CapturedProfile[]> {
