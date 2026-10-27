@@ -157,3 +157,29 @@ provider effect reconciliation and explicit synthetic cleanup are in
 `/Volumes/PRO-G40/Projects/Lovelies/verification/supabase-storage-probe-20261026/repair-v2/hosted-result.json`.
 Hosted application authority, full client-role matrix, external writer fencing
 and backing-blob/backup retention remain unqualified.
+
+For the pinned local Storage `v1.68.10` source, REST creation uses POST with
+`x-upsert` controlling overwrite and returns a JSON object; REST PUT is an
+upsert. Its REST asset renderer does not forward `If-Match` or a client-selected
+version. The pinned S3 route also does not demonstrate the conditional/version
+contract required by the proposed upload verifier. See the upstream
+[REST create](https://raw.githubusercontent.com/supabase/storage/v1.68.10/src/http/routes/object/createObject.ts),
+[REST update](https://raw.githubusercontent.com/supabase/storage/v1.68.10/src/http/routes/object/updateObject.ts),
+[REST renderer](https://raw.githubusercontent.com/supabase/storage/v1.68.10/src/storage/renderer/asset.ts)
+and [S3 GET](https://raw.githubusercontent.com/supabase/storage/v1.68.10/src/http/routes/s3/commands/get-object.ts)
+source. These are source-level observations for the local pinned version; the
+hosted project's version and behavior have not been established. Do not treat
+an empty PUT response or current documentation for a different version as
+evidence of no-overwrite or a version-consistent hosted read.
+The pinned uploader performs its permission check before upload and later
+uses a locked metadata upsert; source inspection indicates that concurrent
+non-upsert requests may both pass the earlier check. This is an inference,
+not a reproduced hosted failure. Qualify concurrent and delayed writes and
+enforce the independent writer/key fence rather than relying on the header
+alone. See the pinned [uploader](https://raw.githubusercontent.com/supabase/storage/v1.68.10/src/storage/uploader.ts)
+and [database implementation](https://raw.githubusercontent.com/supabase/storage/v1.68.10/src/storage/database/pg.ts).
+One candidate Supabase-only design uses permanently reserved unique keys, a
+credential-restricted writer gateway and proven drainage of prior writers and
+deletions before full byte/metadata readback under enforced immutability. It
+also needs a versioned evidence contract for the actual POST response. This is
+not yet implemented or qualified; unknown in-flight effects must remain fenced.
