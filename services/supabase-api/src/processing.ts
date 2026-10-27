@@ -572,18 +572,17 @@ export async function processPhotoJob(message: unknown, ctx: AppContext): Promis
         const previewHash = await digest(previewBytes);
         (await ctx.db.transaction(async () => (await assertAttempt(ctx, attempt, actor, lease))));
         const rendition = crypto.randomUUID(), version = crypto.randomUUID();
-        publishedKey = `preview/${actor.accountId}/${attempt.asset_id}/${attempt.id}/${lease}`;
+        const candidateKey = `preview/${actor.accountId}/${attempt.asset_id}/${attempt.id}/${lease}`;
         // A stale lease can only write its own private object, never overwrite the winning rendition.
-        const write = (await beginMediaWrite(ctx, actor, 'PHOTOS', publishedKey));
-        try {
-            await ctx.env.PHOTOS.put(publishedKey, new Uint8Array(previewBytes).buffer, { httpMetadata: { contentType }, customMetadata: {
-                    source_checksum_sha256: attempt.source_checksum_sha256, source_version: attempt.source_version,
-                    rendition_version: version, checksum_sha256: previewHash, asset_id: attempt.asset_id
-                } });
-        }
-        finally {
-            (await settleMediaWrite(ctx, write));
-        }
+        const write = (await beginMediaWrite(ctx, actor, 'PHOTOS', candidateKey));
+        publishedKey = candidateKey;
+        await ctx.env.PHOTOS.put(candidateKey, new Uint8Array(previewBytes).buffer, { httpMetadata: { contentType }, customMetadata: {
+                source_checksum_sha256: attempt.source_checksum_sha256, source_version: attempt.source_version,
+                rendition_version: version, checksum_sha256: previewHash, asset_id: attempt.asset_id
+            } });
+        // A rejected PUT can still have a remote effect. Only an acknowledged
+        // write may be settled; an unknown writer continues to fence cleanup.
+        (await settleMediaWrite(ctx, write));
         const finalSource = await ctx.env.QUARANTINE.head(source.object_key);
         (await ctx.db.transaction(async () => {
             (await assertAttempt(ctx, attempt, actor, lease));
@@ -617,9 +616,15 @@ export async function processPhotoJob(message: unknown, ctx: AppContext): Promis
         publishedKey = null;
     }
     catch (error) {
-        if (publishedKey)
-            await ctx.env.PHOTOS.delete(publishedKey).catch(() => { });
+        const cleanupKey = publishedKey;
         (await ctx.db.transaction(async () => {
+            // A committed publication may have lost its reply. Queue the exact
+            // writer rather than deleting directly; cleanup rechecks live media,
+            // holds and unresolved writers before touching Storage.
+            if (cleanupKey && !(await ctx.db.one("SELECT r.id FROM renditions r JOIN assets a ON a.id=r.asset_id WHERE a.owner_id=? AND r.object_key=? AND r.status='ready' LIMIT 1", actor.accountId, cleanupKey)) &&
+                (await ctx.db.one("SELECT id FROM media_write_intents WHERE account_id=? AND bucket='PHOTOS' AND object_key=? LIMIT 1", actor.accountId, cleanupKey)) &&
+                !(await ctx.db.one("SELECT id FROM cleanup_intents WHERE subject_id=? AND bucket='PHOTOS' AND object_key=? AND request_id IS NULL", actor.accountId, cleanupKey)))
+                (await ctx.db.run("INSERT INTO cleanup_intents(id,subject_id,bucket,object_key,status,created_at) VALUES(?,?,'PHOTOS',?,'pending',?)", crypto.randomUUID(), actor.accountId, cleanupKey, ctx.now()));
             const current = (await ctx.db.one<{
                 status: string;
                 lease_token: string;

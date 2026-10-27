@@ -243,17 +243,32 @@ reference-template writers now retain the same pending fence on an uncertain
 write and queue orphan cleanup. Both delayed-write cases reproduced the prior
 failure and passed after the change; acknowledged controls and 177 affected
 account, face, consent and privacy cases also passed locally. Face SQL
-acknowledgement-loss, delayed login and replacement cases remain untested. Preview
-and export still need containment. Pending-writer reconciliation and the hosted
-acknowledgement contract remain open; no hosted late write or release acceptance
-is claimed. Evidence:
+acknowledgement-loss, delayed login and replacement cases remain untested.
+Generated preview and privacy-export writers now retain the same pending fence
+on uncertain PUT, queue authorized cleanup without direct preview deletion and
+preserve already committed publication after a lost SQL reply. Preview cleanup
+checks static global, asset and moderation holds; missing asset metadata remains
+blocked for independent reconciliation. Fourteen synthetic cases cover delayed
+writes, acknowledged controls, publication and registration reply loss, four
+static holds, missing metadata and active-window retry. A 122-case affected run
+passed 121 and found one stale immediate-deletion expectation; the corrected
+cleanup-path test and 24 related cases then passed with unchanged inputs. API
+types and the Edge entrypoint check passed. A hold acquired after a Storage DELETE
+has begun can still be too late to protect the bytes, even though verification
+fails: cross-process hold/delete fencing remains a release blocker. Pending-writer
+reconciliation and hosted acknowledgement/terminality remain open; no hosted
+late write or release acceptance is claimed. Evidence:
 `/Volumes/PRO-G40/Projects/Lovelies/verification/storage-delayed-write-regression-20261027/root-baseline-01/result.json`,
 `/Volumes/PRO-G40/Projects/Lovelies/verification/storage-delayed-write-regression-20261027/root-source-chunk-consumers-01/result.json`,
 `/Volumes/PRO-G40/Projects/Lovelies/verification/storage-delayed-write-regression-20261027/root-final-focused-01/result.json`,
 `/Volumes/PRO-G40/Projects/Lovelies/verification/assembly-delayed-write-20261027/root-baseline-01/result.json`,
 `/Volumes/PRO-G40/Projects/Lovelies/verification/assembly-delayed-write-20261027/root-consumers-01/result.json`,
 `/Volumes/PRO-G40/Projects/Lovelies/verification/storage-delayed-face-write-regression-20261027/root-baseline-01/result.json`,
-and `/Volumes/PRO-G40/Projects/Lovelies/verification/storage-delayed-face-write-regression-20261027/root-consumers-01/result.json`.
+`/Volumes/PRO-G40/Projects/Lovelies/verification/storage-delayed-face-write-regression-20261027/root-consumers-01/result.json`,
+`/Volumes/PRO-G40/Projects/Lovelies/verification/preview-export-delayed-write-tests-20261027/root-baseline-01/result.json`,
+`/Volumes/PRO-G40/Projects/Lovelies/verification/preview-export-delayed-write-tests-20261027/root-baseline-04/result.json`,
+`/Volumes/PRO-G40/Projects/Lovelies/verification/preview-export-delayed-write-tests-20261027/root-consumers-01/result.json`,
+and `/Volumes/PRO-G40/Projects/Lovelies/verification/preview-export-delayed-write-tests-20261027/root-consumers-02/result.json`.
 
 Two local regressions reproduced cleanup starvation: 100 older unresolved
 writers blocked a later eligible account in both the privacy cleanup and terminal
@@ -263,20 +278,23 @@ checks still govern deletion. Rows with unsupported cursor identities or clocks
 are excluded from these two scans and reported by maintenance health; separate
 authorized erasure workflows retain their own authority. Sixteen focused cases
 passed, including live references and cursor validation. A wider local regression
-passed 213 cases with one intentionally skipped native PostgreSQL case; the
-latter still needs a two-pool fixture. Bounded result counts do not prove bounded
-scan cost: index/query-plan and sustained-load qualification remain open. New
+passed 213 cases with one intentionally skipped native PostgreSQL case. That
+case subsequently passed with two independent pools in a 17-case native
+PostgreSQL 17 fixture; its independent postflight confirmed the fixture process,
+port, password file and data directory were absent. Bounded result counts do not
+prove bounded scan cost: index/query-plan and sustained-load qualification remain open. New
 backdated work below the high-water mark can delay wrap under sustained overload.
 Evidence:
-`/Volumes/PRO-G40/Projects/Lovelies/verification/cleanup-starvation-regression-20261027/root-baseline-01/result.json`
-and `/Volumes/PRO-G40/Projects/Lovelies/verification/cleanup-starvation-regression-20261027/root-consumers-01/result.json`.
+`/Volumes/PRO-G40/Projects/Lovelies/verification/cleanup-starvation-regression-20261027/root-baseline-01/result.json`,
+`/Volumes/PRO-G40/Projects/Lovelies/verification/cleanup-starvation-regression-20261027/root-consumers-01/result.json`,
+`/Volumes/PRO-G40/Projects/Lovelies/verification/native-postgres17-fixture-20261027/native-pg17-run-05/result.json`,
+and `/Volumes/PRO-G40/Projects/Lovelies/verification/native-postgres17-fixture-20261027/native-pg17-run-05/independent-postflight.json`.
 
-An isolated synthetic delayed-write baseline also reproduced premature settlement
-and cleanup in generated preview and privacy export writes; both acknowledged
-write controls passed. The failed-write containment for these two paths remains
-open. The export test used an expired maintenance clock to isolate cleanup and
-does not qualify active-window retry behavior. Evidence:
-`/Volumes/PRO-G40/Projects/Lovelies/verification/preview-export-delayed-write-tests-20261027/root-baseline-01/result.json`.
+The initial preview/export delayed-write baseline used an expired maintenance
+clock to isolate export cleanup; the later active-window retry case separately
+checks that the original writer and cleanup obligation remain pending and that
+no deletion is dispatched for its exact key. All these tests use synthetic
+PGlite and Storage transport, not hosted-provider terminality.
 
 On an object-version mismatch, the Storage adapter now returns its conflict
 without waiting for an uncooperative response-body cancellation. The local
@@ -515,6 +533,23 @@ with104 sealed source files and19 declared JPEGs in the refreshed run-07, includ
 cutover, store submission or live/stable replacement is claimed. See the current
 [integration checkpoint](audience-readiness-20261024.md) for source-bound receipts
 and preserved failures. GitHub billing remains parked without a substitute CI pass.
+
+A read-only Supabase connector check on 27 October found project
+`ltqfplqevxztlswlzexn` active/healthy, all seven recorded migrations present,
+69 listed private tables with RLS enabled, and no deployed Edge Functions. The
+security advisor returned no findings; the performance advisor reported 82
+unindexed foreign-key observations and 27 unused-index observations. These are
+not a complete security or workload assessment, and unused indexes were not
+removed. Evidence:
+`/Volumes/PRO-G40/Projects/Lovelies/verification/supabase-live-readonly-20261027/attempt-01/result.json`.
+
+Supabase plans to disable four older TLS 1.2 CBC suites on 10 November 2026.
+Official Android API 24/25 and iOS 17+ defaults indicate overlap with retained
+TLS suites, but existing compatibility fixtures do not prove an HTTPS handshake.
+Qualify actual final signed clients against the chosen project and a test build
+using the same transport against the future suite set, including a no-shared-suite
+failure, without recording credentials or payloads. See the
+[Supabase notice](https://supabase.com/changelog/cbc-tls-ciphers-deprecated).
 
 ## Work packages and acceptance criteria
 

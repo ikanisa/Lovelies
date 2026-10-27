@@ -565,6 +565,17 @@ async function cleanupAuthority(ctx: AppContext, row: CleanupRow, actor?: Execut
         OR instr(?, 'source/'||a.owner_id||'/'||a.id||'/'||a.version||'/')=1) LIMIT 1`, row.subject_id, row.object_key, row.object_key));
         if (transferAsset && ((await ctx.db.one("SELECT id FROM retention_settings WHERE id='default' AND legal_hold=1")) || (await ctx.db.one('SELECT asset_id FROM asset_retention WHERE asset_id=? AND legal_hold=1', transferAsset.id)) || (await ctx.db.one('SELECT id FROM moderation_holds WHERE active=1 AND (subject_id=? OR asset_id=?) LIMIT 1', row.subject_id, transferAsset.id))))
             throw new ApiError(409, 'upload_cleanup_blocked');
+        // Failed previews are not necessarily bound to a rendition, but their
+        // canonical owner/asset prefix still identifies held evidence.
+        const previewObject = row.bucket === 'PHOTOS' && row.object_key.startsWith('preview/');
+        const previewAsset = previewObject && (await ctx.db.one<{id:string}>(`SELECT id FROM assets WHERE owner_id=?
+            AND instr(?, 'preview/'||owner_id||'/'||id||'/')=1 LIMIT 1`, row.subject_id, row.object_key));
+        // An orphan without its asset cannot be checked against asset holds.
+        // Keep it for an independently authorized reconciliation/erasure.
+        if (previewObject && !previewAsset)
+            throw new ApiError(409, 'preview_cleanup_asset_unavailable');
+        if (previewAsset && ((await ctx.db.one("SELECT id FROM retention_settings WHERE id='default' AND legal_hold=1")) || (await ctx.db.one('SELECT asset_id FROM asset_retention WHERE asset_id=? AND legal_hold=1', previewAsset.id)) || (await ctx.db.one('SELECT id FROM moderation_holds WHERE active=1 AND (subject_id=? OR asset_id=?) LIMIT 1', row.subject_id, previewAsset.id))))
+            throw new ApiError(409, 'preview_cleanup_blocked');
         if ((await ctx.db.one(`SELECT id FROM assets WHERE owner_id=? AND object_key=? AND deleted_at IS NULL
       AND NOT EXISTS(SELECT 1 FROM upload_transfers t WHERE t.asset_id=assets.id AND t.state IN('cancelled','failed')) LIMIT 1`, row.subject_id, row.object_key)) || (await ctx.db.one(`SELECT c.asset_id FROM upload_chunks c JOIN upload_transfers t ON t.asset_id=c.asset_id
           JOIN assets a ON a.id=c.asset_id WHERE a.owner_id=? AND c.object_key=? AND t.state='uploading' AND a.deleted_at IS NULL LIMIT 1`, row.subject_id, row.object_key)) || (await ctx.db.one("SELECT r.id FROM renditions r JOIN assets a ON a.id=r.asset_id WHERE a.owner_id=? AND r.object_key=? AND r.status='ready' LIMIT 1", row.subject_id, row.object_key)) || (await ctx.db.one("SELECT id FROM face_profiles WHERE account_id=? AND template_key=? AND status='active' LIMIT 1", row.subject_id, row.object_key)) || (await ctx.db.one("SELECT p.challenge_id FROM auth_capture_proofs p JOIN auth_challenges c ON c.id=p.challenge_id JOIN accounts a ON a.id=c.account_id WHERE c.account_id=? AND p.object_key=? AND c.status IN('pending','verifying') AND c.used_at IS NULL AND c.expires_at>? AND a.disabled_at IS NULL AND c.auth_epoch=a.auth_epoch LIMIT 1", row.subject_id, row.object_key, ctx.now())))
@@ -698,14 +709,11 @@ async function createVerifiedExport(ctx: AppContext, actor: ExecutionAuthority, 
             (await executionLease(ctx, actor, request.id, token));
             (await ctx.db.run('INSERT INTO media_write_intents(id,account_id,bucket,object_key,status,created_at) VALUES(?,?,?,?,?,?)', writeId, request.subject_id, 'PRIVACY_EXPORTS', key, 'pending', ctx.now()));
             (await ctx.db.run('INSERT INTO privacy_exports(id,request_id,subject_id,object_key,sha256,bytes,expires_at,status,created_at) VALUES(?,?,?,?,?,?,?,?,?)', exportId, request.id, request.subject_id, key, sha256, bytes.byteLength, ctx.now() + exportTtl, 'pending', ctx.now()));
-            registered = true;
         }));
-        try {
-            await ctx.env.PRIVACY_EXPORTS.put(key, bytes.buffer as ArrayBuffer, { httpMetadata: { contentType: 'application/json' } });
-        }
-        finally {
-            (await settleMediaWrite(ctx, writeId));
-        }
+        registered = true;
+        await ctx.env.PRIVACY_EXPORTS.put(key, bytes.buffer as ArrayBuffer, { httpMetadata: { contentType: 'application/json' } });
+        // A rejected PUT has an unknown remote outcome and stays pending.
+        (await settleMediaWrite(ctx, writeId));
         (await ctx.db.transaction(async () => (await executionLease(ctx, actor, request.id, token))));
         const written = await ctx.env.PRIVACY_EXPORTS.get(key);
         (await ctx.db.transaction(async () => (await executionLease(ctx, actor, request.id, token))));
@@ -735,8 +743,14 @@ async function createVerifiedExport(ctx: AppContext, actor: ExecutionAuthority, 
     catch (error) {
         if (registered)
             (await ctx.db.transaction(async () => {
+                // The publication transaction can commit while its reply is
+                // lost. Preserve either durable indication of this exact key.
+                const publication = (await ctx.db.one<{status:string;object_key:string}>('SELECT status,object_key FROM privacy_exports WHERE id=?', exportId));
+                const current = (await ctx.db.one<{export_key:string|null}>('SELECT export_key FROM privacy_requests WHERE id=?', request.id));
+                if (publication?.object_key === key && publication.status === 'published' || current?.export_key === key)
+                    return;
                 (await cleanup(ctx, request, 'PRIVACY_EXPORTS', key, true));
-                (await ctx.db.run("UPDATE privacy_exports SET status='retired' WHERE id=?", exportId));
+                (await ctx.db.run("UPDATE privacy_exports SET status='retired' WHERE id=? AND status='pending'", exportId));
             }));
         throw error;
     }

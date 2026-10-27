@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import {test} from 'node:test';
 import {encodeGeneration,selectedGeneration} from '../src/inference-generation.ts';
 import {processPhotoJob} from '../src/processing.ts';
+import {flushPrivacyCleanup} from '../src/privacy.ts';
 import {startHarness,prepareEnrollment,enroll,captureProofs,faceVerifierFixture,fixturePng,stable} from './runtime-harness.mjs';
 import {INFERENCE_ENGINE_SPACE} from '../src/inference-contract.ts';
 
@@ -262,6 +263,16 @@ test('a generation switch after a private preview write retires that preview and
   const item=await queuedPhoto(h,owner),before=await references(h),put=h.env.PHOTOS.put.bind(h.env.PHOTOS);
   h.env.PHOTOS.put=async(key,value,options)=>{await put(key,value,options);if(key.startsWith('preview/'))h.env.INFERENCE_ENGINE_IDENTITY=next;};
   await assert.rejects(processPhotoJob({attempt_id:item.attempt.id},h.app),error=>error?.code==='inference_generation_changed');
+  const keys=[...h.env.PHOTOS.rows.keys()].filter(value=>value.startsWith('preview/')&&value.includes('/'+item.asset_id+'/'));
+  assert.equal(keys.length,1,'unpublished preview awaits authority-checked cleanup');
+  const queued=await h.storage.exec("SELECT status,verified_at FROM cleanup_intents WHERE subject_id=? AND bucket='PHOTOS' AND object_key=?",owner.accountId,keys[0]);
+  assert.equal(queued.length,1);assert.equal(queued[0].status,'pending');assert.equal(queued[0].verified_at,null);
+  const writer=(await h.storage.exec("SELECT status FROM media_write_intents WHERE account_id=? AND bucket='PHOTOS' AND object_key=?",owner.accountId,keys[0]))[0];
+  assert.equal(writer.status,'settled');
+  const denied=await h.request(`/community/media/${item.asset_id}/preview`,{token:owner.token});assert.equal(denied.status,404);await denied.body?.cancel();
+  await h.db.invocation(()=>flushPrivacyCleanup(h.app));
+  const cleaned=(await h.storage.exec("SELECT status,verified_at FROM cleanup_intents WHERE subject_id=? AND bucket='PHOTOS' AND object_key=?",owner.accountId,keys[0]))[0];
+  assert.equal(cleaned.status,'verified');assert.notEqual(cleaned.verified_at,null);
   await noPublication(h,item,'inference_generation_changed');assert.deepEqual(await references(h),before);
 });
 
