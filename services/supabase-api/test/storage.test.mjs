@@ -50,3 +50,34 @@ test('Storage error envelope byte, encoding and time limits fail closed and canc
  const started=Date.now();await unavailable(()=>hanging.head('owned/missing'));
  assert(Date.now()-started<2500,'Unresponsive error body must not keep the missing-object probe alive');assert(cancelled);
 });
+
+test('Storage absence parsing keeps the bytes actually read when a stream reuses its buffer',async()=>{
+ const encoder=new TextEncoder(),first=encoder.encode('{"statusCode":"403","error":"not_found",'),second=encoder.encode('"message":"Object not found","code":"NoSuchKey"}');
+ let reads=0;
+ const body=new ReadableStream({pull(controller){
+  if(reads++===0){controller.enqueue(first);return;}
+  return new Promise(resolve=>setTimeout(()=>{first.set(encoder.encode('{"statusCode":"404","error":"not_found",'));controller.enqueue(second);controller.close();resolve();},0));
+ }});
+ await unavailable(()=>bucket(async()=>new Response(body,{status:400,headers:{'content-type':'application/json'}})).head('owned/missing'));
+});
+
+test('Storage absence parsing rejects an excessive number of empty fragments',async()=>{
+ let reads=0,cancelled=false;
+ const body=new ReadableStream({pull(controller){
+  if(reads++<257)controller.enqueue(new Uint8Array());
+  else{controller.enqueue(new TextEncoder().encode(JSON.stringify(missing)));controller.close();}
+ },cancel(){cancelled=true;}});
+ await unavailable(()=>bucket(async()=>new Response(body,{status:400,headers:{'content-type':'application/json'}})).head('owned/missing'));
+ assert(cancelled);
+});
+
+test('Storage absence parsing rejects inconsistent declared lengths and locked bodies',async()=>{
+ const encoded=new TextEncoder().encode(JSON.stringify(missing));
+ const valid=new ReadableStream({start(controller){controller.enqueue(encoded.slice(0,17));controller.enqueue(encoded.slice(17));controller.close();}});
+ assert.equal(await bucket(async()=>new Response(valid,{status:400,headers:{'content-type':'application/json','content-length':String(encoded.byteLength)}})).head('owned/missing'),null);
+ for(const length of [0,encoded.byteLength-1,encoded.byteLength+1]){
+  await unavailable(()=>bucket(async()=>new Response(encoded,{status:400,headers:{'content-type':'application/json','content-length':String(length)}})).head('owned/missing'));
+ }
+ const body=new ReadableStream({start(controller){controller.enqueue(encoded);controller.close();}}),response=new Response(body,{status:400,headers:{'content-type':'application/json'}}),reader=response.body.getReader();
+ try{await unavailable(()=>bucket(async()=>response).head('owned/missing'));}finally{reader.releaseLock();}
+});

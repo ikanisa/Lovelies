@@ -1,6 +1,7 @@
 import { ApiError, type PrivateBucket, type PrivateObject } from './types.ts';
 
 const MAX_STORAGE_ERROR_BYTES=2048;
+const MAX_STORAGE_ERROR_CHUNKS=256;
 const STORAGE_ERROR_TIMEOUT_MS=1000;
 
 /** storage-api v1.68.10 uses HTTP 400 for this specific missing-key error.
@@ -8,15 +9,18 @@ const STORAGE_ERROR_TIMEOUT_MS=1000;
 async function missingObjectEnvelope(response:Response):Promise<boolean>{
   const type=response.headers.get('content-type')??'',length=response.headers.get('content-length');
   if(!/^application\/json(?:;|$)/i.test(type)||length!==null&&(!/^\d+$/.test(length)||Number(length)>MAX_STORAGE_ERROR_BYTES)||!response.body)return false;
-  const reader=response.body.getReader(),chunks:Uint8Array[]=[];let bytes=0,timer:ReturnType<typeof setTimeout>|undefined;
+  let reader:ReadableStreamDefaultReader<Uint8Array>;
+  try{reader=response.body.getReader();}catch{return false;}
+  const buffer=new Uint8Array(MAX_STORAGE_ERROR_BYTES);let bytes=0,chunks=0,timer:ReturnType<typeof setTimeout>|undefined;
   const expired=new Promise<never>((_,reject)=>{timer=setTimeout(()=>reject(new Error('storage_error_body_timeout')),STORAGE_ERROR_TIMEOUT_MS);});
   try{
     for(;;){
       const next=await Promise.race([reader.read(),expired]);if(next.done)break;
-      bytes+=next.value.byteLength;if(bytes>MAX_STORAGE_ERROR_BYTES)return false;chunks.push(next.value);
+      if(++chunks>MAX_STORAGE_ERROR_CHUNKS||bytes+next.value.byteLength>MAX_STORAGE_ERROR_BYTES)return false;
+      buffer.set(next.value,bytes);bytes+=next.value.byteLength;
     }
-    const buffer=new Uint8Array(bytes);let offset=0;for(const chunk of chunks){buffer.set(chunk,offset);offset+=chunk.byteLength;}
-    const value=JSON.parse(new TextDecoder('utf-8',{fatal:true}).decode(buffer)) as Record<string,unknown>;
+    if(length!==null&&Number(length)!==bytes)return false;
+    const value=JSON.parse(new TextDecoder('utf-8',{fatal:true}).decode(buffer.subarray(0,bytes))) as Record<string,unknown>;
     return !!value&&typeof value==='object'&&!Array.isArray(value)&&Object.keys(value).length===4&&
       value.statusCode==='404'&&value.error==='not_found'&&value.code==='NoSuchKey'&&value.message==='Object not found';
   }catch{return false;}

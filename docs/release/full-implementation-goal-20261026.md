@@ -101,6 +101,19 @@ old-writer fencing and hosted recovery remain open. Evidence:
 `/Volumes/PRO-G40/Projects/Lovelies/verification/refresh-cancel-recovery-implementation-20261027/root-whole-v2-01/`,
 and `/Volumes/PRO-G40/Projects/Lovelies/verification/inference-packaging-20261026/private-inference-qualification/run-13/result.json`.
 
+The private Storage adapter now copies each error-body fragment as it is read,
+limits fragment count, and rejects locked streams and inconsistent declared
+lengths before treating a 400 response as an absent object. Two new regressions
+failed on the preceding source; the updated adapter and affected boundary cases
+passed all 15 focused tests. API types and the Deno Edge entrypoint check also
+passed. The earlier 872-of-873 API and seven-case model runs predate this
+adapter change; they are not a complete current-source regression result.
+This local parser check does not prove hosted authentication, object immutability
+or recovery clearance. Evidence:
+`/Volumes/PRO-G40/Projects/Lovelies/verification/storage-error-stream-20261027/reproduction-01/result.json`,
+`/Volumes/PRO-G40/Projects/Lovelies/verification/storage-error-stream-20261027/root-focused-02/result.json`,
+and `/Volumes/PRO-G40/Projects/Lovelies/verification/storage-error-stream-20261027/root-deno-check-01/result.json`.
+
 The second local Edge attempt failed at the missing-auth Storage control before
 starting Edge or its database. Docker stop commands succeeded, but their output
 did not match the coordinator's expected acknowledgement, so it retained the
