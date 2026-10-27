@@ -4,7 +4,7 @@ import { randomUUID } from 'node:crypto';
 import { createApp, createHandler } from '../src/index.ts';
 import { executeAccountDeletionOperation, prepareOperation } from '../src/operations.ts';
 import { restoreAllocationID, restoreOperationID } from '../src/restore-transaction.ts';
-import { ApiError } from '../src/types.ts';
+import { ApiError, stable } from '../src/types.ts';
 import { enroll, faceVerifierFixture } from './runtime-harness.mjs';
 import { fixture, controlRow, digest, installMarker, unavailable } from './restore-database-fixture.mjs';
 
@@ -54,16 +54,17 @@ const logicalID = (f, body, account = f.actor.accountID) => restoreOperationID(a
 const rows = f => f.h.db.all('SELECT id,subject_id,request_type,status,reason FROM privacy_requests ORDER BY id');
 const facts = async f => (await f.journal.control()).marker.cursor.sequence;
 
-async function assertRequestedPlan(f, body, expectedID, { committed = true } = {}) {
+async function assertRequestedPlan(f, body, expectedID, { committed = true, authorityFacts = [] } = {}) {
   const operationID = await logicalID(f, body), saved = await f.journal.lookup(operationID);
   assert(saved); if (committed) assert.equal(saved.status, 'committed');
   assert.deepEqual(saved.plan.allocations, { id_0: expectedID });
-  assert.equal(saved.plan.events.length, 1);
+  assert.equal(saved.plan.events.length, 1 + authorityFacts.length);
   const event = saved.plan.events[0];
   assert.equal(event.kind, 'account-deletion-requested');
   assert.deepEqual(event.scope, { account_id: f.actor.accountID, deletion_request_id: expectedID });
   assert.notEqual(event.operation_id, expectedID, 'Event and allocation use distinct namespaces');
   assert.notEqual(event.operation_id, operationID);
+  assert.deepEqual(saved.plan.events.slice(1).map(({ kind, scope }) => ({ kind, scope })), authorityFacts);
   const encoded = JSON.stringify(saved.plan);
   assert(!encoded.includes(body.status_token)); assert(!encoded.includes(body.reason));
   assert(!encoded.includes('status_token_hash')); assert(!encoded.includes('reason'));
@@ -85,8 +86,13 @@ test('request allocations are deterministic, distinct from logical operations an
 
 for (const registered of [false, true]) test(`${registered ? 'registered' : 'guest'} deletion records one allocated request across plan, SQL, status and original receipt`, async t => {
   const f = await deletionFixture(t, { registered }), body = f.body();
+  const consents = await f.h.db.all("SELECT id,purpose FROM consents WHERE account_id=? AND status='granted' AND purpose IN('face_authentication','photo_matching','photo_processing') ORDER BY id", f.actor.accountID);
+  const profile = await f.h.db.one("SELECT id,revision,status FROM face_profiles WHERE account_id=?", f.actor.accountID);
+  const rawFacts = consents.map(row => ({ kind: 'consent-withdrawn', scope: { account_id: f.actor.accountID, consent_id: row.id, purpose: row.purpose } }));
+  if (profile?.status === 'active') rawFacts.push({ kind: 'profile-retired', scope: { account_id: f.actor.accountID, profile_id: profile.id, profile_revision: profile.revision } });
+  const authorityFacts = [...new Map(rawFacts.map(fact => [stable(fact), fact])).entries()].sort(([a], [b]) => a < b ? -1 : a > b ? 1 : 0).map(([, fact]) => fact);
   const expectedID = await restoreAllocationID(await logicalID(f, body), 'id_0');
-  const result = await f.create(body), saved = await assertRequestedPlan(f, body, expectedID);
+  const result = await f.create(body), saved = await assertRequestedPlan(f, body, expectedID, { authorityFacts });
   assert.equal(result.privacy_request.id, expectedID); assert.equal(result.privacy_request.status, 'pending_approval');
   assert.equal(result.deletion_completed, false);
   assert.deepEqual((await rows(f)).map(row => ({ id: row.id, subject_id: row.subject_id, request_type: row.request_type, status: row.status })),
@@ -98,7 +104,7 @@ for (const registered of [false, true]) test(`${registered ? 'registered' : 'gue
   assert.equal(JSON.parse(sqlReceipt.response_json).privacy_request.id, expectedID);
   const status = await f.json('/privacy/account-deletion/status', { body: { status_token: body.status_token }, bearer: null });
   assert.equal(status.privacy_request.id, expectedID); assert.equal(status.operation_key, body.operation_key);
-  assert.deepEqual(await f.create(body), result); assert.equal(await facts(f), 1);
+  assert.deepEqual(await f.create(body), result); assert.equal(await facts(f), 1 + authorityFacts.length);
   assert.deepEqual(f.insertIDs, [expectedID]);
   assert.deepEqual(await f.journal.lookup(await logicalID(f, body)), saved);
 });

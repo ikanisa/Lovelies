@@ -1,4 +1,4 @@
-import { audiencePrivacyRows, eraseAudienceSubject, revokeAudienceAuthority } from './audience.ts';
+import { audiencePrivacyRows, eraseAudienceSubject, prepareDeletionAudienceRetirement, revokeAudienceAuthority } from './audience.ts';
 import { nextCleanupIntents } from './cleanup-scan.ts';
 import { ApiError, digest, jsonBody, ok, record, stable, uuid, type Actor, type AppContext } from './types.ts';
 import { assertOperationReceiptAvailable, assertRegisteredActor, executeOperation, executeAccountDeletionOperation, executeRestrictedOperation, prepareOperation, settleMediaWrite } from './operations.ts';
@@ -140,6 +140,7 @@ export async function createPrivacyRequest(ctx: AppContext, actor: Actor, kind: 
             // retiring authority. This is not an independently reviewed erasure.
             await restore.restrict('account-deletion-requested', {
                 account_id: actor.accountId, deletion_request_id: id });
+            await prepareDeletionAudienceRetirement(ctx, restore, actor.accountId);
         }
         (await ctx.db.run('INSERT INTO privacy_requests(id,subject_id,requested_by,request_type,status,reason,created_at,expires_at) VALUES(?,?,?,?,?,?,?,?)', id, actor.accountId, actor.accountId, kind, 'pending_approval', rationale, now, now + (kind === 'delete' ? 30 * 86400000 : requestTtl)));
         if (kind === 'delete') {

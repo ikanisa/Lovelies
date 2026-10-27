@@ -102,15 +102,29 @@ async function assertNoFutureGuardianEpisode(ctx: AppContext, account: string, v
  if (await ctx.db.one('SELECT id FROM guardian_requests WHERE child_account_id=? AND child_audience_version>? LIMIT 1', account, version))
   throw new ApiError(409, 'audience_future_guardian_episode');
 }
-async function audienceAuthorityFacts(ctx: AppContext, account: string): Promise<AudienceRestrictionFact[]> {
- const consents = await ctx.db.all<{ id: string; purpose: string }>(`SELECT id,purpose FROM consents WHERE account_id=?
-   AND purpose IN('face_authentication','photo_matching','photo_processing') AND status='granted' ORDER BY id`, account);
+async function audienceAuthorityFacts(ctx: AppContext, account: string, consentLimit?: number): Promise<AudienceRestrictionFact[]> {
+ const query = `SELECT id,purpose FROM consents WHERE account_id=?
+   AND purpose IN('face_authentication','photo_matching','photo_processing') AND status='granted' ORDER BY id`;
+ const consents = consentLimit === undefined ? await ctx.db.all<{ id: string; purpose: string }>(query, account) :
+  await ctx.db.all<{ id: string; purpose: string }>(query + ' LIMIT ?', account, consentLimit);
  const facts: AudienceRestrictionFact[] = consents.map(consent => ({ kind: 'consent-withdrawn',
    scope: { account_id: account, consent_id: consent.id, purpose: consent.purpose } }));
  const profile = await ctx.db.one<{ id: string; revision: string; status: string }>('SELECT id,revision,status FROM face_profiles WHERE account_id=?', account);
  if (profile?.status === 'active') facts.push({ kind: 'profile-retired',
    scope: { account_id: account, profile_id: profile.id, profile_revision: profile.revision } });
  return facts;
+}
+
+/** Account-deletion request creation also suspends this subject's audience
+ * authority. One slot in its existing atomic manifest is reserved for the
+ * request fact; never record a prefix if the retired episodes do not fit. */
+export async function prepareDeletionAudienceRetirement(ctx: AppContext, restore: RestoreTransactionScope, account: string): Promise<void> {
+ // Reading 32 consents is sufficient to detect overflow even without a profile.
+ const select = async () => orderedAudienceFacts(await audienceAuthorityFacts(ctx, account, 32));
+ const selected = await select();
+ if (selected.length > 31) throw new ApiError(503, 'audience_restriction_capacity');
+ await registerAudienceFacts(restore, selected);
+ if (stable(await select()) !== stable(selected)) throw new ApiError(409, 'audience_authority_changed');
 }
 async function guardianApprovalFacts(ctx: AppContext, request: Guardian): Promise<AudienceRestrictionFact[]> {
  const approvals = await ctx.db.all<GuardianApproval>(`SELECT id,child_account_id,guardian_account_id,purpose,status,version,revoked_at

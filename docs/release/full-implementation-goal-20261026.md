@@ -60,6 +60,22 @@ has not been deployed or bound to production. Evidence:
 `/Volumes/PRO-G40/Projects/Lovelies/verification/restore-write-inventory-implementation-20261027/root-focused-r3-01/`,
 `/Volumes/PRO-G40/Projects/Lovelies/verification/restore-write-inventory-implementation-20261027/root-journal-whole-r3-01/`,
 and `/Volumes/PRO-G40/Projects/Lovelies/verification/restore-write-inventory-implementation-20261027/root-api-consumers-r3-01/`.
+
+Account-deletion request creation now records the exact existing granted
+authentication, matching and photo-processing consent episodes and active
+profile revision before suspending them. It rechecks that selection inside the
+same operation and reserves one of 32 journal slots for the request. A request
+with more than 31 additional facts, or invalid legacy fact identifiers, can now
+fail before creation and needs a workable intake and reconciliation path before
+release. The original source failed the new local negative control; 43 selected
+producer, deletion, audience-capacity and same-subject hold cases subsequently
+passed, as did API types and the Deno Edge check. One existing cross-account
+status-secret case was excluded. These are PGlite/in-process journal results;
+they do not implement replay, independent journal operation, hosted cleanup or
+restore clearance. Evidence:
+`/Volumes/PRO-G40/Projects/Lovelies/verification/restore-deletion-request-audience-20261027/attempt-01/README.md`
+and `/Volumes/PRO-G40/Projects/Lovelies/verification/restore-deletion-request-audience-20261027/root-integrated-01/result.json`.
+
 Separate D2/L2 authority validators now pass 159 local cases, including frozen
 format-2 synthetic vectors and role, consent, guardian, object-hash and bounds
 checks. They are connected to the local format-3 journal candidate; application
@@ -817,6 +833,9 @@ Reviewer instructions now describe the actual flow without implying approval.
 Current-release physical prompt, key-ACL, recovery and review evidence remain
 open. Sources: [Apple App Review Guidelines](https://developer.apple.com/app-store/review/guidelines/#software-requirements)
 and [Apple LocalAuthentication guidance](https://developer.apple.com/documentation/localauthentication/accessing-keychain-items-with-face-id-or-touch-id).
+An additional read-only device inventory found five known iOS devices but none
+with developer services available at that time. No physical test was performed.
+Evidence: `/Volumes/PRO-G40/Projects/Lovelies/verification/physical-device-readback-20261027/attempt-01/result.json`.
 
 
 Android minimum24 is restored with actual API24/25 ARM64 virtual compatibility
@@ -837,6 +856,21 @@ with104 sealed source files and19 declared JPEGs in the refreshed run-07, includ
 cutover, store submission or live/stable replacement is claimed. See the current
 [integration checkpoint](audience-readiness-20261024.md) for source-bound receipts
 and preserved failures. GitHub billing remains parked without a substitute CI pass.
+
+The 27 October dashboard readback showed no Supabase Edge functions, the expected
+inference secret names and matching local/dashboard digests for the URL and two
+generation pins; the service-secret value was not compared. The Cloudflare
+dashboard showed the previously recorded Worker-version prefix at 100% and the
+same container image, with zero live instances at that observation. Its Worker
+logs, traces and Logpush were off, but container/provider retention and loaded
+model health were not established. A local CLI listing timed out and a separate
+read-only Management API call returned 403 without a captured cause; neither was
+retried. The separate Supabase connector then successfully listed zero Edge
+functions. No image was sent. Evidence:
+`/Volumes/PRO-G40/Projects/Lovelies/verification/supabase-inference-readback-20261027/attempt-01/result.json`,
+`/Volumes/PRO-G40/Projects/Lovelies/verification/supabase-inference-readback-20261027/attempt-01/management-api.json`,
+`/Volumes/PRO-G40/Projects/Lovelies/verification/supabase-inference-readback-20261027/attempt-01/connector-readback.json`,
+and `/Volumes/PRO-G40/Projects/Lovelies/verification/inference-provider-readback-20261027/continuation-01/result.json`.
 
 A read-only Supabase connector check on 27 October found project
 `ltqfplqevxztlswlzexn` active/healthy, all seven recorded migrations present,
