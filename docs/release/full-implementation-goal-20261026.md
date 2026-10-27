@@ -38,6 +38,11 @@ The exact immutable Linux AMD64 inference platform manifest is `sha256:982e2ed7b
 ### Execution checkpoint, 26–28 October 2026
 
 Newer receipts supersede the initial baseline only within their tested scopes.
+The association and Android identity changes were committed and pushed as
+`d350143808a756f097b95dbd957e7d7431404d1e`. The first push attempt did not
+dispatch; after confirming the remote remained at the prior commit, the push
+completed and local HEAD, tracking `origin/main` and remote `main` matched.
+The skipped GitHub workflow is not a CI pass.
 The association Worker responds directly with 405 for unsupported methods on its
 two exact association paths. All 14 local unit cases passed. After inspecting the
 existing Pages deployment, custom domains, DNS and zone routes, version
@@ -58,6 +63,17 @@ The Wrangler session can inspect the Worker but lacks Pages access and offers
 no route-list command. The subsequent authenticated dashboard inventory supplied
 the Pages, DNS and route observations used above. Earlier CLI limitation evidence:
 `/Volumes/PRO-G40/Projects/Lovelies/verification/link-association-readonly-inventory-20261028/attempt-01/FINDINGS.md`.
+The subsequent unsigned iOS Release build passed with 259 tracked iOS inputs
+unchanged. Its bundle contains `com.lovelies.memories` and the verified link
+host; the policy/support/deletion URLs remain empty and require publication and
+final configuration. This is not a signed archive or device acceptance.
+Evidence: `/Volumes/PRO-G40/Projects/Lovelies/verification/ios-release-link-host-20261028/attempt-01/`.
+A fresh read-only inventory found five paired iOS devices, all disconnected or
+unavailable; Android's device list was empty. No physical device was modified.
+Evidence: `/Volumes/PRO-G40/Projects/Lovelies/verification/physical-device-readback-20261028/attempt-01/device-inventory.json`.
+The selected Supabase project's security advisor returned no lints on 28 October.
+This is a point-in-time advisor result, not a complete security audit. Evidence:
+`/Volumes/PRO-G40/Projects/Lovelies/verification/supabase-security-advisors-20261028/attempt-01/result.json`.
 
 Android notification posts and taps previously used a 32-bit UUID hash; two
 valid UUIDs were shown to collide, replacing a notification and retargeting its
@@ -75,10 +91,20 @@ recovered. Token rotation remains unresolved: `rotation_pending` has no reader,
 and a lost registration acknowledgement can occupy the shared pending-operation
 slot. Evidence:
 `/Volumes/PRO-G40/Projects/Lovelies/verification/android-notification-identity-20261028/attempt-01/REVIEW.md`.
+An isolated same-account API check also found that audience restriction denies
+push removal; an older database restore could revive a removed registration. A
+push-retirement fact alone breaks unmodified v1 journal readers; safe removal
+requires activation-generation binding and an ordered versioned writer/reader
+cutover. No restricted-account bypass has been deployed.
 Build evidence:
 `/Volumes/PRO-G40/Projects/Lovelies/verification/android-notification-integration-20261028/attempt-01/build-result.json`.
 Runtime evidence, including the earlier disk-capacity and ExFAT lock failures:
 `/Volumes/PRO-G40/Projects/Lovelies/verification/android-notification-integration-20261028/attempt-01/runtime-04/instrument-result.json`.
+The disposable emulator and APFS image were stopped and detached. Initial cleanup
+stopped when macOS removed a paired AppleDouble sidecar automatically; the
+remaining task-owned files were reconciled against their saved manifest and
+removed, with sidecar copies retained. Evidence:
+`/Volumes/PRO-G40/Projects/Lovelies/verification/android-notification-integration-20261028/attempt-01/runtime-03/exfat-precleanup/cleanup-result.json`.
 
 A bounded Storage metadata-body reader passed 91 local cases in an isolated
 candidate, but a timeout after a dispatched DELETE could accelerate an unsafe
@@ -123,6 +149,13 @@ unintegrated because it does not yet safely invalidate or refresh gallery/media
 after a receipt decision. The test-owned simulator was removed; its boot-status
 timeout and other limits remain in the evidence:
 `/Volumes/PRO-G40/Projects/Lovelies/verification/ios-notification-complete-20261028/attempt-01/REVIEW.md`.
+A further isolated successor passed 22 synthetic same-account simulator cases,
+including gallery/decision recovery and the audience case. It remains
+unintegrated: the real server receipt is not bound to the exact input, 4xx
+recovery can indefinitely hold the gallery, journal-read failure and photo
+share/save publication need additional safeguards, and restore semantics are
+unproved. The owned simulator was removed after the run. Evidence:
+`/Volumes/PRO-G40/Projects/Lovelies/verification/ios-notification-complete-20261028/attempt-03/REVIEW.md`.
 An isolated journal worker accidentally opened `/tmp/v4-snippet-review-not-used`
 for writing; it is now empty. Its creation and modification timestamps match
 the reported write, but its prior existence or contents are not conclusively
