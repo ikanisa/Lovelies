@@ -102,6 +102,16 @@ can still race a legacy commit. Evidence:
 `/Volumes/PRO-G40/Projects/Lovelies/verification/restore-legacy-body-stream-20261027/root-focused-02/result.json`,
 and `/Volumes/PRO-G40/Projects/Lovelies/verification/restore-legacy-body-stream-20261027/root-dry-build-02/result.json`.
 
+An external caller-bound format-3 journal candidate, tested with the newer
+legacy reader, passed 108 focused local cases, including bounded responses when
+stream cancellation does not settle. Its native mixed-version run passed one case and
+failed four interleaving cases after engine timeouts; those failures remain open.
+The candidate has not been integrated or deployed. Existing raw format-3 tests
+still need a faithful port, and the app client, SQL binding, provider barriers and
+recovery clearance remain unimplemented. Evidence:
+`/Volumes/PRO-G40/Projects/Lovelies/verification/restore-v3-caller-binding-implementation-20261027/root-qualification-01/focused-result.json`
+and `/Volumes/PRO-G40/Projects/Lovelies/verification/restore-v3-caller-binding-implementation-20261027/root-qualification-01/native-result.json`.
+
 Refresh-delivery cancellation now collects exact restriction facts for the
 original session and its named delivered successor before tentative domain
 effects; the independent plan is prepared before the SQL commit. It preserves
@@ -162,6 +172,18 @@ empty mapping. No HTTP artifact was recorded. Independent readback confirmed
 the exact new container and network absent. This is not Storage authentication
 or Edge readiness evidence. Receipt:
 `/Volumes/PRO-G40/Projects/Lovelies/verification/docker-internal-port-qualification-20261027/attempt-02/run-port/root-reconciliation.json`.
+
+The next isolated Storage diagnostic passed 50 offline synthetic checks after
+repairing a cross-realm test mock. Its fresh local run then failed before the
+native self-test or any HTTP request because the runtime rejected an underscore
+in its own command label. Independent readback found both exact containers,
+both volumes, the network and the two generated environment files absent; private
+diagnostic artifacts remain. This is neither Storage-authentication nor Edge
+readiness evidence. The original failed offline run is retained. Evidence:
+`/Volumes/PRO-G40/Projects/Lovelies/verification/supabase-storage-auth-diagnostic-20261027/root-offline-attempt03-01/result.json`,
+`/Volumes/PRO-G40/Projects/Lovelies/verification/supabase-storage-auth-diagnostic-20261027/root-offline-attempt03-02/result.json`,
+`/Volumes/PRO-G40/Projects/Lovelies/verification/supabase-storage-auth-diagnostic-20261027/attempt-03/run-b/result.json`,
+and `/Volumes/PRO-G40/Projects/Lovelies/verification/supabase-storage-auth-diagnostic-20261027/attempt-03/run-b/root-independent-postflight.json`.
 
 Hosted v9–v13 are applied: schema13 has 69 private forced-RLS tables and policies,
 zero client/public access, preserved existing table projections and an empty
