@@ -121,9 +121,30 @@ results and retained original failures are in
 The test's both-enter barrier may itself conflict with the pinned Durable
 Object transaction input gate: its release timer was scheduled outside the
 first transaction. That explanation is an inference, not an observed failure
-stage. A fresh owned metadata-only gate diagnostic must establish callback and
-timer ordering before the actual interleavings are retested; the four unknown
-outcomes remain preserved.
+stage. The first metadata-only diagnostic launch exited during preflight before
+creating a namespace; a clean-environment check observed macOS injecting
+`__CF_USER_TEXT_ENCODING`, which its strict environment gate did not allow.
+After a reviewed correction, the bounded native diagnostic observed the first
+SQLite transaction and its internal timer completing before a second callback
+entered, with the expected revisions and a qualified independent postflight.
+This is one synthetic request with instrumented callbacks, not the actual
+caller-bound restore protocol. The prior four unknown outcomes remain preserved;
+both serial orders and concurrent separate callers still need testing. The
+owned diagnostic namespace is retained and workerd child termination is not
+independently established. Evidence:
+`/Volumes/PRO-G40/Projects/Lovelies/verification/restore-sqlite-gate-diagnostic-20261027/root-supervisor-01/result.json`,
+`/Volumes/PRO-G40/Projects/Lovelies/verification/restore-sqlite-gate-diagnostic-20261027/root-supervisor-03/result.json`,
+and `/Volumes/PRO-G40/Projects/Lovelies/verification/restore-sqlite-gate-diagnostic-20261027/root-native-03/postflight-01.json`.
+An independently reviewed replacement fixture then passed eight native local
+SQLite cases with the preserved caller-bound candidate: old and caller-aware
+observers, both submission orders and separate overlapping request lifetimes.
+The postflight qualified all case receipts and retained their owned namespaces.
+This is not the current workspace implementation, proof of overlapping SQLite
+callbacks, a retry after a shared stale snapshot, hosted durability or the cause
+of the earlier four timeouts. Workerd child-process terminality was not
+independently inventoried. Evidence:
+`/Volumes/PRO-G40/Projects/Lovelies/verification/restore-v3-serialized-caller-qualification-20261027/root-supervisor-02/result.json`
+and `/Volumes/PRO-G40/Projects/Lovelies/verification/restore-v3-serialized-caller-qualification-20261027/root-native-02/postflight-01.json`.
 
 Refresh-delivery cancellation now collects exact restriction facts for the
 original session and its named delivered successor before tentative domain
@@ -279,7 +300,7 @@ and `/Volumes/PRO-G40/Projects/Lovelies/verification/preview-export-delayed-writ
 Two local regressions reproduced cleanup starvation: 100 older unresolved
 writers blocked a later eligible account in both the privacy cleanup and terminal
 face-proof batches. Both scans now use bounded, persistent high-water cursors;
-blocked rows remain eligible on later cycles and writer, reference and hold
+blocked rows remain eligible on later cycles and existing writer and reference
 checks still govern deletion. Rows with unsupported cursor identities or clocks
 are excluded from these two scans and reported by maintenance health; separate
 authorized erasure workflows retain their own authority. Sixteen focused cases
@@ -295,6 +316,48 @@ Evidence:
 `/Volumes/PRO-G40/Projects/Lovelies/verification/cleanup-starvation-regression-20261027/root-consumers-01/result.json`,
 `/Volumes/PRO-G40/Projects/Lovelies/verification/native-postgres17-fixture-20261027/native-pg17-run-05/result.json`,
 and `/Volumes/PRO-G40/Projects/Lovelies/verification/native-postgres17-fixture-20261027/native-pg17-run-05/independent-postflight.json`.
+
+Terminal face-proof cleanup previously deleted synthetic proof bytes and rows
+despite a pre-existing global retention hold, subject moderation hold or
+nonterminal subject deletion-request hold. Those three baseline cases failed;
+unheld and unrelated-subject controls passed. The local guard now checks the
+exact proof's owner and those hold classes before deletion, after deletion and
+before row retirement. Nine focused synthetic cases pass, including release,
+unknown owner and injected database errors. A hold or query failure observed
+after deletion preserves the row but cannot recover bytes already removed.
+A hold set and cleared wholly during the external call is not detected by the
+current recheck; persisted physical-key ownership and cross-process/provider
+terminality are also unqualified. The first wider consumer run reached 173
+passing cases but timed out before its summary and remains incomplete. A later
+split run passed 173 affected cleanup, recovery and privacy cases; one separate
+native-PostgreSQL scan case was skipped by the in-memory harness. API types and
+the Supabase Edge entrypoint check passed. Evidence:
+`/Volumes/PRO-G40/Projects/Lovelies/verification/face-proof-hold-20261027/agent-baseline-02/result.json`,
+`/Volumes/PRO-G40/Projects/Lovelies/verification/face-proof-hold-20261027/root-fix-02/result.json`,
+`/Volumes/PRO-G40/Projects/Lovelies/verification/face-proof-hold-20261027/root-consumers-01/result.json`,
+and `/Volumes/PRO-G40/Projects/Lovelies/verification/face-proof-hold-20261027/root-consumers-02/result.json`.
+
+A later synthetic regression exercised an actual signed registration verifier
+with its Storage read paused while a separate database context ran face-proof
+cleanup after challenge expiry. The second context deleted the three synthetic
+proof objects and rows before the held read returned; the same-context control
+kept them until the verifier settled. The expired completion was denied in both
+cases and no registered-face session or profile was created. This demonstrates
+an in-flight read/cleanup coordination gap with two database objects in one
+process, not an authentication bypass or proof of hosted behavior. A second
+synthetic test reproduced the same overlap after the actual logout route
+cancelled an unexpired challenge; it also denied completion and preserved an
+unrelated account's proof. Durable reader accounting, cancellation and
+cross-process/recovery behavior remain to be designed and tested; expiry,
+challenge status or a process-local activity set alone is not proof that
+another reader has stopped. Evidence:
+`/Volumes/PRO-G40/Projects/Lovelies/verification/face-proof-read-cleanup-race-20261027-cd6660b5ed58/run-01.json`
+and `/Volumes/PRO-G40/Projects/Lovelies/verification/face-proof-read-cleanup-race-20261027-cd6660b5ed58/run-02.json`.
+An external reader-admission design and 18 in-memory model cases cover capture
+and reference reads, revocation, uncertain stream completion and restored old
+state. This is design evidence only: application, PostgreSQL, provider,
+independent-journal and restore integration remain open. See
+`/Volumes/PRO-G40/Projects/Lovelies/verification/face-proof-read-admission-design-20261027/attempt-01/DESIGN.md`.
 The earlier failed revision03 fixture had been preserved on `/private/tmp`,
 but a later read-only inventory found its exact runtime and data paths absent;
 the original failure/ownership receipts remain. The Mac restarted in between,
@@ -315,7 +378,23 @@ schedule; it does not claim the hosted provider exhibited it. Durable exact-key
 delete-attempt admission, hold coordination, independent restore-journal coverage
 and qualified terminal reconciliation are required before deletion or recovery
 can be considered complete. Evidence:
-`/Volumes/PRO-G40/Projects/Lovelies/verification/storage-delete-uncertainty-20261027/root-baseline-01/result.json`.
+`/Volumes/PRO-G40/Projects/Lovelies/verification/storage-delete-uncertainty-20261027/root-baseline-01/result.json`
+and `/Volumes/PRO-G40/Projects/Lovelies/verification/storage-delete-uncertainty-20261027/root-baseline-02/result.json`.
+An unintegrated external candidate passed 16 focused cases and the hardened
+uncertain-delete regression, but intentionally left even acknowledged deletes
+unresolved. Its preserved compatibility checks show ordinary export and
+retention return 503 and the acknowledged-delete control remains unverified.
+It is not deployable: actual provider-terminal binding, independent journal
+coverage and working success/hold journeys are still required. Independent
+code review also identified candidate-specific gaps: pending moderation holds
+are not consistently applied to media access, reapproval and processing;
+physical-key ownership is not established globally across tables and subjects;
+and a claimed DELETE can dispatch after a hold becomes pending. The added
+attempt/hold records need an export, retention and erasure design, and schema
+readiness tests need requalification for the candidate's new tables. These are
+review findings, not hosted observations. A pending hold cannot be represented
+as proof that an already claimed deletion has stopped. Evidence:
+`/Volumes/PRO-G40/Projects/Lovelies/verification/storage-delete-uncertainty-20261027/attempt-01/REVIEW.md`.
 
 The Storage status adapter previously treated arbitrary native HTTP 404s as
 object absence and could accept a 404 DELETE. Six isolated regressions reproduced
