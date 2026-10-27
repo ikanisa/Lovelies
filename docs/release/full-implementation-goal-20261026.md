@@ -106,11 +106,13 @@ An external caller-bound format-3 journal candidate, tested with the newer
 legacy reader, passed 108 focused local cases, including bounded responses when
 stream cancellation does not settle. Its native mixed-version run passed one case and
 failed four interleaving cases after engine timeouts; those failures remain open.
-The candidate has not been integrated or deployed. Existing raw format-3 tests
-still need a faithful port, and the app client, SQL binding, provider barriers and
-recovery clearance remain unimplemented. Evidence:
-`/Volumes/PRO-G40/Projects/Lovelies/verification/restore-v3-caller-binding-implementation-20261027/root-qualification-01/focused-result.json`
-and `/Volumes/PRO-G40/Projects/Lovelies/verification/restore-v3-caller-binding-implementation-20261027/root-qualification-01/native-result.json`.
+The candidate has not been integrated or deployed. An external bound-wire port
+of the existing format-3 tests passed 37 focused and three native cases; historical
+unbound-wire coverage remains separately scoped. The app client, SQL binding,
+provider barriers and recovery clearance remain unimplemented. Evidence:
+`/Volumes/PRO-G40/Projects/Lovelies/verification/restore-v3-caller-binding-implementation-20261027/root-qualification-01/focused-result.json`,
+`/Volumes/PRO-G40/Projects/Lovelies/verification/restore-v3-caller-binding-implementation-20261027/root-qualification-01/native-result.json`,
+and `/Volumes/PRO-G40/Projects/Lovelies/verification/restore-v3-caller-binding-implementation-20261027/root-qualification-02/result.json`.
 
 Refresh-delivery cancellation now collects exact restriction facts for the
 original session and its named delivered successor before tentative domain
@@ -184,6 +186,15 @@ readiness evidence. The original failed offline run is retained. Evidence:
 `/Volumes/PRO-G40/Projects/Lovelies/verification/supabase-storage-auth-diagnostic-20261027/root-offline-attempt03-02/result.json`,
 `/Volumes/PRO-G40/Projects/Lovelies/verification/supabase-storage-auth-diagnostic-20261027/attempt-03/run-b/result.json`,
 and `/Volumes/PRO-G40/Projects/Lovelies/verification/supabase-storage-auth-diagnostic-20261027/attempt-03/run-b/root-independent-postflight.json`.
+The corrected attempt passed 60 offline checks and reached its real native
+self-test, but that client rejected a non-service environment value before any
+HTTP control. The exact changed key is not yet known. Both fresh containers,
+volumes, network and generated environment files were independently confirmed
+absent. This remains a local diagnostic failure, not hosted authentication proof.
+Evidence:
+`/Volumes/PRO-G40/Projects/Lovelies/verification/supabase-storage-auth-diagnostic-20261027/root-offline-attempt04-01/result.json`,
+`/Volumes/PRO-G40/Projects/Lovelies/verification/supabase-storage-auth-diagnostic-20261027/attempt-04/run-b/result.json`,
+and `/Volumes/PRO-G40/Projects/Lovelies/verification/supabase-storage-auth-diagnostic-20261027/attempt-04/run-b/root-independent-postflight.json`.
 
 Hosted v9–v13 are applied: schema13 has 69 private forced-RLS tables and policies,
 zero client/public access, preserved existing table projections and an empty
