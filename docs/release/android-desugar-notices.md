@@ -142,6 +142,13 @@ describes an additional transformation and removal of two provider classes. A
 local disassembly of one differing NIO class showed
 identical displayed instructions but different class-attribute ordering; that
 single-class observation does not establish equivalence for the other entries.
+An independent local ASM implementation of the inspected transformation then
+produced 1,459 class entries whose uncompressed bytes all match the cached Gradle
+runtime; independent ZIP inspection found no duplicate names or CRC failures.
+Its ZIP layout differs, and the locally selected JDK and ASM are not established
+as the historical official toolchain. This strengthens class-member provenance
+but does not establish an official build, complete corresponding source,
+licence compliance or the contents of a final signed AAB.
 Receipts and archive SHA-256 values are in
 `/Volumes/PRO-G40/Projects/Lovelies/verification/android-desugar-source-20261026/archive-inputs-20261027/`.
 
