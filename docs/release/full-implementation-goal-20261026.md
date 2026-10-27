@@ -345,6 +345,53 @@ restore. Evidence:
 `/Volumes/PRO-G40/Projects/Lovelies/verification/face-proof-hold-20261027/native-pg-run-06/result.json`,
 and `/Volumes/PRO-G40/Projects/Lovelies/verification/face-proof-hold-20261027/native-pg-run-06/independent-postflight.json`.
 
+Generic same-owner orphan cleanup also ignored pre-existing global, subject
+moderation and separate deletion-request holds: three local cases reproduced
+deletion and verified status despite a hold. Further same-owner cases showed
+the same issue after a NULL-request intent inherited or was persistently linked
+to a reviewed request. The local guard now checks holds before deletion and on
+rechecks, retains the scanned orphan context through adoption, and checks a
+linked delete against other nonterminal held requests. Fourteen focused cases
+passed locally, including hold release, linking, adoption during deletion and a
+query fault; API types and the Edge entrypoint check passed. The first fix test
+had an assertion-code mismatch and an early linked fixture triggered an unrelated
+job error; both failures are preserved. A still-active hold after dispatch stops
+verified status but cannot restore deleted bytes. Hold changes wholly between
+checks and provider/restore behavior remain open.
+Evidence:
+`/Volumes/PRO-G40/Projects/Lovelies/verification/orphan-cleanup-hold-20261027/baseline-01/result.json`,
+`/Volumes/PRO-G40/Projects/Lovelies/verification/orphan-cleanup-hold-20261027/root-fix-01/result.json`,
+`/Volumes/PRO-G40/Projects/Lovelies/verification/orphan-cleanup-hold-20261027/root-linked-baseline-01/result.json`,
+`/Volumes/PRO-G40/Projects/Lovelies/verification/orphan-cleanup-hold-20261027/root-linked-baseline-02/result.json`,
+`/Volumes/PRO-G40/Projects/Lovelies/verification/orphan-cleanup-hold-20261027/root-adopted-baseline-01/result.json`,
+and `/Volumes/PRO-G40/Projects/Lovelies/verification/orphan-cleanup-hold-20261027/root-fix-04/result.json`.
+
+A separate same-subject deletion-request hold also failed to stop erasure of
+account metadata; in the no-asset case the earlier source even recorded a
+completed account-erased event. The erasure fingerprint now denies an active,
+nonterminal held deletion request at the existing lease, metadata, cleanup and
+completion checks. An affected run passed 18 focused, 34 cleanup and 80 privacy
+cases with no skips; 126 recorded inputs stayed unchanged. The two focused test
+files were subsequently changed only to improve their PostgreSQL skip condition.
+Two additional PGlite cases activated the hold after lease acquisition and after
+metadata erasure, respectively: both blocked completion and resumed on release.
+The second case had already erased metadata before the late hold. Their shared
+tests and the 18 focused cases then passed together; all 20 skip when a PostgreSQL
+test URL is defined, including the empty-value case. These tests use synthetic
+Storage and an in-process journal, not hosted or provider services. Eleven selected
+pre-existing-hold cases also passed on a local PostgreSQL 17 fixture with no skips;
+the exact source, dependency and binary inputs were checked, and independent
+postflight confirmed the owned database and credential absent, the process ended
+and the port free.
+That native run used synthetic Storage and journal and did not test multi-pool
+races. A deletion hold set and cleared entirely between checks has
+no durable version here; in-flight deletion and independent hold replay remain
+unqualified. Evidence:
+`/Volumes/PRO-G40/Projects/Lovelies/verification/distinct-request-hold-20261027/baseline-03/result.json`,
+`/Volumes/PRO-G40/Projects/Lovelies/verification/distinct-request-hold-20261027/root-consumers-01/result.json`,
+`/Volumes/PRO-G40/Projects/Lovelies/verification/distinct-hold-phases-20261027/root-integrated-02/result.json`,
+and `/Volumes/PRO-G40/Projects/Lovelies/verification/privacy-hold-native-20261027/native-pg-run-01/post-run-audit.json`.
+
 A later synthetic regression exercised an actual signed registration verifier
 with its Storage read paused while a separate database context ran face-proof
 cleanup after challenge expiry. The second context deleted the three synthetic
@@ -386,6 +433,14 @@ author reports TypeScript passed, but no separate process-exit receipt was found
 Post-journal-prepare SQL rollback remains a preserved 503 case. This revision is
 also unintegrated and does not provide a production egress or restore controller.
 Evidence: `/Volumes/PRO-G40/Projects/Lovelies/verification/face-proof-reader-implementation-20261027/attempt-02/REVIEW.md`.
+A third external revision adds same-owner writer correlation and cross-caller
+terminal adoption. Its saved filtered logs show 18 passes; 34 earlier targeted
+checks and nine replay checks were not rerun, and both no-egress controls still
+fail. Independent source review found that a general hold check can occur after
+a new orphan DELETE starts and can change again before privacy finalization.
+Settled writer state also does not by itself prove the provider object/version.
+The candidate remains unintegrated. Evidence:
+`/Volumes/PRO-G40/Projects/Lovelies/verification/face-proof-reader-implementation-20261027/attempt-03/REVIEW.md`.
 The separate egress-ordering plan records that the existing pool adapter cannot
 safely use an unqualified reserved-session lock: pool `begin()` need not use the
 reserved connection, releasing it is not an unlock, and an unobserved backend
@@ -393,6 +448,13 @@ disconnect can release the lock before local code learns of the failure. Eight
 synthetic controls include that counterexample; they are not native PostgreSQL
 or hosted proof. A real egress and its recovery contract remain unimplemented.
 Evidence: `/Volumes/PRO-G40/Projects/Lovelies/verification/face-reader-egress-ordering-20261027/plan-01/PLAN.md`.
+A further dispatch-intent model orders durable decisions but shows that an
+already accepted send or delivery can occur after revocation and a prior DELETE
+can take effect after a hold. Ten synthetic controls include these counterexamples.
+Independent review did not establish that this boundary meets the existing
+current-session, consent, future-matching, delivery or hold requirements. It is
+not an adopted product policy or production implementation. Evidence:
+`/Volumes/PRO-G40/Projects/Lovelies/verification/face-reader-dispatch-intent-20261027/plan-01/DESIGN.md`.
 The earlier failed revision03 fixture had been preserved on `/private/tmp`,
 but a later read-only inventory found its exact runtime and data paths absent;
 the original failure/ownership receipts remain. The Mac restarted in between,
@@ -545,6 +607,17 @@ so its safe startup and available capacity must be established before a fresh
 attempt. The failure is not evidence of hosted Storage behavior. Evidence:
 `/Volumes/PRO-G40/Projects/Lovelies/verification/storage-startup-phase-diagnostic-20261027/root-offline-attempt04-root-01/result.json`
 and `/Volumes/PRO-G40/Projects/Lovelies/verification/storage-startup-phase-diagnostic-20261027/attempt-04/run-phase/result.json`.
+Subsequent read-only reconciliation found the two planned credential files
+absent, the owned Docker client configuration empty, and the saved daemon
+error identical to the fixed unavailable-socket message. The run record stopped
+before resource intents, and the sealed source places credential generation after
+that failed step. All 26 source files and the separate instrumented-file identity
+matched the seal. The first source comparison mistakenly treated that identity
+record as a filename; its result is retained with the corrected comparison.
+These observations concern that one failed attempt and do not establish daemon
+state or clean up unrelated resources. Evidence:
+`/Volumes/PRO-G40/Projects/Lovelies/verification/storage-phase-artifact-reconciliation-20261027/attempt-01/result.json`
+and `/Volumes/PRO-G40/Projects/Lovelies/verification/storage-phase-artifact-reconciliation-20261027/attempt-01/source-review-02.json`.
 
 Hosted v9–v13 are applied: schema13 has 69 private forced-RLS tables and policies,
 zero client/public access, preserved existing table projections and an empty
