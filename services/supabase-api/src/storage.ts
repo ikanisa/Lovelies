@@ -50,10 +50,16 @@ export class SupabasePrivateBucket implements PrivateBucket {
     // New sb_secret keys are apikeys, not JWTs; legacy service_role is a JWT.
     if(this.secret.split('.').length===3)headers.set('Authorization','Bearer '+this.secret);
     const response=await this.fetcher(this.base+path,{...init,headers,redirect:'manual'});
-    if(response.redirected||response.status>=300&&response.status<400){void response.body?.cancel().catch(()=>{});throw new ApiError(503,'storage_redirect_denied');}
+    if(response.redirected||response.status>=300&&response.status<400){discardResponseBody(response);throw new ApiError(503,'storage_redirect_denied');}
     const objectRead=(init.method??'GET')==='GET'&&(path.startsWith('/object/info/')||path.startsWith('/object/authenticated/'));
     if(response.status===400&&objectRead&&await missingObjectEnvelope(response))return new Response(null,{status:404});
-    if(!response.ok&&response.status!==404){void response.body?.cancel().catch(()=>{});throw new ApiError(503,'private_storage_unavailable');}
+    // Only the classified object-read envelope above may become absence. A
+    // native 404 can instead be an unknown bucket or route, including DELETE.
+    if(!response.ok){
+      discardResponseBody(response);
+      // Preserve the existing write-error code for a rejected POST 404.
+      throw new ApiError(503,init.method==='POST'&&response.status===404?'private_storage_write_failed':'private_storage_unavailable');
+    }
     return response;
   }
   async head(key:string):Promise<Omit<PrivateObject,'body'|'arrayBuffer'>|null>{

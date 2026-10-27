@@ -6,11 +6,12 @@ const missing={statusCode:'404',error:'not_found',message:'Object not found',cod
 const bucket=fetcher=>new SupabasePrivateBucket('http://127.0.0.1:54321','sb_secret_owned_fixture','lovelies-photos',fetcher);
 const unavailable=operation=>assert.rejects(operation,error=>error.status===503&&error.code==='private_storage_unavailable');
 
-test('Storage exact HTTP400 NoSuchKey and native404 establish missing HEAD/GET only',async()=>{
- for(const response of [()=>Response.json(missing,{status:400}),()=>new Response(null,{status:404})]){
-  assert.equal(await bucket(async()=>response()).head('owned/missing'),null);
-  assert.equal(await bucket(async()=>response()).get('owned/missing'),null);
- }
+test('Storage exact HTTP400 NoSuchKey establishes modeled missing HEAD/GET only',async()=>{
+ const response=()=>Response.json(missing,{status:400});
+ assert.equal(await bucket(async()=>response()).head('owned/missing'),null);
+ assert.equal(await bucket(async()=>response()).get('owned/missing'),null);
+ await unavailable(()=>bucket(async()=>new Response(null,{status:404})).head('owned/missing'));
+ await unavailable(()=>bucket(async()=>new Response(null,{status:404})).get('owned/missing'));
  let calls=0;
  const raced=bucket(async()=>++calls===1?Response.json({size:3,etag:'owned-version',metadata:{}}):Response.json(missing,{status:400}));
  assert.equal(await raced.get('owned/deleted-between-info-and-get'),null);assert.equal(calls,2);

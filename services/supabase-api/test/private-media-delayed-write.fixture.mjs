@@ -30,11 +30,11 @@ export function delayedPrivateMedia(memory,{bucket,prefix,mode}){
    return new Response(null,{status:200});
   }
   if(method==='GET'&&url.pathname.startsWith('/storage/v1/object/info/'+bucket+'/')){
-   const key=keyFrom(url.pathname,'/storage/v1/object/info/'+bucket+'/');events.push({kind:'head',key});const value=await memory.head(key);if(!value)return new Response(null,{status:404});
+   const key=keyFrom(url.pathname,'/storage/v1/object/info/'+bucket+'/');events.push({kind:'head',key});const value=await memory.head(key);if(!value)return Response.json({statusCode:'404',error:'not_found',message:'Object not found',code:'NoSuchKey'},{status:400});
    return Response.json({size:value.size,etag:value.etag,content_type:value.httpMetadata?.contentType??'application/octet-stream',metadata:value.customMetadata});
   }
   if(method==='GET'&&url.pathname.startsWith('/storage/v1/object/authenticated/'+bucket+'/')){
-   const key=keyFrom(url.pathname,'/storage/v1/object/authenticated/'+bucket+'/');events.push({kind:'get',key});const value=await memory.get(key);if(!value)return new Response(null,{status:404});return new Response(await value.arrayBuffer(),{headers:{etag:'"'+value.etag+'"'}});
+   const key=keyFrom(url.pathname,'/storage/v1/object/authenticated/'+bucket+'/');events.push({kind:'get',key});const value=await memory.get(key);if(!value)return Response.json({statusCode:'404',error:'not_found',message:'Object not found',code:'NoSuchKey'},{status:400});return new Response(await value.arrayBuffer(),{headers:{etag:'"'+value.etag+'"'}});
   }
   throw Error('unexpected synthetic private-media Storage route');
  };

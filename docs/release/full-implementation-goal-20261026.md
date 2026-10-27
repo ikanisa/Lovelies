@@ -118,6 +118,12 @@ checks and failed all four requested interleavings with bounded fetch deadlines
 and unknown outcomes. It did not establish overlap or retry. Its exact source,
 results and retained original failures are in
 `/Volumes/PRO-G40/Projects/Lovelies/verification/restore-v3-caller-binding-implementation-20261027/root-qualification-03/result.json`.
+The test's both-enter barrier may itself conflict with the pinned Durable
+Object transaction input gate: its release timer was scheduled outside the
+first transaction. That explanation is an inference, not an observed failure
+stage. A fresh owned metadata-only gate diagnostic must establish callback and
+timer ordering before the actual interleavings are retested; the four unknown
+outcomes remain preserved.
 
 Refresh-delivery cancellation now collects exact restriction facts for the
 original session and its named delivered successor before tentative domain
@@ -295,6 +301,22 @@ clock to isolate export cleanup; the later active-window retry case separately
 checks that the original writer and cleanup obligation remain pending and that
 no deletion is dispatched for its exact key. All these tests use synthetic
 PGlite and Storage transport, not hosted-provider terminality.
+
+The Storage status adapter previously treated arbitrary native HTTP 404s as
+object absence and could accept a 404 DELETE. Six isolated regressions reproduced
+the resulting false missing/cleanup outcomes. The adapter now accepts only the
+bounded exact HTTP 400 `NoSuchKey` envelope for object-read absence, rejects
+other non-success responses, preserves the existing POST-404 error code, and does
+not wait on or trust failed response cancellation. The observed hosted envelope
+covers object-info reads; authenticated-read absence is modeled locally and
+still needs hosted qualification. Fifty-three affected local cases, API types
+and the Edge entrypoint check passed; an earlier run's changed write-error code
+was corrected rather than ignored. None proves privileged provider visibility,
+physical backing-blob deletion, remote DELETE terminality or writer drainage.
+Evidence:
+`/Volumes/PRO-G40/Projects/Lovelies/verification/storage-response-status-regression-20261027/root-baseline-01/result.json`,
+`/Volumes/PRO-G40/Projects/Lovelies/verification/storage-response-status-regression-20261027/root-consumers-01/result.json`,
+and `/Volumes/PRO-G40/Projects/Lovelies/verification/storage-response-status-regression-20261027/root-consumers-02/result.json`.
 
 On an object-version mismatch, the Storage adapter now returns its conflict
 without waiting for an uncooperative response-body cancellation. The local
@@ -543,7 +565,7 @@ not a complete security or workload assessment, and unused indexes were not
 removed. Evidence:
 `/Volumes/PRO-G40/Projects/Lovelies/verification/supabase-live-readonly-20261027/attempt-01/result.json`.
 
-Supabase plans to disable four older TLS 1.2 CBC suites on 10 November 2026.
+Supabase plans to disable four older TLS 1.2 CBC suites no earlier than 10 November 2026.
 Official Android API 24/25 and iOS 17+ defaults indicate overlap with retained
 TLS suites, but existing compatibility fixtures do not prove an HTTPS handshake.
 Qualify actual final signed clients against the chosen project and a test build

@@ -4,12 +4,13 @@ Current integration evidence is in [audience-readiness-20261024.md](audience-rea
 The additive v9–v11 and v12 transactions are applied hosted, with preservation,
 forced-RLS/access and supported migration-history postflight verified on26October.
 
-Official Supabase CLI2.84.2 now accesses the selected project and is linked
-through supported tooling; no Supabase reconnection is required. Local browser
-use remains disabled, affecting store consoles and interactive review. The
-existing connector still lacks project access, but it is no longer the only
-usable configuration path. The owner's authorization remains in effect, and
-GitHub billing remains parked.
+Official Supabase CLI2.84.2 accesses the selected project through supported
+linking. A 27 October read-only connector check also accessed the project, saw
+all seven recorded migrations and no deployed Edge Functions. Recheck browser
+and store-console sessions before interactive work; earlier browser failures
+are historical observations. The owner's authorization remains in effect, and
+GitHub billing remains parked. Connector evidence:
+`/Volumes/PRO-G40/Projects/Lovelies/verification/supabase-live-readonly-20261027/attempt-01/result.json`.
 
 The current qualified Supabase schema reads back at version13. All69 tables
 have forced RLS/backend-only policies; the three private buckets have exact 20 MiB
@@ -116,10 +117,10 @@ confirm zero client/public access. No client schema grants were added.
   provider acceptance remain unresolved technical inputs. Earlier requests are
   historical and do not revoke the owner’s authorization to complete readiness.
   Temporary native-image build qualification is separate from a serving host;
-  inference deployment and exact loaded readiness via private ServiceBinding now pass their bounded checks; the public Supabase-to-inference HTTPS path remains unqualified. No application API cutover,
+  inference deployment and exact loaded readiness via private ServiceBinding and a Supabase-to-inference HTTPS readiness diagnostic pass their bounded checks; actual hosted application image journeys remain unqualified. No application API cutover,
   provider send or store publication is established.
-- All six applied versions are reconciled/read back through supported CLI
-  history. Keep the remaining serving/operation quality gates;
+- All seven applied versions through v13 are reconciled/read back through
+  supported migration history. Keep the remaining serving/operation quality gates;
   never blindly replay baseline DDL or directly edit Supabase-managed
   migration/Storage tables.
 

@@ -47,12 +47,12 @@ function simulatedStorage(memory,mode){
   }
   if(method==='GET'&&url.pathname.startsWith('/storage/v1/object/info/'+bucket+'/')){
    const objectKey=keyFrom(url.pathname,'/storage/v1/object/info/'+bucket+'/');events.push({kind:'head',key:objectKey});
-   const object=await memory.head(objectKey);if(!object)return new Response(null,{status:404});
+   const object=await memory.head(objectKey);if(!object)return Response.json({statusCode:'404',error:'not_found',message:'Object not found',code:'NoSuchKey'},{status:400});
    return Response.json({size:object.size,etag:object.etag,content_type:object.httpMetadata?.contentType??'application/octet-stream',metadata:object.customMetadata});
   }
   if(method==='GET'&&url.pathname.startsWith('/storage/v1/object/authenticated/'+bucket+'/')){
    const objectKey=keyFrom(url.pathname,'/storage/v1/object/authenticated/'+bucket+'/');events.push({kind:'get',key:objectKey});
-   const object=await memory.get(objectKey);if(!object)return new Response(null,{status:404});
+   const object=await memory.get(objectKey);if(!object)return Response.json({statusCode:'404',error:'not_found',message:'Object not found',code:'NoSuchKey'},{status:400});
    return new Response(await object.arrayBuffer(),{status:200,headers:{etag:'"'+object.etag+'"'}});
   }
   throw Error('unexpected synthetic Storage route');
