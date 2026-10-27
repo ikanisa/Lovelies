@@ -1,4 +1,5 @@
 import { assertAudienceCapability, audienceChallengeAuthority } from './audience.ts';
+import { nextTerminalFaceProofs } from './cleanup-scan.ts';
 import { ApiError, digest, jsonBody, ok, record, stable, uuid, type Actor, type AppContext } from './types.ts';
 import { accountRoles, assertEnrollmentActor, authenticate, base64url, decodeBase64url, insertPreparedSession, opaque, prepareSession, type AccountRow } from './auth.ts';
 import { beginFaceChallengeMediaWrite, completeUndispatchedMediaWrite, settleMediaWrite } from './operations.ts';
@@ -1368,9 +1369,7 @@ export async function nextFaceRecoveryAt(ctx: AppContext): Promise<number | null
       ELSE expires_at END due FROM face_recovery_keys)`, RECOVERY_RECEIPT_MS))?.due ?? null;
 }
 export async function cleanupFaceProofs(ctx: AppContext): Promise<void> {
-    const rows = (await ctx.db.all<Capture>(`SELECT p.* FROM auth_capture_proofs p JOIN auth_challenges c ON c.id=p.challenge_id
-    WHERE c.expires_at<=? OR c.used_at IS NOT NULL OR c.status IN('failed','cancelled','used')
-    ORDER BY p.created_at LIMIT 100`, ctx.now()));
+    const rows = (await nextTerminalFaceProofs<Capture>(ctx));
     for (const row of rows) {
         try {
             const writerPending = () => ctx.db.one("SELECT id FROM media_write_intents WHERE bucket='QUARANTINE' AND object_key=? AND status='pending' LIMIT 1",row.object_key);

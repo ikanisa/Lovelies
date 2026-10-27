@@ -1,4 +1,5 @@
 import { maintainAudience } from './audience.ts';
+import { unsupportedCleanupScanCounts } from './cleanup-scan.ts';
 import { ApiError, digest, stable, record, type AppContext, type Database } from './types.ts';
 import { cleanupFaceProofs } from './face-auth.ts';
 import { finishLifecycleCleanup } from './face-profile.ts';
@@ -63,8 +64,10 @@ type Backlog={failed:number;failed_held:number;failed_unheld:number;held:number;
   ordinary_overdue:number;ordinary_overdue_held:number;ordinary_overdue_unheld:number};
 type ObjectBacklog=Omit<Backlog,'ordinary_overdue'|'ordinary_overdue_held'|'ordinary_overdue_unheld'>;
 type HoldSummary={global_retention_active:boolean;active_request_holds:number;active_moderation_holds:number;active_asset_holds:number};
+type ScanIntegrity={unsupported_cleanup_intents:number;unsupported_terminal_face_proofs:number};
 type PrivacyHealth={protocol:'lovelies-maintenance-health-v1';status:'observed'|'unavailable';observed_at:string;deadlines_seconds:typeof healthDeadlines;
-  holds:HoldSummary|null;deletion_requests:(Backlog&{unfinished:number})|null;cleanup:(ObjectBacklog&{unverified:number})|null;writers:(ObjectBacklog&{unsettled:number})|null;backups:typeof backupQualification};
+  holds:HoldSummary|null;deletion_requests:(Backlog&{unfinished:number})|null;cleanup:(ObjectBacklog&{unverified:number})|null;writers:(ObjectBacklog&{unsettled:number})|null;
+  scan_integrity:ScanIntegrity|null;backups:typeof backupQualification};
 function count(value:unknown):number {
   if(typeof value!=='number'||!Number.isSafeInteger(value)||value<0)throw new ApiError(503,'maintenance_health_unavailable');
   return value;
@@ -108,9 +111,12 @@ const objectHold=(subject:string,key:string,bucket:string)=>`EXISTS(SELECT 1 FRO
   OR (${bucket}='PHOTOS' AND (EXISTS(SELECT 1 FROM renditions rd WHERE rd.asset_id=a.id AND rd.object_key=${key})
     OR EXISTS(SELECT 1 FROM processing_attempts pa WHERE pa.asset_id=a.id AND pa.rendition_key=${key})
     OR instr(${key},'preview/'||a.owner_id||'/'||a.id||'/')=1))))`;
-async function readPrivacyHealth(ctx:AppContext):Promise<PrivacyHealth> {
+async function readPrivacyHealth(ctx:AppContext,observeScan:(value:ScanIntegrity)=>void):Promise<PrivacyHealth> {
   const now=ctx.now(),base={protocol:'lovelies-maintenance-health-v1' as const,observed_at:new Date(now).toISOString(),deadlines_seconds:healthDeadlines,backups:backupQualification};
   return ctx.db.transaction(async()=>{
+    const unsupported=await unsupportedCleanupScanCounts(ctx);
+    const scan_integrity={unsupported_cleanup_intents:unsupported.cleanup_intents,unsupported_terminal_face_proofs:unsupported.terminal_face_proofs};
+    observeScan(scan_integrity);
     const holds=await ctx.db.one<HoldSummary>(`SELECT EXISTS(SELECT 1 FROM retention_settings WHERE id='default' AND legal_hold=1) AS global_retention_active,
       (SELECT count(*) FROM privacy_requests WHERE request_type='delete' AND legal_hold=1 AND status NOT IN('completed','rejected','cancelled')) AS active_request_holds,
       (SELECT count(*) FROM moderation_holds WHERE active=1) AS active_moderation_holds,(SELECT count(*) FROM asset_retention WHERE legal_hold=1) AS active_asset_holds`);
@@ -138,7 +144,8 @@ async function readPrivacyHealth(ctx:AppContext):Promise<PrivacyHealth> {
       FROM media_write_intents w WHERE w.status='pending')
       ${aggregateBacklog}writer_backlog`,global,now-DAY,now-DAY,now-DAY,now-DAY),now);
     const {total:unfinished,...deletionStats}=deletion,{total:unverified,...cleanupStats}=objectBacklog(cleanup),{total:unsettled,...writerStats}=objectBacklog(writers);
-    return {...base,status:'observed' as const,holds,deletion_requests:{unfinished,...deletionStats},cleanup:{unverified,...cleanupStats},writers:{unsettled,...writerStats}};
+    return {...base,status:'observed' as const,holds,deletion_requests:{unfinished,...deletionStats},cleanup:{unverified,...cleanupStats},writers:{unsettled,...writerStats},
+      scan_integrity};
   });
 }
 
@@ -160,18 +167,19 @@ export async function maintain(ctx:AppContext):Promise<{processed:number;failed:
       }
     }
     const jobs=await drainJobs(ctx);
-    let privacy_health:PrivacyHealth;
+    let privacy_health:PrivacyHealth,scan_integrity:ScanIntegrity|null=null;
     try{
-      privacy_health=await readPrivacyHealth(ctx);
+      privacy_health=await readPrivacyHealth(ctx,value=>{scan_integrity=value;});
       // Count failing checks, not individual objects. Held obligations and their
       // unchanged clocks stay visible, without being asserted physically erased.
       if(privacy_health.deletion_requests!.failed_unheld||privacy_health.deletion_requests!.ordinary_overdue_unheld)maintenance_errors++;
       if(privacy_health.cleanup!.failed_unheld||privacy_health.cleanup!.target_overdue_unheld)maintenance_errors++;
       if(privacy_health.writers!.target_overdue_unheld)maintenance_errors++;
+      if(privacy_health.scan_integrity!.unsupported_cleanup_intents||privacy_health.scan_integrity!.unsupported_terminal_face_proofs)maintenance_errors++;
     }catch{
       maintenance_errors++;
       privacy_health={protocol:'lovelies-maintenance-health-v1',status:'unavailable',observed_at:new Date(ctx.now()).toISOString(),deadlines_seconds:healthDeadlines,
-        holds:null,deletion_requests:null,cleanup:null,writers:null,backups:backupQualification};
+        holds:null,deletion_requests:null,cleanup:null,writers:null,scan_integrity,backups:backupQualification};
     }
     return {...jobs,maintenance_errors,retention,privacy_health};
   });

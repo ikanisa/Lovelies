@@ -1,4 +1,5 @@
 import { audiencePrivacyRows, eraseAudienceSubject, revokeAudienceAuthority } from './audience.ts';
+import { nextCleanupIntents } from './cleanup-scan.ts';
 import { ApiError, digest, jsonBody, ok, record, stable, uuid, type Actor, type AppContext } from './types.ts';
 import { assertOperationReceiptAvailable, assertRegisteredActor, executeOperation, executeAccountDeletionOperation, executeRestrictedOperation, prepareOperation, settleMediaWrite } from './operations.ts';
 import { assertPrivacyActor } from './auth.ts';
@@ -807,7 +808,7 @@ export async function flushPrivacyCleanup(ctx: AppContext): Promise<void> {
             (await ctx.db.run('UPDATE privacy_requests SET export_expires_at=? WHERE id=?', ctx.now(), row.request_id));
         }
     }));
-    for (const row of (await ctx.db.all<CleanupRow>("SELECT id,request_id,subject_id,bucket,object_key FROM cleanup_intents WHERE status<>'verified' ORDER BY created_at,id LIMIT 100"))) {
+    for (const row of (await nextCleanupIntents<CleanupRow & {created_at: number}>(ctx))) {
         try {
             await cleanObject(ctx, row);
         }

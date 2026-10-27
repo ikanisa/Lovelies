@@ -255,11 +255,28 @@ is claimed. Evidence:
 `/Volumes/PRO-G40/Projects/Lovelies/verification/storage-delayed-face-write-regression-20261027/root-baseline-01/result.json`,
 and `/Volumes/PRO-G40/Projects/Lovelies/verification/storage-delayed-face-write-regression-20261027/root-consumers-01/result.json`.
 
-Two additional local regressions reproduced cleanup starvation: 100 older
-unresolved writers blocked a later eligible account in both the privacy cleanup
-and terminal face-proof batches. One-held-writer controls passed. Fair traversal
-is still being implemented; the pending-writer fence must remain intact.
-Evidence: `/Volumes/PRO-G40/Projects/Lovelies/verification/cleanup-starvation-regression-20261027/root-baseline-01/result.json`.
+Two local regressions reproduced cleanup starvation: 100 older unresolved
+writers blocked a later eligible account in both the privacy cleanup and terminal
+face-proof batches. Both scans now use bounded, persistent high-water cursors;
+blocked rows remain eligible on later cycles and writer, reference and hold
+checks still govern deletion. Rows with unsupported cursor identities or clocks
+are excluded from these two scans and reported by maintenance health; separate
+authorized erasure workflows retain their own authority. Sixteen focused cases
+passed, including live references and cursor validation. A wider local regression
+passed 213 cases with one intentionally skipped native PostgreSQL case; the
+latter still needs a two-pool fixture. Bounded result counts do not prove bounded
+scan cost: index/query-plan and sustained-load qualification remain open. New
+backdated work below the high-water mark can delay wrap under sustained overload.
+Evidence:
+`/Volumes/PRO-G40/Projects/Lovelies/verification/cleanup-starvation-regression-20261027/root-baseline-01/result.json`
+and `/Volumes/PRO-G40/Projects/Lovelies/verification/cleanup-starvation-regression-20261027/root-consumers-01/result.json`.
+
+An isolated synthetic delayed-write baseline also reproduced premature settlement
+and cleanup in generated preview and privacy export writes; both acknowledged
+write controls passed. The failed-write containment for these two paths remains
+open. The export test used an expired maintenance clock to isolate cleanup and
+does not qualify active-window retry behavior. Evidence:
+`/Volumes/PRO-G40/Projects/Lovelies/verification/preview-export-delayed-write-tests-20261027/root-baseline-01/result.json`.
 
 On an object-version mismatch, the Storage adapter now returns its conflict
 without waiting for an uncooperative response-body cancellation. The local
