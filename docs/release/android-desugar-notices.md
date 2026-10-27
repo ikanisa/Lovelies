@@ -127,6 +127,24 @@ or an operated source distribution. Complete inputs/toolchains, generated-output
 comparison and recipient access remain below. The upstream JUnit conversion
 check can upload artifacts on failure; it was not executed as an offline check.
 
+On 27 October the two R8 input archives were retrieved without extraction or
+running their scripts. Both match their recorded upstream SHA-1 pointers. The
+implementation archive contains `desugar_jdk_libs_hash` equal to the pinned
+Google source revision `73170c345e6a762fc6a1f0301bb15218850023ef`; its JAR has
+SHA-256 `1e8cfabbfdef6d25b711ad298b6a808c6343d4bd3bf31c33d05b36764e4ed501`.
+Compared by ZIP member with the selected Gradle runtime JAR, 1,431 members are
+byte-identical, 28 common members differ and three entries occur only in the
+archive JAR. The archives also contain the conversion inputs. This is useful
+provenance, not proof that the archive JAR corresponds exactly to the delivered
+transformed runtime or that the complete source-distribution gate is met.
+The [pinned R8 undesugarer](https://r8.googlesource.com/r8/+/c331a820ddae7dea41f41a04375b784486d0f705/src/test/testbase/java/com/android/tools/r8/desugar/desugaredlibrary/jdk11/DesugaredLibraryJDK11Undesugarer.java)
+describes an additional transformation and removal of two provider classes. A
+local disassembly of one differing NIO class showed
+identical displayed instructions but different class-attribute ordering; that
+single-class observation does not establish equivalence for the other entries.
+Receipts and archive SHA-256 values are in
+`/Volumes/PRO-G40/Projects/Lovelies/verification/android-desugar-source-20261026/archive-inputs-20261027/`.
+
 ## Remaining release gates
 
 1. **Complete corresponding source and build material:** identify and verify the
