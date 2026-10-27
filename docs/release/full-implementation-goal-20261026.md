@@ -156,6 +156,15 @@ recovery can indefinitely hold the gallery, journal-read failure and photo
 share/save publication need additional safeguards, and restore semantics are
 unproved. The owned simulator was removed after the run. Evidence:
 `/Volumes/PRO-G40/Projects/Lovelies/verification/ios-notification-complete-20261028/attempt-03/REVIEW.md`.
+The authenticated request-decision status receipt is now integrated locally.
+It binds a recorded result to the actor, action, source, original key and
+canonical input hash; unknown remains nonterminal. Its read-only database path
+rechecks current authority before both success and operation-specific errors.
+The root rerun passed 48 local same-subject cases, TypeScript and the offline
+Supabase Edge entrypoint check with unchanged inputs. It has not been deployed
+and does not prove terminal rejection, restore
+continuity, device recovery or account-erasure reconciliation. Evidence:
+`/Volumes/PRO-G40/Projects/Lovelies/verification/request-decision-receipt-integration-20261028/attempt-01/result.json`.
 An isolated journal worker accidentally opened `/tmp/v4-snippet-review-not-used`
 for writing; it is now empty. Its creation and modification timestamps match
 the reported write, but its prior existence or contents are not conclusively

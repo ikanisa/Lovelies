@@ -317,6 +317,48 @@ async function decide(payload: Record<string, any>, ctx: AppContext, actor: Acto
             available_count: wanted === 'accepted' ? (JSON.parse(row.asset_ids_json) as string[]).length : 0 };
     }));
 }
+const DECISION_OPERATION_PROTOCOL = 'lovelies-request-decision-operation-v1';
+/** An authenticated status read binds the exact stored decision input. Unknown
+ * means only that this SQL receipt is absent; it is not non-dispatch proof. */
+async function requestDecisionOperation(payload: Record<string, unknown>, ctx: AppContext, actor: Actor): Promise<Record<string, unknown>> {
+    if (Object.keys(payload).length !== 1 || typeof payload.operation_key !== 'string' || !/^[A-Za-z0-9._:-]{16,128}$/.test(payload.operation_key))
+        throw new ApiError(400, 'invalid_operation_key');
+    const key = payload.operation_key;
+    return ctx.db.read(async () => {
+        await assertMediaActor(ctx, actor);
+        const row = await ctx.db.one<{ action: string; payload_hash: string; payload_json: string; response_json: string }>(
+            'SELECT action,payload_hash,payload_json,response_json FROM operations WHERE actor_id=? AND source=? AND operation_key=?', actor.accountId, 'personal', key);
+        if (!row) {
+            await assertMediaActor(ctx, actor);
+            return { protocol: DECISION_OPERATION_PROTOCOL, status: 'unknown', action: 'request.decide', source: 'personal', actor_id: actor.accountId, operation_key: key };
+        }
+        let result: Record<string, unknown>, inputHash: string;
+        try {
+            if (row.action !== 'request.decide') throw new ApiError(409, 'operation_key_conflict');
+            assertOperationReceiptAvailable(row);
+            try {
+                const input = record(JSON.parse(row.payload_json));
+                const prepared = await prepareOperation('request.decide', input, 'personal');
+                if (prepared.key !== key || prepared.payloadJson !== row.payload_json || prepared.hash !== row.payload_hash) throw new Error('input_mismatch');
+                const id = uuid(input.request_id), decision = input.decision;
+                if (typeof decision !== 'string' || !['accept', 'decline', 'withdraw', 'revoke'].includes(decision)) throw new Error('invalid_decision');
+                const wanted = ({ accept: 'accepted', decline: 'declined', withdraw: 'withdrawn', revoke: 'revoked' } as Record<string, string>)[decision];
+                result = record(JSON.parse(row.response_json));
+                if (result.source !== 'personal' || uuid(result.request_id) !== id || result.status !== wanted) throw new Error('result_mismatch');
+                if (result.available_count !== undefined && (!Number.isInteger(result.available_count) || Number(result.available_count) < 0 || Number(result.available_count) > 100)) throw new Error('count_mismatch');
+                result = { source: 'personal', request_id: id, status: wanted, ...(result.available_count === undefined ? {} : { available_count: result.available_count }) };
+                inputHash = prepared.hash;
+            } catch (_) { throw new ApiError(503, 'operation_receipt_unavailable'); }
+        } catch (error) {
+            // Errors identify the selected operation too. Do not reveal their
+            // state after the session, consent or audience authority has expired.
+            await assertMediaActor(ctx, actor);
+            throw error;
+        }
+        await assertMediaActor(ctx, actor);
+        return { protocol: DECISION_OPERATION_PROTOCOL, status: 'recorded', action: 'request.decide', source: 'personal', actor_id: actor.accountId, operation_key: key, input_hash: inputHash, result };
+    });
+}
 export async function handleSharing(request: Request, ctx: AppContext): Promise<Response | null> {
     const url = new URL(request.url);
     if (url.pathname !== '/community/action' || request.method !== 'POST')
@@ -344,6 +386,8 @@ export async function handleSharing(request: Request, ctx: AppContext): Promise<
             (await assertMediaActor(ctx, actor));
             return result;
         })));
+    if (action === 'request.decision-operation')
+        return ok(await requestDecisionOperation(payload, ctx, actor));
     if (action === 'operation')
         return ok((await ctx.db.transaction(async () => {
             (await assertMediaActor(ctx, actor));
