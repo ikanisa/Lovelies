@@ -843,14 +843,22 @@ Evidence: `/Volumes/PRO-G40/Projects/Lovelies/verification/play-version-readback
 The route-free link-association Worker candidate serves the two prepared JSON
 documents on the exact HTTPS origin and hands other requests to `fetch`.
 Ten Node cases, one local Worker-runtime scenario with a synthetic origin, and
-a Wrangler dry build passed. The Worker was not deployed; actual Pages
-passthrough, security filtering, existing-statement merging and platform
-retrieval remain open. A dashboard search found no project with the candidate
-name at that time, but the account, name and cost must be checked again before
-deployment. Android's release host property and iOS's `LOVELIES_LINK_HOST`
+a Wrangler dry build passed. The candidate was subsequently uploaded as version
+`f1249cc7-ce52-4e55-8e8e-8bff803a0eb0`; provider readback showed no URLs,
+routes or bindings, and five selected public responses matched their prior
+bytes and status. Actual Pages passthrough, security filtering, existing-statement
+merging and platform retrieval remain open. The account, service version and
+cost must be checked before any update or routing. Android's release host
+property and iOS's `LOVELIES_LINK_HOST`
 remain unset in the recorded release inputs. Evidence:
-`/Volumes/PRO-G40/Projects/Lovelies/verification/link-association-worker-20261027/attempt-04/result.json`
-and `/Volumes/PRO-G40/Projects/Lovelies/verification/association-worker-name-readback-20261027/attempt-01/result.json`.
+`/Volumes/PRO-G40/Projects/Lovelies/verification/link-association-worker-20261027/attempt-04/result.json`,
+`/Volumes/PRO-G40/Projects/Lovelies/verification/association-worker-name-readback-20261027/attempt-01/result.json`,
+and `/Volumes/PRO-G40/Projects/Lovelies/verification/link-association-hosted-20261027/attempt-01/hosted-readback.json`.
+The dashboard HTTP preview returned a configuration error because neither a
+workers.dev URL nor a route was enabled; it did not yield a Worker response.
+The prepared local remote-binding probe was not run: the provider preview
+credential, remote exposure and cleanup still require qualification. Evidence:
+`/Volumes/PRO-G40/Projects/Lovelies/verification/link-association-hosted-20261027/attempt-01/preview-attempt-01.json`.
 
 The backend workflow now lists the local association test. Its existing port
 mapping was also quoted: Ruby's local YAML parser had rejected the prior form,
