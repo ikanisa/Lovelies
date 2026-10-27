@@ -425,39 +425,64 @@ export async function maintainAudience(ctx: AppContext):Promise<void>{
       AND NOT EXISTS(SELECT 1 FROM privacy_requests d WHERE d.subject_id=ga.id AND d.request_type='delete' AND d.status IN('pending_approval','approved','queued','processing','failed')))))
     ${after===null?'':'AND (r.created_at>? OR (r.created_at=? AND r.id>?))'}
     ORDER BY r.created_at,r.id LIMIT 100`,ctx.now(),AUDIENCE_POLICY,AUDIENCE_POLICY,AUDIENCE_POLICY,ctx.now(),ctx.env.FACE_AUTH_POLICY_VERSION??'',ctx.now(),purposePolicy(ctx,'face_authentication'),purposePolicy(ctx,'photo_matching'),...(after===null?[]:[after,after,afterID!]));
+  type CursorState={last_at:number|null;last_id:string|null};
+  let expectedCursor:CursorState|null=cursor;
+  // The candidate and the global cursor are checked under the same write
+  // transaction. A second worker cannot overwrite a newer position.
+  const saveIfCurrent=async(expected:Guardian,candidate:GuardianExpiryAdmission):Promise<void>=>{
+   const saved=await ctx.db.transaction(async()=>{
+    const current=await ctx.db.one<Guardian>('SELECT * FROM guardian_requests WHERE id=?',candidate.id);
+    if(!current||stable(current)!==stable(expected))return false;
+    const changed=expectedCursor===null
+     ?await ctx.db.one<CursorState>("INSERT INTO retention_scan_cursors(scan,entity_id,last_at,last_id) VALUES('guardian',?,?,?) ON CONFLICT(scan,entity_id) DO NOTHING RETURNING last_at,last_id",cursorEntity,candidate.created_at,candidate.id)
+     :await ctx.db.one<CursorState>("UPDATE retention_scan_cursors SET last_at=?,last_id=? WHERE scan='guardian' AND entity_id=? AND last_at IS NOT DISTINCT FROM ? AND last_id IS NOT DISTINCT FROM ? RETURNING last_at,last_id",candidate.created_at,candidate.id,cursorEntity,expectedCursor.last_at,expectedCursor.last_id);
+    if(!changed)throw new ApiError(503,'audience_cursor_changed');
+    return true;
+   });
+   if(saved)expectedCursor={last_at:candidate.created_at,last_id:candidate.id};
+  };
   if(!selected.length){
-   // An empty page proves exhaustion; only then wrap this scan's own cursor.
-   if(cursor)await ctx.db.run("UPDATE retention_scan_cursors SET last_at=NULL,last_id=NULL WHERE scan='guardian' AND entity_id=?",cursorEntity);
+   // A stale empty-page observation must not clear a newer worker's cursor.
+   if(cursor&&(cursor.last_at!==null||cursor.last_id!==null))await ctx.db.transaction(async()=>{
+    const changed=await ctx.db.one<CursorState>("UPDATE retention_scan_cursors SET last_at=NULL,last_id=NULL WHERE scan='guardian' AND entity_id=? AND last_at IS NOT DISTINCT FROM ? AND last_id IS NOT DISTINCT FROM ? RETURNING last_at,last_id",cursorEntity,cursor.last_at,cursor.last_id);
+    if(!changed)throw new ApiError(503,'audience_cursor_changed');
+   });
    if(blocked)throw new ApiError(503,'audience_maintenance_blocked');
    return;
   }
   for(const candidate of selected){
-   try{await ctx.db.transaction(async restore=>{
+   let expected:Guardian|null=null;
+   try{expected=await ctx.db.transaction(async restore=>{
    const r=await ctx.db.one<Guardian>('SELECT * FROM guardian_requests WHERE id=?',candidate.id);
    // Bind eligibility to the original selection, not an audience increment
    // performed by an earlier expiry in this pass. A changed request is fresh
    // work for a later pass, never an authorization inherited by this candidate.
    if(!r||!['pending','under_review','approved'].includes(r.state)||r.revision!==candidate.revision||
     r.child_account_id!==candidate.child_account_id||r.child_audience_version!==candidate.child_audience_version||
-    r.policy_version!==candidate.policy_version||r.child_audience_version>candidate.admitted_audience_version)return;
+    r.policy_version!==candidate.policy_version||r.child_audience_version>candidate.admitted_audience_version)return null;
    if(r.created_at!==candidate.created_at)throw new ApiError(409,'audience_authority_changed');
    const a=await row(ctx,r.child_account_id);
-   if(!a||r.child_audience_version>a.version)return;
+   if(!a||r.child_audience_version>a.version)return null;
    const invalid=r.expires_at<=ctx.now()||r.policy_version!==AUDIENCE_POLICY||!a||a.age_band!=='13_17'||a.version!==r.child_audience_version||a.policy_version!==AUDIENCE_POLICY||r.state==='approved'&&!await audienceContext(ctx,r.child_account_id,'face_authentication')&&!await audienceContext(ctx,r.child_account_id,'photo_matching')&&!await audienceContext(ctx,r.child_account_id,'photo_processing');
-   if(!invalid)return;
+   if(!invalid)return null;
    restore.operation({operation_id:await restoreOperationID(r.child_account_id,'audience.guardian-expiry-v1','guardian.expire:'+r.id+':'+r.revision),
     input_hash:await digest(stable({protocol:'lovelies-audience-guardian-expiry-v1',child_account_id:r.child_account_id,
      guardian_request_id:r.id,request_revision:r.revision,child_audience_version:r.child_audience_version,policy_version:r.policy_version,expires_at:r.expires_at})),allocations:{}});
    const group=await prepareTerminations(ctx,restore,[r],new Map([[r.child_account_id,candidate.admitted_audience_version]]));
    for(const plan of group.plans)await terminate(ctx,plan.request,'expired',r.reviewed_by??r.child_account_id,plan.controlsCurrent);
+   return await ctx.db.one<Guardian>('SELECT * FROM guardian_requests WHERE id=?',candidate.id);
    });}catch(error){
     // Only these deterministic row-local denials are isolated. Unknown SQL,
     // journal or poisoned-invocation failures stop immediately, without moving
     // the cursor past the uncertain relationship.
     if(!(error instanceof ApiError)||!['audience_restriction_capacity','guardian_approval_scope_invalid','audience_authority_changed','audience_future_guardian_episode'].includes(error.code))throw error;
     blocked=true;
+    // The failed transaction rolled back; only its unchanged original episode
+    // may consume a cursor position, so later work can still progress.
+    const {admitted_audience_version: _admitted,...original}=candidate;
+    expected=original;
    }
-   await ctx.db.run("INSERT INTO retention_scan_cursors(scan,entity_id,last_at,last_id) VALUES('guardian',?,?,?) ON CONFLICT(scan,entity_id) DO UPDATE SET last_at=excluded.last_at,last_id=excluded.last_id",cursorEntity,candidate.created_at,candidate.id);
+   if(expected)await saveIfCurrent(expected,candidate);
   }
   if(blocked)throw new ApiError(503,'audience_maintenance_blocked');
   // Terminal metadata is purged by retention together with its linked operation

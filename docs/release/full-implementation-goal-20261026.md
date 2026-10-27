@@ -25,6 +25,14 @@ The 25 October application checkpoint is `aacd19f8fa9707d09f3b1775a537b8481eafde
 
 Retain successful local API, Swift/Kotlin/operator, backup, native model and bounded device/UI results within their exact source/toolchain/environment scopes. The iOS round8 photo-action fixes and maximum filtered-search coordinate-touch test are completed. Other raw warnings/failures remain recorded and require specific diagnosis or evidence-based disposition, not automatic waiver or repeated full matrices.
 
+A saved largest-text Simulator screenshot shows a truncated search prompt in
+the Debug reference-preview route. Source review confirms that the non-DEBUG
+connected route uses a different search field; the saved screenshot therefore
+does not establish a production-route defect. No fresh connected large-text
+run or spoken accessibility check was performed, and the other raw warnings are
+not waived. Evidence:
+`/Volumes/PRO-G40/Projects/Lovelies/verification/ios-visual-a11y-evidence-20261028/attempt-01/FINDINGS.md`.
+
 The exact immutable Linux AMD64 inference platform manifest is `sha256:982e2ed7bb66b17db17979495495892579f1b734c55d93516a2aeedbf70e1c6c`. Existing native/service/fixture and technical High-disposition proof must not be reopened solely because the unmodified scanner returns exit2. The 26 October lower-row assessment is `verification/openface-integration-20261024/continuation/native-security-disposition-20261025/root-verification-20261026/assessment.json`, SHA256 `ec3f8c1ada7e9a4f88c146c3edb9cb90d61750ffa223fd654c79042d245ea941`. It retains lower-severity findings and does not claim every vulnerability fixed, fresh scanner execution, changed runtime or production recognition acceptance. The ML owner reports gateway cleanup delivered at `5e7cb856acae018f3fdac8bcaf0db1254ea5c269`, with affected22 Worker tests, types and default Supabase dry run passing. Verify exact source/receipt bindings before adopting those results. Temporary-builder retirement has its own postflight receipt; the serving gateway was untouched. Do not recreate removed unverified receipt-shaped/serving flags or an obsolete builder merely to satisfy old notes.
 
 ### Execution checkpoint, 26–27 October 2026
@@ -812,6 +820,19 @@ assertion failure remain preserved with their corrected final proof.
 Receipt: `/Volumes/PRO-G40/Projects/Lovelies/verification/restore-preferences-producers-20261026/root-whole-02/result.json`.
 
 Audience redeclaration, independent adulthood review and guardian expiry/withdrawal/rejection now record exact old consent/profile/approval episodes before effects. Future-version relationships cannot be promoted into authority; row-local failures preserve that row while later children progress through the isolated fair cursor. Unsupported tuples are excluded before page selection and reported without cursor corruption. All46 new cases pass in the current aggregate. The initial test-hook deadlock and stale-role status expectation remain preserved; corrected tests require exact401 stale-role and403 current-user denials with unchanged results. Indirect lifecycle producers, durable manifests above32 and operated guardian/restore acceptance remain open.
+
+Guardian-expiry cursor updates now recheck the selected request and use a
+compare-and-set on the cursor, including empty-page wrap. Two local baseline
+cases had saved an ID after that request changed or disappeared; the final
+repository run passed nine focused and 12 affected audience, journal and
+retention cases, with nine expected defined-empty database-URL skips, API types
+and the cached Deno Edge check. Its 145 recorded inputs stayed unchanged.
+A retained terminal request that stays unchanged while its child is erased can
+still be saved, and existing cursor scrubbing, value ABA, native multi-pool
+concurrency and restore remain open. These results use local PGlite and an
+in-process journal, not hosted or independent guardian operation. Evidence:
+`/Volumes/PRO-G40/Projects/Lovelies/verification/guardian-expiry-stale-cursor-20261028/attempt-01/REVIEW.md`
+and `/Volumes/PRO-G40/Projects/Lovelies/verification/guardian-expiry-stale-cursor-20261028/root-integrated-01/result.json`.
 
 The27October continuation adds exact logout session/pending-consent facts and exact preference-consent/accepted-request retirement facts through the existing stable operation scope. Current session/policy and selected rows are rechecked before effects; local policy drift rolls back, unchanged saves/new grants/unrelated rows survive, and old receipts cannot revive authority. All28 logout and37 preference cases pass, including real PostgreSQL rollback/COMMIT/ack uncertainty. The complete combined run passes543 tests/542 pass/zero fail/one optional model skip, plus94 operator cases and current types. A separate actual-model run passes7/7 on104 sealed inputs/19 engineering JPEGs with memory Storage. These remain local/engineering scopes. Distributed policy-generation fencing, other lifecycle callers, durable large manifests, resource inventory/replay and computed recovery remain open.
 
