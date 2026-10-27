@@ -113,6 +113,11 @@ quiesced, old runtimes drained and prevented from returning, a restore-bound
 write-format control, and a qualified dual-reader rollback artifact. Its 15
 same-account model cases do not implement that control or prove a provider drain.
 Evidence: `/Volumes/PRO-G40/Projects/Lovelies/verification/push-receipt-rollout-20261027/attempt-01/REVIEW.md`.
+An isolated handler prototype for that control passed ten focused local cases,
+but the independent current-control port does not exist: five of eleven existing
+receipt cases failed because new registrations returned 503. It remains
+unintegrated. Evidence:
+`/Volumes/PRO-G40/Projects/Lovelies/verification/push-receipt-rollout-20261027/attempt-02/REVIEW.md`.
 
 Separate D2/L2 authority validators now pass 159 local cases, including frozen
 format-2 synthetic vectors and role, consent, guardian, object-hash and bounds
@@ -512,6 +517,26 @@ erasure/rollback tests, but existing cursor privacy, restored copies, crash
 recovery, extra idle journal writes and fairness after resets remain open.
 Evidence:
 `/Volumes/PRO-G40/Projects/Lovelies/verification/retention-starvation-fair-window-20261027/attempt-02/REVIEW.md`.
+
+The existing face-proof scan cursor can retain challenge identifiers after
+account erasure. An isolated candidate checks both cursor endpoints before
+challenge deletion and passed 11 focused, three scanner and six privacy-hold
+cases locally. It is not integrated: resetting the scan could bring an earlier
+unknown Storage DELETE retry forward, and an unresolved cursor owner can block
+an unrelated or resumed erasure. Other existing cursor classes can outlive
+source rows or be repopulated after erasure; their source inventory does not
+establish hosted contents or restore behavior. Evidence:
+`/Volumes/PRO-G40/Projects/Lovelies/verification/face-proof-cursor-erasure-20261027/attempt-01/REVIEW.md`
+and `/Volumes/PRO-G40/Projects/Lovelies/verification/cursor-erasure-inventory-20261027/attempt-01/INVENTORY.md`.
+
+[Supabase's JavaScript removal reference](https://supabase.com/docs/reference/javascript/file-buckets-remove)
+documents exact-version removal, while its separate [S3 compatibility guide](https://supabase.com/docs/guides/storage/s3/compatibility)
+states that S3 bucket versioning is unsupported. These refer to different
+interfaces. Lovelies currently sends REST string paths; hosted exact-version
+support has not been verified. Even qualified version targeting would not by
+itself establish that a timed-out request has terminated or resolve older
+path-only deletions. Evidence:
+`/Volumes/PRO-G40/Projects/Lovelies/verification/storage-delete-provider-contract-20261028/attempt-01/FINDINGS.md`.
 
 A later synthetic regression exercised an actual signed registration verifier
 with its Storage read paused while a separate database context ran face-proof
