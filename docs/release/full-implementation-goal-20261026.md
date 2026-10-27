@@ -61,6 +61,20 @@ has not been deployed or bound to production. Evidence:
 `/Volumes/PRO-G40/Projects/Lovelies/verification/restore-write-inventory-implementation-20261027/root-journal-whole-r3-01/`,
 and `/Volumes/PRO-G40/Projects/Lovelies/verification/restore-write-inventory-implementation-20261027/root-api-consumers-r3-01/`.
 
+Refresh-delivery cancellation now collects exact restriction facts for the
+original session and its named delivered successor before tentative domain
+effects; the independent plan is prepared before the SQL commit. It preserves
+unrelated later sessions and checks selected authority after awaited writes.
+All 33 focused PostgreSQL cases passed, followed by 872 of 873 complete API
+cases, with one optional model test skipped and no failures. The source seal
+was unchanged. A fresh private-model run also passed all seven engineering
+cases on the updated source and removed task-local credentials. An accepted
+plan with no matching SQL commit remains fenced; actual restriction replay,
+old-writer fencing and hosted recovery remain open. Evidence:
+`/Volumes/PRO-G40/Projects/Lovelies/verification/refresh-cancel-recovery-implementation-20261027/root-focused-v2-01/`,
+`/Volumes/PRO-G40/Projects/Lovelies/verification/refresh-cancel-recovery-implementation-20261027/root-whole-v2-01/`,
+and `/Volumes/PRO-G40/Projects/Lovelies/verification/inference-packaging-20261026/private-inference-qualification/run-13/result.json`.
+
 The second local Edge attempt failed at the missing-auth Storage control before
 starting Edge or its database. Docker stop commands succeeded, but their output
 did not match the coordinator's expected acknowledgement, so it retained the

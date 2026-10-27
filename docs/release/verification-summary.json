@@ -4302,6 +4302,24 @@
         "receipt": "/Volumes/PRO-G40/Projects/Lovelies/verification/inference-packaging-20261026/private-inference-qualification/run-12/result.json",
         "scope": "Local HTTP and PostgreSQL, in-memory Storage, existing authenticated private inference binding; no deployment or physical/store qualification."
       }
+    },
+    "refresh_cancellation_journal_20261027": {
+      "focused_tests": 33,
+      "focused_passed": 33,
+      "api_tests": 873,
+      "api_passed": 872,
+      "api_failed": 0,
+      "optional_model_skipped": 1,
+      "source_inputs_unchanged": true,
+      "api_types_passed": true,
+      "private_model_engineering_tests": 7,
+      "private_model_engineering_passed": 7,
+      "private_model_seal_unchanged": true,
+      "temporary_credentials_removed": true,
+      "focused_receipt": "/Volumes/PRO-G40/Projects/Lovelies/verification/refresh-cancel-recovery-implementation-20261027/root-focused-v2-01/result.json",
+      "aggregate_receipt": "/Volumes/PRO-G40/Projects/Lovelies/verification/refresh-cancel-recovery-implementation-20261027/root-whole-v2-01/result.json",
+      "model_receipt": "/Volumes/PRO-G40/Projects/Lovelies/verification/inference-packaging-20261026/private-inference-qualification/run-13/result.json",
+      "scope": "Local exact original/successor restriction producer; independent replay, old-writer fencing, hosted recovery and store qualification remain open."
     }
   }
 }
