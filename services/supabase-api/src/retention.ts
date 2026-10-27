@@ -454,14 +454,18 @@ export async function retentionPrivateKeys(db: Database, subject: string): Promi
 /** Account erasure uses the same global, asset and moderation hold classes as
  * retention. Keep the owned asset mapping until cleanup finishes: an asset-only
  * hold must remain attributable after the account's ordinary metadata is erased.
- * Versions and cleared hold history also make a hold/release during Storage I/O
- * observable without retaining its private rationale in the fingerprint. */
+ * Versions and cleared hold history make retention-policy and moderation
+ * changes during Storage I/O observable without retaining private rationale.
+ * Deletion-request holds have no such history here: a hold set and cleared
+ * between checks remains an unresolved recovery and concurrency boundary. */
 export async function accountErasureHoldFingerprint(ctx: AppContext, subject: string): Promise<string> {
     const global = await ctx.db.one<{ version: number; legal_hold: number }>("SELECT version,legal_hold FROM retention_settings WHERE id='default'");
+    const deletionHold = await ctx.db.one(`SELECT id FROM privacy_requests WHERE subject_id=? AND request_type='delete'
+      AND legal_hold=1 AND status NOT IN('completed','rejected','cancelled') LIMIT 1`, subject);
     const assets = await ctx.db.all<{ id: string; version: string }>('SELECT id,version FROM assets WHERE owner_id=? ORDER BY id', subject);
     const rules = await ctx.db.all<{ asset_id: string; version: number; legal_hold: number }>('SELECT r.asset_id,r.version,r.legal_hold FROM asset_retention r JOIN assets a ON a.id=r.asset_id WHERE a.owner_id=? ORDER BY r.asset_id', subject);
     const moderation = await ctx.db.all<{ id: string; subject_id: string | null; asset_id: string | null; active: number; created_at: number; cleared_at: number | null }>('SELECT id,subject_id,asset_id,active,created_at,cleared_at FROM moderation_holds WHERE subject_id=? OR asset_id IN(SELECT id FROM assets WHERE owner_id=?) ORDER BY id', subject, subject);
-    if (global?.legal_hold || rules.some(row => row.legal_hold) || moderation.some(row => row.active))
+    if (global?.legal_hold || deletionHold || rules.some(row => row.legal_hold) || moderation.some(row => row.active))
         throw new ApiError(409, 'privacy_legal_hold');
     return digest(stable({ global, assets, rules, moderation }));
 }

@@ -518,6 +518,7 @@ type CleanupExecution = { token: string; holdFingerprint: string };
 async function cleanupAuthority(ctx: AppContext, row: CleanupRow, actor?: ExecutionAuthority, execution?: CleanupExecution): Promise<string | null> {
     const current=await ctx.db.one<CleanupRow>('SELECT id,request_id,subject_id,bucket,object_key FROM cleanup_intents WHERE id=?',row.id);
     if(!current||current.subject_id!==row.subject_id||current.bucket!==row.bucket||current.object_key!==row.object_key)throw new ApiError(409,'cleanup_authority_changed');
+    const requiresOrphanHoldCheck = row.request_id === null || current.request_id === null;
     row=current;
     // Historical duplicate NULL-request rows keep their own IDs/history. Their
     // exact subject/bucket/key can inherit only a durable matching, independently
@@ -533,6 +534,18 @@ async function cleanupAuthority(ctx: AppContext, row: CleanupRow, actor?: Execut
         (await requireAdmin(ctx, actor));
     if (actor && jobAuthority(actor) && actor.requestId !== row.request_id)
         throw new ApiError(403, 'privacy_job_scope_invalid');
+    if (requiresOrphanHoldCheck) {
+        // Orphans can inherit an independently reviewed request above, but must
+        // still respect the subject and global holds reported by maintenance.
+        const hold = await ctx.db.one<{ orphan_cleanup_held: boolean }>(`SELECT
+          (EXISTS(SELECT 1 FROM retention_settings WHERE id='default' AND legal_hold=1)
+           OR EXISTS(SELECT 1 FROM moderation_holds WHERE active=1 AND subject_id=?)
+           OR EXISTS(SELECT 1 FROM privacy_requests WHERE subject_id=? AND request_type='delete'
+             AND legal_hold=1 AND status NOT IN('completed','rejected','cancelled'))) AS orphan_cleanup_held`,
+          row.subject_id, row.subject_id);
+        if (!hold || hold.orphan_cleanup_held !== false)
+            throw new ApiError(409, 'privacy_cleanup_held');
+    }
     let holdFingerprint: string | null = null;
     if (row.request_id) {
         const request = execution && actor ? await executionLease(ctx, actor, row.request_id, execution.token) : (await currentRequest(ctx, row.request_id));
@@ -541,6 +554,11 @@ async function cleanupAuthority(ctx: AppContext, row: CleanupRow, actor?: Execut
         if (request.request_type === 'delete' && (request.legal_hold || request.metadata_erased_at === null))
             throw new ApiError(409, 'privacy_cleanup_unavailable');
         if (request.request_type === 'delete') {
+            // A different pending deletion request can independently hold the
+            // subject even after an orphan was persistently adopted by this one.
+            if (await ctx.db.one(`SELECT id FROM privacy_requests WHERE subject_id=? AND request_type='delete'
+              AND legal_hold=1 AND status NOT IN('completed','rejected','cancelled') LIMIT 1`, request.subject_id))
+                throw new ApiError(409, 'privacy_cleanup_held');
             holdFingerprint = await accountErasureHoldFingerprint(ctx, request.subject_id);
             if (execution && holdFingerprint !== execution.holdFingerprint)
                 throw new ApiError(409, 'privacy_cleanup_authority_changed');
