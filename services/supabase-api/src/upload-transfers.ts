@@ -170,15 +170,14 @@ export async function assembleUpload(ctx: AppContext, actor: Actor, id: string):
             throw new ApiError(422, 'upload_checksum_mismatch');
         if (!imageMagic(bytes, start.asset.content_type))
             throw new ApiError(415, 'image_invalid');
-        writtenKey = sourcePrefix(start.asset) + crypto.randomUUID();
-        const write = (await beginMediaWrite(ctx, actor, 'QUARANTINE', writtenKey));
-        try {
-            await ctx.env.QUARANTINE.put(writtenKey, new Uint8Array(bytes).buffer, { httpMetadata: { contentType: start.asset.content_type },
-                customMetadata: { source_version: start.asset.version, source_checksum_sha256: actual, asset_id: id } });
-        }
-        finally {
-            (await settleMediaWrite(ctx, write));
-        }
+        const uploadBytes = new Uint8Array(bytes).buffer;
+        const options = { httpMetadata: { contentType: start.asset.content_type },
+            customMetadata: { source_version: start.asset.version, source_checksum_sha256: actual, asset_id: id } };
+        const candidateKey = sourcePrefix(start.asset) + crypto.randomUUID();
+        const write = (await beginMediaWrite(ctx, actor, 'QUARANTINE', candidateKey));
+        writtenKey = candidateKey;
+        await ctx.env.QUARANTINE.put(candidateKey, uploadBytes, options);
+        (await settleMediaWrite(ctx, write));
         (await ctx.db.transaction(async () => {
             (await valid());
             (await ctx.db.run("UPDATE assets SET status='uploaded',checksum_sha256=?,object_key=? WHERE id=?", actual, writtenKey, id));

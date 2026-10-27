@@ -126,17 +126,20 @@ test('source/processing stages stay separate and repeated complete creates no du
   assert.equal((await h.json(`/uploads/${r.asset_id}/cancel`,{token:owner.token,body:{operation_key:key()}},409)).error.code,'upload_already_processing');
 });
 
-test('lost actual final R2 PUT reply retains the full accepted prefix; status retries assembly without uploading chunks again',async t=>{
-  let dropped=false;
+test('lost final PUT reply retains accepted chunks and reports the unresolved writer',async t=>{
+  let dropped=false,lostKey;
   const {h,owner}=await setup(t,{mediaWriteGate:({key,stage})=>{
-    if(!dropped && key.startsWith('source/') && stage==='after'){dropped=true;return new Response('declared lost reply',{status:503});}
+    if(!dropped && key.startsWith('source/') && stage==='after'){dropped=true;lostKey=key;return new Response('declared lost reply',{status:503});}
     return {continued:true};
   }}),bytes=image(200),{receipt:r}=await reserve(h,owner,bytes);
   await put(h,owner,r.asset_id,bytes,0,500);assert(dropped);
   const state=await status(h,owner,r.asset_id);assert.equal(state.status,'uploaded');assert.equal(state.bytes_received,bytes.length);
   assert.equal((await h.storage.exec('SELECT count(*) n FROM upload_chunks WHERE asset_id=?',r.asset_id))[0].n,1);
   await h.alarm();const bucket=await h.mf.getR2Bucket('QUARANTINE');const object=(await h.storage.exec('SELECT object_key FROM assets WHERE id=?',r.asset_id))[0];assert(await bucket.head(object.object_key));
-  assert.equal((await status(h,owner,r.asset_id)).cleanup_pending,false);
+  assert(await bucket.head(lostKey));
+  assert.equal((await h.storage.exec("SELECT status FROM media_write_intents WHERE account_id=? AND object_key=?",owner.accountId,lostKey))[0].status,'pending');
+  assert.notEqual((await h.storage.exec("SELECT status FROM cleanup_intents WHERE subject_id=? AND object_key=?",owner.accountId,lostKey))[0].status,'verified');
+  assert.equal((await status(h,owner,r.asset_id)).cleanup_pending,true);
 });
 test('cancel while actual chunk PUT is held fences late publication and retains cleanup until that writer settles',async t=>{
   let entered,release;const arrived=new Promise(r=>entered=r),blocked=new Promise(r=>release=r);let heldKey;

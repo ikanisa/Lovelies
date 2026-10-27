@@ -181,6 +181,17 @@ Evidence:
 `/Volumes/PRO-G40/Projects/Lovelies/verification/api-json-body-reader-20261027/root-continuation-01/result.json`,
 and `/Volumes/PRO-G40/Projects/Lovelies/verification/api-json-body-reader-20261027/root-pglite-adapter-integrated-01/result.json`.
 
+The first fresh local PostgreSQL 17 fixture stopped at its readiness predicate
+before dispatching tests. Its process shut down, its port was free and its
+temporary password file was absent; the failed-run database remains preserved.
+The predicate converted an `inet` address to mask-bearing text but expected an
+unmasked loopback literal; the actual returned row was not recorded. A revised
+fixture uses the address-only function and passed 79 offline controls, but its
+native run and cleanup are still unqualified. Evidence:
+`/Volumes/PRO-G40/Projects/Lovelies/verification/native-postgres17-fixture-20261027/native-pg17-run-03/result.json`,
+`/Volumes/PRO-G40/Projects/Lovelies/verification/native-postgres17-fixture-20261027/native-pg17-run-03/independent-postflight.json`,
+and `/Volumes/PRO-G40/Projects/Lovelies/verification/native-postgres17-fixture-20261027/root-offline-revision04-01/result.json`.
+
 The direct and resumable upload readers now snapshot incoming bytes before
 awaited authority checks, bound fragmented or stalled acquisition, and validate
 the stored size before allocating. Local regression cases reproduced five
@@ -215,13 +226,20 @@ uncertain writer pending and attempt to queue exact cleanup for the existing
 pending-writer check. If that SQL step fails, the intent retains its recovery
 identity. Four focused cases and 109 affected local cases passed. The wider run
 preceded a comment-only change to `operations.ts`; the final focused run and
-type/Edge checks include that comment. Assembly, preview, face capture, face
-template and export still need the same containment. Pending-writer reconciliation
+type/Edge checks include that comment. Final assembly now applies the same
+containment: its delayed-write case reproduced premature cleanup, then passed
+with its acknowledged-write control and 20 affected upload cases. A status retry
+may assemble a new key while the earlier writer remains unresolved and correctly
+reports pending cleanup. SQL acknowledgement-loss and a further cleanup attempt
+after the delayed write remain untested for assembly. Preview, face capture,
+face template and export still need containment. Pending-writer reconciliation
 and the hosted acknowledgement contract remain open; no hosted late write or
 release acceptance is claimed. Evidence:
 `/Volumes/PRO-G40/Projects/Lovelies/verification/storage-delayed-write-regression-20261027/root-baseline-01/result.json`,
 `/Volumes/PRO-G40/Projects/Lovelies/verification/storage-delayed-write-regression-20261027/root-source-chunk-consumers-01/result.json`,
-and `/Volumes/PRO-G40/Projects/Lovelies/verification/storage-delayed-write-regression-20261027/root-final-focused-01/result.json`.
+`/Volumes/PRO-G40/Projects/Lovelies/verification/storage-delayed-write-regression-20261027/root-final-focused-01/result.json`,
+`/Volumes/PRO-G40/Projects/Lovelies/verification/assembly-delayed-write-20261027/root-baseline-01/result.json`,
+and `/Volumes/PRO-G40/Projects/Lovelies/verification/assembly-delayed-write-20261027/root-consumers-01/result.json`.
 
 On an object-version mismatch, the Storage adapter now returns its conflict
 without waiting for an uncooperative response-body cancellation. The local
