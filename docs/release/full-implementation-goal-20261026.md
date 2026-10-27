@@ -108,6 +108,11 @@ provider logs are not cleaned by this change. These are local PGlite and memory
 journal results, not provider, hosted or physical-device proof. Evidence:
 `/Volumes/PRO-G40/Projects/Lovelies/verification/notification-token-receipt-20261027/attempt-02/REVIEW.md`
 and `/Volumes/PRO-G40/Projects/Lovelies/verification/notification-token-receipt-20261027/root-integrated-01/result.json`.
+The subsequent reader-first rollout design requires new registrations to be
+quiesced, old runtimes drained and prevented from returning, a restore-bound
+write-format control, and a qualified dual-reader rollback artifact. Its 15
+same-account model cases do not implement that control or prove a provider drain.
+Evidence: `/Volumes/PRO-G40/Projects/Lovelies/verification/push-receipt-rollout-20261027/attempt-01/REVIEW.md`.
 
 Separate D2/L2 authority validators now pass 159 local cases, including frozen
 format-2 synthetic vectors and role, consent, guardian, object-hash and bounds
@@ -1140,6 +1145,12 @@ pages, a complete-plan seal, stale-writer arbitration and recovery of request
 status inputs. Its 12 finite model checks are not an implementation or a
 database/hosted recovery test. Evidence:
 `/Volumes/PRO-G40/Projects/Lovelies/verification/restore-capacity-design-20261027/deletion-intake-01/DESIGN.md`.
+The v4 boundary further records that the existing control validators cannot
+fence a sidecar reservation and that a submitted page root does not prove a
+complete database selection. An integrated trusted planner, journal control
+transition, checkpoint and commit/recovery path are still required. No v4
+prototype or hosted action was produced in this boundary review. Evidence:
+`/Volumes/PRO-G40/Projects/Lovelies/verification/restore-capacity-design-20261027/v4-boundary-01/BOUNDARY.md`.
 
 The proposed independent upload write inventory is documented at
 `/Volumes/PRO-G40/Projects/Lovelies/verification/restore-write-inventory-design-20261027/design.md`.
