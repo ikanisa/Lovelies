@@ -803,6 +803,21 @@ preservation-safe site deployment before adding the association files. No site
 or configuration was changed. Evidence:
 `/Volumes/PRO-G40/Projects/Lovelies/verification/public-hosting-readback-20261027/attempt-01/result.json`
 and `/Volumes/PRO-G40/Projects/Lovelies/verification/public-hosting-readback-20261027/attempt-02/result.json`.
+The expanded dashboard inventory was subsequently recorded as 104 paths. A bounded
+unauthenticated read of the deployment URL saved 104 public responses; local
+readback verified their sizes and hashes, and all 11 HTML redirects stayed on that
+deployment host. Two non-cryptographic checksums matched the displayed path list.
+For the public, admin and photo domain roots, each later response differed from
+the corresponding deployment response by the same 367-byte insertion and an
+additional Cloudflare Insights script tag. The captured responses and headers
+are useful preservation evidence, not proof of the original uploaded bytes,
+function source, complete host behavior or a restorable deployment. Determine
+whether that script remains in the release and make the published processor and
+analytics disclosures match the operated site. No site was changed. Evidence:
+`/Volumes/PRO-G40/Projects/Lovelies/verification/public-hosting-preservation-20261027/attempt-01/result.json`,
+`/Volumes/PRO-G40/Projects/Lovelies/verification/public-hosting-preservation-20261027/attempt-01/independent-readback.json`,
+`/Volumes/PRO-G40/Projects/Lovelies/verification/public-hosting-preservation-20261027/attempt-01/dashboard-binding.json`,
+and `/Volumes/PRO-G40/Projects/Lovelies/verification/public-hosting-preservation-20261027/attempt-03/html-comparison.json`.
 The deployment's displayed redirect and header configuration is recorded at
 `/Volumes/PRO-G40/Projects/Lovelies/verification/public-hosting-readback-20261027/attempt-04/result.json`;
 it is not a live response or Worker-routing verification.
