@@ -818,6 +818,47 @@ analytics disclosures match the operated site. No site was changed. Evidence:
 `/Volumes/PRO-G40/Projects/Lovelies/verification/public-hosting-preservation-20261027/attempt-01/independent-readback.json`,
 `/Volumes/PRO-G40/Projects/Lovelies/verification/public-hosting-preservation-20261027/attempt-01/dashboard-binding.json`,
 and `/Volumes/PRO-G40/Projects/Lovelies/verification/public-hosting-preservation-20261027/attempt-03/html-comparison.json`.
+The same two association paths returned 404 to an identified readback client but
+403 with Cloudflare error 1010 to Python's default user agent. Cloudflare
+[documents this possible Browser Integrity Check interaction](https://developers.cloudflare.com/support/troubleshooting/http-status-codes/cloudflare-1xxx-errors/error-1010/)
+for Pages custom domains; this local result does not establish what Apple or
+Google fetchers receive. The zone's displayed 29 Worker routes contained no
+Lovelies-host pattern, and the Lovelies CNAME was proxied to the Pages project.
+A narrowly scoped Worker route may avoid replacing the shared deployment, but
+route precedence, fallback, security behavior and real platform retrieval must
+be qualified first. Other routing and protection mechanisms were not inventoried.
+The current Play app-signing page's displayed Digital Asset Links statement
+matches the prepared local Android association JSON; it remains unpublished.
+Evidence:
+`/Volumes/PRO-G40/Projects/Lovelies/verification/public-link-user-agent-20261027/attempt-01/result.json`,
+`/Volumes/PRO-G40/Projects/Lovelies/verification/association-routing-readback-20261027/attempt-01/result.json`,
+and `/Volumes/PRO-G40/Projects/Lovelies/verification/play-association-readback-20261027/attempt-01/result.json`.
+The unfiltered Play bundle list showed all ten uploaded versions, with version
+code 16 highest; the production track showed code 14 and internal testing
+showed code 15 plus a code 16 draft. Play displayed three production-release
+installs. That count does not establish real customers, photos or subscriptions,
+and does not change the owner's no-legacy-data-import direction. Preserve
+installed state and refresh the maximum and track state before a build or upload.
+Evidence: `/Volumes/PRO-G40/Projects/Lovelies/verification/play-version-readback-20261027/attempt-01/result.json`.
+The route-free link-association Worker candidate serves the two prepared JSON
+documents on the exact HTTPS origin and hands other requests to `fetch`.
+Ten Node cases, one local Worker-runtime scenario with a synthetic origin, and
+a Wrangler dry build passed. The Worker was not deployed; actual Pages
+passthrough, security filtering, existing-statement merging and platform
+retrieval remain open. A dashboard search found no project with the candidate
+name at that time, but the account, name and cost must be checked again before
+deployment. Android's release host property and iOS's `LOVELIES_LINK_HOST`
+remain unset in the recorded release inputs. Evidence:
+`/Volumes/PRO-G40/Projects/Lovelies/verification/link-association-worker-20261027/attempt-04/result.json`
+and `/Volumes/PRO-G40/Projects/Lovelies/verification/association-worker-name-readback-20261027/attempt-01/result.json`.
+
+The backend workflow now lists the local association test. Its existing port
+mapping was also quoted: Ruby's local YAML parser had rejected the prior form,
+while PyYAML parsed the same prior value as the intended string. Both parsers
+accept the corrected mapping locally. This does not identify the cause of the
+previous GitHub startup failures or constitute a CI pass. Evidence:
+`/Volumes/PRO-G40/Projects/Lovelies/verification/backend-workflow-yaml-20261027/baseline-01/result.json`
+and `/Volumes/PRO-G40/Projects/Lovelies/verification/link-association-worker-20261027/attempt-04/result.json`.
 The deployment's displayed redirect and header configuration is recorded at
 `/Volumes/PRO-G40/Projects/Lovelies/verification/public-hosting-readback-20261027/attempt-04/result.json`;
 it is not a live response or Worker-routing verification.

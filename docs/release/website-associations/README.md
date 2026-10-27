@@ -6,6 +6,11 @@ it intentionally does not use the upload or Debug key. The Apple app identifier
 matches the inspected existing team/profile. No extra app, web credentials or
 activity-continuation permission is declared.
 
+The existing Play listing's Digital Asset Links snippet was read again on
+27 October 2026 and matches the local Android JSON semantically. This did not
+publish either association or verify a platform link tap. Evidence:
+`/Volumes/PRO-G40/Projects/Lovelies/verification/play-association-readback-20261027/attempt-01/result.json`.
+
 After the existing public domain and release capabilities are qualified, publish
 these files as `/.well-known/assetlinks.json` and
 `/.well-known/apple-app-site-association`, both HTTPS200 with
