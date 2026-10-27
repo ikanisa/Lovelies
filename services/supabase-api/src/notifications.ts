@@ -108,9 +108,17 @@ export async function handleNotifications(request: Request, ctx: AppContext): Pr
             await ctx.db.run("UPDATE push_devices SET token_hash=?,token_value='',updated_at=? WHERE id=? AND active=0",await digest('retired:'+prior.id+':'+tokenHash),ctx.now(),prior.id);
             prior=null;
         }
-        if (!prior && (await ctx.db.one<{
-            n: number;
-        }>('SELECT count(*) n FROM push_devices WHERE account_id=? AND active=1', actor.accountId))!.n >= 10)
+        // A token rotation can replace an active registration on this same
+        // device/platform; an inactive saved token still consumes a slot when
+        // reactivated. Calculate the result before mutating either row.
+        const active = (await ctx.db.one<{ n: number }>('SELECT count(*) n FROM push_devices WHERE account_id=? AND active=1', actor.accountId))!.n;
+        const displaced = (await ctx.db.one<{ n: number }>(`SELECT count(*) n FROM push_devices
+            WHERE account_id=? AND auth_device_id=? AND platform=? AND id<>? AND active=1`,
+            actor.accountId, current.device_id, body.platform as string, prior?.id ?? ''))!.n;
+        const prospective = active + (prior?.active === 1 ? 0 : 1) - displaced;
+        // Preserve pre-existing over-limit accounts without increasing their
+        // active count; this does not silently retire or migrate their devices.
+        if (prospective > 10 && prospective > active)
             throw new ApiError(409, 'push_device_limit');
         const id = prior?.id ?? crypto.randomUUID();
         (await ctx.db.run('INSERT INTO push_devices(id,account_id,auth_device_id,platform,token_hash,token_value,active,created_at,updated_at) VALUES(?,?,?,?,?,?,1,?,?) ON CONFLICT(id) DO UPDATE SET auth_device_id=excluded.auth_device_id,platform=excluded.platform,token_value=excluded.token_value,active=1,updated_at=excluded.updated_at', id, actor.accountId, current.device_id, body.platform, tokenHash!, body.push_token, ctx.now(), ctx.now()));

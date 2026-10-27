@@ -76,6 +76,23 @@ restore clearance. Evidence:
 `/Volumes/PRO-G40/Projects/Lovelies/verification/restore-deletion-request-audience-20261027/attempt-01/README.md`
 and `/Volumes/PRO-G40/Projects/Lovelies/verification/restore-deletion-request-audience-20261027/root-integrated-01/result.json`.
 
+Push registration now calculates the active-device count after replacing any
+same-device/platform registration. This permits rotation at the ten-device
+limit and rejects reactivation that would increase the count beyond it. It
+preserves pre-existing over-limit rows while denying further growth. The two
+original local failures are retained; 18 affected local handler and synthetic
+delivery-disposition cases passed, including platform moves and multiple prior
+registrations on one device. API type checking and the cached Deno Edge check
+passed; all nine PGlite-only cases correctly skipped with a defined-empty
+`TEST_DATABASE_URL`. The 128 recorded inputs stayed unchanged during the final
+run. These results do not qualify separate PostgreSQL connections, unmanaged
+writers, real APNs/FCM or physical devices. A separate existing issue remains:
+push registration operation receipts can retain a raw token after the device
+row is cleared. Any correction must preserve old retry and journal identities.
+Evidence:
+`/Volumes/PRO-G40/Projects/Lovelies/verification/notification-token-rotation-20261027/attempt-01/REVIEW.md`
+and `/Volumes/PRO-G40/Projects/Lovelies/verification/notification-token-rotation-20261027/root-integrated-02/result.json`.
+
 Separate D2/L2 authority validators now pass 159 local cases, including frozen
 format-2 synthetic vectors and role, consent, guardian, object-hash and bounds
 checks. They are connected to the local format-3 journal candidate; application
