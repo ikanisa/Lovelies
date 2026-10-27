@@ -4256,6 +4256,43 @@
         },
         "scope": "Local API and PostgreSQL, in-memory Storage, existing private inference binding; no deployment, physical or store qualification."
       }
+    },
+    "local_device_and_inventory_20261027": {
+      "device_retirement": {
+        "focused_tests": 53,
+        "focused_passed": 53,
+        "initial_fixture_failure_preserved": true,
+        "api_tests": 840,
+        "api_passed": 839,
+        "api_failed": 0,
+        "optional_model_skipped": 1,
+        "types_passed": true,
+        "scope": "Local actual PostgreSQL and API; no physical capture, live rollout or complete restore qualification.",
+        "focused_receipt": "/Volumes/PRO-G40/Projects/Lovelies/verification/restore-device-revoke-20261027/root-focused-v4-01/result.json",
+        "aggregate_receipt": "/Volumes/PRO-G40/Projects/Lovelies/verification/restore-device-revoke-20261027/root-whole-v4-01/result.json"
+      },
+      "journal_inventory": {
+        "focused_tests": 94,
+        "focused_passed": 94,
+        "complete_tests": 128,
+        "complete_passed": 128,
+        "api_consumer_tests": 40,
+        "api_consumer_passed": 40,
+        "syntax_and_dry_build_passed": true,
+        "deployed": false,
+        "scope": "Local journal and controlled SQLite; provider operation, application v2 producers, Storage barriers, replay and recovery clearance remain open.",
+        "receipt": "/Volumes/PRO-G40/Projects/Lovelies/verification/restore-write-inventory-implementation-20261027/root-journal-whole-r3-01/result.json"
+      },
+      "edge_attempt2": {
+        "status": "failed_storage_auth_preflight",
+        "edge_started": false,
+        "owned_containers_confirmed_stopped": true,
+        "temporary_credentials_absent": true,
+        "retained_lock_reconciled_and_released": true,
+        "cause": "unknown; exact response body not retained",
+        "receipt": "/Volumes/PRO-G40/Projects/Lovelies/verification/inference-gateway-edge-schema13-20261027/attempt-02/coordinator-result.json",
+        "reconciliation": "/Volumes/PRO-G40/Projects/Lovelies/verification/inference-gateway-edge-schema13-20261027/attempt-02/root-lock-reconciliation.json"
+      }
     }
   }
 }

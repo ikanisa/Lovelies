@@ -30,6 +30,42 @@ The exact immutable Linux AMD64 inference platform manifest is `sha256:982e2ed7b
 ### Execution checkpoint, 26–27 October 2026
 
 Newer receipts supersede the initial baseline only within their tested scopes.
+The next local checkpoint adds exact device-revocation facts and a bounded,
+independent journal inventory. Device retirement records the selected old device
+revision and eligible session and consent episodes; ambiguous shared lifecycle
+records remain untouched. The first PostgreSQL run passed 52 of 53 tests; one
+fixture failed the registered-session schema check before the route ran. After
+correcting the fixture, all 53 focused cases passed. API types passed, and the
+subsequent complete API run passed 839 of 840 tests, with one optional model test
+skipped and no failures. Source inputs did not change during that run. Evidence:
+`/Volumes/PRO-G40/Projects/Lovelies/verification/restore-device-revoke-20261027/root-focused-v3-01/`,
+`/Volumes/PRO-G40/Projects/Lovelies/verification/restore-device-revoke-20261027/root-focused-v4-01/`,
+and `/Volumes/PRO-G40/Projects/Lovelies/verification/restore-device-revoke-20261027/root-whole-v4-01/`.
+
+The inventory implements bounded typed registration, retirement fences and
+checked quarantine enumeration in the local journal, with preserved v1 history
+and fail-closed upgrade evidence. Its focused 94 cases and complete 128-case
+journal suite passed locally; 40 existing API consumer cases passed, and the
+Worker dry build and syntax checks passed. A cancellation after the final
+transaction check may still commit: its outcome must be reconciled. These tests
+do not qualify provider scheduling, persistence, CPU limits, application v2
+producers, Storage writer barriers, replay or recovery clearance. The v2 journal
+has not been deployed or bound to production. Evidence:
+`/Volumes/PRO-G40/Projects/Lovelies/verification/restore-write-inventory-implementation-20261027/root-focused-r3-01/`,
+`/Volumes/PRO-G40/Projects/Lovelies/verification/restore-write-inventory-implementation-20261027/root-journal-whole-r3-01/`,
+and `/Volumes/PRO-G40/Projects/Lovelies/verification/restore-write-inventory-implementation-20261027/root-api-consumers-r3-01/`.
+
+The second local Edge attempt failed at the missing-auth Storage control before
+starting Edge or its database. Docker stop commands succeeded, but their output
+did not match the coordinator's expected acknowledgement, so it retained the
+outer lock. Independent readback confirmed both exact service incarnations stopped,
+no test listeners, Edge container or temporary credential; root then released the
+exact owned lock. The actual response body was not retained, and the cause remains
+under investigation. This is not an Edge readiness pass or a hosted credential
+failure. Evidence:
+`/Volumes/PRO-G40/Projects/Lovelies/verification/inference-gateway-edge-schema13-20261027/attempt-02/coordinator-result.json`
+and `/Volumes/PRO-G40/Projects/Lovelies/verification/inference-gateway-edge-schema13-20261027/attempt-02/root-lock-reconciliation.json`.
+
 Hosted v9–v13 are applied: schema13 has 69 private forced-RLS tables and policies,
 zero client/public access, preserved existing table projections and an empty
 restore_control. All seven supported history versions match and Security Advisor
@@ -136,9 +172,10 @@ custom bindings and the persistent Worker/namespace remain preserved. See
 
 Exact session retirement invalidates the selected session, not its independent
 device-signed control. That control can remain usable while the device revision
-is active, even after pending lifecycle cancellation. Qualify explicit device
-retirement and held-completion/control-recreation fencing separately, preserving
-other devices and newer revisions. Likewise, exact photo-ticket authorization
+is active, even after pending lifecycle cancellation. The later local device
+retirement checkpoint above fences the selected revision and tests a held
+completion with a synthetic verifier; physical and hosted qualification remain.
+Likewise, exact photo-ticket authorization
 must bind the relevant consent and reviewed-grant episodes through held reads;
 grant replacement and processing-consent renewal must not revive old tickets.
 The ticket candidate is locally integrated and tested, and the additive migration

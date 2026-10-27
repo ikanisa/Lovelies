@@ -108,7 +108,7 @@ async function noRecords(txn, prefixes) {
   for (const prefix of prefixes) if ((await txn.list({ prefix, limit: 1 })).size) fail(503, 'journal_integrity_failed');
 }
 
-async function checkedBinding(txn) {
+export async function checkedBinding(txn) {
   const value = await txn.get(BINDING_KEY);
   if (value === undefined) return undefined;
   if (!exact(value, ['version', 'project_id', 'database_id', 'bootstrap_id', 'initial_marker', 'created_at', 'binding_hash']) ||
@@ -120,7 +120,7 @@ async function checkedBinding(txn) {
   return value;
 }
 
-async function checkedPlan(txn, id) {
+export async function checkedPlan(txn, id) {
   const value = await txn.get(planKey(id));
   if (value === undefined) return undefined;
   if (!exact(value, ['plan', 'plan_hash']) || !digest(value.plan_hash) ||
@@ -182,8 +182,11 @@ async function checkedRecovery(txn, id) {
   return value;
 }
 
-async function loadControl(txn) {
+export async function loadControl(txn) {
   const binding = await checkedBinding(txn), control = await txn.get(CONTROL_KEY);
+  // Version2 replaces this same key. Validate caller input before this read,
+  // then fence unsupported old writers without altering historical v1 bytes.
+  if (control?.version === 2) fail(409, 'protocol_version_unsupported');
   if (binding === undefined && control === undefined) {
     await noRecords(txn, ['plan:', 'prepare:', 'commit:', 'recovery:']);
     return undefined;
