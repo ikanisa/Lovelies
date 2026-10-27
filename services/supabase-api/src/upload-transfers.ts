@@ -1,7 +1,7 @@
 import { UploadBodyReader, UPLOAD_BODY_CHUNK_TOTAL_MS, UPLOAD_MAX_SOURCE_BYTES } from './upload-body.ts';
 import { ApiError, digest, jsonBody, ok, type Actor, type AppContext } from './types.ts';
 import { assertMediaActor, currentAsset, hasConsent, type Asset } from './gallery.ts';
-import { beginMediaWrite, executeOperation, prepareOperation, settleMediaWrite } from './operations.ts';
+import { beginMediaWrite, completeUndispatchedMediaWrite, executeOperation, prepareOperation, settleMediaWrite } from './operations.ts';
 export const UPLOAD_CHUNK_BYTES = 262144;
 const TTL = 7 * 24 * 60 * 60000;
 type Transfer = {
@@ -251,11 +251,24 @@ export async function uploadChunk(request: Request, ctx: AppContext, actor: Acto
         }));
         reader.guard();
         if (!replay) {
-            writtenKey = chunkPrefix(initial.asset) + offset + '/' + crypto.randomUUID();
-            const write = (await beginMediaWrite(ctx, actor, 'QUARANTINE', writtenKey));
+            const uploadBytes = new Uint8Array(bytes).buffer;
+            const options = { httpMetadata: { contentType: initial.asset.content_type },
+                customMetadata: { asset_id: id, source_version: initial.asset.version, offset: String(offset), sha256: hash } };
+            reader.guard();
+            const candidateKey = chunkPrefix(initial.asset) + offset + '/' + crypto.randomUUID();
+            const write = (await beginMediaWrite(ctx, actor, 'QUARANTINE', candidateKey));
+            writtenKey = candidateKey;
             try {
-                await ctx.env.QUARANTINE.put(writtenKey, new Uint8Array(bytes).buffer, { httpMetadata: { contentType: initial.asset.content_type },
-                    customMetadata: { asset_id: id, source_version: initial.asset.version, offset: String(offset), sha256: hash } });
+                reader.guard();
+            }
+            catch (error) {
+                // No PUT has been invoked; do not queue cleanup for this key.
+                writtenKey = null;
+                await completeUndispatchedMediaWrite(ctx, write);
+                throw error;
+            }
+            try {
+                await ctx.env.QUARANTINE.put(candidateKey, uploadBytes, options);
             }
             finally {
                 (await settleMediaWrite(ctx, write));

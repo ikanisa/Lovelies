@@ -187,15 +187,25 @@ the stored size before allocating. Local regression cases reproduced five
 failures in the previous readers. The integrated source passed 65 focused,
 upload-recovery and restore-allocation tests, with no skips; TypeScript and the
 Supabase Edge entrypoint check also passed. When a PostgreSQL test URL is set,
-the 13 PGlite-specific cases skip rather than use that database; nine pure reader
+the 23 PGlite-specific cases skip rather than use that database; nine pure reader
 cases still pass. The time and fragment limits need qualification on actual
-devices and proxies. An abort during write-intent creation can still race a
-Storage PUT, and cancellation after dispatch has an uncertain provider outcome;
-these results do not establish production writer fencing or recovery clearance.
-Isolated candidate and prior-failure evidence:
+devices and proxies. A subsequent local change checks cancellation again after
+intent creation and records the known-undispatched outcome without issuing a PUT
+or local cleanup. If intent creation or completion acknowledgement is lost, the
+actual durable state remains unknown to the caller. Two cancellation and two
+lost-creation cases reproduced the previous local behavior; ten focused cases
+and 105 affected upload, privacy and retention cases now pass, with no skips.
+The latter result retains its 105-input hash list; it is not a complete
+dependency-closure seal. Later maintenance may still inspect the intent, and
+cancellation after dispatch has an uncertain provider outcome. These results do
+not establish production writer fencing or recovery clearance. Evidence:
 `/Volumes/PRO-G40/Projects/Lovelies/verification/upload-binary-stream-test-candidate-20261027/root-reproduction-01/result.json`,
 `/Volumes/PRO-G40/Projects/Lovelies/verification/upload-binary-stream-implementation-20261027/root-qualification-01/result.json`,
-and `/Volumes/PRO-G40/Projects/Lovelies/verification/upload-binary-stream-implementation-20261027/root-qualification-01/restore-consumer-03.json`.
+`/Volumes/PRO-G40/Projects/Lovelies/verification/upload-binary-stream-implementation-20261027/root-qualification-01/restore-consumer-03.json`,
+`/Volumes/PRO-G40/Projects/Lovelies/verification/upload-predispatch-abort-20261027/root-baseline-01/result.json`,
+`/Volumes/PRO-G40/Projects/Lovelies/verification/upload-predispatch-abort-20261027/root-creation-loss-baseline-01/result.json`,
+`/Volumes/PRO-G40/Projects/Lovelies/verification/upload-predispatch-abort-20261027/root-fix-03/result.json`,
+and `/Volumes/PRO-G40/Projects/Lovelies/verification/upload-predispatch-abort-20261027/root-consumers-01/result.json`.
 
 The second local Edge attempt failed at the missing-auth Storage control before
 starting Edge or its database. Docker stop commands succeeded, but their output

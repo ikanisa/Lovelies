@@ -133,6 +133,90 @@ for(const kind of ['source','chunk'])pgliteTest(`${kind} abort while authority i
  }finally{barrier.release();barrier.restore();await within(Promise.allSettled([pending]),10000);}
 });
 
+for(const kind of ['source','chunk'])pgliteTest(`${kind} abort during write intent creation prevents storage dispatch`,{timeout:30000},async t=>{
+ const {h,owner,reserved,original,beforeOriginal}=await setup(t,kind),id=reserved.asset_id,before=await counts(h,id),controller=new AbortController();
+ const stream=new ReadableStream({pull(out){out.enqueue(original);out.close();}},{highWaterMark:0});
+ const request=requestFor(kind,owner,id,stream,await sha256(beforeOriginal),controller.signal),entered=deferred(),release=deferred();
+ const run=h.db.run,put=h.env.QUARANTINE.put,remove=h.env.QUARANTINE.delete;let puts=0,deletes=0;
+ h.db.run=async function(sql,...bindings){const result=await run.call(this,sql,...bindings);if(sql.startsWith('INSERT INTO media_write_intents(')){entered.resolve({id:bindings[0],key:bindings[3]});await release.promise;}return result;};
+ h.env.QUARANTINE.put=async function(...args){puts++;return put.call(this,...args);};
+ h.env.QUARANTINE.delete=async function(...args){deletes++;return remove.call(this,...args);};
+ const pending=h.db.invocation(()=>handleProcessing(request,h.app));void pending.catch(()=>{});
+ try{
+  const intent=await within(entered.promise);controller.abort();release.resolve();
+  await assert.rejects(within(pending,10000),error=>error instanceof ApiError&&error.status===400&&error.code==='upload_body_aborted');
+  assert.equal(puts,0,'a proved undispatched intent must not send a PUT');assert.equal(deletes,0,'a proved undispatched key must not cause a Storage delete');
+  const after=await counts(h,id);assert.deepEqual(after.asset,before.asset);assert.deepEqual(after.chunks,before.chunks);assert.deepEqual(after.objects,before.objects);
+  const inserted=after.intents.find(row=>row.object_key===intent.key);assert(inserted);assert.equal(inserted.status,'settled');
+  assert.equal((await h.storage.exec('SELECT id FROM cleanup_intents WHERE subject_id=? AND bucket=? AND object_key=?',owner.account_id,'QUARANTINE',intent.key)).length,0);
+  assert.deepEqual(original,beforeOriginal);
+ }finally{release.resolve();h.db.run=run;h.env.QUARANTINE.put=put;h.env.QUARANTINE.delete=remove;await within(Promise.allSettled([pending]),10000);}
+});
+
+for(const kind of ['source','chunk'])for(const faultAt of ['before completion','after completion commit'])pgliteTest(`${kind} preserves an undispatched intent on ${faultAt} failure`,{timeout:30000},async t=>{
+ const {h,owner,reserved,original,beforeOriginal}=await setup(t,kind),id=reserved.asset_id,before=await counts(h,id),controller=new AbortController();
+ const stream=new ReadableStream({pull(out){out.enqueue(original);out.close();}},{highWaterMark:0});
+ const request=requestFor(kind,owner,id,stream,await sha256(beforeOriginal),controller.signal),entered=deferred(),release=deferred(),fault=Error('synthetic intent completion failure');
+ const run=h.db.run,transaction=h.db.transaction,put=h.env.QUARANTINE.put,remove=h.env.QUARANTINE.delete;let puts=0,deletes=0,completionRan=false;
+ h.db.run=async function(sql,...bindings){
+  if(sql.startsWith("UPDATE media_write_intents SET status='settled'")&&faultAt==='before completion')throw fault;
+  const result=await run.call(this,sql,...bindings);
+  if(sql.startsWith('INSERT INTO media_write_intents(')){entered.resolve({id:bindings[0],key:bindings[3]});await release.promise;}
+  if(sql.startsWith("UPDATE media_write_intents SET status='settled'")&&faultAt==='after completion commit')completionRan=true;
+  return result;
+ };
+ h.db.transaction=async function(...args){const result=await transaction.call(this,...args);if(completionRan){completionRan=false;throw fault;}return result;};
+ h.env.QUARANTINE.put=async function(...args){puts++;return put.call(this,...args);};
+ h.env.QUARANTINE.delete=async function(...args){deletes++;return remove.call(this,...args);};
+ const pending=h.db.invocation(()=>handleProcessing(request,h.app));void pending.catch(()=>{});
+ try{
+  const intent=await within(entered.promise);controller.abort();release.resolve();
+  await assert.rejects(within(pending,10000),error=>error===fault);
+  h.db.run=run;h.db.transaction=transaction;
+  assert.equal(puts,0);assert.equal(deletes,0);
+  const after=await counts(h,id);assert.deepEqual(after.asset,before.asset);assert.deepEqual(after.chunks,before.chunks);assert.deepEqual(after.objects,before.objects);
+  const inserted=after.intents.find(row=>row.object_key===intent.key);assert(inserted);assert.equal(inserted.status,faultAt==='before completion'?'pending':'settled');
+  assert.equal((await h.storage.exec('SELECT id FROM cleanup_intents WHERE subject_id=? AND bucket=? AND object_key=?',owner.account_id,'QUARANTINE',intent.key)).length,0);
+ }finally{release.resolve();h.db.run=run;h.db.transaction=transaction;h.env.QUARANTINE.put=put;h.env.QUARANTINE.delete=remove;await within(Promise.allSettled([pending]),10000);}
+});
+
+for(const kind of ['source','chunk'])pgliteTest(`${kind} preserves a committed intent when creation acknowledgement is lost`,{timeout:30000},async t=>{
+ const {h,owner,reserved,original,beforeOriginal}=await setup(t,kind),id=reserved.asset_id,before=await counts(h,id),fault=Error('synthetic intent creation acknowledgement lost');
+ const stream=new ReadableStream({pull(out){out.enqueue(original);out.close();}},{highWaterMark:0});
+ const request=requestFor(kind,owner,id,stream,await sha256(beforeOriginal)),run=h.db.run,transaction=h.db.transaction,put=h.env.QUARANTINE.put,remove=h.env.QUARANTINE.delete;
+ let intent,replyLost=false,puts=0,deletes=0;
+ h.db.run=async function(sql,...bindings){const result=await run.call(this,sql,...bindings);if(sql.startsWith('INSERT INTO media_write_intents('))intent={id:bindings[0],key:bindings[3]};return result;};
+ h.db.transaction=async function(...args){const result=await transaction.call(this,...args);if(intent&&!replyLost){replyLost=true;throw fault;}return result;};
+ h.env.QUARANTINE.put=async function(...args){puts++;return put.call(this,...args);};
+ h.env.QUARANTINE.delete=async function(...args){deletes++;return remove.call(this,...args);};
+ const pending=h.db.invocation(()=>handleProcessing(request,h.app));void pending.catch(()=>{});
+ try{
+  await assert.rejects(within(pending,10000),error=>error===fault);assert(intent&&replyLost);
+  h.db.run=run;h.db.transaction=transaction;
+  assert.equal(puts,0);assert.equal(deletes,0,'an unacknowledged intent did not dispatch a PUT');
+  const after=await counts(h,id);assert.deepEqual(after.asset,before.asset);assert.deepEqual(after.chunks,before.chunks);assert.deepEqual(after.objects,before.objects);
+  const inserted=after.intents.find(row=>row.object_key===intent.key);assert(inserted);assert.equal(inserted.status,'pending');
+  assert.equal((await h.storage.exec('SELECT id FROM cleanup_intents WHERE subject_id=? AND bucket=? AND object_key=?',owner.account_id,'QUARANTINE',intent.key)).length,0);
+ }finally{h.db.run=run;h.db.transaction=transaction;h.env.QUARANTINE.put=put;h.env.QUARANTINE.delete=remove;await within(Promise.allSettled([pending]),10000);}
+});
+
+for(const kind of ['source','chunk'])pgliteTest(`${kind} does not clean up a key when intent insertion fails`,{timeout:30000},async t=>{
+ const {h,owner,reserved,original,beforeOriginal}=await setup(t,kind),id=reserved.asset_id,before=await counts(h,id),fault=Error('synthetic intent insertion failure');
+ const stream=new ReadableStream({pull(out){out.enqueue(original);out.close();}},{highWaterMark:0});
+ const request=requestFor(kind,owner,id,stream,await sha256(beforeOriginal)),run=h.db.run,put=h.env.QUARANTINE.put,remove=h.env.QUARANTINE.delete;
+ let attemptedKey,puts=0,deletes=0;
+ h.db.run=async function(sql,...bindings){if(sql.startsWith('INSERT INTO media_write_intents(')){attemptedKey=bindings[3];throw fault;}return run.call(this,sql,...bindings);};
+ h.env.QUARANTINE.put=async function(...args){puts++;return put.call(this,...args);};
+ h.env.QUARANTINE.delete=async function(...args){deletes++;return remove.call(this,...args);};
+ const pending=h.db.invocation(()=>handleProcessing(request,h.app));void pending.catch(()=>{});
+ try{
+  await assert.rejects(within(pending,10000),error=>error===fault);assert(attemptedKey);
+  h.db.run=run;assert.equal(puts,0);assert.equal(deletes,0);
+  assert.deepEqual(await counts(h,id),before);
+  assert.equal((await h.storage.exec('SELECT id FROM cleanup_intents WHERE subject_id=? AND bucket=? AND object_key=?',owner.account_id,'QUARANTINE',attemptedKey)).length,0);
+ }finally{h.db.run=run;h.env.QUARANTINE.put=put;h.env.QUARANTINE.delete=remove;await within(Promise.allSettled([pending]),10000);}
+});
+
 test('upload body acquisition deadline interrupts a stalled read and requests cleanup', {timeout:30000}, async ()=>{
  const {UploadBodyReader}=await import('../src/upload-body.ts'),cancelled=deferred(),release=deferred();
  const stream=new ReadableStream({pull(){return release.promise;},cancel(){cancelled.resolve();}},{highWaterMark:0});

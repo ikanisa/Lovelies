@@ -3,7 +3,7 @@ import { audienceContext, assertAudienceCapability } from './audience.ts';
 import { accountRoles } from './auth.ts';
 import { ApiError, digest, jsonBody, ok, stable, uuid, type Actor, type AppContext } from './types.ts';
 import { assertMediaActor, currentAsset, hasConsent, currentPhotoPolicy, mediaSource, sourceAllowed, type Asset, type MediaSource } from './gallery.ts';
-import { beginMediaWrite, executeOperation, executeUploadReservationOperation, prepareOperation, settleMediaWrite } from './operations.ts';
+import { beginMediaWrite, completeUndispatchedMediaWrite, executeOperation, executeUploadReservationOperation, prepareOperation, settleMediaWrite } from './operations.ts';
 import { assembleUpload, cancelUpload, createUploadTransfer, uploadChunk, uploadStatusAsset, uploadStatusFields, uploadTransfer, validateResumable } from './upload-transfers.ts';
 import { selectedGeneration, assertGeneration } from './inference-generation.ts';
 const MAX_SOURCE_BYTES = UPLOAD_MAX_SOURCE_BYTES;
@@ -313,11 +313,25 @@ async function sourceBytes(request: Request, ctx: AppContext, actor: Actor, id: 
         reader.guard();
         // Concurrent PUTs write separate private keys. Only the winning current
         // transaction can bind its bytes to the asset; a late writer cannot replace it.
-        writtenKey = `${initial.object_key}/${crypto.randomUUID()}`;
-        const write = (await beginMediaWrite(ctx, actor, 'QUARANTINE', writtenKey));
+        const uploadBytes = new Uint8Array(bytes).buffer;
+        const options = { httpMetadata: { contentType: initial.content_type },
+            customMetadata: { source_version: initial.version, source_checksum_sha256: checksum, asset_id: id } };
+        reader.guard();
+        const candidateKey = `${initial.object_key}/${crypto.randomUUID()}`;
+        const write = (await beginMediaWrite(ctx, actor, 'QUARANTINE', candidateKey));
+        writtenKey = candidateKey;
         try {
-            await ctx.env.QUARANTINE.put(writtenKey, new Uint8Array(bytes).buffer, { httpMetadata: { contentType: initial.content_type },
-                customMetadata: { source_version: initial.version, source_checksum_sha256: checksum, asset_id: id } });
+            reader.guard();
+        }
+        catch (error) {
+            // No PUT has been invoked. Do not delete a key we did not write,
+            // even if recording the known-undispatched outcome fails.
+            writtenKey = null;
+            await completeUndispatchedMediaWrite(ctx, write);
+            throw error;
+        }
+        try {
+            await ctx.env.QUARANTINE.put(candidateKey, uploadBytes, options);
         }
         finally {
             (await settleMediaWrite(ctx, write));

@@ -92,6 +92,12 @@ export async function beginFaceChallengeMediaWrite(ctx: AppContext, challengeId:
 export async function settleMediaWrite(ctx: AppContext, id: string): Promise<void> {
     (await ctx.db.transaction(async () => (await ctx.db.run("UPDATE media_write_intents SET status='settled',settled_at=? WHERE id=?", ctx.now(), id))));
 }
+/** Use only when this invocation can prove that it never called PUT for this
+ * intent and cannot call it later. Treat a failed or uncertain transaction as
+ * unresolved; it does not establish a Storage outcome. */
+export async function completeUndispatchedMediaWrite(ctx: AppContext, id: string): Promise<void> {
+    (await ctx.db.transaction(async () => (await ctx.db.run("UPDATE media_write_intents SET status='settled',settled_at=? WHERE id=? AND status='pending'", ctx.now(), id))));
+}
 export async function prepareOperation(action: string, payload: Record<string, unknown>, source = 'personal'): Promise<PreparedOperation> {
     const key = payload.operation_key;
     if (typeof key !== 'string' || !/^[A-Za-z0-9._:-]{16,128}$/.test(key)) {
