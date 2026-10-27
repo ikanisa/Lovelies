@@ -366,6 +366,33 @@ and reference reads, revocation, uncertain stream completion and restored old
 state. This is design evidence only: application, PostgreSQL, provider,
 independent-journal and restore integration remain open. See
 `/Volumes/PRO-G40/Projects/Lovelies/verification/face-proof-read-admission-design-20261027/attempt-01/DESIGN.md`.
+An isolated implementation candidate subsequently passed 44 targeted tests,
+two local restore controls and TypeScript, with synthetic egress. Its unchanged
+no-egress compatibility controls fail: ordinary enrollment returns 503 and
+unheld proof cleanup cannot dispatch. Independent source review also found that
+terminal deletes cannot resume finalization after a transient failure, ownership
+checks lack positive evidence for unknown keys, a lifecycle metadata read is
+ungated, readiness omits the egress ports, the handler fixture does not prove
+real `Response` compatibility, and lost-ack lookup is not wired into handlers.
+The candidate remains outside the repository; production egress, terminal
+evidence, replay and those findings must be resolved together. Evidence:
+`/Volumes/PRO-G40/Projects/Lovelies/verification/face-proof-reader-implementation-20261027/attempt-01/REVIEW.md`.
+A second external revision addresses several local findings, with saved logs for
+46 focused and nine replay-model passes; both no-egress compatibility controls
+still fail. Independent review found that its proof pointer can still be treated
+as its own positive ownership evidence, and a later independently authorized
+privacy job cannot adopt an earlier terminal cleanup from another caller. The
+author reports TypeScript passed, but no separate process-exit receipt was found.
+Post-journal-prepare SQL rollback remains a preserved 503 case. This revision is
+also unintegrated and does not provide a production egress or restore controller.
+Evidence: `/Volumes/PRO-G40/Projects/Lovelies/verification/face-proof-reader-implementation-20261027/attempt-02/REVIEW.md`.
+The separate egress-ordering plan records that the existing pool adapter cannot
+safely use an unqualified reserved-session lock: pool `begin()` need not use the
+reserved connection, releasing it is not an unlock, and an unobserved backend
+disconnect can release the lock before local code learns of the failure. Eight
+synthetic controls include that counterexample; they are not native PostgreSQL
+or hosted proof. A real egress and its recovery contract remain unimplemented.
+Evidence: `/Volumes/PRO-G40/Projects/Lovelies/verification/face-reader-egress-ordering-20261027/plan-01/PLAN.md`.
 The earlier failed revision03 fixture had been preserved on `/private/tmp`,
 but a later read-only inventory found its exact runtime and data paths absent;
 the original failure/ownership receipts remain. The Mac restarted in between,
@@ -701,7 +728,18 @@ failed with permission/authentication indicators. The visible asset inventory
 is not a byte-level backup or complete runtime/route audit; recover and qualify a
 preservation-safe site deployment before adding the association files. No site
 or configuration was changed. Evidence:
-`/Volumes/PRO-G40/Projects/Lovelies/verification/public-hosting-readback-20261027/attempt-01/result.json`.
+`/Volumes/PRO-G40/Projects/Lovelies/verification/public-hosting-readback-20261027/attempt-01/result.json`
+and `/Volumes/PRO-G40/Projects/Lovelies/verification/public-hosting-readback-20261027/attempt-02/result.json`.
+The deployment's displayed redirect and header configuration is recorded at
+`/Volumes/PRO-G40/Projects/Lovelies/verification/public-hosting-readback-20261027/attempt-04/result.json`;
+it is not a live response or Worker-routing verification.
+A read-only source search found a Memories commit with the same deployment label,
+but that label appears on multiple deployments and the candidate tree lacks a
+tracked terms route while production lists `terms/index.html`. Generated content
+or another source remains possible; no exact build or restorable byte manifest
+has been established. Preserve all three custom-domain behaviors while comparing
+the actual deployment and any candidate source. Evidence:
+`/Volumes/PRO-G40/Projects/Lovelies/verification/public-hosting-readback-20261027/attempt-03/result.json`.
 
 Supabase plans to disable four older TLS 1.2 CBC suites no earlier than 10 November 2026.
 Official Android API 24/25 and iOS 17+ defaults indicate overlap with retained
