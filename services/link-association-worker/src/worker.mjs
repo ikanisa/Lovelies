@@ -29,13 +29,17 @@ const DOCUMENTS = new Map([
   ['/.well-known/apple-app-site-association', JSON.stringify(APPLE)],
 ]);
 
-/** Hand other requests to fetch; hosted origin routing requires qualification. */
+/** Only association documents are handled here; all other paths pass through. */
 export async function handle(request, passthrough = fetch) {
   const url = new URL(request.url);
   const body = DOCUMENTS.get(url.pathname);
-  if (url.origin !== 'https://lovelies.ikanisa.com' ||
-      !body || (request.method !== 'GET' && request.method !== 'HEAD')) {
+  if (url.origin !== 'https://lovelies.ikanisa.com' || !body) {
     return passthrough(request);
+  }
+  // The published documents only support reads. Forwarding another method to
+  // this same host could re-enter the route instead of reaching Pages.
+  if (request.method !== 'GET' && request.method !== 'HEAD') {
+    return new Response(null, { status: 405, headers: { allow: 'GET, HEAD' } });
   }
   return new Response(request.method === 'HEAD' ? null : body, {
     status: 200,

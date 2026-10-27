@@ -35,9 +35,27 @@ not waived. Evidence:
 
 The exact immutable Linux AMD64 inference platform manifest is `sha256:982e2ed7bb66b17db17979495495892579f1b734c55d93516a2aeedbf70e1c6c`. Existing native/service/fixture and technical High-disposition proof must not be reopened solely because the unmodified scanner returns exit2. The 26 October lower-row assessment is `verification/openface-integration-20261024/continuation/native-security-disposition-20261025/root-verification-20261026/assessment.json`, SHA256 `ec3f8c1ada7e9a4f88c146c3edb9cb90d61750ffa223fd654c79042d245ea941`. It retains lower-severity findings and does not claim every vulnerability fixed, fresh scanner execution, changed runtime or production recognition acceptance. The ML owner reports gateway cleanup delivered at `5e7cb856acae018f3fdac8bcaf0db1254ea5c269`, with affected22 Worker tests, types and default Supabase dry run passing. Verify exact source/receipt bindings before adopting those results. Temporary-builder retirement has its own postflight receipt; the serving gateway was untouched. Do not recreate removed unverified receipt-shaped/serving flags or an obsolete builder merely to satisfy old notes.
 
-### Execution checkpoint, 26–27 October 2026
+### Execution checkpoint, 26–28 October 2026
 
 Newer receipts supersede the initial baseline only within their tested scopes.
+The association Worker now responds directly with 405 for unsupported methods
+on the two association paths, avoiding a same-host passthrough when those paths
+are routed. Other paths and hosts still pass the original request through. All
+14 local unit cases, a synthetic-origin Worker runtime check and a Wrangler dry
+build passed. The hosted candidate is the older version; its latest recorded
+readback had no public route. Apple/Google retrieval and device taps remain unverified.
+Current zone and Pages routing must be checked before attachment. Evidence:
+`/Volumes/PRO-G40/Projects/Lovelies/verification/link-association-methods-20261028/attempt-01/result.json`
+and `/Volumes/PRO-G40/Projects/Lovelies/verification/link-association-routing-qualification-20261028/attempt-02/FINDINGS.md`.
+
+A bounded Storage metadata-body reader passed 91 local cases in an isolated
+candidate, but a timeout after a dispatched DELETE could accelerate an unsafe
+retry while that DELETE's outcome is unknown. The candidate was removed from
+the app and retained for review. This does not establish that the current
+unbounded read or its retry behavior is release-safe; the independent deletion
+barrier remains required. Evidence:
+`/Volumes/PRO-G40/Projects/Lovelies/verification/storage-info-stream-20261028/candidate-01/REVIEW.md`.
+
 The next local checkpoint adds exact device-revocation facts and a bounded,
 independent journal inventory. Device retirement records the selected old device
 revision and eligible session and consent episodes; ambiguous shared lifecycle

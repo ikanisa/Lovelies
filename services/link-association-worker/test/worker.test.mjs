@@ -31,6 +31,17 @@ for (const [path, filename] of cases) {
     assert.equal(response.headers.get('cache-control'), 'public, max-age=300');
     assert.equal(await response.text(), '');
   });
+
+  for (const method of ['OPTIONS', 'POST']) {
+    test(`${method} ${path} returns 405 without calling origin`, async () => {
+      const response = await handle(new Request(`https://lovelies.ikanisa.com${path}`, { method }), () => {
+        throw new Error('origin must not be called for an association');
+      });
+      assert.equal(response.status, 405);
+      assert.equal(response.headers.get('allow'), 'GET, HEAD');
+      assert.equal(await response.text(), '');
+    });
+  }
 }
 
 for (const [label, url, init] of [
@@ -39,7 +50,7 @@ for (const [label, url, init] of [
   ['other host', 'https://lovelies.admin.ikanisa.com/.well-known/assetlinks.json', {}],
   ['alternate port', 'https://lovelies.ikanisa.com:8443/.well-known/assetlinks.json', {}],
   ['non-HTTPS', 'http://lovelies.ikanisa.com/.well-known/assetlinks.json', {}],
-  ['other method', 'https://lovelies.ikanisa.com/.well-known/assetlinks.json', { method: 'POST', body: 'original body' }],
+  ['other path and method', 'https://lovelies.ikanisa.com/privacy/', { method: 'POST', body: 'original body' }],
 ]) {
   test(`${label} passes the original request and origin response through`, async () => {
     const request = new Request(url, init);

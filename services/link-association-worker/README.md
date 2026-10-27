@@ -1,17 +1,20 @@
 # Lovelies link association Worker candidate
 
 This isolated candidate can serve the two reviewed public association documents
-without replacing the shared `lovelies-web` Pages deployment. It serves only GET
-and HEAD for the two exact paths on `https://lovelies.ikanisa.com`; every other
-request is handed to `fetch` as the original Request. Whether Cloudflare sends
-that request to the existing Pages origin is not yet qualified. The tests compare
-the JSON with `docs/release/website-associations/` and exercise that local boundary.
+without replacing the shared `lovelies-web` Pages deployment. It serves GET
+and HEAD for the two exact paths on `https://lovelies.ikanisa.com` and returns
+405 for other methods on those paths. Requests to other paths or hosts are handed
+to `fetch` as the original Request. Whether Cloudflare sends those requests to
+the existing Pages origin is not yet qualified. The tests compare the JSON with
+`docs/release/website-associations/` and exercise that local boundary.
 
-The configuration has no routes or public Worker URL. A copy was uploaded to
+The configuration has no routes or public Worker URL. An earlier copy was uploaded to
 the existing Cloudflare account as version
 `f1249cc7-ce52-4e55-8e8e-8bff803a0eb0`; the dashboard showed it ready with no
 enabled URL, routes, domains or bindings. The existing site's three checked
 roots and the two unpublished association paths matched their earlier responses.
+That hosted version predates the local 405 handling and still forwards unsupported
+methods; it is not the current source.
 This does not qualify a hosted Worker request or site-wide preservation.
 Evidence: `/Volumes/PRO-G40/Projects/Lovelies/verification/link-association-hosted-20261027/attempt-01/hosted-readback.json`.
 The dashboard's HTTP preview returned a configuration error because the service
