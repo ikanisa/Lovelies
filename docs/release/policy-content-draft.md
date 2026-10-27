@@ -73,9 +73,10 @@ records follow the configured retention policy and any justified hold. The
 selected schedule is recorded in [retention-and-young-users.md](retention-and-young-users.md).
 Local enforcement now includes 60-day original/preview deadlines, 14-day inactive
 reference-address minimization, native cache expiry within two days, and a 30-day
-maximum routine account-security audit setting. The hosted schema8 baseline still
-has the historical audit setting until the qualified additive migration is applied.
-Local implementation does not establish hosted cleanup or provider backup expiry.
+maximum routine account-security audit setting. The additive v9 migration added
+the audit limit; a later hosted checkpoint recorded schema v13. These settings
+and local implementation do not establish operated hosted cleanup or provider
+backup expiry.
 Publish the selected active schedule and backup-expiry period after operational
 configuration and necessity review. Preserve only justified
 financial, security, legal-hold and minimal erasure evidence after deletion.
