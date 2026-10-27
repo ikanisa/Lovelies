@@ -307,6 +307,16 @@ checks that the original writer and cleanup obligation remain pending and that
 no deletion is dispatched for its exact key. All these tests use synthetic
 PGlite and Storage transport, not hosted-provider terminality.
 
+A separate owned PGlite/synthetic Storage regression reproduced an ambiguous
+DELETE followed by automatic retry: the second DELETE and absent HEAD marked the
+cleanup verified while the held first DELETE later removed a synthetic replacement
+at the same key. Its acknowledged-write control passed. This models an unsafe
+schedule; it does not claim the hosted provider exhibited it. Durable exact-key
+delete-attempt admission, hold coordination, independent restore-journal coverage
+and qualified terminal reconciliation are required before deletion or recovery
+can be considered complete. Evidence:
+`/Volumes/PRO-G40/Projects/Lovelies/verification/storage-delete-uncertainty-20261027/root-baseline-01/result.json`.
+
 The Storage status adapter previously treated arbitrary native HTTP 404s as
 object absence and could accept a 404 DELETE. Six isolated regressions reproduced
 the resulting false missing/cleanup outcomes. The adapter now accepts only the
