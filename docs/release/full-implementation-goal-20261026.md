@@ -80,6 +80,12 @@ Evidence:
 `/Volumes/PRO-G40/Projects/Lovelies/verification/restore-inventory-format3-implementation-20261027/root-focused-v4-01/`,
 `/Volumes/PRO-G40/Projects/Lovelies/verification/restore-inventory-format3-implementation-20261027/root-journal-whole-v4-01/`,
 and `/Volumes/PRO-G40/Projects/Lovelies/verification/restore-inventory-format3-implementation-20261027/root-api-consumers-v4-01/`.
+Seven additional local tests cover mixed historical and new records, eight-plus-one
+pagination and acknowledgement, the 32/33 restriction boundary, corrupted
+anchors, and injected commit uncertainty followed by controlled SQLite restarts.
+They passed, but do not establish provider failures, power-loss behavior or
+hosted durability. Evidence:
+`/Volumes/PRO-G40/Projects/Lovelies/verification/restore-inventory-format3-extra-tests-20261027/root-focused-v2-01/result.json`.
 
 Refresh-delivery cancellation now collects exact restriction facts for the
 original session and its named delivered successor before tentative domain
