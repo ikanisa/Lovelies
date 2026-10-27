@@ -58,6 +58,18 @@ the app and retained for review. This does not establish that the current
 unbounded read or its retry behavior is release-safe; the independent deletion
 barrier remains required. Evidence:
 `/Volumes/PRO-G40/Projects/Lovelies/verification/storage-info-stream-20261028/candidate-01/REVIEW.md`.
+The hosted Storage catalog contains version-related bucket and object columns,
+but the follow-up read of bucket settings did not return before the tool wait
+was stopped. Column presence alone does not establish enabled versioning, the
+deployed API's exact-version support or a terminal DELETE outcome. Evidence:
+`/Volumes/PRO-G40/Projects/Lovelies/verification/supabase-storage-catalog-20261028/attempt-01/result.json`.
+An isolated independent SQLite coordinator exercised all four copied DELETE
+callers: 15 ledger and 12 handler cases passed with synthetic terminal proof.
+Without such proof, the candidate fails closed; a one-use export grant can be
+consumed while its bytes are withheld. The coordinator is not integrated: real
+provider terminality, authenticated independent journal/ownership and complete
+hold/writer bindings are still missing. Evidence:
+`/Volumes/PRO-G40/Projects/Lovelies/verification/storage-delete-independent-barrier-20261028/attempt-01/REVIEW.md`.
 
 The next local checkpoint adds exact device-revocation facts and a bounded,
 independent journal inventory. Device retirement records the selected old device
@@ -104,6 +116,12 @@ they do not implement replay, independent journal operation, hosted cleanup or
 restore clearance. Evidence:
 `/Volumes/PRO-G40/Projects/Lovelies/verification/restore-deletion-request-audience-20261027/attempt-01/README.md`
 and `/Volumes/PRO-G40/Projects/Lovelies/verification/restore-deletion-request-audience-20261027/root-integrated-01/result.json`.
+An isolated deletion-only f3 bridge passed 16 local cases and eight selected v1
+controls, while preserving the same 31-fact limit. Activating it would fence
+other v1 writers, and its receipt-retry change also affects v1. It is not
+merged or deployed; an integrated v4 planning and complete-enumeration path,
+general writer compatibility and independent review remain required. Evidence:
+`/Volumes/PRO-G40/Projects/Lovelies/verification/restore-deletion-v4-vertical-20261028/attempt-01/REVIEW.md`.
 
 Push registration now calculates the active-device count after replacing any
 same-device/platform registration. This permits rotation at the ten-device
@@ -147,6 +165,14 @@ but the independent current-control port does not exist: five of eleven existing
 receipt cases failed because new registrations returned 503. It remains
 unintegrated. Evidence:
 `/Volumes/PRO-G40/Projects/Lovelies/verification/push-receipt-rollout-20261027/attempt-02/REVIEW.md`.
+The next isolated prototype uses an independently stored, authenticated format
+control and passed 94 journal and 17 adapted API/rotation cases locally. An old
+handler paired with the new adapter still wrote a raw receipt after activation
+and returned 409 on a redacted retry. The control also conflicts with the
+current v2/v3 journal transition. It remains unintegrated until coherent
+artifact/ingress fencing, old-runtime drainage and a compatible journal control
+are implemented and verified. Evidence:
+`/Volumes/PRO-G40/Projects/Lovelies/verification/push-receipt-rollout-20261028/attempt-01/REVIEW.md`.
 
 Separate D2/L2 authority validators now pass 159 local cases, including frozen
 format-2 synthetic vectors and role, consent, guardian, object-hash and bounds
