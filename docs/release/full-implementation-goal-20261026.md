@@ -145,6 +145,16 @@ of the earlier four timeouts. Workerd child-process terminality was not
 independently inventoried. Evidence:
 `/Volumes/PRO-G40/Projects/Lovelies/verification/restore-v3-serialized-caller-qualification-20261027/root-supervisor-02/result.json`
 and `/Volumes/PRO-G40/Projects/Lovelies/verification/restore-v3-serialized-caller-qualification-20261027/root-native-02/postflight-01.json`.
+A later instrumented old-observer crossing also timed out. It recorded the
+observer callback's control read and a marker immediately before its gate wait;
+the activation marker preceded its transaction call and did not establish that
+the callback entered. No timer or activation-entry receipt was observed before
+the deadline. This is consistent with, but does not prove, the proposed fixture
+serialization explanation or identify the stages of the earlier four failures.
+The later eight cases already test both serial orders and overlapping caller
+lifetimes; stale-snapshot reads and retries remain unqualified. The failed run
+and its independently checked postflight are retained at
+`/Volumes/PRO-G40/Projects/Lovelies/verification/restore-caller-timeout-phase-20261027/root-native-01/ANALYSIS.md`.
 
 Refresh-delivery cancellation now collects exact restriction facts for the
 original session and its named delivered successor before tentative domain
@@ -183,6 +193,17 @@ unchanged during the runs. These checks do not qualify native PostgreSQL or a
 hosted provider. Evidence:
 `/Volumes/PRO-G40/Projects/Lovelies/verification/pglite-guard-20261027/root-baseline-01/result.json`
 and `/Volumes/PRO-G40/Projects/Lovelies/verification/pglite-guard-20261027/root-validation-01/result.json`.
+The separately selected native cleanup-scan case then passed on a fresh local
+PostgreSQL 17 instance: two pools returned the 101 synthetic entries as disjoint
+pages of 100 and 1. It passed again after the PUT cleanup change, with 165 source
+inputs unchanged. Both owned servers, database files and temporary credentials
+were removed and their postflights confirmed. The case did not capture backend
+PIDs or establish overlapping SQL lock acquisition, hosted cleanup or Storage
+behavior. The first refreshed plan was held before execution after a manifest
+ordering mismatch was identified; the corrected plan and failure are retained.
+Evidence:
+`/Volumes/PRO-G40/Projects/Lovelies/verification/cleanup-scan-native-20261027/native-pg-run-01/root-audit.json`
+and `/Volumes/PRO-G40/Projects/Lovelies/verification/cleanup-scan-native-20261027/native-pg-run-put-01/root-audit.json`.
 
 API response teardown now initiates unused-stream cancellation without waiting
 indefinitely for an uncooperative source. Two 403/404 cases reproduced the prior
@@ -452,6 +473,14 @@ a new orphan DELETE starts and can change again before privacy finalization.
 Settled writer state also does not by itself prove the provider object/version.
 The candidate remains unintegrated. Evidence:
 `/Volumes/PRO-G40/Projects/Lovelies/verification/face-proof-reader-implementation-20261027/attempt-03/REVIEW.md`.
+An external fourth revision incorporates the newer hold-related inputs and
+corrects a demonstrated false-ready result in that candidate when its restore
+fence or exact-operation lookup is missing. Five diagnostics, six selected
+handler cases and type checking passed. The two no-egress compatibility cases
+still fail, and three newer hold-test files and 12 prior cases were not rerun.
+The candidate is not integrated or deployable; it does not supply the missing
+independent egress, provider terminality or restore controls. Evidence:
+`/Volumes/PRO-G40/Projects/Lovelies/verification/face-proof-reader-implementation-20261027/attempt-04/REVIEW.md`.
 The separate egress-ordering plan records that the existing pool adapter cannot
 safely use an unqualified reserved-session lock: pool `begin()` need not use the
 reserved connection, releasing it is not an unlock, and an unobserved backend
@@ -523,13 +552,25 @@ and `/Volumes/PRO-G40/Projects/Lovelies/verification/storage-response-status-reg
 On an object-version mismatch, the Storage adapter now returns its conflict
 without waiting for an uncooperative response-body cancellation. The local
 regression reproduced the hang; 17 Storage and database-boundary checks, API
-types and the Edge entrypoint check passed after the change. The corresponding
-PUT and DELETE cleanup hangs remain open: the faster three-path candidate is
-preserved but not integrated, because provider acknowledgement and remote-writer
-terminality require separate qualification. Evidence:
+types and the Edge entrypoint check passed after the change. The earlier
+three-path candidate remains unintegrated. Evidence:
 `/Volumes/PRO-G40/Projects/Lovelies/verification/storage-response-cleanup-20261027/root-baseline-01/result.json`,
 `/Volumes/PRO-G40/Projects/Lovelies/verification/storage-response-cleanup-20261027/candidate-unintegrated-01/`,
 and `/Volumes/PRO-G40/Projects/Lovelies/verification/storage-response-cleanup-20261027/root-fix-02/result.json`.
+
+A separately reviewed PUT-only fix now bounds asynchronous response-body
+cancellation after response headers. A stall, throw or rejection returns an
+unresolved-write error so the caller retains its pending write and cleanup
+obligation; normal completed cancellation retains existing behavior. All 68
+affected local cases passed, together with API type checking and the Deno Edge
+entrypoint check; 143 recorded source inputs were unchanged. Synthetic cases
+covered delayed writes and retry across all seven PUT call sites. This timeout
+does not bound the complete request, stop a remote write, prove provider
+acknowledgement, release an underlying connection, or resolve pending writes.
+Repeated retries can accumulate unresolved objects; distributed recovery and
+DELETE cancellation/unknown-outcome fencing remain open. Evidence:
+`/Volumes/PRO-G40/Projects/Lovelies/verification/storage-put-bounded-cleanup-20261027/attempt-01/README.md`
+and `/Volumes/PRO-G40/Projects/Lovelies/verification/storage-put-bounded-cleanup-20261027/root-integrated-01/result.json`.
 
 The second local Edge attempt failed at the missing-auth Storage control before
 starting Edge or its database. Docker stop commands succeeded, but their output
@@ -766,6 +807,16 @@ device delivery remain open. Fresh actualPG17.11 schema12 backup qualification
 passes11 checks with all69 table hashes/control row, seven-day expiry and
 old-marker quarantine preserved. Hosted backup custody/media replay/operation
 remain open.
+
+A 27 October source and policy review checked current Apple guideline 2.5.13
+against the iOS protected device key and the separate server-side registered-face
+comparison. The app uses LocalAuthentication for key authorization; the
+combined flow's acceptance by App Review is not established. The 13+ selection
+does not resolve that question and depends on effective under-13 exclusion.
+Reviewer instructions now describe the actual flow without implying approval.
+Current-release physical prompt, key-ACL, recovery and review evidence remain
+open. Sources: [Apple App Review Guidelines](https://developer.apple.com/app-store/review/guidelines/#software-requirements)
+and [Apple LocalAuthentication guidance](https://developer.apple.com/documentation/localauthentication/accessing-keychain-items-with-face-id-or-touch-id).
 
 
 Android minimum24 is restored with actual API24/25 ARM64 virtual compatibility

@@ -3,10 +3,30 @@ import { ApiError, type PrivateBucket, type PrivateObject } from './types.ts';
 const MAX_STORAGE_ERROR_BYTES=2048;
 const MAX_STORAGE_ERROR_CHUNKS=256;
 const STORAGE_ERROR_TIMEOUT_MS=1000;
+const STORAGE_PUT_CLEANUP_TIMEOUT_MS=1000;
 
 /** A rejected read can return without waiting for response-body cleanup. */
 function discardResponseBody(response:Response):void {
   try{void response.body?.cancel().catch(()=>{});}catch{}
+}
+
+/** Bound only the local cleanup wait. A failed or timed-out cancellation says
+ * nothing about the remote write: callers must retain its pending intent. An
+ * ordinary completed cancellation preserves the existing response handling;
+ * it does not establish provider acknowledgement or writer terminality. */
+async function finishPutResponse(response:Response):Promise<void> {
+  let timer:ReturnType<typeof setTimeout>|undefined;
+  try {
+    if (!response.body) return;
+    const cancellation=response.body.cancel();
+    if (!cancellation || typeof cancellation.then!=='function') throw new Error('storage_put_cleanup_invalid');
+    const expired=new Promise<never>((_,reject)=>{timer=setTimeout(()=>reject(new Error('storage_put_cleanup_timeout')),STORAGE_PUT_CLEANUP_TIMEOUT_MS);});
+    await Promise.race([cancellation,expired]);
+  } catch {
+    throw new ApiError(503,'private_storage_write_failed');
+  } finally {
+    if(timer!==undefined)clearTimeout(timer);
+  }
 }
 
 /** storage-api v1.68.10 uses HTTP 400 for this specific missing-key error.
@@ -82,7 +102,7 @@ export class SupabasePrivateBucket implements PrivateBucket {
     const encoded=btoa(JSON.stringify(metadata));
     const response=await this.request('/object/'+this.path(key),{method:'POST',headers:{'Content-Type':options?.httpMetadata?.contentType??'application/octet-stream','Cache-Control':'no-store','x-upsert':'false','x-metadata':encoded},body:new Uint8Array(value instanceof ArrayBuffer?value:value.buffer.slice(value.byteOffset,value.byteOffset+value.byteLength)) as unknown as BodyInit});
     if(!response.ok)throw new ApiError(503,'private_storage_write_failed');
-    await response.body?.cancel();
+    await finishPutResponse(response);
   }
   async delete(keys:string|string[]):Promise<void>{
     const names=typeof keys==='string'?[keys]:keys;if(!names.length)return;for(const key of names)this.path(key);

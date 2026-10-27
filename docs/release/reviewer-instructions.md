@@ -11,6 +11,17 @@ verifies them before upgrading that same account. There is no OTP or liveness
 challenge. Subsequent sign-in compares a fresh signed capture with that registered
 reference; a reviewer's selfie cannot unlock someone else's enrolled account.
 
+For iOS, describe the current flow accurately in the final notes: Apple
+LocalAuthentication protects the device-signing key, and Lovelies separately
+requires a server-side comparison with the registered face reference for a new
+registered-face login. Device passcode can satisfy the user-presence control
+when available. Confirm actual prompts and recovery on the final release build;
+do not state that the protected key alone replaces the server comparison. Apple
+[guideline 2.5.13](https://developer.apple.com/app-store/review/guidelines/#software-requirements)
+requires LocalAuthentication for facial account authentication where possible.
+Whether the combined flow is accepted remains an App Review question, not an
+approval or rejection established by this draft. Under-13 exclusion must work.
+
 Browse the empty/library states, choose permitted photos from system Photos/Files,
 confirm upload choices and observe transfer vs matching progress. For sharing,
 use two independently enrolled consenting test participants and images they have
