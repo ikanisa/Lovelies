@@ -85,6 +85,13 @@ under investigation. This is not an Edge readiness pass or a hosted credential
 failure. Evidence:
 `/Volumes/PRO-G40/Projects/Lovelies/verification/inference-gateway-edge-schema13-20261027/attempt-02/coordinator-result.json`
 and `/Volumes/PRO-G40/Projects/Lovelies/verification/inference-gateway-edge-schema13-20261027/attempt-02/root-lock-reconciliation.json`.
+An independent disposable Docker diagnostic later passed 62 offline checks and
+captured a successful stop/readback/removal. The observed Docker stop output
+included a `--time` deprecation notice before the ID, so exact stdout equality
+is not a valid stop confirmation. The prior attempt's raw output was not retained,
+so that observation does not prove its exact bytes. No retained service or
+Storage authentication was tested by this diagnostic. Evidence:
+`/Volumes/PRO-G40/Projects/Lovelies/verification/inference-gateway-edge-schema13-20261027/attempt-02/corrections-proposal-v4/run-a/result.json`.
 
 Hosted v9–v13 are applied: schema13 has 69 private forced-RLS tables and policies,
 zero client/public access, preserved existing table projections and an empty
