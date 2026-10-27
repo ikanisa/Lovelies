@@ -41,6 +41,12 @@ skipped and no failures. Source inputs did not change during that run. Evidence:
 `/Volumes/PRO-G40/Projects/Lovelies/verification/restore-device-revoke-20261027/root-focused-v3-01/`,
 `/Volumes/PRO-G40/Projects/Lovelies/verification/restore-device-revoke-20261027/root-focused-v4-01/`,
 and `/Volumes/PRO-G40/Projects/Lovelies/verification/restore-device-revoke-20261027/root-whole-v4-01/`.
+The updated source also passed all seven private-model engineering cases against
+the existing authenticated service binding, with actual local PostgreSQL and
+in-memory Storage. Its 114-file input seal was unchanged and task-local
+credentials were removed. This does not qualify physical capture, recognition
+accuracy, hosted Storage, API deployment or store review. Evidence:
+`/Volumes/PRO-G40/Projects/Lovelies/verification/inference-packaging-20261026/private-inference-qualification/run-12/result.json`.
 
 The inventory implements bounded typed registration, retirement fences and
 checked quarantine enumeration in the local journal, with preserved v1 history
