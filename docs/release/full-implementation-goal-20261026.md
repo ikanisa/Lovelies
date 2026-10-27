@@ -60,6 +60,12 @@ has not been deployed or bound to production. Evidence:
 `/Volumes/PRO-G40/Projects/Lovelies/verification/restore-write-inventory-implementation-20261027/root-focused-r3-01/`,
 `/Volumes/PRO-G40/Projects/Lovelies/verification/restore-write-inventory-implementation-20261027/root-journal-whole-r3-01/`,
 and `/Volumes/PRO-G40/Projects/Lovelies/verification/restore-write-inventory-implementation-20261027/root-api-consumers-r3-01/`.
+Separate D2/L2 authority validators now pass 159 local cases, including frozen
+format-2 synthetic vectors and role, consent, guardian, object-hash and bounds
+checks. They are not yet connected to the journal's routes or application
+writers. Current Storage cannot supply the required qualified strong version
+evidence, and cross-generation link resumption remains unsupported. Evidence:
+`/Volumes/PRO-G40/Projects/Lovelies/verification/restore-descriptor-v2-validators-20261027/root-focused-v2-01/result.json`.
 
 Refresh-delivery cancellation now collects exact restriction facts for the
 original session and its named delivered successor before tentative domain

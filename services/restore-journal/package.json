@@ -6,7 +6,7 @@
   "engines": { "node": ">=24" },
   "scripts": {
     "test": "node --test --test-concurrency=1 test/*.test.mjs",
-    "check": "node --check src/journal.mjs && node --check src/operations.mjs && node --check src/inventory-values.mjs && node --check src/inventory.mjs && node --check src/worker.mjs",
+    "check": "node --check src/journal.mjs && node --check src/operations.mjs && node --check src/inventory-values.mjs && node --check src/inventory-descriptors-v2.mjs && node --check src/inventory.mjs && node --check src/worker.mjs",
     "build": "wrangler deploy --dry-run --outdir ../../verification/restore-journal/worker-build"
   },
   "devDependencies": { "esbuild": "0.28.1", "miniflare": "4.20260714.0", "wrangler": "4.112.0" }
