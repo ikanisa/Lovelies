@@ -310,7 +310,7 @@ PGlite and Storage transport, not hosted-provider terminality.
 A separate owned PGlite/synthetic Storage regression reproduced an ambiguous
 DELETE followed by automatic retry: the second DELETE and absent HEAD marked the
 cleanup verified while the held first DELETE later removed a synthetic replacement
-at the same key. Its acknowledged-write control passed. This models an unsafe
+at the same key. Its acknowledged-delete control passed. This models an unsafe
 schedule; it does not claim the hosted provider exhibited it. Durable exact-key
 delete-attempt admission, hold coordination, independent restore-journal coverage
 and qualified terminal reconciliation are required before deletion or recovery
@@ -437,6 +437,15 @@ zero client/public access, preserved existing table projections and an empty
 restore_control. All seven supported history versions match and Security Advisor
 reports no issues. No imports/deletions or serving-marker bootstrap occurred.
 Current receipt: `/Volumes/PRO-G40/Projects/Lovelies/verification/hosted-v13-20261027/result.json`.
+
+The task-owned CoreSimulator default alias pointed through a missing temporary
+compatibility link after a restart. Its newer durable device set and older
+snapshot were preserved. The missing link was recreated atomically after exact
+receipt, owner, inode and no-overwrite checks; an independent readback confirmed
+the restored path chain. No device was booted, and no full device-set manifest,
+exclusive simulator lease, UI run or release qualification is implied. Evidence:
+`/Volumes/PRO-G40/Projects/Lovelies/verification/ios-simulator-link-restoration-20261027/attempt-01/result.json`
+and `/Volumes/PRO-G40/Projects/Lovelies/verification/ios-simulator-link-restoration-20261027/attempt-01/independent-readback.json`.
 
 An earlier whole API checkpoint had 543 tests, 542 pass, zero fail and one optional model skip;
 current production types and all94 operator tests pass. Signed pause/resume,
@@ -591,6 +600,12 @@ privileges, recovery readiness or a complete workload assessment; unused
 indexes were not removed. Evidence:
 `/Volumes/PRO-G40/Projects/Lovelies/verification/supabase-live-readonly-20261027/attempt-01/result.json`
 and `/Volumes/PRO-G40/Projects/Lovelies/verification/supabase-live-readonly-20261027/attempt-02/result.json`.
+
+A 27 October public readback returned HTTP 200 for the current Lovelies site,
+but HTTP 404 for both platform association files and the support route. No
+site or association was published or changed by this check. Complete the
+operating/privacy gates and preserve the existing shared site before publication.
+Evidence: `/Volumes/PRO-G40/Projects/Lovelies/verification/public-link-readback-20261027/attempt-01/result.json`.
 
 Supabase plans to disable four older TLS 1.2 CBC suites no earlier than 10 November 2026.
 Official Android API 24/25 and iOS 17+ defaults indicate overlap with retained
