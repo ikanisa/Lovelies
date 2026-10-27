@@ -118,6 +118,22 @@ is not a valid stop confirmation. The prior attempt's raw output was not retaine
 so that observation does not prove its exact bytes. No retained service or
 Storage authentication was tested by this diagnostic. Evidence:
 `/Volumes/PRO-G40/Projects/Lovelies/verification/inference-gateway-edge-schema13-20261027/attempt-02/corrections-proposal-v4/run-a/result.json`.
+The subsequent fresh local Storage diagnostic failed before any HTTP control:
+Docker recorded the requested loopback binding but reported no actual published
+port. Its exact disposable container, two newly created volumes and network were
+independently reconciled and removed; private environment files and raw diagnostics
+remain retained for review. No complete credential-disposal or Storage-authentication
+claim is made. Evidence:
+`/Volumes/PRO-G40/Projects/Lovelies/verification/supabase-storage-auth-diagnostic-20261027/attempt-02/run-b/result.json`,
+`/Volumes/PRO-G40/Projects/Lovelies/verification/supabase-storage-auth-diagnostic-20261027/attempt-02/run-b/root-container-reconciliation-final.json`,
+and `/Volumes/PRO-G40/Projects/Lovelies/verification/supabase-storage-auth-diagnostic-20261027/attempt-02/run-b/root-resource-cleanup.json`.
+A separate no-secret internal-bridge diagnostic again observed no published
+loopback mapping. Its final report failed after exceeding the diagnostic's own
+file-size limit; seven saved observations and the final raw inspection show the
+empty mapping. No HTTP artifact was recorded. Independent readback confirmed
+the exact new container and network absent. This is not Storage authentication
+or Edge readiness evidence. Receipt:
+`/Volumes/PRO-G40/Projects/Lovelies/verification/docker-internal-port-qualification-20261027/attempt-02/run-port/root-reconciliation.json`.
 
 Hosted v9–v13 are applied: schema13 has 69 private forced-RLS tables and policies,
 zero client/public access, preserved existing table projections and an empty
