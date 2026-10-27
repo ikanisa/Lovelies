@@ -57,7 +57,7 @@ export async function createUploadTransfer(ctx: AppContext, id: string, expected
 }
 function chunkPrefix(asset: Asset): string { return `upload-chunk/${asset.owner_id}/${asset.id}/`; }
 function sourcePrefix(asset: Asset): string { return `source/${asset.owner_id}/${asset.id}/${asset.version}/`; }
-async function retireKey(ctx: AppContext, owner: string, key: string): Promise<void> {
+export async function retireUploadKey(ctx: AppContext, owner: string, key: string): Promise<void> {
     if (!(await ctx.db.one('SELECT id FROM media_write_intents WHERE account_id=? AND bucket=\'QUARANTINE\' AND object_key=?', owner, key)))
         return;
     if (!(await ctx.db.one('SELECT id FROM cleanup_intents WHERE subject_id=? AND bucket=\'QUARANTINE\' AND object_key=? AND request_id IS NULL', owner, key)))
@@ -68,7 +68,7 @@ async function retireTransferKeys(ctx: AppContext, asset: Asset, includeSource: 
         object_key: string;
     }>(`SELECT object_key FROM media_write_intents WHERE account_id=? AND bucket='QUARANTINE'
     AND (instr(object_key,?)=1 OR (?=1 AND instr(object_key,?)=1))`, asset.owner_id, chunkPrefix(asset), includeSource ? 1 : 0, sourcePrefix(asset))))
-        (await retireKey(ctx, asset.owner_id, row.object_key));
+        (await retireUploadKey(ctx, asset.owner_id, row.object_key));
 }
 async function cleanupPending(ctx: AppContext, asset: Asset): Promise<boolean> {
     return !!(await ctx.db.one(`SELECT id FROM media_write_intents WHERE account_id=? AND bucket='QUARANTINE' AND status='pending'
@@ -205,7 +205,7 @@ export async function assembleUpload(ctx: AppContext, actor: Actor, id: string):
     finally {
         bytes.fill(0);
         if (writtenKey)
-            (await ctx.db.transaction(async () => (await retireKey(ctx, start.asset.owner_id, writtenKey!))));
+            (await ctx.db.transaction(async () => (await retireUploadKey(ctx, start.asset.owner_id, writtenKey!))));
     }
 }
 export async function uploadChunk(request: Request, ctx: AppContext, actor: Actor, id: string): Promise<Response> {
@@ -267,19 +267,15 @@ export async function uploadChunk(request: Request, ctx: AppContext, actor: Acto
                 await completeUndispatchedMediaWrite(ctx, write);
                 throw error;
             }
-            try {
-                await ctx.env.QUARANTINE.put(candidateKey, uploadBytes, options);
-            }
-            finally {
-                (await settleMediaWrite(ctx, write));
-            }
+            await ctx.env.QUARANTINE.put(candidateKey, uploadBytes, options);
+            (await settleMediaWrite(ctx, write));
             (await ctx.db.transaction(async () => {
                 const current = (await pending(ctx, actor, id));
                 const winner = (await ctx.db.one<Chunk>('SELECT * FROM upload_chunks WHERE asset_id=? AND offset_bytes=?', id, offset));
                 if (winner) {
                     if (winner.sha256 !== hash || winner.byte_size !== size)
                         throw new ApiError(409, 'upload_offset_conflict');
-                    (await retireKey(ctx, actor.accountId, writtenKey!));
+                    (await retireUploadKey(ctx, actor.accountId, writtenKey!));
                     return;
                 }
                 if (current.transfer.state !== 'uploading' || current.asset.status !== 'uploading' || current.transfer.bytes_received !== offset || current.asset.version !== initial.asset.version)
@@ -301,7 +297,7 @@ export async function uploadChunk(request: Request, ctx: AppContext, actor: Acto
         bytes.fill(0);
         reader.close();
         if (writtenKey)
-            (await ctx.db.transaction(async () => (await retireKey(ctx, actor.accountId, writtenKey!))));
+            (await ctx.db.transaction(async () => (await retireUploadKey(ctx, actor.accountId, writtenKey!))));
     }
 }
 export async function cancelUpload(request: Request, ctx: AppContext, actor: Actor, id: string): Promise<Response> {

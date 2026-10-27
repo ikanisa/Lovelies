@@ -207,13 +207,21 @@ not establish production writer fencing or recovery clearance. Evidence:
 `/Volumes/PRO-G40/Projects/Lovelies/verification/upload-predispatch-abort-20261027/root-fix-03/result.json`,
 and `/Volumes/PRO-G40/Projects/Lovelies/verification/upload-predispatch-abort-20261027/root-consumers-01/result.json`.
 
-Further review found that seven media writers currently mark their intent
-settled when a Storage PUT promise rejects, although rejection alone does not
-prove a remote writer has stopped. Some failure paths can then delete or verify
-absence while that outcome is unresolved. Synthetic delayed-write regression
-and a fail-closed correction are in preparation across upload, processing, face
-and export paths. Pending-writer reconciliation and the hosted acknowledgement
-contract remain open; no hosted late write or release acceptance is claimed.
+Further review found seven media writers that marked their intent settled when a
+Storage PUT promise rejected, although rejection alone does not prove a remote
+writer has stopped. Synthetic delayed-write tests reproduced premature settlement
+and cleanup on both source and chunk uploads. Those two paths now leave an
+uncertain writer pending and attempt to queue exact cleanup for the existing
+pending-writer check. If that SQL step fails, the intent retains its recovery
+identity. Four focused cases and 109 affected local cases passed. The wider run
+preceded a comment-only change to `operations.ts`; the final focused run and
+type/Edge checks include that comment. Assembly, preview, face capture, face
+template and export still need the same containment. Pending-writer reconciliation
+and the hosted acknowledgement contract remain open; no hosted late write or
+release acceptance is claimed. Evidence:
+`/Volumes/PRO-G40/Projects/Lovelies/verification/storage-delayed-write-regression-20261027/root-baseline-01/result.json`,
+`/Volumes/PRO-G40/Projects/Lovelies/verification/storage-delayed-write-regression-20261027/root-source-chunk-consumers-01/result.json`,
+and `/Volumes/PRO-G40/Projects/Lovelies/verification/storage-delayed-write-regression-20261027/root-final-focused-01/result.json`.
 
 On an object-version mismatch, the Storage adapter now returns its conflict
 without waiting for an uncooperative response-body cancellation. The local
@@ -293,6 +301,14 @@ confirmed absent. Evidence:
 `/Volumes/PRO-G40/Projects/Lovelies/verification/supabase-storage-auth-diagnostic-20261027/attempt-05/run-b/root-independent-postflight.json`,
 `/Volumes/PRO-G40/Projects/Lovelies/verification/supabase-storage-startup-health-20261027/attempt-02/run-b/result.json`,
 and `/Volumes/PRO-G40/Projects/Lovelies/verification/supabase-storage-startup-health-20261027/attempt-02/run-b/root-independent-postflight.json`.
+An image-only extraction then passed 90 offline controls and captured four
+fixed files from a new container that was never started; the extraction process
+reported removal and exited successfully. Its separate exact-ID postflight
+failed closed on an unrecognized Docker absence response, so independent absence
+is not yet established. Source content and raw outputs remain private. Evidence:
+`/Volumes/PRO-G40/Projects/Lovelies/verification/docker-storage-source-extraction-20261027/root-offline-attempt02-01/result.json`,
+`/Volumes/PRO-G40/Projects/Lovelies/verification/docker-storage-source-extraction-20261027/attempt-02/run-source/result.json`,
+and `/Volumes/PRO-G40/Projects/Lovelies/verification/docker-storage-source-extraction-20261027/attempt-02/run-source/root-independent-postflight.json`.
 
 Hosted v9–v13 are applied: schema13 has 69 private forced-RLS tables and policies,
 zero client/public access, preserved existing table projections and an empty

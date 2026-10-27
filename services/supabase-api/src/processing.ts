@@ -4,7 +4,7 @@ import { accountRoles } from './auth.ts';
 import { ApiError, digest, jsonBody, ok, stable, uuid, type Actor, type AppContext } from './types.ts';
 import { assertMediaActor, currentAsset, hasConsent, currentPhotoPolicy, mediaSource, sourceAllowed, type Asset, type MediaSource } from './gallery.ts';
 import { beginMediaWrite, completeUndispatchedMediaWrite, executeOperation, executeUploadReservationOperation, prepareOperation, settleMediaWrite } from './operations.ts';
-import { assembleUpload, cancelUpload, createUploadTransfer, uploadChunk, uploadStatusAsset, uploadStatusFields, uploadTransfer, validateResumable } from './upload-transfers.ts';
+import { assembleUpload, cancelUpload, createUploadTransfer, retireUploadKey, uploadChunk, uploadStatusAsset, uploadStatusFields, uploadTransfer, validateResumable } from './upload-transfers.ts';
 import { selectedGeneration, assertGeneration } from './inference-generation.ts';
 const MAX_SOURCE_BYTES = UPLOAD_MAX_SOURCE_BYTES;
 const MAX_PREVIEW_BYTES = 4 * 1024 * 1024;
@@ -330,12 +330,8 @@ async function sourceBytes(request: Request, ctx: AppContext, actor: Actor, id: 
             await completeUndispatchedMediaWrite(ctx, write);
             throw error;
         }
-        try {
-            await ctx.env.QUARANTINE.put(candidateKey, uploadBytes, options);
-        }
-        finally {
-            (await settleMediaWrite(ctx, write));
-        }
+        await ctx.env.QUARANTINE.put(candidateKey, uploadBytes, options);
+        (await settleMediaWrite(ctx, write));
         (await ctx.db.transaction(async () => {
             const current = (await sourceAsset(ctx, actor, id));
             if (current.version !== initial.version || current.status !== 'uploading')
@@ -350,7 +346,7 @@ async function sourceBytes(request: Request, ctx: AppContext, actor: Actor, id: 
         bytes.fill(0);
         reader.close();
         if (writtenKey)
-            await ctx.env.QUARANTINE.delete(writtenKey).catch(() => { });
+            (await ctx.db.transaction(async () => (await retireUploadKey(ctx, actor.accountId, writtenKey!))));
     }
 }
 async function profilesForCapture(ctx: AppContext, ownerId: string, model: string): Promise<CapturedProfile[]> {

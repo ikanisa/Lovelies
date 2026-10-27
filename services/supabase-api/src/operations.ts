@@ -87,8 +87,9 @@ export async function beginFaceChallengeMediaWrite(ctx: AppContext, challengeId:
         return id;
     }));
 }
-/** Call only after the actual PUT promise settles, including rejection. This
- * durable completion marker does not grant access or bypass revocation. */
+/** Mark a resolved writer only after its write acknowledgement qualifies.
+ * Rejection or an unknown outcome must remain pending. Other legacy call sites
+ * still need conversion, and hosted acknowledgement semantics remain open. */
 export async function settleMediaWrite(ctx: AppContext, id: string): Promise<void> {
     (await ctx.db.transaction(async () => (await ctx.db.run("UPDATE media_write_intents SET status='settled',settled_at=? WHERE id=?", ctx.now(), id))));
 }
