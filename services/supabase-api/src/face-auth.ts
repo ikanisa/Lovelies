@@ -1,7 +1,7 @@
 import { assertAudienceCapability, audienceChallengeAuthority } from './audience.ts';
 import { ApiError, digest, jsonBody, ok, record, stable, uuid, type Actor, type AppContext } from './types.ts';
 import { accountRoles, assertEnrollmentActor, authenticate, base64url, decodeBase64url, insertPreparedSession, opaque, prepareSession, type AccountRow } from './auth.ts';
-import { beginFaceChallengeMediaWrite, settleMediaWrite } from './operations.ts';
+import { beginFaceChallengeMediaWrite, completeUndispatchedMediaWrite, settleMediaWrite } from './operations.ts';
 import { lifecycleOperation, lifecycleAuthority, commitLifecycle } from './face-profile.ts';
 import { selectedGeneration, assertGeneration } from './inference-generation.ts';
 const MAX_CAPTURE_BYTES = 8 * 1024 * 1024;
@@ -998,7 +998,7 @@ async function uploadProof(request: Request, id: string, index: number, ctx: App
                 throw new ApiError(409, 'capture_index_out_of_order');
         }
     }));
-    let bytes: Uint8Array = new Uint8Array(), writeStarted = false, committed = false;
+    let bytes: Uint8Array = new Uint8Array(), writeStarted = false, writeAcknowledged = false, committed = false;
     try {
         // Admission covers signature verification and body reading as well as the
         // eventual PUT, so reconciliation cannot report an unresolved upload absent.
@@ -1012,6 +1012,7 @@ async function uploadProof(request: Request, id: string, index: number, ctx: App
         (await assertChallenge(challenge, ctx));
         writeStarted = true;
         await ctx.env.QUARANTINE.put(key, new Uint8Array(bytes).buffer, { httpMetadata: { contentType: mime }, customMetadata: { purpose: 'face_authentication', challenge_id: challenge.id } });
+        writeAcknowledged = true;
         (await assertChallenge(challenge, ctx));
         (await ctx.db.transaction(async () => {
             (await assertChallenge(challenge, ctx));
@@ -1035,25 +1036,21 @@ async function uploadProof(request: Request, id: string, index: number, ctx: App
     }
     finally {
         bytes.fill(0);
-        try {
+        (await ctx.db.transaction(async () => {
             if (writeStarted && !committed)
                 await retireOrphan('QUARANTINE', key, challenge.account_id, ctx);
-        }
-        finally {
-            (await settleMediaWrite(ctx, writeId));
-        }
+            if (!writeStarted)
+                await completeUndispatchedMediaWrite(ctx, writeId);
+            else if (writeAcknowledged)
+                await settleMediaWrite(ctx, writeId);
+        }));
     }
 }
 async function retireOrphan(bucketName: 'PHOTOS' | 'QUARANTINE', key: string, accountId: string, ctx: AppContext): Promise<void> {
-    const id = crypto.randomUUID();
-    (await ctx.db.run(`INSERT INTO cleanup_intents(id,subject_id,bucket,object_key,status,created_at) VALUES(?,?,?,?,'pending',?)`, id, accountId, bucketName, key, ctx.now()));
-    try {
-        await ctx.env[bucketName].delete(key);
-        if (await ctx.env[bucketName].head(key))
-            return;
-        (await ctx.db.run(`UPDATE cleanup_intents SET status='verified',verified_at=? WHERE id=?`, ctx.now(), id));
-    }
-    catch { /* Durable cleanup intent remains pending for maintenance; no raw data is logged. */ }
+    (await ctx.db.transaction(async () => {
+        if (!(await ctx.db.one('SELECT id FROM cleanup_intents WHERE subject_id=? AND bucket=? AND object_key=? AND request_id IS NULL', accountId, bucketName, key)))
+            (await ctx.db.run(`INSERT INTO cleanup_intents(id,subject_id,bucket,object_key,status,created_at) VALUES(?,?,?,?,'pending',?)`, crypto.randomUUID(), accountId, bucketName, key, ctx.now()));
+    }));
 }
 async function privateVerdict(challenge: Challenge, rows: Capture[], ctx: AppContext): Promise<Record<string, any>> {
     verifierAvailable(ctx);
@@ -1258,13 +1255,9 @@ async function complete(request: Request, purpose: 'registration' | 'login' | 'l
                 templateKey = `registered-face/${challenge.account_id}/${profileId}/${crypto.randomUUID()}`;
                 const writeId = (await beginFaceChallengeMediaWrite(ctx, challenge.id, 'PHOTOS', templateKey, async () => (await assertChallenge(challenge, ctx, 'verifying'))));
                 templateWriteStarted = true;
-                try {
-                    await ctx.env.PHOTOS.put(templateKey, new Uint8Array(bytes).buffer, { httpMetadata: { contentType: 'application/octet-stream' },
-                        customMetadata: { purpose: 'registered_face_reference', model_id: modelId!, revision: revision!, template_digest: templateDigest! } });
-                }
-                finally {
-                    (await settleMediaWrite(ctx, writeId));
-                }
+                await ctx.env.PHOTOS.put(templateKey, new Uint8Array(bytes).buffer, { httpMetadata: { contentType: 'application/octet-stream' },
+                    customMetadata: { purpose: 'registered_face_reference', model_id: modelId!, revision: revision!, template_digest: templateDigest! } });
+                (await settleMediaWrite(ctx, writeId));
                 (await assertChallenge(challenge, ctx, 'verifying'));
                 if (lifecycle) {
                     const head = await ctx.env.PHOTOS.head(templateKey!);

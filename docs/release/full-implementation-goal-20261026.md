@@ -185,12 +185,19 @@ The first fresh local PostgreSQL 17 fixture stopped at its readiness predicate
 before dispatching tests. Its process shut down, its port was free and its
 temporary password file was absent; the failed-run database remains preserved.
 The predicate converted an `inet` address to mask-bearing text but expected an
-unmasked loopback literal; the actual returned row was not recorded. A revised
-fixture uses the address-only function and passed 79 offline controls, but its
-native run and cleanup are still unqualified. Evidence:
+unmasked loopback literal; the actual returned row was not recorded. The revised
+fixture uses the address-only function and passed 79 offline controls and all
+16 selected native PostgreSQL cases with no skips. Its 149 recorded source
+inputs were unchanged, and independent postflight confirmed its process, port,
+password file and database cleanup. The failed first run's database remains
+preserved. The two refresh-cancellation races use one fenced and one unfenced
+fixture pool; they do not prove two fully fenced production requests. A native
+Deno case, hosted recovery and provider gates remain separate. Evidence:
 `/Volumes/PRO-G40/Projects/Lovelies/verification/native-postgres17-fixture-20261027/native-pg17-run-03/result.json`,
 `/Volumes/PRO-G40/Projects/Lovelies/verification/native-postgres17-fixture-20261027/native-pg17-run-03/independent-postflight.json`,
-and `/Volumes/PRO-G40/Projects/Lovelies/verification/native-postgres17-fixture-20261027/root-offline-revision04-01/result.json`.
+`/Volumes/PRO-G40/Projects/Lovelies/verification/native-postgres17-fixture-20261027/root-offline-revision04-01/result.json`,
+`/Volumes/PRO-G40/Projects/Lovelies/verification/native-postgres17-fixture-20261027/native-pg17-run-04/result.json`,
+and `/Volumes/PRO-G40/Projects/Lovelies/verification/native-postgres17-fixture-20261027/native-pg17-run-04/independent-postflight.json`.
 
 The direct and resumable upload readers now snapshot incoming bytes before
 awaited authority checks, bound fragmented or stalled acquisition, and validate
@@ -231,15 +238,28 @@ containment: its delayed-write case reproduced premature cleanup, then passed
 with its acknowledged-write control and 20 affected upload cases. A status retry
 may assemble a new key while the earlier writer remains unresolved and correctly
 reports pending cleanup. SQL acknowledgement-loss and a further cleanup attempt
-after the delayed write remain untested for assembly. Preview, face capture,
-face template and export still need containment. Pending-writer reconciliation
-and the hosted acknowledgement contract remain open; no hosted late write or
-release acceptance is claimed. Evidence:
+after the delayed write remain untested for assembly. Signed face capture and
+reference-template writers now retain the same pending fence on an uncertain
+write and queue orphan cleanup. Both delayed-write cases reproduced the prior
+failure and passed after the change; acknowledged controls and 177 affected
+account, face, consent and privacy cases also passed locally. Face SQL
+acknowledgement-loss, delayed login and replacement cases remain untested. Preview
+and export still need containment. Pending-writer reconciliation and the hosted
+acknowledgement contract remain open; no hosted late write or release acceptance
+is claimed. Evidence:
 `/Volumes/PRO-G40/Projects/Lovelies/verification/storage-delayed-write-regression-20261027/root-baseline-01/result.json`,
 `/Volumes/PRO-G40/Projects/Lovelies/verification/storage-delayed-write-regression-20261027/root-source-chunk-consumers-01/result.json`,
 `/Volumes/PRO-G40/Projects/Lovelies/verification/storage-delayed-write-regression-20261027/root-final-focused-01/result.json`,
 `/Volumes/PRO-G40/Projects/Lovelies/verification/assembly-delayed-write-20261027/root-baseline-01/result.json`,
-and `/Volumes/PRO-G40/Projects/Lovelies/verification/assembly-delayed-write-20261027/root-consumers-01/result.json`.
+`/Volumes/PRO-G40/Projects/Lovelies/verification/assembly-delayed-write-20261027/root-consumers-01/result.json`,
+`/Volumes/PRO-G40/Projects/Lovelies/verification/storage-delayed-face-write-regression-20261027/root-baseline-01/result.json`,
+and `/Volumes/PRO-G40/Projects/Lovelies/verification/storage-delayed-face-write-regression-20261027/root-consumers-01/result.json`.
+
+Two additional local regressions reproduced cleanup starvation: 100 older
+unresolved writers blocked a later eligible account in both the privacy cleanup
+and terminal face-proof batches. One-held-writer controls passed. Fair traversal
+is still being implemented; the pending-writer fence must remain intact.
+Evidence: `/Volumes/PRO-G40/Projects/Lovelies/verification/cleanup-starvation-regression-20261027/root-baseline-01/result.json`.
 
 On an object-version mismatch, the Storage adapter now returns its conflict
 without waiting for an uncooperative response-body cancellation. The local
@@ -321,12 +341,15 @@ confirmed absent. Evidence:
 and `/Volumes/PRO-G40/Projects/Lovelies/verification/supabase-storage-startup-health-20261027/attempt-02/run-b/root-independent-postflight.json`.
 An image-only extraction then passed 90 offline controls and captured four
 fixed files from a new container that was never started; the extraction process
-reported removal and exited successfully. Its separate exact-ID postflight
-failed closed on an unrecognized Docker absence response, so independent absence
-is not yet established. Source content and raw outputs remain private. Evidence:
+reported removal and exited successfully. Its first exact-ID postflight failed
+closed because Docker emitted a single newline on stdout. A separately reviewed
+read-only reconciliation then confirmed current absence of that exact container
+on the same observed daemon and socket; the original failure remains preserved.
+Source content and raw outputs remain private. Evidence:
 `/Volumes/PRO-G40/Projects/Lovelies/verification/docker-storage-source-extraction-20261027/root-offline-attempt02-01/result.json`,
 `/Volumes/PRO-G40/Projects/Lovelies/verification/docker-storage-source-extraction-20261027/attempt-02/run-source/result.json`,
-and `/Volumes/PRO-G40/Projects/Lovelies/verification/docker-storage-source-extraction-20261027/attempt-02/run-source/root-independent-postflight.json`.
+`/Volumes/PRO-G40/Projects/Lovelies/verification/docker-storage-source-extraction-20261027/attempt-02/run-source/root-independent-postflight.json`,
+and `/Volumes/PRO-G40/Projects/Lovelies/verification/docker-storage-source-reconciliation-20261027/attempt-01/run-reconcile/reconciliation.json`.
 
 Hosted v9–v13 are applied: schema13 has 69 private forced-RLS tables and policies,
 zero client/public access, preserved existing table projections and an empty
