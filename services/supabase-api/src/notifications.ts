@@ -1,6 +1,6 @@
 import { audienceContext } from './audience.ts';
 import { ApiError, jsonBody, ok, stable, digest, uuid, record, type Actor, type AppContext, type Database } from './types.ts';
-import { assertRegisteredActor, executeOperation, prepareOperation } from './operations.ts';
+import { assertRegisteredActor, executeOperation, prepareOperation, type PreparedOperation } from './operations.ts';
 export const notificationsSchemaStatements: readonly string[] = [
     `CREATE TABLE IF NOT EXISTS notification_settings(account_id TEXT PRIMARY KEY REFERENCES accounts(id),match_alerts INTEGER NOT NULL DEFAULT 1 CHECK(match_alerts IN(0,1)),payment_alerts INTEGER NOT NULL DEFAULT 1 CHECK(payment_alerts IN(0,1)),support_alerts INTEGER NOT NULL DEFAULT 1 CHECK(support_alerts IN(0,1)),updated_at INTEGER NOT NULL)`,
     `CREATE TABLE IF NOT EXISTS push_devices(id TEXT PRIMARY KEY,account_id TEXT NOT NULL REFERENCES accounts(id),auth_device_id TEXT NOT NULL REFERENCES auth_devices(id),platform TEXT NOT NULL CHECK(platform IN('ios','android')),token_hash TEXT NOT NULL UNIQUE,token_value TEXT NOT NULL,active INTEGER NOT NULL CHECK(active IN(0,1)),created_at INTEGER NOT NULL,updated_at INTEGER NOT NULL)`,
@@ -63,7 +63,13 @@ export async function handleNotifications(request: Request, ctx: AppContext): Pr
         tokenHash = await digest(body.push_token);
     }
     const intent = await prepareOperation('notification.' + path + '.' + request.method, { ...body, ...(read ? { notification_id: uuid(read[1]) } : device ? { device_id: uuid(device[1]) } : {}) }, 'notification');
-    return ok((await executeOperation(ctx, actor, intent, async () => {
+    // New push receipts commit a token digest, not a second plaintext copy.
+    // Exact legacy rows retain their original identity and response on retry.
+    const redacted = tokenHash === undefined ? undefined : await prepareOperation(intent.action, {
+        protocol: 'lovelies-push-registration-receipt-v1', operation_key: intent.key,
+        platform: body.platform, push_token_sha256: tokenHash,
+    }, 'notification');
+    const execute = (selected: PreparedOperation) => executeOperation(ctx, actor, selected, async () => {
         if (path === '/me/notification-settings') {
             if (request.method !== 'PATCH')
                 throw new ApiError(405, 'method_not_allowed');
@@ -124,7 +130,18 @@ export async function handleNotifications(request: Request, ctx: AppContext): Pr
         (await ctx.db.run('INSERT INTO push_devices(id,account_id,auth_device_id,platform,token_hash,token_value,active,created_at,updated_at) VALUES(?,?,?,?,?,?,1,?,?) ON CONFLICT(id) DO UPDATE SET auth_device_id=excluded.auth_device_id,platform=excluded.platform,token_value=excluded.token_value,active=1,updated_at=excluded.updated_at', id, actor.accountId, current.device_id, body.platform, tokenHash!, body.push_token, ctx.now(), ctx.now()));
         await ctx.db.run("UPDATE push_devices SET active=0,token_value='',updated_at=? WHERE account_id=? AND auth_device_id=? AND platform=? AND id<>? AND active=1",ctx.now(),actor.accountId,current.device_id,body.platform,id);
         return { id, platform: body.platform, active: true };
-    })));
+    });
+    if (!redacted) return ok(await execute(intent));
+    return ok(await ctx.db.transaction(async () => {
+        await assertRegisteredActor(ctx, actor);
+        const previous = await ctx.db.one<{action: string; payload_hash: string}>(
+            'SELECT action,payload_hash FROM operations WHERE actor_id=? AND source=? AND operation_key=?', actor.accountId, intent.source, intent.key);
+        // A legacy receipt uses the original raw-input hash, including retired
+        // receipts. The shared operation engine still checks exact payload.
+        if (previous && previous.action === intent.action && previous.payload_hash === intent.hash) return execute(intent);
+        if (!previous && intent.key.includes(body.push_token as string)) throw new ApiError(400, 'push_token_in_operation_key');
+        return execute(redacted);
+    }));
 }
 export async function flushNotificationOutbox(ctx: AppContext): Promise<void> {
     for (const row of (await ctx.db.all<any>("SELECT j.*,n.kind FROM notification_jobs j JOIN notifications n ON n.id=j.notification_id WHERE j.status IN('queued','dispatched','ambiguous') AND (j.dispatched_at IS NULL OR j.dispatched_at<=?) ORDER BY j.created_at LIMIT 25", ctx.now() - 60000))) {

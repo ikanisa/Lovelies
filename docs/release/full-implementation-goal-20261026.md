@@ -86,12 +86,28 @@ registrations on one device. API type checking and the cached Deno Edge check
 passed; all nine PGlite-only cases correctly skipped with a defined-empty
 `TEST_DATABASE_URL`. The 128 recorded inputs stayed unchanged during the final
 run. These results do not qualify separate PostgreSQL connections, unmanaged
-writers, real APNs/FCM or physical devices. A separate existing issue remains:
-push registration operation receipts can retain a raw token after the device
-row is cleared. Any correction must preserve old retry and journal identities.
+writers, real APNs/FCM or physical devices.
 Evidence:
 `/Volumes/PRO-G40/Projects/Lovelies/verification/notification-token-rotation-20261027/attempt-01/REVIEW.md`
 and `/Volumes/PRO-G40/Projects/Lovelies/verification/notification-token-rotation-20261027/root-integrated-02/result.json`.
+
+New push-registration operation receipts now store a versioned token digest
+instead of a duplicate raw token. Exact existing legacy SQL receipts keep their
+original retry result and hash; historical raw receipts are not migrated. A new
+operation key containing the complete literal token is rejected, although this
+does not detect fragments or encodings. Active device rows still hold the token
+needed by the sender. The source-bound local run passed 29 receipt, rotation and
+synthetic disposition cases; all 20 PGlite-only cases skipped for a defined-empty
+database URL, and API types and the cached Deno Edge check passed. The 140
+recorded inputs stayed unchanged. An old handler returns 409 for a new-format
+receipt, and a client can treat that as a definitive failure. A compatible
+reader or a controlled single-version cutover and rollback path must therefore
+be qualified before deployment. A pending independent journal plan without a
+matching SQL marker remains fenced, and historical receipts, WAL, backups and
+provider logs are not cleaned by this change. These are local PGlite and memory
+journal results, not provider, hosted or physical-device proof. Evidence:
+`/Volumes/PRO-G40/Projects/Lovelies/verification/notification-token-receipt-20261027/attempt-02/REVIEW.md`
+and `/Volumes/PRO-G40/Projects/Lovelies/verification/notification-token-receipt-20261027/root-integrated-01/result.json`.
 
 Separate D2/L2 authority validators now pass 159 local cases, including frozen
 format-2 synthetic vectors and role, consent, guardian, object-hash and bounds
@@ -1119,6 +1135,11 @@ facts. The decision input at
 `/Volumes/PRO-G40/Projects/Lovelies/verification/restore-capacity-design-20261027/decision-input.md`
 records unresolved snapshot, authority, recovery, intent and bounded-work semantics;
 neither a larger finite cap nor an unqualified paged design closes R11.
+The later deletion-intake design records the additional need for durable exact
+pages, a complete-plan seal, stale-writer arbitration and recovery of request
+status inputs. Its 12 finite model checks are not an implementation or a
+database/hosted recovery test. Evidence:
+`/Volumes/PRO-G40/Projects/Lovelies/verification/restore-capacity-design-20261027/deletion-intake-01/DESIGN.md`.
 
 The proposed independent upload write inventory is documented at
 `/Volumes/PRO-G40/Projects/Lovelies/verification/restore-write-inventory-design-20261027/design.md`.
