@@ -693,6 +693,15 @@ but HTTP 404 for both platform association files and the support route. No
 site or association was published or changed by this check. Complete the
 operating/privacy gates and preserve the existing shared site before publication.
 Evidence: `/Volumes/PRO-G40/Projects/Lovelies/verification/public-link-readback-20261027/attempt-01/result.json`.
+The later read-only Cloudflare dashboard inspection showed production deployment
+`c866edeb-dbbf-43ac-9770-2281c0833966`, 104 uploaded files and shared public,
+admin and photo domains. Project settings showed a repository Connect button,
+not a connected repository. The CLI reported authentication but its Pages list
+failed with permission/authentication indicators. The visible asset inventory
+is not a byte-level backup or complete runtime/route audit; recover and qualify a
+preservation-safe site deployment before adding the association files. No site
+or configuration was changed. Evidence:
+`/Volumes/PRO-G40/Projects/Lovelies/verification/public-hosting-readback-20261027/attempt-01/result.json`.
 
 Supabase plans to disable four older TLS 1.2 CBC suites no earlier than 10 November 2026.
 Official Android API 24/25 and iOS 17+ defaults indicate overlap with retained
