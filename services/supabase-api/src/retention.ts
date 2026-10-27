@@ -76,8 +76,18 @@ async function createJob(ctx: AppContext, p: Policy, subject: string, asset: str
     for (const item of objects)
         (await ctx.db.run("INSERT INTO retention_objects(id,job_id,bucket,object_key,status,created_at) VALUES(?,?,?,?,'pending',?)", crypto.randomUUID(), id, item.bucket, item.object_key, ctx.now()));
 }
+/** A nonterminal deletion-request hold applies to the subject's retained evidence. */
+async function subjectDeletionHold(ctx: AppContext, subject: string): Promise<boolean> {
+    try {
+        return !!(await ctx.db.one(`SELECT id FROM privacy_requests WHERE subject_id=? AND request_type='delete'
+          AND legal_hold=1 AND status NOT IN('completed','rejected','cancelled') LIMIT 1`, subject));
+    } catch {
+        // Failure to read hold state is not permission to retry an uncertain DELETE.
+        throw new ApiError(409, 'retention_request_hold_unavailable');
+    }
+}
 async function hold(ctx: AppContext, job: Job, p: Policy): Promise<boolean> {
-    if (p.legal_hold)
+    if (p.legal_hold || await subjectDeletionHold(ctx, job.subject_id))
         return true;
     if (job.asset_id)
         return !!(await ctx.db.one('SELECT asset_id FROM asset_retention WHERE asset_id=? AND legal_hold=1', job.asset_id)) || (await mediaHeld(ctx, job.subject_id, job.asset_id));
@@ -91,6 +101,8 @@ async function current(ctx: AppContext, id: string, lease?: string): Promise<{
     if (!job || job.status !== 'processing' || lease && job.lease_token !== lease || job.lease_until === null || job.lease_until <= ctx.now())
         throw new ApiError(409, 'retention_job_changed');
     const p = (await policy(ctx));
+    if (await subjectDeletionHold(ctx, job.subject_id))
+        throw new ApiError(503, 'retention_request_hold');
     if (p.version !== job.policy_version || (await hold(ctx, job, p)))
         throw new ApiError(409, 'retention_authority_changed');
     const binding = JSON.parse(job.binding_json);
@@ -118,8 +130,11 @@ async function snapshotExpired(ctx: AppContext, maximum: number): Promise<void> 
     // retired synchronously before any external DELETE is attempted.
     const assets = (await ctx.db.all<any>(`SELECT a.* FROM assets a LEFT JOIN asset_retention r ON r.asset_id=a.id
     WHERE a.deleted_at IS NULL AND (coalesce(r.raw_expires_at,a.created_at+?)<=? OR coalesce(r.preview_expires_at,a.created_at+?)<=?)
+    AND NOT EXISTS(SELECT 1 FROM privacy_requests h WHERE h.subject_id=a.owner_id AND h.request_type='delete'
+      AND h.legal_hold=1 AND h.status NOT IN('completed','rejected','cancelled'))
     ORDER BY a.created_at,a.id LIMIT ?`, p.raw_days * DAY, ctx.now(), p.preview_days * DAY, ctx.now(), maximum));
     for (const asset of assets) {
+        if (await subjectDeletionHold(ctx, asset.owner_id)) continue;
         const rule = (await assetPolicy(ctx, asset, p));
         if (rule.legal_hold || (await mediaHeld(ctx, asset.owner_id, asset.id)))
             continue;
@@ -127,6 +142,8 @@ async function snapshotExpired(ctx: AppContext, maximum: number): Promise<void> 
         // A live external writer must settle before the exact-key cleanup begins.
         if ((await asyncSome(objects, async (item) => (await ctx.db.one("SELECT id FROM media_write_intents WHERE bucket=? AND object_key=? AND status='pending' LIMIT 1", item.bucket, item.object_key)))))
             continue;
+        // Recheck immediately before mutating the asset/its retained work.
+        if (await subjectDeletionHold(ctx, asset.owner_id)) continue;
         const deleted = raw ? ctx.now() : null;
         if (raw) {
             (await ctx.db.run("UPDATE assets SET status='expired',deleted_at=? WHERE id=?", deleted, asset.id));
@@ -142,9 +159,12 @@ async function snapshotExpired(ctx: AppContext, maximum: number): Promise<void> 
     }
     for (const profile of (await ctx.db.all<any>(`SELECT f.* FROM face_profiles f WHERE f.status='active'
     AND NOT EXISTS(SELECT 1 FROM consents c WHERE c.account_id=f.account_id AND c.purpose IN('face_authentication','photo_matching') AND c.status='granted' AND c.revoked_at IS NULL AND (c.expires_at IS NULL OR c.expires_at>?))
+    AND NOT EXISTS(SELECT 1 FROM privacy_requests h WHERE h.subject_id=f.account_id AND h.request_type='delete'
+      AND h.legal_hold=1 AND h.status NOT IN('completed','rejected','cancelled'))
     ORDER BY f.account_id LIMIT ?`, ctx.now(), maximum))) {
         if (!profile.template_key || (await ctx.db.one('SELECT id FROM moderation_holds WHERE active=1 AND subject_id=?', profile.account_id)) || (await ctx.db.one("SELECT id FROM media_write_intents WHERE bucket='PHOTOS' AND object_key=? AND status='pending'", profile.template_key)))
             continue;
+        if (await subjectDeletionHold(ctx, profile.account_id)) continue;
         (await ctx.db.run("UPDATE face_profiles SET status='revoked',auth_enabled=0,auth_epoch=auth_epoch+1 WHERE account_id=?", profile.account_id));
         (await ctx.db.run('UPDATE accounts SET auth_epoch=auth_epoch+1 WHERE id=?', profile.account_id));
         (await ctx.db.run('UPDATE sessions SET revoked_at=coalesce(revoked_at,?) WHERE account_id=?', ctx.now(), profile.account_id));
@@ -166,26 +186,37 @@ export async function runRetention(ctx: AppContext, maximum = 50): Promise<{
     const metadataFailures = await pruneInactiveProfileMetadata(ctx, maximum);
     (await ctx.db.transaction(async () => { await pruneRetainedMetadata(ctx, maximum); await snapshotExpired(ctx, maximum); }));
     let verified = 0, failed = metadataFailures;
-    for (const row of (await ctx.db.all<Job>("SELECT * FROM retention_jobs WHERE status IN('pending','failed','processing') AND (lease_until IS NULL OR lease_until<=?) ORDER BY created_at,id LIMIT ?", ctx.now(), maximum))) {
+    for (const row of (await ctx.db.all<Job>(`SELECT j.* FROM retention_jobs j WHERE j.status IN('pending','failed','processing') AND (j.lease_until IS NULL OR j.lease_until<=?)
+      AND NOT EXISTS(SELECT 1 FROM privacy_requests h WHERE h.subject_id=j.subject_id AND h.request_type='delete'
+        AND h.legal_hold=1 AND h.status NOT IN('completed','rejected','cancelled'))
+      ORDER BY j.created_at,j.id LIMIT ?`, ctx.now(), maximum))) {
         const lease = crypto.randomUUID();
+        let deleteDispatched = false, freshClaim = false;
         try {
             (await ctx.db.transaction(async () => {
                 const actual = (await ctx.db.one<Job>('SELECT * FROM retention_jobs WHERE id=?', row.id));
                 if (!actual || !['pending', 'failed', 'processing'].includes(actual.status) || actual.lease_until !== null && actual.lease_until > ctx.now())
                     throw new ApiError(409, 'retention_job_changed');
+                // Use the state read under the claim transaction, never the
+                // earlier scan row, which another worker may have changed.
+                freshClaim = actual.status === 'pending' && actual.lease_until === null;
                 const p = (await policy(ctx));
+                if (await subjectDeletionHold(ctx, actual.subject_id))
+                    throw new ApiError(503, 'retention_request_hold');
                 if ((await hold(ctx, actual, p)))
                     throw new ApiError(503, 'retention_on_hold');
                 // A hold pause may be released by a newer policy. The asset-specific
                 // deadline, source, exact keys and purpose checks remain unchanged.
                 (await ctx.db.run("UPDATE retention_jobs SET status='processing',policy_version=?,lease_token=?,lease_until=?,error_code=NULL WHERE id=?", p.version, lease, ctx.now() + 300000, row.id));
-                (await current(ctx, row.id, lease));
+                // Validate source under this committed lease immediately before
+                // DELETE or finalization, so only this lease can record failure.
             }));
             for (const item of (await ctx.db.all<any>("SELECT * FROM retention_objects WHERE job_id=? AND status<>'verified' ORDER BY id LIMIT 500", row.id))) {
                 const check = async () => { (await current(ctx, row.id, lease)); if ((await ctx.db.one("SELECT id FROM media_write_intents WHERE bucket=? AND object_key=? AND status='pending' LIMIT 1", item.bucket, item.object_key)))
                     throw new ApiError(503, 'retention_writer_unresolved'); };
                 (await ctx.db.transaction(check));
                 const bucket = ctx.env[item.bucket as PrivateObject['bucket']];
+                deleteDispatched = true;
                 await bucket.delete(item.object_key);
                 (await ctx.db.transaction(check));
                 const remains = await bucket.head(item.object_key);
@@ -210,8 +241,16 @@ export async function runRetention(ctx: AppContext, maximum = 50): Promise<{
         }
         catch (error) {
             const code = error instanceof ApiError ? error.code : 'retention_storage_failed';
-            const blocked = error instanceof ApiError && error.status === 409;
-            (await ctx.db.run('UPDATE retention_jobs SET status=?,lease_token=NULL,lease_until=NULL,error_code=? WHERE id=? AND (lease_token=? OR lease_token IS NULL)', blocked ? 'blocked' : 'failed', code, row.id, lease));
+            // In the intact local job lifecycle, a new pending job with no DELETE
+            // in this attempt may retry after release. Older retry/expired-lease
+            // jobs and any current dispatch need independent reconciliation;
+            // this test does not qualify restore or provider terminality.
+            const freshUndispatched = freshClaim && !deleteDispatched;
+            const blocked = error instanceof ApiError && (error.status === 409 ||
+                error.code === 'retention_request_hold' && !freshUndispatched);
+            // Only the current, unexpired lease may change job state. A stale
+            // scan must never overwrite a successor's verified or blocked job.
+            (await ctx.db.run("UPDATE retention_jobs SET status=?,lease_token=NULL,lease_until=NULL,error_code=? WHERE id=? AND status='processing' AND lease_token=? AND lease_until>?", blocked ? 'blocked' : 'failed', code, row.id, lease, ctx.now()));
             failed++;
         }
     }
@@ -585,11 +624,21 @@ function privacyOperation(row: StoredOperation, input: Record<string, unknown>, 
         shape(result, ['privacy_request', 'delivery_confirmed']) && result.delivery_confirmed === false && shape(saved, ['id', 'request_type', 'status', 'reviewed_by', 'reviewed_at']) &&
         saved.status === (row.action === 'privacy.review.approve' ? 'queued' : 'rejected') && saved.reviewed_by === row.actor_id && dateText(saved.reviewed_at);
 }
+/** SQL predicates are fixed application expressions; no user text is interpolated. */
+function noCurrentHold(subjectPredicate: string): string {
+    return `EXISTS(SELECT 1 FROM retention_settings p WHERE p.id='default' AND p.legal_hold=0)
+      AND NOT EXISTS(SELECT 1 FROM moderation_holds h WHERE h.active=1 AND (${subjectPredicate}))
+      AND NOT EXISTS(SELECT 1 FROM privacy_requests h WHERE h.request_type='delete' AND h.legal_hold=1
+        AND h.status NOT IN('completed','rejected','cancelled') AND (${subjectPredicate}))`;
+}
 /** A terminal source is not permission to erase an outstanding writer, cleanup,
  * hold or delivery obligation. No external object or queue row is changed here. */
 async function operationRetirementBlocked(ctx: AppContext, subjects: string[], entity: string): Promise<boolean> {
+    const global = await ctx.db.one<{legal_hold: number}>("SELECT legal_hold FROM retention_settings WHERE id='default'");
+    if (!global || global.legal_hold !== 0) return true;
     for (const subject of new Set(subjects)) {
-        if (await ctx.db.one('SELECT id FROM moderation_holds WHERE active=1 AND subject_id=? LIMIT 1', subject) ||
+        if (await subjectDeletionHold(ctx, subject) ||
+            await ctx.db.one('SELECT id FROM moderation_holds WHERE active=1 AND subject_id=? LIMIT 1', subject) ||
             await ctx.db.one("SELECT id FROM media_write_intents WHERE account_id=? AND status='pending' LIMIT 1", subject) ||
             await ctx.db.one("SELECT id FROM cleanup_intents WHERE subject_id=? AND status<>'verified' LIMIT 1", subject) ||
             await ctx.db.one('SELECT id FROM outbox WHERE account_id=? AND delivered_at IS NULL AND cancelled_at IS NULL LIMIT 1', subject)) return true;
@@ -623,7 +672,10 @@ async function retireLinkedOperations(ctx: AppContext, link: OperationLink, budg
       ${after ? 'AND (o.created_at>? OR (o.created_at=? AND o.operation_key>?))' : ''}
       ORDER BY o.created_at,o.actor_id,o.source,o.operation_key LIMIT ?`, ...link.bindings, retiredOperationInput, retiredOperationResponse, ...(after ? [after.at, after.at, after.key] : []), allowance + 1);
     const selected = rows.slice(0, allowance);
-    const retire: StoredOperation[] = [];
+    const retire: Array<{row: StoredOperation; subjects: string[]}> = [];
+    const directSubjects = [...new Set(link.subjects)];
+    if (!directSubjects.length || directSubjects.length > 32) return false;
+    const observedSubjects = new Set(directSubjects);
     for (const row of selected) {
         let input: unknown, result: unknown;
         try { input = JSON.parse(row.payload_json); result = JSON.parse(row.response_json); } catch { return false; }
@@ -634,16 +686,30 @@ async function retireLinkedOperations(ctx: AppContext, link: OperationLink, budg
         const related = await ctx.db.all<{ subject_id: string }>('SELECT subject_id FROM operation_subjects WHERE actor_id=? AND source=? AND operation_key=? LIMIT 201', row.actor_id, row.source, row.operation_key);
         if (related.length > 200 || !link.subjects.some(subject => related.some(item => item.subject_id === subject)) ||
             await operationRetirementBlocked(ctx, [row.actor_id, ...related.map(item => item.subject_id)], link.entity)) return false;
-        if (classification !== 'other') retire.push(row);
+        observedSubjects.add(row.actor_id);
+        for (const item of related) observedSubjects.add(item.subject_id);
+        if (classification !== 'other') retire.push({row, subjects: [...new Set([...directSubjects, row.actor_id, ...related.map(item => item.subject_id)])]});
     }
-    for (const row of retire) {
-        await ctx.db.run('UPDATE operations SET payload_json=?,response_json=? WHERE actor_id=? AND source=? AND operation_key=? AND payload_hash=? AND payload_json=? AND response_json=?',
-            retiredOperationInput, retiredOperationResponse, row.actor_id, row.source, row.operation_key, row.payload_hash, row.payload_json, row.response_json);
+    // Recheck all previously observed subjects before each mutation. A late
+    // hold aborts the whole pruning transaction, including earlier receipts.
+    const directPlaceholders = directSubjects.map(() => '?').join(',');
+    const receiptSubject = `h.subject_id=operations.actor_id OR h.subject_id IN (${directPlaceholders}) OR EXISTS(
+      SELECT 1 FROM operation_subjects os WHERE os.actor_id=operations.actor_id AND os.source=operations.source
+      AND os.operation_key=operations.operation_key AND os.subject_id=h.subject_id)`;
+    for (const {row, subjects} of retire) {
+        if (await operationRetirementBlocked(ctx, subjects, link.entity))
+            throw new ApiError(409, 'retention_hold_changed');
+        await ctx.db.run(`UPDATE operations SET payload_json=?,response_json=? WHERE actor_id=? AND source=? AND operation_key=?
+          AND payload_hash=? AND payload_json=? AND response_json=? AND ${noCurrentHold(receiptSubject)}`,
+            retiredOperationInput, retiredOperationResponse, row.actor_id, row.source, row.operation_key, row.payload_hash, row.payload_json, row.response_json,
+            ...directSubjects, ...directSubjects);
         const current = await ctx.db.one<{payload_json: string; response_json: string}>('SELECT payload_json,response_json FROM operations WHERE actor_id=? AND source=? AND operation_key=?', row.actor_id, row.source, row.operation_key);
         if (current?.payload_json !== retiredOperationInput || current.response_json !== retiredOperationResponse)
             throw new ApiError(409, 'retention_operation_changed');
         budget.left--;
     }
+    if (await operationRetirementBlocked(ctx, [...observedSubjects], link.entity))
+        throw new ApiError(409, 'retention_hold_changed');
     const complete = rows.length === selected.length;
     if (link.continuation) {
         // Other intact review receipts remain unchanged. Save our proof of that
@@ -686,7 +752,10 @@ async function pruneTerminalOperationCopies(ctx: AppContext, maximum: number): P
             bindings: [support.id, support.id, support.id],
             valid: (row, input, result) => supportOperation(row, input, result, support),
         }, budget);
-        if (complete) await ctx.db.run('DELETE FROM support_requests WHERE id=?', support.id);
+        if (complete) {
+            await ctx.db.run(`DELETE FROM support_requests WHERE id=? AND ${noCurrentHold('h.subject_id=support_requests.account_id')}`, support.id);
+            if (await ctx.db.one('SELECT id FROM support_requests WHERE id=?', support.id)) throw new ApiError(409, 'retention_hold_changed');
+        }
     }
     for (const guardian of await terminalScan(ctx, 'guardian', `guardian_requests r
       WHERE r.state IN('rejected','withdrawn','expired') AND r.terminated_at IS NOT NULL AND r.terminated_at<=?
@@ -697,7 +766,10 @@ async function pruneTerminalOperationCopies(ctx: AppContext, maximum: number): P
             bindings: [guardian.id, guardian.id],
             valid: (row, input, result) => guardianOperation(row, input, result, guardian),
         }, budget);
-        if (complete) await ctx.db.run('DELETE FROM guardian_requests WHERE id=?', guardian.id);
+        if (complete) {
+            await ctx.db.run(`DELETE FROM guardian_requests WHERE id=? AND ${noCurrentHold("h.subject_id=guardian_requests.child_account_id OR h.subject_id=guardian_requests.guardian_account_id OR h.subject_id=guardian_requests.reviewed_by")}`, guardian.id);
+            if (await ctx.db.one('SELECT id FROM guardian_requests WHERE id=?', guardian.id)) throw new ApiError(409, 'retention_hold_changed');
+        }
     }
     for (const review of await terminalScan(ctx, 'adult', `audience_adult_reviews r WHERE r.created_at<=?
       AND NOT EXISTS(SELECT 1 FROM moderation_holds h WHERE h.active=1 AND h.subject_id=r.account_id)`, 'r.created_at', [ctx.now() - 365 * DAY], maximum)) {
@@ -715,7 +787,8 @@ async function pruneTerminalOperationCopies(ctx: AppContext, maximum: number): P
             continuation: { generation, currentGeneration: () => adultReceiptGeneration(ctx, review.id) },
         }, budget);
         if (complete) {
-            await ctx.db.run('DELETE FROM audience_adult_reviews WHERE id=?', review.id);
+            await ctx.db.run(`DELETE FROM audience_adult_reviews WHERE id=? AND ${noCurrentHold('h.subject_id=audience_adult_reviews.account_id OR h.subject_id=audience_adult_reviews.reviewed_by')}`, review.id);
+            if (await ctx.db.one('SELECT id FROM audience_adult_reviews WHERE id=?', review.id)) throw new ApiError(409, 'retention_hold_changed');
             await ctx.db.run('DELETE FROM retention_scan_cursors WHERE scan=? AND entity_id=?', 'adult', review.id);
         }
     }
@@ -751,13 +824,24 @@ export async function pruneRetainedMetadata(ctx: AppContext, maximum = 100): Pro
         WHEN e.action LIKE 'face.%' OR e.action LIKE 'auth.%' OR e.action LIKE 'session.%' OR e.action LIKE 'device.%' OR e.action LIKE 'security.%' THEN ?
         ELSE ? END
       AND NOT EXISTS(SELECT 1 FROM moderation_holds h WHERE h.active=1 AND (h.subject_id=e.subject_id OR h.subject_id=e.actor_id))
+      AND NOT EXISTS(SELECT 1 FROM privacy_requests h WHERE h.request_type='delete' AND h.legal_hold=1
+        AND h.status NOT IN('completed','rejected','cancelled') AND (h.subject_id=e.subject_id OR h.subject_id=e.actor_id))
       AND NOT EXISTS(SELECT 1 FROM cleanup_intents c WHERE c.subject_id=e.subject_id AND c.status<>'verified')
       ORDER BY e.created_at,e.id LIMIT ?`,ctx.now(),365*DAY,p.audit_days*DAY,7*DAY,maximum);
-    for (const event of events) await ctx.db.run('DELETE FROM audit_events WHERE id=?',event.id);
+    for (const event of events) {
+        await ctx.db.run(`DELETE FROM audit_events WHERE id=?
+          AND ${noCurrentHold('h.subject_id=audit_events.subject_id OR h.subject_id=audit_events.actor_id')}
+          AND NOT EXISTS(SELECT 1 FROM cleanup_intents c WHERE c.subject_id=audit_events.subject_id AND c.status<>'verified')`, event.id);
+        // A newly visible hold must also roll back earlier pruning in this
+        // transaction; silently skipping this row could commit older mutations.
+        if (await ctx.db.one('SELECT id FROM audit_events WHERE id=?', event.id))
+            throw new ApiError(409, 'retention_hold_changed');
+    }
     // These rows contain minimal consent facts already. References held by an
     // active or unresolved operation prevent premature deletion; no FK bypass.
     await ctx.db.run(`DELETE FROM consents WHERE id IN(SELECT c.id FROM consents c
       WHERE (c.revoked_at IS NOT NULL OR c.expires_at IS NOT NULL AND c.expires_at<=?)
+      AND EXISTS(SELECT 1 FROM retention_settings p WHERE p.id='default' AND p.legal_hold=0)
       AND coalesce(c.revoked_at,c.expires_at,c.created_at)<=?
       AND NOT EXISTS(SELECT 1 FROM face_profiles f WHERE f.consent_id=c.id OR f.auth_consent_id=c.id)
       AND NOT EXISTS(SELECT 1 FROM sessions s WHERE s.face_consent_id=c.id)
@@ -767,6 +851,10 @@ export async function pruneRetainedMetadata(ctx: AppContext, maximum = 100): Pro
       AND NOT EXISTS(SELECT 1 FROM face_profile_operations o WHERE o.consent_id=c.id)
       AND NOT EXISTS(SELECT 1 FROM match_origins o WHERE o.matching_consent_id=c.id)
       AND NOT EXISTS(SELECT 1 FROM moderation_holds h WHERE h.active=1 AND h.subject_id=c.account_id)
+      AND NOT EXISTS(SELECT 1 FROM privacy_requests h WHERE h.subject_id=c.account_id AND h.request_type='delete'
+        AND h.legal_hold=1 AND h.status NOT IN('completed','rejected','cancelled'))
       ORDER BY c.created_at,c.id LIMIT ?)`,ctx.now(),ctx.now()-365*DAY,maximum);
+    const finalGlobal = await ctx.db.one<{legal_hold: number}>("SELECT legal_hold FROM retention_settings WHERE id='default'");
+    if (!finalGlobal || finalGlobal.legal_hold !== 0) throw new ApiError(409, 'retention_hold_changed');
     });
 }

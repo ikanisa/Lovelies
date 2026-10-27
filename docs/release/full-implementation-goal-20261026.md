@@ -457,6 +457,27 @@ unqualified. Evidence:
 `/Volumes/PRO-G40/Projects/Lovelies/verification/distinct-hold-phases-20261027/root-integrated-02/result.json`,
 and `/Volumes/PRO-G40/Projects/Lovelies/verification/privacy-hold-native-20261027/native-pg-run-01/post-run-audit.json`.
 
+Retention scheduling and metadata pruning now check nonterminal same-subject
+deletion-request holds before selecting and mutating the affected records.
+Selected audit and terminal-source mutations recheck holds, and a late hold in
+the tested audit or global-consent paths rolls back earlier pruning in that
+transaction. A stale retention worker can no longer overwrite a successor's
+verified job using an expired or absent lease. The initial integrated consumer
+run exposed an existing fault-injection test tied to the old exact SQL text;
+after adapting that test to the guarded query, 48 new and 36 existing affected
+cases passed. The 48 new PGlite-only cases also skipped correctly for a
+defined-empty database URL; API types and the cached Deno Edge check passed.
+The final local run kept 137 recorded inputs unchanged. These synthetic
+same-transaction models and in-memory Storage do not establish provider or
+multi-backend behavior. A subject hold first observed at consent deletion may
+still leave earlier terminal pruning committed; a late hold on a distinct
+previously observed receipt party may escape a later source check. Hold ABA,
+non-cooperating writers, an already-dispatched or uncertain Storage DELETE,
+restore reconciliation and starvation behind other holds remain open. Evidence:
+`/Volumes/PRO-G40/Projects/Lovelies/verification/retention-deletion-request-hold-20261027/attempt-08/REVIEW.md`,
+`/Volumes/PRO-G40/Projects/Lovelies/verification/retention-deletion-request-hold-20261027/root-integrated-01/result.json`,
+and `/Volumes/PRO-G40/Projects/Lovelies/verification/retention-deletion-request-hold-20261027/root-integrated-02/result.json`.
+
 A later synthetic regression exercised an actual signed registration verifier
 with its Storage read paused while a separate database context ran face-proof
 cleanup after challenge expiry. The second context deleted the three synthetic

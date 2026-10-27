@@ -344,7 +344,7 @@ test('unknown/malformed linked actions and orphan receipts are preserved; source
         assert.deepEqual(await saved(h, item.body.operation_key), originals[0]);
         const run = h.db.run.bind(h.db);
         h.db.run = async (sql, ...bindings) => {
-            if (sql === 'DELETE FROM support_requests WHERE id=?' && bindings[0] === item.record.id) throw new Error('synthetic_terminal_purge_failure');
+            if (sql.startsWith('DELETE FROM support_requests WHERE id=?') && bindings[0] === item.record.id) throw new Error('synthetic_terminal_purge_failure');
             return run(sql, ...bindings);
         };
         try { await assert.rejects(prune(h), /synthetic_terminal_purge_failure/); }
