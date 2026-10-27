@@ -19,7 +19,7 @@ jobs:
         env:
           POSTGRES_PASSWORD: disposable-ci-fixture-only
           POSTGRES_DB: postgres
-        ports: [5432:5432]
+        ports: ["5432:5432"]
         options: >-
           --health-cmd "pg_isready -U postgres -d postgres"
           --health-interval 5s --health-timeout 5s --health-retries 12
@@ -43,6 +43,7 @@ jobs:
       - run: pnpm backend:build
       - run: pnpm backend:test
       - run: pnpm backend:client:test
+      - run: node --test services/link-association-worker/test/worker.test.mjs
       - run: pnpm backup:test
       - run: pnpm admin:test
       - run: pnpm preview:test
@@ -50,4 +51,5 @@ jobs:
       - run: pnpm push:test
 # This workflow has no production secrets and never deploys or submits a store
 # build. Models, real Storage, providers, native builds and hosted acceptance have
-# separate required evidence. This prepared workflow has not run on GitHub yet.
+# separate required evidence. Earlier GitHub runs stopped before any jobs;
+# this revised workflow has not passed GitHub CI.
