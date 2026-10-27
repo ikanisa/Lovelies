@@ -207,6 +207,17 @@ not establish production writer fencing or recovery clearance. Evidence:
 `/Volumes/PRO-G40/Projects/Lovelies/verification/upload-predispatch-abort-20261027/root-fix-03/result.json`,
 and `/Volumes/PRO-G40/Projects/Lovelies/verification/upload-predispatch-abort-20261027/root-consumers-01/result.json`.
 
+On an object-version mismatch, the Storage adapter now returns its conflict
+without waiting for an uncooperative response-body cancellation. The local
+regression reproduced the hang; 17 Storage and database-boundary checks, API
+types and the Edge entrypoint check passed after the change. The corresponding
+PUT and DELETE cleanup hangs remain open: the faster three-path candidate is
+preserved but not integrated, because provider acknowledgement and remote-writer
+terminality require separate qualification. Evidence:
+`/Volumes/PRO-G40/Projects/Lovelies/verification/storage-response-cleanup-20261027/root-baseline-01/result.json`,
+`/Volumes/PRO-G40/Projects/Lovelies/verification/storage-response-cleanup-20261027/candidate-unintegrated-01/`,
+and `/Volumes/PRO-G40/Projects/Lovelies/verification/storage-response-cleanup-20261027/root-fix-02/result.json`.
+
 The second local Edge attempt failed at the missing-auth Storage control before
 starting Edge or its database. Docker stop commands succeeded, but their output
 did not match the coordinator's expected acknowledgement, so it retained the

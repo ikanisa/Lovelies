@@ -81,3 +81,36 @@ test('Storage absence parsing rejects inconsistent declared lengths and locked b
  const body=new ReadableStream({start(controller){controller.enqueue(encoded);controller.close();}}),response=new Response(body,{status:400,headers:{'content-type':'application/json'}}),reader=response.body.getReader();
  try{await unavailable(()=>bucket(async()=>response).head('owned/missing'));}finally{reader.releaseLock();}
 });
+
+test('Storage mismatched get does not await uncooperative response cleanup',async()=>{
+ let finishCancel,signalCancel,cancelCount=0,fetchCount=0,timer;
+ const cancelled=new Promise(resolve=>{signalCancel=resolve;}),release=new Promise(resolve=>{finishCancel=resolve;});
+ const body=new ReadableStream({cancel(){cancelCount++;signalCancel();return release;}});
+ const instance=bucket(async()=>{
+  fetchCount++;
+  if(fetchCount===1)return Response.json({size:3,etag:'first-version',metadata:{}});
+  return new Response(body,{status:200,headers:{etag:'second-version'}});
+ });
+ const pending=instance.get('owned/synthetic');
+ const outcome=pending.then(value=>({value}),error=>({error}));
+ try{
+  const cancellation=await Promise.race([cancelled.then(()=>true),new Promise(resolve=>{timer=setTimeout(()=>resolve(false),2000);})]);
+  clearTimeout(timer);assert(cancellation,'response cancellation must be requested');
+  const result=await Promise.race([outcome,new Promise(resolve=>{timer=setTimeout(()=>resolve({deadline:true}),600);})]);
+  assert.notEqual(result.deadline,true,'response cleanup must not delay the operation');
+  assert(result.error?.status===409&&result.error?.code==='private_object_changed');
+  assert.equal(fetchCount,2);assert.equal(cancelCount,1);
+ }finally{clearTimeout(timer);finishCancel();await Promise.race([outcome,new Promise(resolve=>{timer=setTimeout(resolve,2000);})]);clearTimeout(timer);}
+});
+
+test('Storage mismatched get preserves its error when response cancellation rejects',async()=>{
+ let cancelCount=0,fetchCount=0;
+ const body=new ReadableStream({cancel(){cancelCount++;throw Error('synthetic cancellation failure');}});
+ const instance=bucket(async()=>{
+  fetchCount++;
+  if(fetchCount===1)return Response.json({size:3,etag:'first-version',metadata:{}});
+  return new Response(body,{status:200,headers:{etag:'second-version'}});
+ });
+ await assert.rejects(instance.get('owned/synthetic'),error=>error.status===409&&error.code==='private_object_changed');
+ assert.equal(fetchCount,2);assert.equal(cancelCount,1);
+});

@@ -4,6 +4,11 @@ const MAX_STORAGE_ERROR_BYTES=2048;
 const MAX_STORAGE_ERROR_CHUNKS=256;
 const STORAGE_ERROR_TIMEOUT_MS=1000;
 
+/** A rejected read can return without waiting for response-body cleanup. */
+function discardResponseBody(response:Response):void {
+  try{void response.body?.cancel().catch(()=>{});}catch{}
+}
+
 /** storage-api v1.68.10 uses HTTP 400 for this specific missing-key error.
  * An arbitrary 400, denied credential or malformed error is never absence. */
 async function missingObjectEnvelope(response:Response):Promise<boolean>{
@@ -63,7 +68,7 @@ export class SupabasePrivateBucket implements PrivateBucket {
     const initial=await this.head(key);if(!initial)return null;
     const response=await this.request('/object/authenticated/'+this.path(key));if(response.status===404){void response.body?.cancel().catch(()=>{});return null;}
     const downloadEtag=response.headers.get('etag')?.replace(/^W\//,'').replace(/^"|"$/g,'');
-    if(downloadEtag&&downloadEtag!==initial.etag){await response.body?.cancel();throw new ApiError(409,'private_object_changed');}
+    if(downloadEtag&&downloadEtag!==initial.etag){discardResponseBody(response);throw new ApiError(409,'private_object_changed');}
     return {...initial,body:response.body,arrayBuffer:()=>response.arrayBuffer()};
   }
   async put(key:string,value:ArrayBuffer|Uint8Array,options:Parameters<PrivateBucket['put']>[2]={}):Promise<void>{
