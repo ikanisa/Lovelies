@@ -4320,6 +4320,21 @@
       "aggregate_receipt": "/Volumes/PRO-G40/Projects/Lovelies/verification/refresh-cancel-recovery-implementation-20261027/root-whole-v2-01/result.json",
       "model_receipt": "/Volumes/PRO-G40/Projects/Lovelies/verification/inference-packaging-20261026/private-inference-qualification/run-13/result.json",
       "scope": "Local exact original/successor restriction producer; independent replay, old-writer fencing, hosted recovery and store qualification remain open."
+    },
+    "journal_format3_local_20261027": {
+      "focused_tests": 33,
+      "focused_passed": 33,
+      "journal_tests": 320,
+      "journal_passed": 320,
+      "api_consumer_tests": 40,
+      "api_consumer_passed": 40,
+      "source_inputs_unchanged": true,
+      "syntax_and_dry_build_passed": true,
+      "hosted_upgrade": false,
+      "scope": "Local format3 transition with preserved old Workers and nonempty restrictions in SQLite; app writer integration, caller capability binding, provider and recovery clearance remain open.",
+      "focused_receipt": "/Volumes/PRO-G40/Projects/Lovelies/verification/restore-inventory-format3-implementation-20261027/root-focused-v4-01/result.json",
+      "journal_receipt": "/Volumes/PRO-G40/Projects/Lovelies/verification/restore-inventory-format3-implementation-20261027/root-journal-whole-v4-01/result.json",
+      "api_receipt": "/Volumes/PRO-G40/Projects/Lovelies/verification/restore-inventory-format3-implementation-20261027/root-api-consumers-v4-01/result.json"
     }
   }
 }

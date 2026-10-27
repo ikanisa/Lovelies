@@ -62,10 +62,24 @@ has not been deployed or bound to production. Evidence:
 and `/Volumes/PRO-G40/Projects/Lovelies/verification/restore-write-inventory-implementation-20261027/root-api-consumers-r3-01/`.
 Separate D2/L2 authority validators now pass 159 local cases, including frozen
 format-2 synthetic vectors and role, consent, guardian, object-hash and bounds
-checks. They are not yet connected to the journal's routes or application
-writers. Current Storage cannot supply the required qualified strong version
+checks. They are connected to the local format-3 journal candidate; application
+writers and hosted routes remain unchanged. Current Storage cannot supply the required qualified strong version
 evidence, and cross-generation link resumption remains unsupported. Evidence:
 `/Volumes/PRO-G40/Projects/Lovelies/verification/restore-descriptor-v2-validators-20261027/root-focused-v2-01/result.json`.
+
+The local format-3 transition now validates the preserved format-2 cutoff,
+separates new writer generations and handles narrowly scoped historical replies
+without granting dispatch authority. Its 33 focused cases, complete 320-case
+journal suite and 40 existing API consumer cases passed; syntax and dry build
+also passed. The local native test used actual preserved format-1 and format-2
+Workers with the same SQLite state and nonempty restriction history. These
+results do not prove hosted upgrade, observer credential operation, all provider
+faults, application-writer integration or recovery clearance. Caller-expected
+capability and marker binding remain open before application integration.
+Evidence:
+`/Volumes/PRO-G40/Projects/Lovelies/verification/restore-inventory-format3-implementation-20261027/root-focused-v4-01/`,
+`/Volumes/PRO-G40/Projects/Lovelies/verification/restore-inventory-format3-implementation-20261027/root-journal-whole-v4-01/`,
+and `/Volumes/PRO-G40/Projects/Lovelies/verification/restore-inventory-format3-implementation-20261027/root-api-consumers-v4-01/`.
 
 Refresh-delivery cancellation now collects exact restriction facts for the
 original session and its named delivered successor before tentative domain

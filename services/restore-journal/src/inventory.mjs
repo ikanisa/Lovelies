@@ -4,6 +4,7 @@ import { PROJECT_ID, PROTOCOL, GENESIS_HASH, authenticate, canonical, sha256, ex
   loadHead, headView, checkedReceipt, appendEventTransaction, response, errorResponse } from './journal.mjs';
 import { CONTROL_KEY, BINDING_KEY, planKey, prepareKey, commitKey, validateMarker,
   checkedBinding as checkedV1Binding, checkedPlan as checkedV1Plan, loadControl as loadV1Control } from './operations.mjs';
+import { validateDescriptorV2, validateLinkV2, validateD2LinkTarget } from './inventory-descriptors-v2.mjs';
 import { INVENTORY_PROTOCOL, LIMITS, equal, uuid, digest, unsigned, positive, nullableUuid, copy, bounded,
   envelope, cursor, chainName, chainTag, recordKey, metaKey, writeKey, linkKey, observationKey, cutKey,
   cutHeadKey, progressKey, recoveryKey, hashContent, keyHash, genesis, clock, validateDescriptor,
@@ -14,12 +15,19 @@ const reasons = new Set(['marker_mismatch', 'acknowledgement_mismatch', 'journal
 const controlFields = ['version', 'project_id', 'binding_hash', 'state', 'marker', 'pending_operation_id', 'recovery_generation_id',
   'quarantine', 'writer_generation_id', 'minimum_operation_version', 'inventory_protocol', 'registration_head', 'observation_head', 'coverage_anchor_hash',
   'upgrade_id', 'upgrade_receipt_hash', 'upgrade_control_hash'];
+const controlFields3 = [...controlFields, 'capability_id', 'capability_receipt_hash', 'capability_archive_hash', 'capability_version', 'minimum_descriptor_version', 'minimum_link_version'];
+const capFields = ['version','project_id','capability_id','input_hash','old_control_hash','old_writer_generation_id','new_writer_generation_id','marker','restriction_head','registration_head','observation_head','old_upgrade_id','old_upgrade_receipt_hash','old_upgrade_control_hash','coverage_anchor_hash','recorded_at','hash'];
+const capKey = id => 'inventory:capability:' + id;
+const capArchiveKey = id => 'inventory:capability-archive:' + id;
+const generationKey = id => 'inventory:writer-generation:' + id;
 const inputFields = ['version', 'project_id', 'operation_id', 'input_hash', 'expected', 'writer_generation_id', 'allocations', 'events', 'resources', 'links'];
 const headOf = (control, chain) => chain === 'registrations' ? control.registration_head : control.observation_head;
 const fieldOf = chain => chain === 'registrations' ? 'registration_head' : 'observation_head';
 const receiptFields = ['version', 'protocol', 'project_id', 'database_id', 'incarnation_id', 'chain', 'sequence', 'previous_hash', 'payload_hash', 'payload', 'recorded_at', 'hash'];
 const corrupt = () => fail(503, 'inventory_integrity_failed');
 const persisted = fn => { try { return fn(); } catch { corrupt(); } };
+const persistedAsync = async (fn, gate) => { try { return await gate.wait(fn()); } catch { gate.check(); corrupt(); } };
+const freeze = value => { if (value && typeof value === 'object') { for (const child of Object.values(value)) freeze(child); Object.freeze(value); } return value; };
 const view = control => ({ protocol: INVENTORY_PROTOCOL, project_id: PROJECT_ID, control: copy(control), clearance_available: false });
 const finish = value => { if (value.denied) fail(value.status, value.denied); return value; };
 const deny = code => ({ denied: code, status: 409 });
@@ -35,7 +43,8 @@ async function put(txn, values, result, gate) {
   await gate.wait(txn.put(values)); gate.check(); return result;
 }
 function context(options = {}) {
-  return { gate: options.gate ?? inertGate(), now: options.now ?? Date.now, plans: new Map(), anchors: new Map(), reads: { plans: 0, restriction_receipts: 0 }, pageLimit: options.pageLimit ?? 1 };
+  if (options.format === 3 && (!Number.isInteger(options.pageLimit ?? 1) || (options.pageLimit ?? 1) < 1 || (options.pageLimit ?? 1) > 8)) fail(503, 'inventory_configuration_invalid');
+  return { gate: options.gate ?? inertGate(), now: options.now ?? Date.now, plans: new Map(), anchors: new Map(), reads: { plans: 0, restriction_receipts: 0 }, pageLimit: options.pageLimit ?? 1, format: options.format ?? 2 };
 }
 async function transact(storage, ctx, callback) {
   // A cancelled/lost response may race an already durable commit. Race the
@@ -44,8 +53,23 @@ async function transact(storage, ctx, callback) {
   return ctx.gate.wait(storage.transaction(async txn => {
     // Native DO transaction callbacks may retry. Never reuse checked values
     // from an abandoned snapshot in the next admission/validation pass.
-    ctx.plans = new Map(); ctx.anchors = new Map(); ctx.heads = null; ctx.gate.check(); return callback(txn);
+    ctx.plans = new Map(); ctx.anchors = new Map(); ctx.heads = null; ctx.capCutSequence=undefined;ctx.gate.check(); return callback(txn);
   }));
+}
+function descriptorHistory(value, input) {
+  return value?.version === 1 ? validateDescriptor(value,input) : value?.version === 2 ? validateDescriptorV2(value,input) : fail(400,'inventory_descriptor_invalid');
+}
+function linkHistory(value, input) {
+  return value?.version === 1 ? validateLink(value,input) : value?.version === 2 ? validateLinkV2(value,input) : fail(400,'inventory_link_invalid');
+}
+function prepareHistory(value) {
+  if (!plain(value) || !Array.isArray(value.resources) || !Array.isArray(value.links) || value.resources.length + value.links.length > 1) fail(400,'operation_invalid');
+  const old = validatePrepareV2({...value,resources:[],links:[]});
+  const input = {...old,resources:value.resources.map(x=>descriptorHistory(x,value)),links:value.links.map(x=>linkHistory(x,value))};
+  return copy(bounded(input,LIMITS.operation,'operation_too_large'));
+}
+function recordLimit(record) {
+  const item=record?.payload?.item;return record?.chain==='registrations' && item?.version===2 ? 10240 : LIMITS.record;
 }
 async function anchoredPlan(txn, id, expectedHash, record, ctx) {
   const key = id + ':' + expectedHash;
@@ -54,7 +78,7 @@ async function anchoredPlan(txn, id, expectedHash, record, ctx) {
     stored = await ctx.gate.wait(txn.get(planKey(id)));
     if (!exact(stored, ['plan', 'plan_hash']) || stored.plan_hash !== expectedHash ||
         !exact(stored.plan, [...inputFields, 'next', 'prepared_at', 'receipts', 'registration_before', 'registration_after', 'inventory_receipts'])) corrupt();
-    persisted(() => bounded(stored, LIMITS.response)); persisted(() => validatePrepareV2(planInput(stored.plan)));
+    persisted(() => bounded(stored, LIMITS.response)); persisted(() => ctx.format===2 ? validatePrepareV2(planInput(stored.plan)) : prepareHistory(planInput(stored.plan)));
     persisted(() => validateMarker(stored.plan.next));
     if (stored.plan.operation_id !== id || stored.plan_hash !== await ctx.gate.hash(canonical(stored.plan))) corrupt();
     if (!equal(await ctx.gate.wait(txn.get(prepareKey(stored.plan.next.checkpoint.revision))), { operation_id: id, plan_hash: expectedHash })) corrupt();
@@ -77,19 +101,20 @@ async function checkedRecord(txn, chain, sequence, binding, ctx) {
   if (!exact(record, receiptFields) || record.version !== 1 || record.protocol !== INVENTORY_PROTOCOL || record.project_id !== PROJECT_ID ||
       record.database_id !== binding.database_id || record.incarnation_id !== binding.initial_marker.incarnation_id || record.chain !== chain ||
       record.sequence !== sequence || !digest(record.previous_hash) || !digest(record.payload_hash) || !positive(record.recorded_at) || !digest(record.hash)) corrupt();
-  persisted(() => bounded(record, LIMITS.record));
+  persisted(() => bounded(record, recordLimit(record)));
   if (record.payload_hash !== await ctx.gate.hash(canonical(record.payload)) || record.hash !== await receiptHash(record, ctx)) corrupt();
   if (chain === 'registrations') {
     const p = record.payload;
     if (!exact(p, ['entry_kind', 'operation_id', 'input_hash', 'ordinal', 'item_hash', 'item']) || !uuid(p.operation_id) || !digest(p.input_hash) || p.ordinal !== 0 || !digest(p.item_hash)) corrupt();
+    if((ctx.format===2||ctx.capCutSequence!==undefined&&record.sequence<=ctx.capCutSequence)&&p.item?.version!==1)corrupt();
     if (p.entry_kind === 'write') {
-      persisted(() => validateDescriptor(p.item));
+      persisted(() => descriptorHistory(p.item));
       const index = await ctx.gate.wait(txn.get(writeKey(p.item.write_id)));
       if (!exact(index, ['version', 'project_id', 'write_id', 'operation_id', 'plan_hash', 'descriptor_hash', 'sequence', 'hash', 'action']) ||
           index.version !== 1 || index.project_id !== PROJECT_ID || index.write_id !== p.item.write_id || index.operation_id !== p.operation_id ||
           !digest(index.plan_hash) || index.descriptor_hash !== p.item_hash || index.sequence !== sequence || index.hash !== record.hash || index.action !== p.item.action) corrupt();
     } else if (p.entry_kind === 'link') {
-      persisted(() => validateLink(p.item));
+      persisted(() => linkHistory(p.item));
       const index = await ctx.gate.wait(txn.get(linkKey(p.operation_id)));
       if (!exact(index, ['version', 'project_id', 'operation_id', 'plan_hash', 'item_hash', 'sequence', 'hash']) || index.version !== 1 ||
           index.project_id !== PROJECT_ID || index.operation_id !== p.operation_id || !digest(index.plan_hash) || index.item_hash !== p.item_hash ||
@@ -117,6 +142,7 @@ async function checkedRecord(txn, chain, sequence, binding, ctx) {
       const publication = await checkedRecord(txn, 'registrations', linked.sequence, binding, ctx), link = publication.payload.item;
       if (publication.payload.entry_kind !== 'link' || link.target_write_id !== record.payload.write_id ||
           link.target_descriptor_hash !== registration.payload.item_hash || !sameTarget(link, registration.payload.item)) corrupt();
+      if(link.version===2){if(registration.payload.item.version!==2)corrupt();await persistedAsync(() => validateD2LinkTarget(link,registration.payload.item),ctx.gate);}
       const accepted = await anchoredPlan(txn, linked.operation_id, linked.plan_hash, publication, ctx);
       const committed = await ctx.gate.wait(txn.get(commitKey(accepted.plan.next.checkpoint.revision)));
       if (!exact(committed, ['version', 'project_id', 'marker', 'operation_id', 'plan_hash', 'registration_after', 'writer_generation_id', 'committed_at']) ||
@@ -166,7 +192,7 @@ async function plan(txn, id, expectedHash, binding, ctx) {
   }
   if (!exact(stored, ['plan', 'plan_hash']) || !digest(stored.plan_hash) || expectedHash && stored.plan_hash !== expectedHash ||
       !exact(stored.plan, [...inputFields, 'next', 'prepared_at', 'receipts', 'registration_before', 'registration_after', 'inventory_receipts'])) corrupt();
-  const p = stored.plan, input = persisted(() => validatePrepareV2(planInput(p))), next = persisted(() => validateMarker(p.next));
+  const p = stored.plan, input = persisted(() => ctx.format===2 ? validatePrepareV2(planInput(p)) : prepareHistory(planInput(p))), next = persisted(() => validateMarker(p.next));
   persisted(() => bounded(stored, LIMITS.response));
   if (input.expected.database_id !== binding.database_id || input.expected.incarnation_id !== binding.initial_marker.incarnation_id || p.operation_id !== id || !positive(p.prepared_at) || !Array.isArray(p.receipts) || p.receipts.length !== p.events.length ||
       !Array.isArray(p.inventory_receipts) || p.inventory_receipts.length !== p.resources.length + p.links.length ||
@@ -245,6 +271,50 @@ async function checkedUpgradeOrigin(txn, control, binding, ctx) {
       control.recovery_generation_id === null && control.writer_generation_id !== receipt.writer_generation_id) corrupt();
   return receipt;
 }
+async function checkedCapability(txn, control, binding, ctx) {
+  const cap=await ctx.gate.wait(txn.get(capKey(control.capability_id)));
+  const archived=await ctx.gate.wait(txn.get(capArchiveKey(control.capability_id)));
+  if(!exact(cap,capFields)||cap.version!==1||cap.project_id!==PROJECT_ID||cap.capability_id!==control.capability_id||
+     !digest(cap.input_hash)||!digest(cap.old_control_hash)||!uuid(cap.old_writer_generation_id)||!uuid(cap.new_writer_generation_id)||
+     cap.old_writer_generation_id===cap.new_writer_generation_id||!positive(cap.recorded_at)||!digest(cap.hash)||
+     cap.hash!==control.capability_receipt_hash||cap.old_control_hash!==control.capability_archive_hash)corrupt();
+  persisted(()=>bounded(cap,2048));const {hash,...content}=cap;
+  if(hash!==await hashContent('inventory-capability-v1',content,ctx.gate))corrupt();
+  if(!exact(archived,controlFields)||archived.version!==2||archived.project_id!==PROJECT_ID||archived.binding_hash!==binding.binding_hash||
+     archived.state!=='serving'||archived.pending_operation_id!==null||archived.recovery_generation_id!==null||archived.quarantine!==null||
+     archived.writer_generation_id!==cap.old_writer_generation_id||archived.minimum_operation_version!==2||archived.inventory_protocol!==1||
+     !equal(archived.marker,cap.marker)||!equal(archived.registration_head,cap.registration_head)||!equal(archived.observation_head,cap.observation_head)||
+     !equal(archived.marker.cursor,cap.restriction_head)||archived.coverage_anchor_hash!==cap.coverage_anchor_hash||
+     archived.upgrade_id!==cap.old_upgrade_id||archived.upgrade_receipt_hash!==cap.old_upgrade_receipt_hash||archived.upgrade_control_hash!==cap.old_upgrade_control_hash||
+     control.upgrade_id!==archived.upgrade_id||control.upgrade_receipt_hash!==archived.upgrade_receipt_hash||control.upgrade_control_hash!==archived.upgrade_control_hash||control.coverage_anchor_hash!==archived.coverage_anchor_hash||
+     await ctx.gate.hash(canonical(archived))!==cap.old_control_hash)corrupt();
+  persisted(()=>validateMarker(cap.marker));for(const head of [cap.restriction_head,cap.registration_head,cap.observation_head])persisted(()=>cursor(head));
+  const input={version:3,project_id:PROJECT_ID,capability_id:cap.capability_id,expected_marker:cap.marker,expected_control_hash:cap.old_control_hash,
+    expected_restriction_head:cap.restriction_head,expected_registration_head:cap.registration_head,expected_observation_head:cap.observation_head};
+  if(cap.input_hash!==await ctx.gate.hash(canonical(input)))corrupt();
+  const origin=await checkedUpgradeOrigin(txn,archived,binding,ctx);
+  if(origin.writer_generation_id!==cap.old_writer_generation_id||cap.recorded_at<origin.recorded_at)corrupt();
+  const generation=await ctx.gate.wait(txn.get(generationKey(cap.new_writer_generation_id)));
+  if(!equal(generation,{version:1,project_id:PROJECT_ID,writer_generation_id:cap.new_writer_generation_id,capability_id:cap.capability_id,capability_hash:cap.hash}))corrupt();
+  if(cap.restriction_head.sequence===0){if(cap.restriction_head.hash!==GENESIS_HASH)corrupt();}
+  else {const r=await ctx.gate.wait(checkedReceipt(txn,cap.restriction_head.sequence));if(r.hash!==cap.restriction_head.hash||r.recorded_at>cap.recorded_at)corrupt();}
+  for(const [chain,head] of [['registrations',cap.registration_head],['observations',cap.observation_head]]){
+    await checkedCursor(txn,chain,head,head,binding,ctx);
+    if(head.sequence>0){const r=await checkedRecord(txn,chain,head.sequence,binding,ctx);if(r.recorded_at>cap.recorded_at||chain==='registrations'&&r.payload.item?.version!==1)corrupt();
+      if(chain==='observations')await observationDependencies(txn,r.payload,binding,archived,ctx,cap.registration_head.sequence);}
+  }
+  const commit=await ctx.gate.wait(txn.get(commitKey(cap.marker.checkpoint.revision)));
+  if(!commit||!equal(commit.marker,cap.marker)||!positive(commit.committed_at)||commit.committed_at>cap.recorded_at)corrupt();
+  if(cap.marker.checkpoint.revision===0){
+    if(!exact(commit,['version','project_id','marker','operation_id','plan_hash','committed_at'])||commit.version!==1||commit.project_id!==PROJECT_ID||
+       commit.operation_id!==null||commit.plan_hash!==null||!equal(commit.marker,binding.initial_marker)||commit.committed_at!==binding.created_at)corrupt();
+  }else{
+    const saved=await plan(txn,commit.operation_id,commit.plan_hash,binding,ctx);
+    if(!saved||(await operationView(txn,saved,archived,ctx)).status!=='committed'||!equal(saved.plan.next,cap.marker))corrupt();
+    if(saved.plan.version===2){persisted(()=>validatePrepareV2(planInput(saved.plan)));if(!equal(saved.plan.registration_after,cap.registration_head)||saved.plan.writer_generation_id!==cap.old_writer_generation_id)corrupt();}
+  }
+  return {cap,archived,origin};
+}
 async function load(txn, ctx) {
   const binding = await ctx.gate.wait(checkedV1Binding(txn)), control = await ctx.gate.wait(txn.get(CONTROL_KEY));
   if (!binding && !control) {
@@ -252,11 +322,12 @@ async function load(txn, ctx) {
     fail(409, 'control_uninitialized');
   }
   if (!binding || !control) corrupt();
-  if (control.version === 1) fail(409, 'protocol_version_unsupported');
-  if (!exact(control, controlFields) || control.version !== 2 || control.project_id !== PROJECT_ID || control.binding_hash !== binding.binding_hash ||
+  if (control.version !== ctx.format || ![2,3].includes(control.version)) fail(409, 'protocol_version_unsupported');
+  if (!exact(control, control.version === 3 ? controlFields3 : controlFields) || control.version !== ctx.format || control.project_id !== PROJECT_ID || control.binding_hash !== binding.binding_hash ||
       !['serving', 'pending', 'quarantined'].includes(control.state) || !nullableUuid(control.pending_operation_id) || !nullableUuid(control.recovery_generation_id) ||
       !uuid(control.writer_generation_id) || control.minimum_operation_version !== 2 || control.inventory_protocol !== 1 || !digest(control.coverage_anchor_hash) ||
-      !uuid(control.upgrade_id) || !digest(control.upgrade_receipt_hash) || !digest(control.upgrade_control_hash)) corrupt();
+      !uuid(control.upgrade_id) || !digest(control.upgrade_receipt_hash) || !digest(control.upgrade_control_hash) ||
+      control.version===3&&(!uuid(control.capability_id)||!digest(control.capability_receipt_hash)||!digest(control.capability_archive_hash)||control.capability_version!==3||control.minimum_descriptor_version!==2||control.minimum_link_version!==2)) corrupt();
   persisted(() => validateMarker(control.marker));
   if (control.marker.database_id !== binding.database_id || control.marker.incarnation_id !== binding.initial_marker.incarnation_id ||
       control.state === 'serving' && control.pending_operation_id !== null || control.state === 'pending' && control.pending_operation_id === null) corrupt();
@@ -264,11 +335,17 @@ async function load(txn, ctx) {
     if (!exact(control.quarantine, ['reason', 'detected_at', 'observed_marker_hash']) || !reasons.has(control.quarantine.reason) || !positive(control.quarantine.detected_at) ||
         !(control.quarantine.observed_marker_hash === null || digest(control.quarantine.observed_marker_hash))) corrupt();
   } else if (control.quarantine !== null || control.recovery_generation_id !== null) corrupt();
-  const origin = await checkedUpgradeOrigin(txn, control, binding, ctx);
+  const capability=control.version===3?await checkedCapability(txn,control,binding,ctx):null;
+  const origin=capability?capability.origin:await checkedUpgradeOrigin(txn,control,binding,ctx);
+  if(capability)ctx.capCutSequence=capability.cap.registration_head.sequence;
+  if(capability && control.recovery_generation_id===null && control.writer_generation_id!==capability.cap.new_writer_generation_id)corrupt();
   const restriction = await ctx.gate.wait(loadHead(txn));
   const registrations = await checkedMeta(txn, 'registrations', binding, ctx), observations = await checkedMeta(txn, 'observations', binding, ctx);
   if (!equal(control.registration_head, headView(registrations)) || !equal(control.observation_head, headView(observations))) corrupt();
   ctx.heads = { restriction: headView(restriction), registrations: headView(registrations), observations: headView(observations) };
+  if(capability){for(const [cut,head] of [[capability.cap.restriction_head,ctx.heads.restriction],[capability.cap.registration_head,ctx.heads.registrations],[capability.cap.observation_head,ctx.heads.observations]])
+    if(cut.sequence>head.sequence||cut.sequence===head.sequence&&cut.hash!==head.hash)corrupt();
+    if(capability.cap.marker.checkpoint.revision>control.marker.checkpoint.revision||capability.cap.marker.checkpoint.revision===control.marker.checkpoint.revision&&!equal(capability.cap.marker,control.marker))corrupt();}
   const commit = await ctx.gate.wait(txn.get(commitKey(control.marker.checkpoint.revision)));
   if (!commit || !equal(commit.marker, control.marker)) corrupt();
   if (control.marker.checkpoint.revision === 0) {
@@ -291,7 +368,7 @@ async function load(txn, ctx) {
           !equal(latest.plan.registration_after, control.registration_head)) ||
         control.pending_operation_id === null && latest.plan.operation_id !== commit.operation_id) corrupt();
   } else if (prepares.size) corrupt();
-  const loaded = { binding, control, restriction, registrations, observations, origin };
+  const loaded = { binding, control, restriction, registrations, observations, origin, capability };
   if (control.recovery_generation_id !== null) await checkedRecovery(txn, control.recovery_generation_id, loaded, ctx);
   else await noRecords(txn, ['inventory:recovery:', 'inventory:cut:', 'inventory:cut-head:', 'inventory:progress:'], ctx);
   ctx.gate.check(); return loaded;
@@ -320,11 +397,12 @@ async function appendRecord(txn, chain, payload, meta, time, ctx) {
   const record = { version: 1, protocol: INVENTORY_PROTOCOL, project_id: PROJECT_ID, database_id: meta.database_id,
     incarnation_id: meta.incarnation_id, chain, sequence: meta.sequence + 1, previous_hash: meta.hash,
     payload_hash: await ctx.gate.hash(canonical(payload)), payload: copy(payload), recorded_at: time };
-  record.hash = await receiptHash(record, ctx); bounded(record, LIMITS.record);
+  record.hash = await receiptHash(record, ctx); bounded(record, recordLimit(record));
   return { record, meta: { ...meta, sequence: record.sequence, hash: record.hash, recorded_at: time } };
 }
 
 export async function upgradeInventory(storage, value, options) {
+  if (options?.format===3) fail(404, 'route_unavailable');
   envelope(value, ['upgrade_id', 'expected', 'expected_control_hash', 'coverage_anchor_hash'], 'inventory_upgrade_invalid');
   if (!uuid(value.upgrade_id) || !digest(value.expected_control_hash) || !digest(value.coverage_anchor_hash)) fail(400, 'inventory_upgrade_invalid');
   const expected = validateMarker(value.expected), ctx = context(options), requestHash = await ctx.gate.hash(canonical(value));
@@ -363,13 +441,52 @@ export async function upgradeInventory(storage, value, options) {
       [metaKey('registrations')]: registrations, [metaKey('observations')]: observations }, { ...view(control), upgrade: receipt }, ctx.gate);
   });
 }
+/** Explicit f2-to-f3 capability switch. No bootstrap or recovery clearance. */
+export async function upgradeInventoryCapability(storage,value,options={}) {
+  if (!Number.isInteger(options.pageLimit ?? 1) || (options.pageLimit ?? 1) < 1 || (options.pageLimit ?? 1) > 8) fail(503, 'inventory_configuration_invalid');
+  if(!exact(value,['version','project_id','capability_id','expected_marker','expected_control_hash','expected_restriction_head','expected_registration_head','expected_observation_head'])||
+     value.version!==3||value.project_id!==PROJECT_ID||!uuid(value.capability_id)||!digest(value.expected_control_hash))fail(400,'inventory_capability_invalid');
+  value=freeze(copy(value));
+  const marker=validateMarker(value.expected_marker);for(const head of [value.expected_restriction_head,value.expected_registration_head,value.expected_observation_head])cursor(head);
+  const ctx=context({...options,format:2}),inputHash=await ctx.gate.hash(canonical(value));
+  return transact(storage,ctx,async txn=>{
+    const existing=await ctx.gate.wait(txn.get(capKey(value.capability_id)));
+    if(existing!==undefined){
+      const current=await ctx.gate.wait(txn.get(CONTROL_KEY));if(current?.version!==3||current.capability_id!==value.capability_id)fail(409,'inventory_capability_conflict');
+      const loaded=await load(txn,{...ctx,format:3});if(loaded.capability.cap.input_hash!==inputHash)fail(409,'inventory_capability_conflict');
+      return {...view(loaded.control),capability:loaded.capability.cap};
+    }
+    const loaded=await load(txn,ctx),old=loaded.control;
+    if(old.state!=='serving'||old.pending_operation_id!==null||old.recovery_generation_id!==null||old.quarantine!==null)fail(409,'inventory_capability_not_serving');
+    if(!equal(marker,old.marker)||!equal(value.expected_restriction_head,headView(loaded.restriction))||
+       !equal(value.expected_restriction_head,old.marker.cursor)||!equal(value.expected_registration_head,old.registration_head)||
+       !equal(value.expected_observation_head,old.observation_head)||value.expected_control_hash!==await ctx.gate.hash(canonical(old)))fail(409,'inventory_capability_conflict');
+    if(await ctx.gate.wait(txn.get(capArchiveKey(value.capability_id)))!==undefined)corrupt();
+    await noRecords(txn,['inventory:capability:','inventory:capability-archive:','inventory:writer-generation:'],ctx);
+    const lastCommit=await ctx.gate.wait(txn.get(commitKey(old.marker.checkpoint.revision)));
+    if(!lastCommit||!positive(lastCommit.committed_at))corrupt();
+    const generation=crypto.randomUUID();if(generation===old.writer_generation_id)corrupt();
+    const content={version:1,project_id:PROJECT_ID,capability_id:value.capability_id,input_hash:inputHash,old_control_hash:value.expected_control_hash,
+      old_writer_generation_id:old.writer_generation_id,new_writer_generation_id:generation,marker:copy(old.marker),
+      restriction_head:headView(loaded.restriction),registration_head:copy(old.registration_head),observation_head:copy(old.observation_head),
+      old_upgrade_id:old.upgrade_id,old_upgrade_receipt_hash:old.upgrade_receipt_hash,old_upgrade_control_hash:old.upgrade_control_hash,
+      coverage_anchor_hash:old.coverage_anchor_hash,recorded_at:clock(ctx.now,Math.max(loaded.restriction.recorded_at,loaded.registrations.recorded_at,loaded.observations.recorded_at,lastCommit.committed_at,loaded.origin.recorded_at))};
+    const cap={...content,hash:await hashContent('inventory-capability-v1',content,ctx.gate)};bounded(cap,2048);
+    const control={...old,version:3,writer_generation_id:generation,capability_id:value.capability_id,capability_receipt_hash:cap.hash,
+      capability_archive_hash:value.expected_control_hash,capability_version:3,minimum_descriptor_version:2,minimum_link_version:2};
+    const gen={version:1,project_id:PROJECT_ID,writer_generation_id:generation,capability_id:value.capability_id,capability_hash:cap.hash};
+    return put(txn,{[capArchiveKey(value.capability_id)]:old,[capKey(value.capability_id)]:cap,[generationKey(generation)]:gen,[CONTROL_KEY]:control},
+      {...view(control),capability:cap},ctx.gate);
+  });
+}
 export async function readInventoryControl(storage, options) {
   const ctx = context(options); return transact(storage, ctx, async txn => view((await load(txn, ctx)).control));
 }
 export async function admitInventory(storage, value, options) {
   envelope(value, ['marker', 'writer_generation_id', 'operation_version', 'inventory_protocol'], 'inventory_admission_invalid');
-  const marker = validateMarker(value.marker);
   if (!uuid(value.writer_generation_id) || value.operation_version !== 2 || value.inventory_protocol !== 1) fail(409, 'protocol_version_unsupported');
+  if (options?.format===3) value=freeze(copy(value));
+  const marker = validateMarker(value.marker);
   const ctx = context(options);
   return finish(await transact(storage, ctx, async txn => {
     const loaded = await load(txn, ctx), denied = await requireServing(txn, loaded, marker, value.writer_generation_id, ctx);
@@ -408,9 +525,14 @@ async function retiredKey(txn, target, ctx) {
   return { hash, owner, retired };
 }
 export async function prepareInventory(storage, raw, options) {
-  const input = validatePrepareV2(raw), ctx = context(options);
+  const ctx = context(options), input = ctx.format===3 ? freeze(prepareHistory(raw)) : validatePrepareV2(raw);
+  if(ctx.format===3 && (input.resources.some(item=>item.version!==2||item.action!=='put'||item.kind!=='direct-source') || input.links.some(item=>item.version!==2||item.relation!=='asset-source'))) fail(409,'inventory_capability_unsupported');
   return finish(await transact(storage, ctx, async txn => {
-    const loaded = await load(txn, ctx), existing = await plan(txn, input.operation_id, undefined, loaded.binding, ctx);
+    const loaded = await load(txn, ctx);
+    if (ctx.format===3 && input.writer_generation_id!==loaded.control.writer_generation_id) return deny('writer_generation_stale');
+    if (ctx.format===3 && loaded.control.state==='quarantined') return deny('serving_quarantined');
+    if (ctx.format===3 && loaded.control.state==='pending' && loaded.control.pending_operation_id!==input.operation_id) return deny('operation_pending');
+    const existing = await plan(txn, input.operation_id, undefined, loaded.binding, ctx);
     if (existing) {
       if (existing.plan.version !== 2) fail(409, 'operation_version_conflict');
       if (!equal(input, planInput(existing.plan))) fail(409, 'operation_conflict');
@@ -437,6 +559,7 @@ export async function prepareInventory(storage, raw, options) {
       if (target.item.action !== 'put' || !sameTarget(item, target.item) ||
           (item.relation === 'upload-chunk' ? target.item.kind !== 'upload-chunk' || item.offset_bytes !== target.item.payload.offset_bytes : target.item.kind === 'upload-chunk')) fail(409, 'inventory_target_conflict');
       if ((await retiredKey(txn, target, ctx)).retired !== undefined) fail(409, 'inventory_key_retired');
+      if(ctx.format===3){if(target.item.version!==2)fail(409,'inventory_capability_unsupported');await ctx.gate.wait(validateD2LinkTarget(item,target.item));}
       if (await ctx.gate.wait(txn.get(linkKey(input.operation_id))) !== undefined) corrupt();
     }
     const priorCommit = await ctx.gate.wait(txn.get(commitKey(loaded.control.marker.checkpoint.revision)));
@@ -485,12 +608,16 @@ export async function lookupInventoryOperation(storage, id, options) {
 export async function acknowledgeInventory(storage, id, value, options) {
   envelope(value, ['plan_hash', 'marker', 'writer_generation_id'], 'acknowledgement_invalid');
   if (!uuid(id) || !digest(value.plan_hash) || !uuid(value.writer_generation_id)) fail(400, 'acknowledgement_invalid');
+  if (options?.format===3) value=freeze(copy(value));
   const marker = validateMarker(value.marker), ctx = context(options);
   return finish(await transact(storage, ctx, async txn => {
     const loaded = await load(txn, ctx), operation = await plan(txn, id, undefined, loaded.binding, ctx);
     if (!operation) fail(404, 'operation_not_found');
     if (operation.plan.version !== 2) fail(409, 'operation_version_conflict');
     if (value.writer_generation_id !== operation.plan.writer_generation_id) return deny('writer_generation_stale');
+    if (ctx.format===3 && loaded.control.writer_generation_id!==value.writer_generation_id) return deny('writer_generation_stale');
+    if (ctx.format===3 && loaded.control.state==='quarantined') return deny('serving_quarantined');
+    if (ctx.format===3 && loaded.control.state==='pending' && loaded.control.pending_operation_id!==id) return deny('operation_pending');
     if (value.plan_hash !== operation.plan_hash || !equal(marker, operation.plan.next)) return quarantine(txn, loaded, 'acknowledgement_mismatch', marker, ctx);
     const prior = await operationView(txn, operation, loaded.control, ctx);
     // Historical exact receipt lookup never rewinds a marker or clears quarantine.
@@ -509,11 +636,13 @@ export async function acknowledgeInventory(storage, id, value, options) {
 export async function dispatchInventory(storage, value, options) {
   envelope(value, ['marker', 'writer_generation_id', 'write_id', 'descriptor_hash', 'plan_hash'], 'inventory_dispatch_invalid');
   if (!uuid(value.writer_generation_id) || !uuid(value.write_id) || !digest(value.descriptor_hash) || !digest(value.plan_hash)) fail(400, 'inventory_dispatch_invalid');
+  if (options?.format===3) value=freeze(copy(value));
   const marker = validateMarker(value.marker), ctx = context(options);
   return finish(await transact(storage, ctx, async txn => {
     const loaded = await load(txn, ctx), denied = await requireServing(txn, loaded, marker, value.writer_generation_id, ctx); if (denied) return denied;
     const target = await targetWrite(txn, value.write_id, value.descriptor_hash, loaded.binding, ctx, { committed: true, control: loaded.control });
     if (target.operation.plan_hash !== value.plan_hash || target.item.writer_generation_id !== value.writer_generation_id) fail(409, 'inventory_dispatch_conflict');
+    if(ctx.format===3&&(target.item.version!==2||target.item.action!=='put'||target.item.kind!=='direct-source'))fail(409,'inventory_capability_unsupported');
     if (target.item.action === 'put') {
       if ((await retiredKey(txn, target, ctx)).retired !== undefined) fail(409, 'inventory_key_retired');
     } else {
@@ -545,21 +674,76 @@ async function observationDependencies(txn, input, binding, control, ctx, regist
     const link = publication.plan.links[0];
     if (link.target_write_id !== target.item.write_id || link.target_descriptor_hash !== target.record.payload.item_hash || !sameTarget(link, target.item) ||
         registrationLimit !== undefined && publication.plan.registration_after.sequence > registrationLimit) fail(409, 'inventory_observation_conflict');
+    if(link.version===2){if(target.item.version!==2)corrupt();await persistedAsync(() => validateD2LinkTarget(link,target.item),ctx.gate);}
   }
   return target;
 }
+/** Separately authenticated telemetry only. It never admits a writer or proves
+ * that a provider call was dispatched or has reached a terminal state. */
+export async function observeHistoricalReply(storage,value,options={}) {
+  if(!exact(value,['version','project_id','capability_id','original_writer_generation_id','observation'])||value.version!==3||value.project_id!==PROJECT_ID||
+     !uuid(value.capability_id)||!uuid(value.original_writer_generation_id))fail(400,'inventory_late_observation_invalid');
+  value=freeze(copy(value));
+  const input=validateObservation(value.observation);
+  if(!['put-reply','delete-reply'].includes(input.kind))fail(400,'inventory_late_observation_invalid');
+  const ctx=context({...options,format:3}),payloadHash=await ctx.gate.hash(canonical(input));
+  return transact(storage,ctx,async txn=>{
+    const loaded=await load(txn,ctx),cap=loaded.capability.cap;
+    if(value.capability_id!==cap.capability_id||value.original_writer_generation_id!==cap.old_writer_generation_id)fail(409,'inventory_late_observation_conflict');
+    const index=await ctx.gate.wait(txn.get(writeKey(input.write_id)));
+    if(!plain(index)||!digest(index.descriptor_hash))fail(409,'inventory_target_unknown');
+    const target=await targetWrite(txn,input.write_id,index.descriptor_hash,loaded.binding,ctx,{committed:true,control:loaded.control});
+    if(target.item.version!==1||target.item.writer_generation_id!==value.original_writer_generation_id||target.record.hash!==input.registration_hash||
+       target.operation.plan_hash!==input.plan_hash||target.record.sequence>cap.registration_head.sequence||
+       target.operation.plan.next.checkpoint.revision>cap.marker.checkpoint.revision||
+       (input.kind==='put-reply'?target.item.action!=='put':target.item.action!=='delete'))fail(409,'inventory_late_observation_conflict');
+    if(target.item.action==='delete'){
+      const original=await targetWrite(txn,target.item.payload.target_write_id,target.item.payload.target_descriptor_hash,loaded.binding,ctx,{committed:true,control:loaded.control});
+      if(original.item.version!==1||original.item.action!=='put'||!sameTarget(target.item,original.item)||
+         target.item.payload.expected_sha256!==original.item.payload.sha256||target.item.payload.expected_byte_size!==original.item.payload.byte_size||
+         original.record.sequence>cap.registration_head.sequence||original.operation.plan.next.checkpoint.revision>cap.marker.checkpoint.revision)fail(409,'inventory_late_observation_conflict');
+      const {retired}=await retiredKey(txn,original,ctx);
+      if(!retired||retired.delete_write_id!==target.item.write_id||retired.delete_operation_id!==target.item.operation_id||
+         retired.sequence!==target.record.sequence||retired.hash!==target.record.hash)corrupt();
+    }
+    const previous=await ctx.gate.wait(txn.get(observationKey(input.observation_id)));
+    if(previous!==undefined){
+      if(!plain(previous)||!positive(previous.sequence))corrupt();
+      const record=await checkedRecord(txn,'observations',previous.sequence,loaded.binding,ctx);
+      if(record.payload_hash!==payloadHash)fail(409,'inventory_observation_id_conflict');
+      await observationDependencies(txn,record.payload,loaded.binding,loaded.control,ctx,cap.registration_head.sequence);
+      return {...view(loaded.control),observation:record};
+    }
+    await observationDependencies(txn,input,loaded.binding,loaded.control,ctx,cap.registration_head.sequence);
+    const time=clock(ctx.now,Math.max(loaded.registrations.recorded_at,loaded.observations.recorded_at));
+    const {record,meta}=await appendRecord(txn,'observations',input,loaded.observations,time,ctx);
+    const control={...loaded.control,observation_head:headView(record)};
+    const own={version:1,project_id:PROJECT_ID,observation_id:input.observation_id,sequence:record.sequence,hash:record.hash,input_hash:payloadHash};
+    return put(txn,{[recordKey('observations',record.sequence)]:record,[metaKey('observations')]:meta,
+      [observationKey(input.observation_id)]:own,[CONTROL_KEY]:control},{...view(control),observation:record},ctx.gate);
+  });
+}
 export async function observeInventory(storage, raw, options) {
-  const input = validateObservation(raw), ctx = context(options), payloadHash = await ctx.gate.hash(canonical(input));
+  const ctx = context(options), input = ctx.format===3 ? freeze(validateObservation(raw)) : validateObservation(raw), payloadHash = await ctx.gate.hash(canonical(input));
   return transact(storage, ctx, async txn => {
     const loaded = await load(txn, ctx), previous = await ctx.gate.wait(txn.get(observationKey(input.observation_id)));
+    const currentTarget = async payload => {
+      const target = await observationDependencies(txn, payload, loaded.binding, loaded.control, ctx);
+      if (ctx.format === 3) {
+        if (loaded.control.state !== 'serving' || loaded.control.recovery_generation_id !== null) fail(409, 'inventory_observation_not_serving');
+        if (target.item.version !== 2 || target.item.writer_generation_id !== loaded.control.writer_generation_id ||
+            (await operationView(txn, target.operation, loaded.control, ctx)).status !== 'committed') fail(409, 'inventory_observation_not_current');
+      }
+      return target;
+    };
     if (previous !== undefined) {
       if (!plain(previous) || !positive(previous.sequence)) corrupt();
       const record = await checkedRecord(txn, 'observations', previous.sequence, loaded.binding, ctx);
       if (record.payload_hash !== payloadHash) fail(409, 'inventory_observation_id_conflict');
-      await observationDependencies(txn, record.payload, loaded.binding, loaded.control, ctx);
+      await currentTarget(record.payload);
       return { ...view(loaded.control), observation: record };
     }
-    await observationDependencies(txn, input, loaded.binding, loaded.control, ctx);
+    await currentTarget(input);
     const time = clock(ctx.now, Math.max(loaded.registrations.recorded_at, loaded.observations.recorded_at));
     const { record, meta } = await appendRecord(txn, 'observations', input, loaded.observations, time, ctx);
     const control = { ...loaded.control, observation_head: headView(record) };
@@ -647,7 +831,7 @@ async function checkedRecovery(txn, id, loaded, ctx) {
   const { hash, ...content } = value;
   if (hash !== await hashContent('inventory-recovery-v1', content, ctx.gate) || loaded.control.state !== 'quarantined' ||
       loaded.control.recovery_generation_id !== id || loaded.control.writer_generation_id !== value.fenced_writer_generation_id ||
-      value.old_writer_generation_id !== loaded.origin.writer_generation_id ||
+      value.old_writer_generation_id !== (loaded.capability?.cap.new_writer_generation_id ?? loaded.origin.writer_generation_id) ||
       !equal(loaded.control.marker, value.prior_marker) || loaded.control.pending_operation_id !== value.prior_pending_operation_id) corrupt();
   const initial = await checkedCutShallow(txn, id, value.initial_cut_id, ctx);
   if (initial.cut_hash !== value.initial_cut_hash || initial.creation_input_hash !== value.input_hash || initial.cut_ordinal !== 0 ||
@@ -710,6 +894,7 @@ async function sealCut(content, ctx) {
 export async function beginInventoryRecovery(storage, value, options) {
   envelope(value, ['recovery_id', 'cut_id', 'expected', 'writer_generation_id'], 'inventory_recovery_invalid');
   if (!uuid(value.recovery_id) || !uuid(value.cut_id) || !uuid(value.writer_generation_id)) fail(400, 'inventory_recovery_invalid');
+  if (options?.format===3) value=freeze(copy(value));
   const marker = validateMarker(value.expected), ctx = context(options), inputHash = await ctx.gate.hash(canonical(value));
   return finish(await transact(storage, ctx, async txn => {
     const loaded = await load(txn, ctx), c = loaded.control;
@@ -717,7 +902,7 @@ export async function beginInventoryRecovery(storage, value, options) {
       if (c.recovery_generation_id !== value.recovery_id) fail(409, 'recovery_in_progress');
       const current = await activeCut(txn, value.recovery_id, loaded, ctx);
       if (current.recovery.input_hash !== inputHash) fail(409, 'recovery_conflict');
-      return { ...view(c), recovery: current.recovery, cut: await checkedCut(txn, value.recovery_id, current.recovery.initial_cut_id, loaded.binding, ctx), active_cut: current.head };
+      return { ...view(c), recovery: current.recovery, cut: await checkedCut(txn, value.recovery_id, current.recovery.initial_cut_id, loaded.binding, ctx), active_cut: current.head, ...(ctx.format===3 ? {immutable_evidence_only:true} : {}) };
     }
     if (value.writer_generation_id !== c.writer_generation_id) return deny('writer_generation_stale');
     if (!equal(marker, c.marker)) return quarantine(txn, loaded, 'marker_mismatch', marker, ctx);
@@ -727,6 +912,7 @@ export async function beginInventoryRecovery(storage, value, options) {
     await noRecords(txn, ['inventory:progress:' + value.recovery_id + ':', 'inventory:cut:' + value.recovery_id + ':'], ctx);
     const time = clock(ctx.now, Math.max(loaded.restriction.recorded_at, loaded.registrations.recorded_at, loaded.observations.recorded_at));
     const generation = crypto.randomUUID();
+    if(generation===c.writer_generation_id||loaded.capability&&(generation===loaded.capability.cap.old_writer_generation_id||await ctx.gate.wait(txn.get(generationKey(generation)))!==undefined))corrupt();
     const cut = await sealCut({ version: 1, project_id: PROJECT_ID, recovery_id: value.recovery_id, recovery_generation_id: value.recovery_id,
       cut_id: value.cut_id, creation_input_hash: inputHash, cut_ordinal: 0, parent_cut_hash: null, parent_progress: null,
       prior_marker: c.marker, prior_pending_operation_id: c.pending_operation_id, old_writer_generation_id: c.writer_generation_id,
@@ -749,6 +935,7 @@ export async function createInventoryCut(storage, id, value, options) {
   if (!uuid(id) || value.recovery_id !== id || !uuid(value.cut_id) || !uuid(value.expected_parent_cut_id) || !digest(value.expected_parent_cut_hash) ||
       !exact(value.expected_progress, CHAIN_NAMES) || CHAIN_NAMES.some(k => !digest(value.expected_progress[k])) ||
       !exact(value.carry_prefix, CHAIN_NAMES) || CHAIN_NAMES.some(k => typeof value.carry_prefix[k] !== 'boolean')) fail(400, 'inventory_cut_invalid');
+  if (options?.format===3) value=freeze(copy(value));
   const ctx = context(options), inputHash = await ctx.gate.hash(canonical(value));
   return transact(storage, ctx, async txn => {
     const loaded = await load(txn, ctx), active = await activeCut(txn, id, loaded, ctx), existing = await ctx.gate.wait(txn.get(cutKey(id, value.cut_id)));
@@ -789,9 +976,11 @@ async function registrationDependencies(txn, record, binding, control, ctx, cut)
   if (p.entry_kind === 'link') {
     const target = await targetWrite(txn, p.item.target_write_id, p.item.target_descriptor_hash, binding, ctx, { committed: true, control });
     if (target.item.action !== 'put' || !sameTarget(p.item, target.item) || target.record.sequence > cut.registration_head.sequence) corrupt();
+    if(p.item.version===2){if(target.item.version!==2)corrupt();await persistedAsync(() => validateD2LinkTarget(p.item,target.item),ctx.gate);}
   } else if (p.item.action === 'delete') {
     const target = await targetWrite(txn, p.item.payload.target_write_id, p.item.payload.target_descriptor_hash, binding, ctx);
     if (target.item.action !== 'put' || !sameTarget(p.item, target.item) || target.record.sequence > cut.registration_head.sequence) corrupt();
+    if(p.item.version===2){if(target.item.version!==2)corrupt();await persistedAsync(() => validateD2LinkTarget(p.item,target.item),ctx.gate);}
     const retired = (await retiredKey(txn, target, ctx)).retired;
     if (!retired || retired.delete_write_id !== p.item.write_id || retired.sequence !== record.sequence || retired.hash !== record.hash) corrupt();
   } else {
@@ -828,6 +1017,7 @@ async function pageWithin(txn, id, chain, cut, after, limit, loaded, ctx) {
 }
 export async function readInventoryPage(storage, id, chain, value, options) {
   if (!uuid(id) || !exact(value, ['cut_id', 'after', 'limit']) || !uuid(value.cut_id)) fail(400, 'inventory_page_invalid');
+  if (options?.format===3) value=freeze(copy(value));
   chainName(chain); const after = cursor(value.after), ctx = context(options);
   return transact(storage, ctx, async txn => {
     const loaded = await load(txn, ctx); await activeCut(txn, id, loaded, ctx);
@@ -854,6 +1044,7 @@ export async function acknowledgeInventoryPage(storage, id, value, options) {
   envelope(value, ['recovery_id', 'recovery_generation_id', 'chain', 'cut_id', 'cut_hash', 'expected_state_hash', 'after', 'limit', 'page_hash', 'next'], 'inventory_progress_invalid');
   if (!uuid(id) || value.recovery_id !== id || !uuid(value.recovery_generation_id) || !uuid(value.cut_id) ||
       !digest(value.cut_hash) || !digest(value.expected_state_hash) || !digest(value.page_hash)) fail(400, 'inventory_progress_invalid');
+  if (options?.format===3) value=freeze(copy(value));
   chainName(value.chain); const after = cursor(value.after), next = cursor(value.next), ctx = context(options);
   const requestHash = await ctx.gate.hash(canonical(value));
   return transact(storage, ctx, async txn => {
@@ -882,20 +1073,24 @@ export async function acknowledgeInventoryPage(storage, id, value, options) {
 export function inventoryRoute(request) {
   const url = new URL(request.url);
   if (url.protocol !== 'https:' || url.username || url.password || url.hash || request.headers.has('Upgrade')) fail(400, 'transport_invalid');
-  if (!url.pathname.startsWith('/v2/')) return null;
+  const format=url.pathname.startsWith('/v3/')?3:url.pathname.startsWith('/v2/')?2:null;
+  if(!format)return null;const path=format===3?'/v2/'+url.pathname.slice(4):url.pathname;
+  if(format===3&&path==='/v2/control/capability'){if(url.search)fail(400,'query_invalid');if(request.method!=='POST')fail(405,'method_unavailable');return {kind:'capability',format};}
+  if(format===3&&path==='/v2/inventory/late-observations'){if(url.search)fail(400,'query_invalid');if(request.method!=='POST')fail(405,'method_unavailable');return {kind:'late',format};}
+  if(format===3&&path==='/v2/control/upgrade')fail(404,'route_unavailable');
   const fixed = { '/v2/control': ['GET', 'control'], '/v2/control/upgrade': ['POST', 'upgrade'], '/v2/admission': ['POST', 'admission'],
     '/v2/operations/prepare': ['POST', 'prepare'], '/v2/inventory/dispatch-admission': ['POST', 'dispatch'],
     '/v2/inventory/observations': ['POST', 'observe'], '/v2/recovery/begin': ['POST', 'begin'] };
   let target;
-  if (Object.hasOwn(fixed, url.pathname)) { const [method, kind] = fixed[url.pathname]; if (request.method !== method) fail(405, 'method_unavailable'); target = { kind }; }
+  if (Object.hasOwn(fixed, path)) { const [method, kind] = fixed[path]; if (request.method !== method) fail(405, 'method_unavailable'); target = { kind }; }
   else {
-    let match = /^\/v2\/operations\/([^/]+)(\/acknowledge)?$/.exec(url.pathname);
+    let match = /^\/v2\/operations\/([^/]+)(\/acknowledge)?$/.exec(path);
     if (match) {
       if (!uuid(match[1])) fail(404, 'route_unavailable');
       if (request.method !== (match[2] ? 'POST' : 'GET')) fail(405, 'method_unavailable');
       target = { kind: match[2] ? 'acknowledge' : 'lookup', operation_id: match[1] };
     } else {
-      match = /^\/v2\/recovery\/([^/]+)\/(cuts|enumeration-progress|inventory\/(registrations|observations))$/.exec(url.pathname);
+      match = /^\/v2\/recovery\/([^/]+)\/(cuts|enumeration-progress|inventory\/(registrations|observations))$/.exec(path);
       if (!match || !uuid(match[1])) fail(404, 'route_unavailable');
       target = { recovery_id: match[1] };
       if (match[2] === 'cuts') { if (request.method !== 'POST') fail(405, 'method_unavailable'); target.kind = 'cut'; }
@@ -903,7 +1098,7 @@ export function inventoryRoute(request) {
         if (!['GET', 'POST'].includes(request.method)) fail(405, 'method_unavailable'); target.kind = request.method === 'GET' ? 'progress' : 'progress-ack';
         if (target.kind === 'progress') {
           if ([...url.searchParams.keys()].length !== 1 || url.searchParams.getAll('chain').length !== 1) fail(400, 'query_invalid');
-          target.chain = chainName(url.searchParams.get('chain')); return target;
+          target.chain = chainName(url.searchParams.get('chain')); target.format=format;return target;
         }
       } else {
         if (request.method !== 'GET') fail(405, 'method_unavailable'); target.kind = 'page'; target.chain = match[3];
@@ -911,26 +1106,46 @@ export function inventoryRoute(request) {
         if ([...url.searchParams.keys()].length !== keys.length || keys.some(k => url.searchParams.getAll(k).length !== 1)) fail(400, 'query_invalid');
         const number = x => { if (!/^(0|[1-9][0-9]{0,15})$/.test(x)) fail(400, 'query_invalid'); const n = Number(x); if (!unsigned(n)) fail(400, 'query_invalid'); return n; };
         target.page = { cut_id: url.searchParams.get('cut_id'), after: { sequence: number(url.searchParams.get('after_sequence')), hash: url.searchParams.get('after_hash') }, limit: number(url.searchParams.get('limit')) };
-        if (!uuid(target.page.cut_id) || !digest(target.page.after.hash)) fail(400, 'query_invalid'); return target;
+        if (!uuid(target.page.cut_id) || !digest(target.page.after.hash)) fail(400, 'query_invalid');target.format=format;return target;
       }
     }
   }
-  if (url.search) fail(400, 'query_invalid'); return target;
+  if (url.search) fail(400, 'query_invalid');target.format=format;return target;
+}
+
+export async function authenticateInventoryRoute(request,env){
+  const observer=env?.RESTORE_JOURNAL_OBSERVER_TOKEN,admin=env?.RESTORE_JOURNAL_TOKEN;
+  const scoped=new URL(request.url).pathname==='/v3/inventory/late-observations';
+  if(observer!==undefined){
+    if(typeof observer!=='string'||!/^[!-~]{32,256}$/.test(observer)||typeof admin!=='string'||!/^[!-~]{32,256}$/.test(admin)) fail(503,'inventory_observer_disabled');
+    const [observerHash,adminHash]=await Promise.all([sha256(observer),sha256(admin)]);let same=0;
+    for(let i=0;i<64;i++)same|=observerHash.charCodeAt(i)^adminHash.charCodeAt(i);
+    if(same===0)fail(503,'inventory_observer_disabled');
+  }
+  if(!scoped)return authenticate(request,env);
+  if(env?.SUPABASE_PROJECT_ID!==PROJECT_ID||observer===undefined)fail(503,'inventory_observer_disabled');
+  const authorization=request.headers.get('Authorization')??'',match=authorization.length<=263?/^Bearer ([!-~]{32,256})$/.exec(authorization):null;
+  const [expected,supplied]=await Promise.all([sha256(observer),sha256(match?.[1]??'')]);let different=0;
+  for(let i=0;i<64;i++)different|=expected.charCodeAt(i)^supplied.charCodeAt(i);
+  if(different!==0||!match)fail(401,'journal_authentication_required');
 }
 export async function handleInventoryRequest(request, env, storage, { now = Date.now, deadlineMs = 5000 } = {}) {
   const gate = requestGate(request, deadlineMs);
   try {
-    await gate.wait(authenticate(request, env)); const target = inventoryRoute(request); if (!target) fail(404, 'route_unavailable');
+    await gate.wait(authenticateInventoryRoute(request, env)); const target = inventoryRoute(request); if (!target) fail(404, 'route_unavailable');
     const setting = env?.RESTORE_INVENTORY_PAGE_LIMIT ?? '1';
     if (typeof setting !== 'string' || !/^(?:[1-9]|[12][0-9]|3[0-2])$/.test(setting)) fail(503, 'inventory_configuration_invalid');
-    const options = { gate, now, pageLimit: Number(setting) }; let result;
+    if(target.format===3&&Number(setting)>8)fail(503,'inventory_configuration_invalid');
+    const options = { gate, now, pageLimit: Number(setting), format:target.format }; let result;
     if (target.kind === 'control') result = await readInventoryControl(storage, options);
     else if (target.kind === 'lookup') result = await lookupInventoryOperation(storage, target.operation_id, options);
     else if (target.kind === 'page') result = await readInventoryPage(storage, target.recovery_id, target.chain, target.page, options);
     else if (target.kind === 'progress') result = await readInventoryProgress(storage, target.recovery_id, target.chain, options);
     else {
       const value = await readCanonical(request, gate, target.kind === 'observe' ? LIMITS.observation : LIMITS.operation);
-      if (target.kind === 'upgrade') result = await upgradeInventory(storage, value, options);
+      if (target.kind === 'capability') result = await upgradeInventoryCapability(storage,value,options);
+      else if(target.kind==='late') result=await observeHistoricalReply(storage,value,options);
+      else if (target.kind === 'upgrade') result = await upgradeInventory(storage, value, options);
       else if (target.kind === 'admission') result = await admitInventory(storage, value, options);
       else if (target.kind === 'prepare') result = await prepareInventory(storage, value, options);
       else if (target.kind === 'acknowledge') result = await acknowledgeInventory(storage, target.operation_id, value, options);
