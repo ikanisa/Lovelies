@@ -207,6 +207,14 @@ not establish production writer fencing or recovery clearance. Evidence:
 `/Volumes/PRO-G40/Projects/Lovelies/verification/upload-predispatch-abort-20261027/root-fix-03/result.json`,
 and `/Volumes/PRO-G40/Projects/Lovelies/verification/upload-predispatch-abort-20261027/root-consumers-01/result.json`.
 
+Further review found that seven media writers currently mark their intent
+settled when a Storage PUT promise rejects, although rejection alone does not
+prove a remote writer has stopped. Some failure paths can then delete or verify
+absence while that outcome is unresolved. Synthetic delayed-write regression
+and a fail-closed correction are in preparation across upload, processing, face
+and export paths. Pending-writer reconciliation and the hosted acknowledgement
+contract remain open; no hosted late write or release acceptance is claimed.
+
 On an object-version mismatch, the Storage adapter now returns its conflict
 without waiting for an uncooperative response-body cancellation. The local
 regression reproduced the hang; 17 Storage and database-boundary checks, API
