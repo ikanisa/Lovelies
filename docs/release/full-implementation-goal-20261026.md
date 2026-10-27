@@ -499,6 +499,20 @@ restore reconciliation and starvation behind other holds remain open. Evidence:
 `/Volumes/PRO-G40/Projects/Lovelies/verification/retention-deletion-request-hold-20261027/root-integrated-01/result.json`,
 and `/Volumes/PRO-G40/Projects/Lovelies/verification/retention-deletion-request-hold-20261027/root-integrated-02/result.json`.
 
+An isolated fair-window experiment reproduced seven cases where older held or
+writer-blocked work, or a repeatedly selected preview, prevents later retention
+work from progressing. Its candidate passed 20 focused, 48 hold-boundary and 16
+existing retention cases locally. The initial privacy-consumer run could not load
+its journal fixture; after the isolated fixture closure was repaired, six
+privacy consumers passed with unchanged recorded inputs. The candidate is not
+integrated: it can surface a job whose earlier DELETE outcome is unknown and
+cause an earlier retry, and exact-key terminality is also needed before an
+asset/profile-only split can be accepted. Its owned cursor reset has local
+erasure/rollback tests, but existing cursor privacy, restored copies, crash
+recovery, extra idle journal writes and fairness after resets remain open.
+Evidence:
+`/Volumes/PRO-G40/Projects/Lovelies/verification/retention-starvation-fair-window-20261027/attempt-02/REVIEW.md`.
+
 A later synthetic regression exercised an actual signed registration verifier
 with its Storage read paused while a separate database context ran face-proof
 cleanup after challenge expiry. The second context deleted the three synthetic
@@ -1151,6 +1165,13 @@ complete database selection. An integrated trusted planner, journal control
 transition, checkpoint and commit/recovery path are still required. No v4
 prototype or hosted action was produced in this boundary review. Evidence:
 `/Volumes/PRO-G40/Projects/Lovelies/verification/restore-capacity-design-20261027/v4-boundary-01/BOUNDARY.md`.
+An isolated provisional scanner subsequently exercised bounded same-subject
+pages and the existing admitted read-only adapter in 14 local cases. It does
+not reserve or durably seal the full plan, prove crash-resumable end-of-set,
+fence page output, or implement v4/recovery; the 31-fact intake limit remains.
+Evidence:
+`/Volumes/PRO-G40/Projects/Lovelies/verification/restore-deletion-planner-20261027/attempt-01/REVIEW.md`
+and `/Volumes/PRO-G40/Projects/Lovelies/verification/restore-deletion-planner-20261027/attempt-01.postseal-note.md`.
 
 The proposed independent upload write inventory is documented at
 `/Volumes/PRO-G40/Projects/Lovelies/verification/restore-write-inventory-design-20261027/design.md`.
