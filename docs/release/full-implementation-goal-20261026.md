@@ -331,11 +331,19 @@ terminality are also unqualified. The first wider consumer run reached 173
 passing cases but timed out before its summary and remains incomplete. A later
 split run passed 173 affected cleanup, recovery and privacy cases; one separate
 native-PostgreSQL scan case was skipped by the in-memory harness. API types and
-the Supabase Edge entrypoint check passed. Evidence:
+the Supabase Edge entrypoint check passed. A separately reviewed PostgreSQL 17
+fixture then passed seven face-proof hold cases with no skips. Its passing tests
+asserted distinct database connections; raw PID pairs were not retained. The
+owned server shutdown and postflight confirmed the port was free and the exact
+data directory and credential were absent. This local synthetic-bucket result
+does not qualify hosted Storage, in-flight provider effects, reader exclusion or
+restore. Evidence:
 `/Volumes/PRO-G40/Projects/Lovelies/verification/face-proof-hold-20261027/agent-baseline-02/result.json`,
 `/Volumes/PRO-G40/Projects/Lovelies/verification/face-proof-hold-20261027/root-fix-02/result.json`,
 `/Volumes/PRO-G40/Projects/Lovelies/verification/face-proof-hold-20261027/root-consumers-01/result.json`,
-and `/Volumes/PRO-G40/Projects/Lovelies/verification/face-proof-hold-20261027/root-consumers-02/result.json`.
+`/Volumes/PRO-G40/Projects/Lovelies/verification/face-proof-hold-20261027/root-consumers-02/result.json`,
+`/Volumes/PRO-G40/Projects/Lovelies/verification/face-proof-hold-20261027/native-pg-run-06/result.json`,
+and `/Volumes/PRO-G40/Projects/Lovelies/verification/face-proof-hold-20261027/native-pg-run-06/independent-postflight.json`.
 
 A later synthetic regression exercised an actual signed registration verifier
 with its Storage read paused while a separate database context ran face-proof
