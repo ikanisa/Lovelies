@@ -87,6 +87,21 @@ They passed, but do not establish provider failures, power-loss behavior or
 hosted durability. Evidence:
 `/Volumes/PRO-G40/Projects/Lovelies/verification/restore-inventory-format3-extra-tests-20261027/root-focused-v2-01/result.json`.
 
+The existing legacy restriction and operation reader now copies incoming bytes,
+bounds fragments and read time, and returns on an aborted body without waiting
+for an uncooperative stream cancellation. Four Worker/handler regressions failed
+before the fix; the complete local journal suite then passed 333 cases with no
+skips, and eight final stream cases passed separately, including fragmented and
+aborted operation requests. Syntax and an isolated Worker dry build passed. The
+first dry-build command used the wrong local dependency path and is retained as
+a failure; the corrected command succeeded. These results cover the local reader,
+not provider cancellation or a transaction aborted after parsing: a later abort
+can still race a legacy commit. Evidence:
+`/Volumes/PRO-G40/Projects/Lovelies/verification/restore-legacy-body-stream-20261027/reproduction-01/result.json`,
+`/Volumes/PRO-G40/Projects/Lovelies/verification/restore-legacy-body-stream-20261027/root-whole-01/result.json`,
+`/Volumes/PRO-G40/Projects/Lovelies/verification/restore-legacy-body-stream-20261027/root-focused-02/result.json`,
+and `/Volumes/PRO-G40/Projects/Lovelies/verification/restore-legacy-body-stream-20261027/root-dry-build-02/result.json`.
+
 Refresh-delivery cancellation now collects exact restriction facts for the
 original session and its named delivered successor before tentative domain
 effects; the independent plan is prepared before the SQL commit. It preserves

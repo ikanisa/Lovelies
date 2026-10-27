@@ -9,6 +9,8 @@ export const GENESIS_HASH = '0'.repeat(64);
 export const MAX_BODY_BYTES = 2048;
 export const MAX_PAGE_SIZE = 100;
 export const HEAD_KEY = 'meta:v1';
+const MAX_BODY_FRAGMENTS = 4096;
+const BODY_READ_TIMEOUT_MS = 5000;
 const encoder = new TextEncoder();
 export const hashPattern = /^[0-9a-f]{64}$/;
 export const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
@@ -125,27 +127,34 @@ export async function readJson(request, maximum = MAX_BODY_BYTES, label = 'event
   if (request.headers.has('Content-Encoding')) fail(415, 'content_encoding_invalid');
   const length = request.headers.get('Content-Length');
   if (length !== null && (!/^(0|[1-9][0-9]*)$/.test(length) || Number(length) > maximum)) fail(413, label + '_too_large');
-  const reader = request.body?.getReader();
+  let reader;
+  try { reader = request.body?.getReader(); } catch { fail(400, label + '_invalid'); }
   if (!reader) fail(400, label + '_invalid');
-  const chunks = []; let size = 0, completed = false;
+  const bytes = new Uint8Array(maximum); let size = 0, fragments = 0, completed = false, stopped, rejectStop;
+  const stopPromise = new Promise((_, reject) => { rejectStop = reject; }); stopPromise.catch(() => {});
+  const stop = code => { if (!stopped) { stopped = new JournalError(503, label + code); rejectStop(stopped); } };
+  const onAbort = () => stop('_read_aborted');
+  const timer = setTimeout(() => stop('_read_timeout'), BODY_READ_TIMEOUT_MS);
+  if (request.signal?.aborted) onAbort(); else request.signal?.addEventListener('abort', onAbort, { once: true });
   try {
     for (;;) {
-      const { done, value } = await reader.read();
+      const { done, value } = await Promise.race([reader.read(), stopPromise]);
+      if (stopped || request.signal?.aborted) throw stopped ?? new JournalError(503, label + '_read_aborted');
       if (done) { completed = true; break; }
-      size += value.byteLength;
-      if (size > maximum) { await reader.cancel(); fail(413, label + '_too_large'); }
-      chunks.push(value);
+      if (!(value instanceof Uint8Array)) fail(400, label + '_invalid');
+      if (++fragments > MAX_BODY_FRAGMENTS || size + value.byteLength > maximum) fail(413, label + '_too_large');
+      bytes.set(value, size); size += value.byteLength;
     }
   } finally {
-    if (!completed) await reader.cancel().catch(() => {});
-    reader.releaseLock();
+    clearTimeout(timer); request.signal?.removeEventListener('abort', onAbort);
+    if (!completed) { try { Promise.resolve(reader.cancel()).catch(() => {}); } catch {} }
+    try { reader.releaseLock(); } catch {}
   }
   if (length !== null && Number(length) !== size) fail(400, label + '_length_invalid');
-  const bytes = new Uint8Array(size); let offset = 0;
-  for (const chunk of chunks) { bytes.set(chunk, offset); offset += chunk.byteLength; }
   let parsed;
-  try { parsed = JSON.parse(new TextDecoder('utf-8', { fatal: true }).decode(bytes)); }
+  try { parsed = JSON.parse(new TextDecoder('utf-8', { fatal: true }).decode(bytes.subarray(0, size))); }
   catch { fail(400, label + '_invalid'); }
+  if (request.signal?.aborted) fail(503, label + '_read_aborted');
   return parsed;
 }
 export const eventKey = sequence => 'event:' + String(sequence).padStart(16, '0');
