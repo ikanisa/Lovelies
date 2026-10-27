@@ -141,6 +141,19 @@ or recovery clearance. Evidence:
 `/Volumes/PRO-G40/Projects/Lovelies/verification/storage-error-stream-20261027/root-focused-02/result.json`,
 and `/Volumes/PRO-G40/Projects/Lovelies/verification/storage-error-stream-20261027/root-deno-check-01/result.json`.
 
+API response teardown now initiates unused-stream cancellation without waiting
+indefinitely for an uncooperative source. Two 403/404 cases reproduced the prior
+hang; six focused cases now pass, including final-admission failure with a stale
+response and locked, throwing or rejecting cancellation. The affected local
+schema/auth/transaction consumer run passed 41 of 42 cases, with its real
+three-pool case skipped; API types and the Edge entrypoint check passed. Initiated
+cancellation is not proof that a remote stream settled, and later side effects
+are not ruled out by this change. Evidence:
+`/Volumes/PRO-G40/Projects/Lovelies/verification/api-request-cleanup-20261027/reproduction-01/result.json`,
+`/Volumes/PRO-G40/Projects/Lovelies/verification/api-request-cleanup-20261027/root-focused-02/result.json`,
+`/Volumes/PRO-G40/Projects/Lovelies/verification/api-request-cleanup-20261027/root-consumers-01/result.json`,
+and `/Volumes/PRO-G40/Projects/Lovelies/verification/api-request-cleanup-20261027/root-deno-01/result.json`.
+
 The second local Edge attempt failed at the missing-auth Storage control before
 starting Edge or its database. Docker stop commands succeeded, but their output
 did not match the coordinator's expected acknowledgement, so it retained the

@@ -24,6 +24,12 @@ function failure(error:unknown):Response {
   if(error instanceof ApiError)return ok({error:{code:error.code}},error.status);
   console.error('lovelies_api_failure',error instanceof Error?error.name:'unknown');return ok({error:{code:'internal_error'}},500);
 }
+function cancelUnusedBody(body:ReadableStream<Uint8Array>|null|undefined):void {
+  if(!body||body.locked)return;
+  // Cancellation can be initiated, but an uncooperative underlying source may
+  // never settle its promise. Do not let it hold an already-decided response.
+  try{void body.cancel().catch(()=>{});}catch{}
+}
 function missingConfiguration(env:SupabaseEnv):string[]{
   const missing:string[]=[];
   for(const key of ['PHOTOS','QUARANTINE','PRIVACY_EXPORTS','PHOTO_JOBS','FACE_AUTH_VERIFIER','PHOTO_PROCESSOR','MODEL_SERVICE_READINESS'] as const)if(!env[key])missing.push(key);
@@ -112,15 +118,16 @@ export function createHandler(ctx:AppContext):(request:Request)=>Promise<Respons
           if(!handled)throw new ApiError(404,'route_not_found');response=handled;
         }
       }catch(error){response=failure(error);}
-      finally{if(request.body&&!request.body.locked)await request.body.cancel().catch(()=>{});}
+      finally{cancelUnusedBody(request.body);}
       response=decorate(response);return response;
     });}catch(error){
       // The invocation's final admission can fail after a private response was
-      // constructed. Cancel that body before returning the same JSON/CORS error
-      // contract; no stale payload is released merely because its last query passed.
-      await response?.body?.cancel().catch(()=>{});
+      // constructed. Start cancelling that body before returning the same
+      // JSON/CORS error contract; no stale payload is released merely because
+      // its last query passed. Cancellation itself may remain unsettled.
+      cancelUnusedBody(response?.body);
       const body=(activeRequest??incoming).body;
-      if(body&&!body.locked)await body.cancel().catch(()=>{});
+      cancelUnusedBody(body);
       return decorate(failure(error));
     }
   };
