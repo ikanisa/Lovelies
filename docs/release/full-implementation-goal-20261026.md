@@ -302,6 +302,13 @@ A Python syntax check also refreshed the ignored
 `scripts/__pycache__/test-ios-openface.cpython-312.pyc`; its prior state was not
 captured, so it remains in place. Cleanup evidence:
 `/Users/jeanbosco/Library/Application Support/LoveliesVerification/ios-share-photo-selection-20261029-root-01/cleanup-module-caches-01/result.json`.
+The unrun app-level fixture now creates its own private scratch directory
+exclusively before constructing the store, so it cannot intentionally prune an
+existing directory with that name. Its updated source typechecked; the new
+compiler cache was inventoried and removed with its result and app module
+retained. The test itself still requires a simulator run. Evidence:
+`/Users/jeanbosco/Library/Application Support/LoveliesVerification/ios-share-photo-selection-20261029-root-01/ios-test-typecheck-03/result.json`
+and `/Users/jeanbosco/Library/Application Support/LoveliesVerification/ios-share-photo-selection-20261029-root-01/cleanup-module-caches-02/result.json`.
 A separate one-subject handler fixture reproduced loss of a one-use privacy
 export when its response is discarded after the server has consumed its grant
 and retired the object. Repeating the same grant-issuance operation key also
@@ -596,6 +603,13 @@ producers, operator/writer separation, custody and restore clearance remain
 unimplemented. Evidence:
 `/Volumes/PRO-G40/Projects/Lovelies/verification/restore-bound-v4-journal-20261029/attempt-01/REVIEW.md`
 and `/Volumes/PRO-G40/Projects/Lovelies/verification/restore-bound-v4-journal-20261029/root-01/result.json`.
+A further isolated successor validates and preserves up to four contiguous,
+committed f3 post-binding plans in their original acceptance hash domain. Its
+26 synthetic checks passed, including old resource history and unchanged prior
+receipts. Pending plans, advanced f3 observations and longer histories still
+fail closed; no serving, SQL or restore qualification follows. Evidence:
+`/Volumes/PRO-G40/Projects/Lovelies/verification/restore-bound-v4-journal-20261029/attempt-02/REVIEW.md`
+and `/Volumes/PRO-G40/Projects/Lovelies/verification/restore-bound-v4-journal-20261029/root-02/result.json`.
 
 The next local checkpoint adds exact device-revocation facts and a bounded,
 independent journal inventory. Device retirement records the selected old device

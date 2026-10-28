@@ -5,6 +5,7 @@ import CryptoKit
 import ImageIO
 import LocalAuthentication
 import UIKit
+import Darwin
 @testable import Lovelies
 
 final class ReleaseReadinessTests: XCTestCase {
@@ -551,6 +552,7 @@ private actor PhotoShareSelectionTransport: NativeTransport {
         let repository = BackendRepository(origin: URL(string: "https://fixture.invalid")!, transport: transport, secrets: vault, signer: PhotoShareSelectionSigner())
         _ = try await repository.bootstrap()
         let scratch = FileManager.default.temporaryDirectory.appendingPathComponent("lovelies-selection-test-" + UUID().uuidString, isDirectory: true)
+        guard mkdir(scratch.path, 0o700) == 0 else { throw NativeAPIError.unavailable("selection_test_scratch_unavailable") }
         let store = LiveAppStore(sharedFiles: NativeAuthorizedShareFiles(directory: scratch), repository: repository,
             savePhotoToLibrary: { bytes, requireCurrent in try await saver.save(bytes, requireCurrent: requireCurrent) })
         store.refreshAudience(); try await waitUntilIdle(store)
