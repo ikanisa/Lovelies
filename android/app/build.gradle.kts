@@ -97,7 +97,7 @@ val validateLoveliesRelease=tasks.register("validateLoveliesRelease") {
             require(uri!=null && uri.scheme=="https" && !uri.host.isNullOrBlank() && uri.userInfo==null && uri.port in setOf(-1,443) && uri.query==null && uri.fragment==null && uri.normalize()==uri) { "Invalid HTTPS release URL in $key" }
         }
         require(values.getValue("loveliesApiUrl").trimEnd('/')=="https://ltqfplqevxztlswlzexn.supabase.co/functions/v1/lovelies-api") { "Release API must target the selected Lovelies Supabase function." }
-        require(Regex("^[A-Za-z0-9](?:[A-Za-z0-9.-]*[A-Za-z0-9])?\\.[A-Za-z]{2,}$").matches(values.getValue("loveliesLinkHost"))) { "Set the verified HTTPS App Links host." }
+        require(values.getValue("loveliesLinkHost") == "lovelies.ikanisa.com") { "The release App Links host must match the published Lovelies association host." }
     }
 }
 tasks.matching { it.name=="preReleaseBuild" }.configureEach { dependsOn(validateLoveliesRelease) }

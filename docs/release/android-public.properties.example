@@ -12,7 +12,8 @@ loveliesPlayProduct=com.lovelies.memories.pro.monthly
 loveliesPrivacyPolicyUrl=
 loveliesTermsUrl=
 loveliesDeletionUrl=
-loveliesLinkHost=
+# Published association documents are verified for this host.
+loveliesLinkHost=lovelies.ikanisa.com
 loveliesFirebaseProjectId=easymoai
 loveliesFirebaseAppId=1:423260854848:android:05e378657a0a819135dda5
 # Verified public client key is in the ignored .release-secrets/android/firebase-public-client.properties.

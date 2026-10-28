@@ -54,6 +54,13 @@ the expected package and Play signing fingerprint; Apple's CDN returned the
 reviewed AASA document. Query-string variants still reach the original 404, as
 the routes have no wildcard. The iOS Release host is set to the verified domain;
 Android release must explicitly receive the same `loveliesLinkHost` property.
+The Android preflight now rejects any other or blank host. In an offline
+temporary project with a synthetic signing key, the verified host passed and
+appeared in the generated release BuildConfig and both manifest paths; the two
+negative controls failed as intended. The temporary project was removed and
+268 recorded source inputs were unchanged. This is not a signed package,
+device tap or store check. Evidence:
+`/Volumes/PRO-G40/Projects/Lovelies/verification/android-release-link-preflight-20261028/attempt-01/result.json`.
 Final signed artifacts and physical device taps remain unverified. Evidence:
 `/Volumes/PRO-G40/Projects/Lovelies/verification/link-association-publish-20261028/attempt-01/`,
 `/Volumes/PRO-G40/Projects/Lovelies/verification/link-association-methods-20261028/attempt-01/result.json`,
@@ -74,6 +81,13 @@ Evidence: `/Volumes/PRO-G40/Projects/Lovelies/verification/physical-device-readb
 The selected Supabase project's security advisor returned no lints on 28 October.
 This is a point-in-time advisor result, not a complete security audit. Evidence:
 `/Volumes/PRO-G40/Projects/Lovelies/verification/supabase-security-advisors-20261028/attempt-01/result.json`.
+Its performance advisor separately reported 82 foreign keys without a covering
+index and 27 indexes with no recorded use. The eight sampled workload tables
+had zero estimated live rows at inspection, not proof of empty tables. Evaluate
+index choices and write/storage cost against representative deletion, sharing,
+notification and growth workloads; do not remove indexes merely because this
+early project has no observed use. Evidence:
+`/Volumes/PRO-G40/Projects/Lovelies/verification/supabase-performance-advisors-20261028/attempt-01/result.json`.
 
 Android notification posts and taps previously used a 32-bit UUID hash; two
 valid UUIDs were shown to collide, replacing a notification and retargeting its
@@ -162,6 +176,23 @@ unintegrated: a claimed sheet that is never presented may leave the presentation
 barrier held, and server terminal-rejection, restore and deletion guarantees
 remain open. Evidence:
 `/Volumes/PRO-G40/Projects/Lovelies/verification/ios-notification-complete-20261028/attempt-07/REVIEW.md`.
+A further isolated host implementation passed 45 focused tests, with one
+interactive dismissal test skipped. A separate interactive attempt could not
+deliver a gesture; a screenshot shows the native sheet appeared but does not
+prove dismissal. It remains unintegrated pending real dismissal, navigation,
+VoiceOver, scene-transition and queued-modal qualification; background retirement
+may interrupt a normal handoff. Evidence:
+`/Volumes/PRO-G40/Projects/Lovelies/verification/ios-share-host-implementation-20261028/attempt-01/REVIEW.md`.
+The next isolated host build succeeded but its partial simulator run exposed
+two failed assertions in the scene-change/presentation case and then crashed on
+an unchecked test-fixture index. The candidate preserved a photo and did not
+request dismissal despite no simulated user selection; UIKit also attempted
+to open its nonexistent placeholder. The run had 28 passes and one skip before
+the failure, and was stopped as internal free space fell below the 2 GiB floor;
+its xcresult is incomplete. The remaining new cases were not run. The owned
+simulator was removed and pre-existing devices were retained. This candidate is
+not integrated and does not establish safe handoff or cleanup. Evidence:
+`/Volumes/PRO-G40/Projects/Lovelies/verification/ios-share-host-implementation-20261028/attempt-02/`.
 The authenticated request-decision status receipt is now integrated locally.
 It binds a recorded result to the actor, action, source, original key and
 canonical input hash; unknown remains nonterminal. Its read-only database path
@@ -179,6 +210,19 @@ Edge entrypoint check. The Android recovery caller has not yet been adapted to
 this POST contract; a current row is not proof of the original operation's
 device or of provider/restore terminality. Evidence:
 `/Volumes/PRO-G40/Projects/Lovelies/verification/push-receipt-integration-20261028/attempt-01/result.json`.
+An isolated Android successor uses the POST receipt and passed seven local
+transport cases against the copied API and eleven fake registration cases. Its
+real Android Keystore and repository then preserved a synthetic pending record
+across logout and a synthetic deletion-storage rewrite in three separate API 36
+emulator processes, without restoring credentials or dispatching push. The
+candidate remains unintegrated: actual erasure, terminality, restricted-audience
+removal, producer provenance, provider effects, restore and finite retention of
+pending tokens remain open. The disposable emulator and image were removed
+after evidence preservation. One task-created AppleDouble sidecar disappeared
+with that image; its exact bytes were not preserved, and no pre-existing user
+file was targeted. Evidence:
+`/Volumes/PRO-G40/Projects/Lovelies/verification/android-push-post-transport-20261028/attempt-01/REVIEW.md`
+and `/Volumes/T7/Lovelies-PushVault-20261028-e53cdc66ba/README.md`.
 An isolated journal worker accidentally opened `/tmp/v4-snippet-review-not-used`
 for writing; it is now empty. Its creation and modification timestamps match
 the reported write, but its prior existence or contents are not conclusively
