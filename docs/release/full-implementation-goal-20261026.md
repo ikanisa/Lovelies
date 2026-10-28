@@ -355,6 +355,13 @@ rewrite. A digest-only local record and independent generation-retirement fence
 are proposed but not implemented; unknown registration and provider effects
 cannot be treated as terminal. Evidence:
 `/Volumes/PRO-G40/Projects/Lovelies/verification/android-push-erasure-terminality-20261028/design-01/DESIGN.md`.
+An independent local-display candidate serializes its app-created notification
+post with opt-out and observed session retirement. Eleven gate checks and six
+baseline/six candidate adapter checks passed with synthetic host fakes. It is
+not integrated: durable preference failure, OS/provider auto-display, process
+death and system cancellation remain open; the 4,096-tag limit and the timing
+of security-epoch retirement also require review. Evidence:
+`/Volumes/PRO-G40/Projects/Lovelies/verification/android-notification-display-retirement-20261028/root-01/result.json`.
 An isolated journal worker accidentally opened `/tmp/v4-snippet-review-not-used`
 for writing; it is now empty. Its creation and modification timestamps match
 the reported write, but its prior existence or contents are not conclusively
@@ -1489,6 +1496,14 @@ server alert before a certificate, so the hostname control and full test were
 inconclusive; the probe did not retain the positive HTTP status. API 25 did not
 run. The reused-package test image was removed after preservation. Evidence:
 `/Volumes/T7/Lovelies-TLS-20261028-3bc64da245/http-exec-9deedf4032c0/run-summary.json`.
+Two subsequent read-only T7 operations stalled; their identified task processes
+later exited. The volume remains mounted with the expected UUID, and a small
+task-owned write/read succeeded, but the cause and overall filesystem health
+are unconfirmed. The next diagnostic runner is unsealed and has not run; avoid
+new T7-dependent execution until its state is independently reconciled. No
+remount or repair was attempted. The task-owned probe was retained at
+`/Volumes/T7/Lovelies-TLS-20261028-3bc64da245/http-plan-03/io-probe-01.txt`;
+its current presence and file hash have not been rechecked.
 Qualify actual final signed clients and the same app transport against the future
 suite set, including a no-shared-suite failure, without recording credentials
 or payloads. See the
