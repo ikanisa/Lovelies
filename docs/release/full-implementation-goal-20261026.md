@@ -318,6 +318,16 @@ run passed. Reliable recovery needs a versioned logical delivery and durable
 client acknowledgement, with current session, deletion, restore and exact-object
 barriers; no export fix is integrated. Evidence:
 `/Volumes/PRO-G40/Projects/Lovelies/verification/privacy-export-delivery-loss-20261029/REVIEW.md`.
+An isolated v2 model passed 17 same-subject checks for a pre-saved identity,
+same-session retries, fixed expiry and acknowledgement of an exact dispatch.
+It permits retransmission within one logical delivery, which differs from v1's
+literal one-GET behavior. Two negative controls show that an old v1 worker can
+ignore the proposed isolation and a same-generation rollback can reopen a
+delivery without an independently current journal. The model uses a fake fence
+and memory-only staging; no production protocol or native recovery is integrated.
+Evidence:
+`/Volumes/PRO-G40/Projects/Lovelies/verification/privacy-export-v2-model-20261029/DESIGN.md`
+and `/Volumes/PRO-G40/Projects/Lovelies/verification/privacy-export-v2-model-20261029/model-run-03/result.json`.
 The shared iOS preview now sweeps expired in-memory entries on every exit,
 including delayed errors and cancellation, without clearing a newer valid
 entry. The baseline counterexamples, 21 focused checks and 35 existing
