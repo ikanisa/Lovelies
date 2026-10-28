@@ -81,6 +81,13 @@ Evidence: `/Volumes/PRO-G40/Projects/Lovelies/verification/physical-device-readb
 The selected Supabase project's security advisor returned no lints on 28 October.
 This is a point-in-time advisor result, not a complete security audit. Evidence:
 `/Volumes/PRO-G40/Projects/Lovelies/verification/supabase-security-advisors-20261028/attempt-01/result.json`.
+A 29 October read-only connector check found the selected project healthy, its
+schema at version 13, all 69 private tables under forced RLS, and no table
+privileges for the anonymous or authenticated client roles. Seven migration
+history entries were listed and no Edge Functions were deployed at that check.
+The API deployment and independent hosted behavior remain open. This metadata
+does not verify backups, user data, provider operation or a full security audit.
+Evidence: `/Volumes/PRO-G40/Projects/Lovelies/verification/supabase-readback-20261029/result.json`.
 Its performance advisor separately reported 82 foreign keys without a covering
 index and 27 indexes with no recorded use. The eight sampled workload tables
 had zero estimated live rows at inspection, not proof of empty tables. Evaluate
