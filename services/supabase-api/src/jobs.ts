@@ -41,10 +41,13 @@ export async function drainJobs(ctx:AppContext,limit=8):Promise<{processed:numbe
         else if(job.category==='privacy')await processPrivacyJob(payload,ctx);
         else if(job.category==='notification')await processNotificationJob(payload,ctx);
         else throw new ApiError(500,'invalid_job');
-        await ctx.db.run("UPDATE job_queue SET state='completed',lease_token=NULL,lease_until=NULL,completed_at=?,error_code=NULL WHERE id=? AND lease_token=?",ctx.now(),job.id,job.lease_token);return 'processed' as const;
+        // A reclaimed job belongs to its successor. Report completion only
+        // when this worker actually commits its own processing lease.
+        const completed=await ctx.db.transaction(()=>ctx.db.one<{id:string}>("UPDATE job_queue SET state='completed',lease_token=NULL,lease_until=NULL,completed_at=?,error_code=NULL WHERE id=? AND state='processing' AND lease_token=? RETURNING id",ctx.now(),job.id,job.lease_token));
+        return completed?'processed' as const:'failed' as const;
       }catch(error){
         const code=error instanceof ApiError?error.code:'job_execution_failed';
-        await ctx.db.run("UPDATE job_queue SET state=?,lease_token=NULL,lease_until=NULL,available_at=?,error_code=? WHERE id=? AND lease_token=?",job.attempts>=19?'failed':'pending',ctx.now()+Math.min(3600000,30000*2**Math.min(job.attempts,7)),code,job.id,job.lease_token);return 'failed' as const;
+        await ctx.db.run("UPDATE job_queue SET state=?,lease_token=NULL,lease_until=NULL,available_at=?,error_code=? WHERE id=? AND state='processing' AND lease_token=?",job.attempts>=19?'failed':'pending',ctx.now()+Math.min(3600000,30000*2**Math.min(job.attempts,7)),code,job.id,job.lease_token);return 'failed' as const;
       }
     });
     if(outcome===null)break;
