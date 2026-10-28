@@ -454,3 +454,187 @@ private final class ConnectedDeviceQASigner: NativeDeviceSigner, @unchecked Send
         try ConnectedDeviceQA.require(!(try DeviceIdentity.hasExistingKey(alias: ownedAlias)), "owned_key_cleanup_not_confirmed")
     }
 }
+
+// Synthetic same-account test of the actual LiveAppStore and repository path.
+// The transport is in-memory and the test creates only its own temporary folder.
+private final class PhotoShareSelectionSecrets: NativeSecretStore, @unchecked Sendable {
+    private let lock = NSLock()
+    private var slots: [String: Data] = [:]
+    func read(_ name: String) throws -> Data? { lock.lock(); defer { lock.unlock() }; return slots[name] }
+    func write(_ name: String, data: Data?) throws { lock.lock(); defer { lock.unlock() }; slots[name] = data }
+}
+private struct PhotoShareSelectionSigner: NativeDeviceSigner {
+    func sign(_ data: Data) throws -> String { throw NativeAPIError.invalidResponse }
+    func sha256(_ data: Data) -> String { SHA256.hash(data: data).map { String(format: "%02x", $0) }.joined() }
+    func clear() {}
+}
+private actor PhotoShareSelectionGate {
+    private var opened = false
+    private var waiter: CheckedContinuation<Void, Never>?
+    func hold() async {
+        if opened { return }
+        await withCheckedContinuation { waiter = $0 }
+    }
+    func open() { opened = true; waiter?.resume(); waiter = nil }
+}
+private actor PhotoShareSelectionTransport: NativeTransport {
+    static let account = "00000000-0000-4000-8000-000000000091"
+    static let ticket = "00000000-0000-4000-8000-000000000092"
+    static let assetA = "00000000-0000-4000-8000-000000000093"
+    let gate: PhotoShareSelectionGate, reached: XCTestExpectation?
+    private(set) var signCount = 0, downloadCount = 0
+    init(gate: PhotoShareSelectionGate, reached: XCTestExpectation?) { self.gate = gate; self.reached = reached }
+    nonisolated func cancelPending() {}
+    func send(_ request: URLRequest, limit: Int) async throws -> NativeHTTPReply {
+        func json(_ value: WireValue) throws -> NativeHTTPReply {
+            .init(status: 200, headers: ["content-type": "application/json"], data: try value.encoded())
+        }
+        switch request.url!.path {
+        case "/me":
+            return try json(.object(["user_id": .string(Self.account), "auth_method": .string("registered_face"), "authenticated": .bool(true)]))
+        case "/me/audience":
+            return try json(.object(["protocol": .string(NativeAudienceProjection.protocolName), "policy_version": .string(NativeAudienceProjection.policy), "account_id": .string(Self.account),
+                "audience": .object(["age_band": .string("18_plus"), "status": .string("eligible"), "version": .integer(1), "policy_version": .string(NativeAudienceProjection.policy), "next_review_at": .null]),
+                "guardian_request": .null, "capabilities": .object(["face_authentication": .bool(true), "photo_matching": .bool(true), "photo_processing": .bool(true)])]))
+        case "/downloads/sign":
+            signCount += 1
+            let body = try WireValue.decoded(request.httpBody!)
+            guard let asset = body["asset_id"].string,
+                  [Self.assetA, "00000000-0000-4000-8000-000000000094"].contains(asset),
+                  body["operation_key"].string != nil else { throw NativeAPIError.invalidResponse }
+            return try json(.object(["method": .string("GET"), "download_url": .string("https://fixture.invalid/downloads/" + Self.ticket),
+                                     "expires_in": .integer(120), "source_version": .string("source-v1")]))
+        case "/downloads/" + Self.ticket:
+            downloadCount += 1; reached?.fulfill(); await gate.hold()
+            return .init(status: 200, headers: ["content-type": "image/png"], data: Data([0x89, 0x50, 0x4e, 0x47, 0x01]))
+        default: throw NativeAPIError.invalidResponse
+        }
+    }
+}
+
+@MainActor private final class PhotoShareSelectionSaver {
+    private(set) var attempts = 0, dispatched = 0
+    var permissionGate: PhotoShareSelectionGate?
+    var permissionReached: XCTestExpectation?
+    func save(_ bytes: Data, requireCurrent: @escaping @MainActor () async throws -> Void) async throws {
+        attempts += 1
+        try await requireCurrent()
+        if let permissionGate {
+            permissionReached?.fulfill()
+            await permissionGate.hold()
+        }
+        try await requireCurrent()
+        dispatched += 1
+    }
+}
+
+@MainActor final class PhotoShareSelectionIntegrationTests: XCTestCase {
+    private func photo(_ id: String, _ version: String) throws -> NativePhoto {
+        try NativePhoto(.object(["id": .string(id), "title": .string("Synthetic photo"), "media_source": .string("personal"), "version": .string(version)]))
+    }
+    private func waitUntilIdle(_ store: LiveAppStore) async throws {
+        for _ in 0..<500 {
+            if !store.busy { return }
+            try await Task.sleep(nanoseconds: 10_000_000)
+        }
+        XCTFail("Synthetic operation did not become idle")
+        throw NativeAPIError.unavailable("synthetic_test_timeout")
+    }
+    private func makeStore(_ reached: XCTestExpectation?, saver: PhotoShareSelectionSaver) async throws -> (LiveAppStore, PhotoShareSelectionGate, PhotoShareSelectionTransport, URL) {
+        let gate = PhotoShareSelectionGate(), vault = PhotoShareSelectionSecrets()
+        let transport = PhotoShareSelectionTransport(gate: gate, reached: reached)
+        let now = Date(), lifetime = 900
+        let claims: WireValue = .object(["sub": .string(PhotoShareSelectionTransport.account), "auth_method": .string("registered_face"), "exp": .integer(Int(now.timeIntervalSince1970) + lifetime + 1)])
+        let credential = try NativeCredentials(.object(["access_token": .string("fixture." + (try claims.encoded()).base64URL + ".fixture"), "refresh_token": .string("synthetic-selection-refresh"),
+            "account_id": .string(PhotoShareSelectionTransport.account), "auth_method": .string("registered_face"), "expires_in": .integer(lifetime), "roles": .strings(["user"])]), now: now)
+        try vault.write("credentials", data: JSONEncoder().encode(credential))
+        let repository = BackendRepository(origin: URL(string: "https://fixture.invalid")!, transport: transport, secrets: vault, signer: PhotoShareSelectionSigner())
+        _ = try await repository.bootstrap()
+        let scratch = FileManager.default.temporaryDirectory.appendingPathComponent("lovelies-selection-test-" + UUID().uuidString, isDirectory: true)
+        let store = LiveAppStore(sharedFiles: NativeAuthorizedShareFiles(directory: scratch), repository: repository,
+            savePhotoToLibrary: { bytes, requireCurrent in try await saver.save(bytes, requireCurrent: requireCurrent) })
+        store.refreshAudience(); try await waitUntilIdle(store)
+        XCTAssertEqual(store.session?.accountID, PhotoShareSelectionTransport.account)
+        XCTAssertTrue(store.session?.authenticated == true)
+        return (store, gate, transport, scratch)
+    }
+    private func cleanup(_ store: LiveAppStore, scratch: URL) throws {
+        // This per-test directory is newly generated and contains only the
+        // synthetic file, if the actual app share path produced one.
+        store.retireSharedFile()
+        if FileManager.default.fileExists(atPath: scratch.path) { try FileManager.default.removeItem(at: scratch) }
+    }
+    func testActualShareAndSaveRejectStaleSelectedPhoto() async throws {
+        let assetA = PhotoShareSelectionTransport.assetA, assetB = "00000000-0000-4000-8000-000000000094"
+        let a = try photo(assetA, "source-v1"), b = try photo(assetB, "source-v1"), newVersion = try photo(assetA, "source-v2")
+        for action in ["share", "save"] {
+            for mode in ["A-B", "A-B-A", "A-new-version", "unchanged"] {
+                let reached = expectation(description: "Synthetic download reached for " + action + " " + mode)
+                let saver = PhotoShareSelectionSaver()
+                let (store, gate, transport, scratch) = try await makeStore(reached, saver: saver)
+                store.currentPhoto = a
+                if action == "share" { store.shareCurrentPhoto() } else { store.saveCurrentPhoto() }
+                await fulfillment(of: [reached], timeout: 5)
+                switch mode {
+                case "A-B": store.currentPhoto = b
+                case "A-B-A": store.currentPhoto = b; store.currentPhoto = a
+                case "A-new-version": store.currentPhoto = newVersion
+                default: break
+                }
+                await gate.open(); try await waitUntilIdle(store)
+                let downloaded = await transport.downloadCount
+                XCTAssertEqual(downloaded, 1)
+                if mode == "unchanged" && action == "share" {
+                    guard let file = store.sharedFile else { XCTFail("Unchanged selection did not reach its own share slot"); try cleanup(store, scratch: scratch); continue }
+                    XCTAssertEqual(try Data(contentsOf: file.url), Data([0x89, 0x50, 0x4e, 0x47, 0x01]))
+                } else if mode == "unchanged" {
+                    XCTAssertEqual(saver.attempts, 1); XCTAssertEqual(saver.dispatched, 1)
+                } else {
+                    XCTAssertNil(store.sharedFile, "Old bytes must not be shared after \(mode)")
+                    XCTAssertNotNil(store.error, "The stale operation must not report success")
+                    if action == "save" { XCTAssertEqual(saver.dispatched, 0, "Old bytes must not be dispatched to the fake Photos handoff") }
+                }
+                try cleanup(store, scratch: scratch)
+            }
+        }
+    }
+    func testSelectionChangesBeforeWorkStartsDoNotFetchAnotherPhoto() async throws {
+        let a = try photo(PhotoShareSelectionTransport.assetA, "source-v1")
+        let b = try photo("00000000-0000-4000-8000-000000000094", "source-v1")
+        for action in ["share", "save"] {
+            for returnToA in [false, true] {
+                let saver = PhotoShareSelectionSaver()
+                let (store, gate, transport, scratch) = try await makeStore(nil, saver: saver)
+                await gate.open()
+                store.currentPhoto = a
+                if action == "share" { store.shareCurrentPhoto() } else { store.saveCurrentPhoto() }
+                // The test remains on MainActor, so the scheduled work has not
+                // yet run when these selection changes are published.
+                store.currentPhoto = b
+                if returnToA { store.currentPhoto = a }
+                try await waitUntilIdle(store)
+                let signed = await transport.signCount, downloaded = await transport.downloadCount
+                XCTAssertEqual(signed, 0); XCTAssertEqual(downloaded, 0)
+                XCTAssertEqual(saver.dispatched, 0)
+                XCTAssertNil(store.sharedFile); XCTAssertNotNil(store.error)
+                try cleanup(store, scratch: scratch)
+            }
+        }
+    }
+    func testSelectionChangeDuringSavePermissionWaitIsRechecked() async throws {
+        let a = try photo(PhotoShareSelectionTransport.assetA, "source-v1")
+        let b = try photo("00000000-0000-4000-8000-000000000094", "source-v1")
+        let downloadReached = expectation(description: "Synthetic download ready")
+        let permissionReached = expectation(description: "Synthetic permission handoff")
+        let saver = PhotoShareSelectionSaver(), permissionGate = PhotoShareSelectionGate()
+        saver.permissionGate = permissionGate; saver.permissionReached = permissionReached
+        let (store, downloadGate, _, scratch) = try await makeStore(downloadReached, saver: saver)
+        store.currentPhoto = a; store.saveCurrentPhoto()
+        await fulfillment(of: [downloadReached], timeout: 5); await downloadGate.open()
+        await fulfillment(of: [permissionReached], timeout: 5)
+        store.currentPhoto = b; await permissionGate.open(); try await waitUntilIdle(store)
+        XCTAssertEqual(saver.attempts, 1); XCTAssertEqual(saver.dispatched, 0)
+        XCTAssertNotNil(store.error)
+        try cleanup(store, scratch: scratch)
+    }
+}

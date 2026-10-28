@@ -30,7 +30,7 @@ PRODUCTION = [
 CONTROLLED = [
     'NativeProtocolTests', 'NativeConnectionTests', 'NativeOrdinaryLoginTests', 'NativeCameraRecoveryTests',
     'NativeEnrollmentRecoveryTests', 'NativeFaceProfileLifecycleTests',
-    'NativeAccountRecoveryTests', 'NativeRefreshDeliveryTests', 'NativePreviewExitExpiryTests',
+    'NativeAccountRecoveryTests', 'NativeRefreshDeliveryTests', 'NativePreviewExitExpiryTests', 'NativePhotoSelectionTests',
 ]
 HTTP = {
     'live': ('NativeLiveHTTPJourney', [None]),
@@ -42,7 +42,7 @@ HTTP = {
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('--suite', choices=['wire', 'controlled', 'preview-expiry', *HTTP], required=True)
+    parser.add_argument('--suite', choices=['wire', 'controlled', 'preview-expiry', 'photo-selection', *HTTP], required=True)
     parser.add_argument('--config', type=Path, help='Frozen shared native fixture config; required for HTTP suites')
     parser.add_argument('--output', type=Path, required=True, help='A new private evidence directory; existing attempts are preserved')
     args = parser.parse_args()
@@ -56,7 +56,8 @@ def main():
     if not Path(env['DEVELOPER_DIR']).is_dir():
         parser.error('Select the installed full Xcode using DEVELOPER_DIR')
     names = (['NativeProtocolTests'] if args.suite == 'wire' else CONTROLLED if args.suite == 'controlled'
-             else ['NativePreviewExitExpiryTests'] if args.suite == 'preview-expiry' else [HTTP[args.suite][0]])
+             else ['NativePreviewExitExpiryTests'] if args.suite == 'preview-expiry'
+             else ['NativePhotoSelectionTests'] if args.suite == 'photo-selection' else [HTTP[args.suite][0]])
     source_paths = [ROOT / name for name in PRODUCTION]
     source_paths += [ROOT / 'ios/Tests' / (name + '.swift') for name in names]
     source_paths.append(Path(__file__).resolve())
@@ -139,11 +140,17 @@ def main():
         report['toolchain'] = (output / 'swift-toolchain.log').read_text().strip()
         for name in names:
             binary = output / name
-            compiler = ['xcrun', 'swiftc'] + (['-j', '1'] if args.suite == 'preview-expiry' else [])
+            compiler = ['xcrun', 'swiftc'] + (['-j', '1'] if args.suite == 'preview-expiry' or name == 'NativePhotoSelectionTests' else [])
+            if name == 'NativePhotoSelectionTests':
+                env['TMPDIR'] = str(output / 'private') + '/'
+                compiler += ['-D', 'SELECTION_FIXED', '-module-cache-path', str(output / 'private' / 'module-cache')]
             run(name + '-compile', [*compiler, *PRODUCTION, 'ios/Tests/' + name + '.swift', '-o', str(binary)], 300)
-            if args.suite in ['wire', 'controlled', 'preview-expiry']:
-                arguments = ['--fixed'] if name == 'NativePreviewExitExpiryTests' else []
-                row = run(name + '-tests', [str(binary), *arguments], 180)
+            if args.suite in ['wire', 'controlled', 'preview-expiry', 'photo-selection']:
+                arguments = ['--fixed'] if name in ['NativePreviewExitExpiryTests', 'NativePhotoSelectionTests'] else []
+                command = [str(binary), *arguments]
+                if name == 'NativePhotoSelectionTests':
+                    command = ['sandbox-exec', '-p', '(version 1)(allow default)(deny network*)', *command]
+                row = run(name + '-tests', command, 180)
                 match = re.search(r'checks passed: (\d+)', (output / (name + '-tests.log')).read_text())
                 if not match:
                     row['status'] = 'failed'

@@ -679,6 +679,24 @@ struct NativePhoto: Identifiable, Sendable, Equatable {
     }
     var ratio: Double { guard let width, let height else { return 1 }; return Double(height) / Double(width) }
 }
+/// Captures the selected photo before asynchronous original-download work.
+/// A later assignment invalidates the snapshot even if the user returns to
+/// the same asset and version before the download completes.
+struct NativePhotoSelectionFence: Sendable {
+    struct Snapshot: Sendable {
+        fileprivate let revision: UUID, assetID: String, source: String, version: String
+    }
+    private var revision = UUID()
+    mutating func changed() { revision = UUID() }
+    func capture(_ photo: NativePhoto) -> Snapshot {
+        .init(revision: revision, assetID: photo.id, source: photo.source, version: photo.version)
+    }
+    func permits(_ snapshot: Snapshot, current: NativePhoto?) -> Bool {
+        guard let current else { return false }
+        return revision == snapshot.revision && current.id == snapshot.assetID &&
+            current.source == snapshot.source && current.version == snapshot.version
+    }
+}
 struct NativePerson: Identifiable, Sendable, Equatable {
     let id: String, name: String
     init(_ wire: WireValue) throws { id = try wire.uuid("id"); name = wire["name"].string ?? String(localized: "Matched person") }

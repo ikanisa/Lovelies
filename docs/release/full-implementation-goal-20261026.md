@@ -278,6 +278,39 @@ files, but filename/recipient compatibility and background byte lifetime are
 not established. Unknown legacy files and already-shared external copies cannot
 be treated as owned cleanup. No replacement was integrated. Evidence:
 `/Volumes/PRO-G40/Projects/Lovelies/verification/ios-share-source-assessment-20261029/ASSESSMENT.md`.
+The iOS Share and Save actions now capture the selected photo before their
+asynchronous work and invalidate that selection on any later assignment,
+including A-to-B-to-A. The original download also requires the server's source
+version to match the selected photo before fetching bytes. A same-subject host
+fixture reproduced the previous version behavior, and the integrated native
+runner passed 18 checks; all 21 app sources and the prepared app-level XCTest source typechecked
+against the simulator SDK. The first standalone XCTest typecheck failed because
+its command omitted the platform Swift XCTest overlay; the corrected command
+passed. The app-level tests have not run, and a Photos write already handed to
+the OS cannot be recalled. Existing share-file cleanup and one-use export
+recovery remain open. Evidence:
+`/Users/jeanbosco/Library/Application Support/LoveliesVerification/ios-share-photo-selection-20261029-root-01/result.json`,
+`/Users/jeanbosco/Library/Application Support/LoveliesVerification/ios-share-photo-selection-20261029-root-01/ios-typecheck-01/result.json`,
+`/Users/jeanbosco/Library/Application Support/LoveliesVerification/ios-share-photo-selection-20261029-root-01/ios-test-typecheck-01/result.json`,
+`/Users/jeanbosco/Library/Application Support/LoveliesVerification/ios-share-photo-selection-20261029-root-01/ios-test-typecheck-02/result.json`,
+and `/Users/jeanbosco/Library/Application Support/LoveliesVerification/ios-share-photo-selection-20261029-integrated-02/result.json`.
+After those runs, seven newly created compiler module-cache directories were
+inventoried, checked for open files and removed. Their file hashes and removal
+receipt were retained; the test binaries, app module, logs and result files
+were confirmed unchanged. Approximately 424 MB of internal space was recovered.
+A Python syntax check also refreshed the ignored
+`scripts/__pycache__/test-ios-openface.cpython-312.pyc`; its prior state was not
+captured, so it remains in place. Cleanup evidence:
+`/Users/jeanbosco/Library/Application Support/LoveliesVerification/ios-share-photo-selection-20261029-root-01/cleanup-module-caches-01/result.json`.
+A separate one-subject handler fixture reproduced loss of a one-use privacy
+export when its response is discarded after the server has consumed its grant
+and retired the object. Repeating the same grant-issuance operation key also
+created a second grant while operation lookup remained unknown. A fixture's
+first two-grant run selected the wrong row and failed; the corrected exact-token
+run passed. Reliable recovery needs a versioned logical delivery and durable
+client acknowledgement, with current session, deletion, restore and exact-object
+barriers; no export fix is integrated. Evidence:
+`/Volumes/PRO-G40/Projects/Lovelies/verification/privacy-export-delivery-loss-20261029/REVIEW.md`.
 The shared iOS preview now sweeps expired in-memory entries on every exit,
 including delayed errors and cancellation, without clearing a newer valid
 entry. The baseline counterexamples, 21 focused checks and 35 existing
@@ -553,6 +586,16 @@ added. These tests do not establish hosted recovery, custody or clearance.
 Evidence:
 `/Volumes/PRO-G40/Projects/Lovelies/verification/restore-metadata-receipt-boundary-20261029/assessment-01/RECEIPT-CONTRACT.md`
 and `/Volumes/PRO-G40/Projects/Lovelies/verification/restore-metadata-receipt-boundary-20261029/root-01/result.json`.
+An isolated successor preserves a verified f3 binding through a narrow f4
+transition and atomically records per-plan acceptance alongside the existing
+transaction binding. Sixteen same-subject, in-memory checks passed, including
+rollback, lost replies, quarantine and the bounded proof window. It remains
+unrouted and unauthenticated, refuses post-binding f3 operation history and
+supports only the narrow existing f4 decision paths. SQL pinning, broader
+producers, operator/writer separation, custody and restore clearance remain
+unimplemented. Evidence:
+`/Volumes/PRO-G40/Projects/Lovelies/verification/restore-bound-v4-journal-20261029/attempt-01/REVIEW.md`
+and `/Volumes/PRO-G40/Projects/Lovelies/verification/restore-bound-v4-journal-20261029/root-01/result.json`.
 
 The next local checkpoint adds exact device-revocation facts and a bounded,
 independent journal inventory. Device retirement records the selected old device

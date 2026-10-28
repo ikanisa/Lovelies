@@ -1966,8 +1966,10 @@ actor BackendRepository {
     func authorizedSaveBytes(_ photo: NativePhoto) async throws -> Data {
         // The backend owns the verified store entitlement and current grant decision.
         guard photo.source == "personal" else { throw NativeAPIError.invalidResponse }
+        guard !photo.version.isEmpty else { throw NativeAPIError.unsupported(String(localized: "Return to your library and refresh current access.")) }
         let captured = try await readyScope()
         let signed = try await post("/downloads/sign", payload: .object(["asset_id": .string(photo.id)]), operation: "download.sign")
+        guard signed["source_version"].string == photo.version else { throw NativeAPIError.unsupported(String(localized: "Return to your library and refresh current access.")) }
         guard signed["method"].string == "GET", let rawURL = signed["download_url"].string, let url = URL(string: rawURL),
               url.scheme == origin.scheme, url.host == origin.host, url.port == origin.port, url.user == nil, url.password == nil,
               url.query == nil, url.fragment == nil,

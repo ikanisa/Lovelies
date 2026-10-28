@@ -2,6 +2,8 @@ import SwiftUI
 import UIKit
 import AVFoundation
 
+typealias NativePhotoSaveOperation = @MainActor (Data, @escaping @MainActor () async throws -> Void) async throws -> Void
+
 @MainActor final class LiveAppStore: ObservableObject {
     @Published var session: NativeSessionSummary?
     @Published private(set) var audience: NativeAudienceProjection?
@@ -17,7 +19,8 @@ import AVFoundation
     @Published var hasPendingOperation = false
     @Published private(set) var hasPendingPrivacyOperation = false
     @Published var photos: [NativePhoto] = []
-    @Published var currentPhoto: NativePhoto?
+    private var photoSelection = NativePhotoSelectionFence()
+    @Published var currentPhoto: NativePhoto? { didSet { photoSelection.changed() } }
     @Published var currentPerson: NativePerson?
     @Published var imports: [NativeImport] = []
     @Published var selectedImports: Set<String> = []
@@ -73,6 +76,7 @@ import AVFoundation
     @Published var sharedFile: NativeShareFile?
     private let sharedFiles: NativeAuthorizedShareFiles
     private let privateMediaClock: NativePrivateMediaClock
+    private let savePhotoToLibrary: NativePhotoSaveOperation
     private var sharedFileDeadline: NativePrivateMediaDeadline?
     private var sharedFileExpiryTask: Task<Void, Never>?
     private var libraryAccount: String?
@@ -105,8 +109,12 @@ import AVFoundation
     private var retakeChallenge: NativeFaceChallenge?
     private(set) var photoCameraContext: NativeMediaCaptureContext?
     init(sharedFiles: NativeAuthorizedShareFiles = NativeAuthorizedShareFiles(), privateMediaClock: NativePrivateMediaClock = .live,
-         localAuthenticator: any NativeLocalAuthenticating = NativeLocalAuthenticator()) {
+         localAuthenticator: any NativeLocalAuthenticating = NativeLocalAuthenticator(), repository: BackendRepository? = nil,
+         savePhotoToLibrary: @escaping NativePhotoSaveOperation = { bytes, requireCurrent in
+             try await NativePhotoLibrary.save(bytes, requireCurrent: requireCurrent)
+         }) {
         self.sharedFiles = sharedFiles; self.privateMediaClock = privateMediaClock; self.localAuthenticator = localAuthenticator
+        self.repository = repository; self.savePhotoToLibrary = savePhotoToLibrary
         // A restarted presentation has no surviving authority. Only recognized
         // private share files participate; durable upload staging is separate.
         do { try sharedFiles.prune(now: privateMediaClock.read().wall) }
@@ -884,15 +892,18 @@ import AVFoundation
         }
     }
     func saveCurrentPhoto() {
+        let photo = currentPhoto, selected = currentPhoto.map { photoSelection.capture($0) }
         performGuarded { [self] fence in
-            guard let repository, let photo = currentPhoto else { throw NativeAPIError.invalidResponse }
+            guard let repository, let photo, let selected else { throw NativeAPIError.invalidResponse }
+            guard photoSelection.permits(selected, current: currentPhoto) else { throw NativeAPIError.unsupported(String(localized: "Return to your library and refresh current access.")) }
             let account = session?.accountID, epoch = session?.epoch
             let approval = try await repository.requireAudience(.faceAuthentication)
             let bytes = try await repository.authorizedSaveBytes(photo)
-            try await NativePhotoLibrary.save(bytes) { [self] in
+            try await savePhotoToLibrary(bytes) { [self] in
                 let current = try await repository.requireAudience(.faceAuthentication)
                 try checkPublication(fence)
                 guard current == approval, account == session?.accountID, epoch == session?.epoch, isForeground else { throw NativeAPIError.sessionChanged }
+                guard photoSelection.permits(selected, current: currentPhoto) else { throw NativeAPIError.unsupported(String(localized: "Return to your library and refresh current access.")) }
             }
             try checkPublication(fence); transferText = String(localized: "Saved to Photos.")
         }
@@ -1352,12 +1363,15 @@ extension LiveAppStore {
         }
     }
     func shareCurrentPhoto() {
+        let photo = currentPhoto, selected = currentPhoto.map { photoSelection.capture($0) }
         performGuarded { [self] fence in
-            guard let repository, let photo = currentPhoto else { throw NativeAPIError.invalidResponse }
+            guard let repository, let photo, let selected else { throw NativeAPIError.invalidResponse }
+            guard photoSelection.permits(selected, current: currentPhoto) else { throw NativeAPIError.unsupported(String(localized: "Return to your library and refresh current access.")) }
             let account = session?.accountID, epoch = session?.epoch, approval = try await repository.requireAudience(.faceAuthentication)
             let bytes = try await repository.authorizedSaveBytes(photo), current = try await repository.requireAudience(.faceAuthentication)
             try checkPublication(fence)
             guard session?.accountID == account, session?.epoch == epoch, approval == current, isForeground else { throw NativeAPIError.sessionChanged }
+            guard photoSelection.permits(selected, current: currentPhoto) else { throw NativeAPIError.unsupported(String(localized: "Return to your library and refresh current access.")) }
             let ext = bytes.starts(with: [0xff, 0xd8]) ? "jpg" : bytes.starts(with: [0x89, 0x50, 0x4e, 0x47]) ? "png" : bytes.starts(with: [0x52, 0x49, 0x46, 0x46]) ? "webp" : "heic"
             try presentSharedBytes(bytes, extension: ext)
         }
