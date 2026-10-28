@@ -45,7 +45,7 @@
 "Account & Settings" = "Konti n’amagenamiterere";
 "Account & security" = "Konti n’umutekano";
 "Account deletion" = "Gusiba konti";
-"Account deletion completed" = "Gusiba konti byarangiye";
+"Account deletion completed" = "Gukuraho amakuru akoreshwa ya konti byemejwe";
 "Account deletion information" = "Amakuru yerekeye gusiba konti";
 "Account recovery" = "Kugarura konti";
 "Account recovery is still processing. Check again before capturing." = "Kugarura konti biracyatunganywa. Ongera urebe mbere yo gufata amafoto.";
@@ -317,7 +317,7 @@
 "Getting Started" = "Gutangira";
 "Go Back" = "Subira inyuma";
 "Great matches!\nYour photos found people\nin your memories." = "Ibyahujwe ni byiza!\nAmafoto yawe yabonye abantu\nmu nzibutso zawe.";
-"Guest account deleted" = "Konti y’umushyitsi yasibwe";
+"Guest account deleted" = "Gukuraho amakuru akoreshwa ya konti y’umushyitsi byemejwe";
 "Guest account privacy" = "Kurinda amakuru ya konti y’umushyitsi";
 "Help Center" = "Ikigo cy’ubufasha";
 "Help Lovelies find you in photos\nacross your matches." = "Fasha Lovelies kubona isura yawe mu mafoto\nmu byo wahujwemo.";
@@ -585,7 +585,7 @@
 "Request guest account deletion" = "Saba gusiba konti y’umushyitsi";
 "Request outcome not confirmed" = "Ibyavuye mu busabe ntibiraremezwa";
 "Requested" = "Byasabwe";
-"Requests require independent review. A request is complete only after the server confirms erasure and private-file cleanup." = "Ubusabe bugomba gusuzumwa mu buryo bwigenga. Ubusabe burangira ari uko seriveri yemeje ko amakuru yasibwe n’amadosiye y’ibanga akurwaho.";
+"Requests require independent review. A request is complete only after the server confirms erasure and private-file cleanup." = "Ubusabe bugomba gusuzumwa mu buryo bwigenga. Raporo ya seriveri ikurikirana ikurwaho ry’amakuru akoreshwa ya konti n’amadosiye y’ibanga; ntiyemeza ko igihe cyo kubika kopi z’ububiko cyarangiye.";
 "Requests submitted · awaiting recipient acceptance" = "Ubusabe bwoherejwe · Butegereje ko abo bwohererejwe babwemera";
 "Reset" = "Subiza uko byari bimeze";
 "Reset demo" = "Subiza icyitegererezo uko cyari kimeze";
@@ -754,8 +754,8 @@
 "The saved selfie is unavailable or changed. Check the original capture status before retaking it." = "Ifoto y’isura yawe yabitswe ntiboneka cyangwa yarahindutse. Reba uko kuyifata bwa mbere bihagaze mbere yo kongera kuyifata.";
 "The selfies were not clear enough. Hold the phone steady, use even lighting, and retake them." = "Amafoto y’isura yawe ntiyagaragaraga neza bihagije. Fata telefoni utayinyeganyeza, ukoreshe urumuri rungana kandi wongere uyafate.";
 "The server cannot resolve this receipt. It may be unknown, expired or revoked. This does not mean the account was deleted. Your receipt is kept; a new account will not start automatically." = "Seriveri ntishobora kubona igisubizo cy’iyi nyandiko. Ishobora kuba itazwi, yararengeje igihe cyangwa yarahagaritswe. Ibi ntibivuze ko konti yasibwe. Inyandiko yawe irabitswe; konti nshya ntizatangizwa ku buryo bwikora.";
-"The server confirmed account erasure and private-file cleanup. Previously downloaded or forwarded copies cannot be recalled." = "Seriveri yemeje ko konti yasibwe n’amadosiye y’ibanga akurwaho. Kopi zamaze gukururwa cyangwa kohererezwa abandi ntizishobora kugaruzwa.";
-"The server confirmed that this guest account and its private files were deleted. Start again only if you want a new guest account." = "Seriveri yemeje ko iyi konti y’umushyitsi n’amadosiye yayo y’ibanga byasibwe. Tangira bushya gusa niba ushaka konti nshya y’umushyitsi.";
+"The server confirmed account erasure and private-file cleanup. Previously downloaded or forwarded copies cannot be recalled." = "Seriveri yemeje ko amakuru akoreshwa ya konti n’amadosiye y’ibanga akurikiranwa byakuweho. Iyi raporo ntiyemeza ko igihe cyo kubika kopi z’ububiko cyarangiye. Kopi zamaze gukururwa cyangwa kohererezwa abandi ntizishobora kugaruzwa.";
+"The server confirmed that this guest account and its private files were deleted. Start again only if you want a new guest account." = "Seriveri yemeje ko amakuru akoreshwa y’iyi konti y’umushyitsi n’amadosiye y’ibanga akurikiranwa byakuweho. Iyi raporo ntiyemeza ko igihe cyo kubika kopi z’ububiko cyarangiye. Tangira bushya gusa niba ushaka konti nshya y’umushyitsi.";
 "The server has not yet confirmed removal of all private reference bytes. Keep this saved action and check again; re-enrollment remains unavailable until cleanup is verified." = "Seriveri ntiremeza ko bayiti zose z’amakuru y’isura abitswe mu ibanga zakuweho. Bika iki gikorwa cyabitswe wongere urebe uko gihagaze; kongera kwandikisha isura ntibishoboka kugeza seriveri yemeje ko ayo makuru yakuweho.";
 "The server must confirm completed deletion before starting again." = "Seriveri igomba kwemeza ko gusiba byarangiye mbere yo gutangira bushya.";
 "The server reported a failure. Private-file cleanup has not been confirmed. Keep this receipt and check the status again." = "Seriveri yatangaje ko igikorwa cyanze. Gukuraho amadosiye y’ibanga ntibiraremezwa. Bika iyi nyandiko wongere urebe uko bihagaze.";
@@ -916,7 +916,7 @@
 "Your people are out there.\nKeep sharing your photos\nand we'll find them!" = "Abantu bawe bari hariya.\nKomeza gusangiza amafoto yawe\nnatwe tuzababona!";
 "Your photos\nfind their people" = "Amafoto yawe\nabona abantu bayagaragaramo";
 "Your privacy matters" = "Ibanga ryawe ni ingenzi";
-"Your private status receipt is stored securely on this device and works after your session is retired. Deletion is complete only when the server confirms it." = "Inyandiko y’ibanga y’uko ubusabe buhagaze ibitswe mu mutekano kuri iki gikoresho kandi ikomeza gukora nyuma yo guhagarika uburenganzira bw’igihe cyo kwinjira muri konti. Gusiba birangira ari uko seriveri ibyemeje.";
+"Your private status receipt is stored securely on this device and works after your session is retired. Deletion is complete only when the server confirms it." = "Inyandiko y’ibanga y’uko ubusabe buhagaze ibitswe mu mutekano kuri iki gikoresho kandi ikomeza gukora nyuma yo guhagarika uburenganzira bw’igihe cyo kwinjira muri konti. Ikurikirana ikurwaho ry’amakuru akoreshwa; ntiyemeza ko igihe cyo kubika kopi z’ububiko cyarangiye.";
 "Your profile" = "Umwirondoro wawe";
 "Your profile is current. Verify one fresh selfie with the retained device key to regain account access." = "Amakuru y’isura yawe aracyemewe. Genzura ifoto imwe nshya y’isura yawe ukoresheje urufunguzo rw’igikoresho rwabitswe kugira ngo wongere ubone uburenganzira bwo kwinjira muri konti.";
 "Your reference is retained for the separately granted matching purpose. Restoring authentication requires current consent and one fresh selfie." = "Amakuru y’isura yawe abitswe ku bw’uruhushya rwo guhuza amafoto n’abantu rwemewe ukwabwo. Gusubizaho kwinjira ukoresheje isura bisaba uruhushya ruriho ubu n’ifoto imwe nshya y’isura yawe.";

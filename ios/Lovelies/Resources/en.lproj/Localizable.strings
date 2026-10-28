@@ -38,7 +38,7 @@
 "Account & Settings" = "Account & Settings";
 "Account & security" = "Account & security";
 "Account deletion" = "Account deletion";
-"Account deletion completed" = "Account deletion completed";
+"Account deletion completed" = "Active account cleanup confirmed";
 "Account deletion information" = "Account deletion information";
 "Account recovery" = "Account recovery";
 "Account recovery is still processing. Check again before capturing." = "Account recovery is still processing. Check again before capturing.";
@@ -299,7 +299,7 @@
 "Getting Started" = "Getting Started";
 "Go Back" = "Go Back";
 "Great matches!\nYour photos found people\nin your memories." = "Great matches!\nYour photos found people\nin your memories.";
-"Guest account deleted" = "Guest account deleted";
+"Guest account deleted" = "Guest account cleanup confirmed";
 "Guest account privacy" = "Guest account privacy";
 "Help Center" = "Help Center";
 "Help Lovelies find you in photos\nacross your matches." = "Help Lovelies find you in photos\nacross your matches.";
@@ -555,7 +555,7 @@
 "Request deletion" = "Request deletion";
 "Request guest account deletion" = "Request guest account deletion";
 "Request outcome not confirmed" = "Request outcome not confirmed";
-"Requests require independent review. A request is complete only after the server confirms erasure and private-file cleanup." = "Requests require independent review. A request is complete only after the server confirms erasure and private-file cleanup.";
+"Requests require independent review. A request is complete only after the server confirms erasure and private-file cleanup." = "Requests require independent review. The server status tracks cleanup of the active account and private files; it does not confirm that backup copies have expired.";
 "Requests submitted · awaiting recipient acceptance" = "Requests submitted · awaiting recipient acceptance";
 "Reset" = "Reset";
 "Reset demo" = "Reset demo";
@@ -720,8 +720,8 @@
 "The saved selfie is unavailable or changed. Check the original capture status before retaking it." = "The saved selfie is unavailable or changed. Check the original capture status before retaking it.";
 "The selfies were not clear enough. Hold the phone steady, use even lighting, and retake them." = "The selfies were not clear enough. Hold the phone steady, use even lighting, and retake them.";
 "The server cannot resolve this receipt. It may be unknown, expired or revoked. This does not mean the account was deleted. Your receipt is kept; a new account will not start automatically." = "The server cannot resolve this receipt. It may be unknown, expired or revoked. This does not mean the account was deleted. Your receipt is kept; a new account will not start automatically.";
-"The server confirmed account erasure and private-file cleanup. Previously downloaded or forwarded copies cannot be recalled." = "The server confirmed account erasure and private-file cleanup. Previously downloaded or forwarded copies cannot be recalled.";
-"The server confirmed that this guest account and its private files were deleted. Start again only if you want a new guest account." = "The server confirmed that this guest account and its private files were deleted. Start again only if you want a new guest account.";
+"The server confirmed account erasure and private-file cleanup. Previously downloaded or forwarded copies cannot be recalled." = "The server confirmed cleanup of the active account and tracked private files. This status does not confirm that backup copies have expired. Previously downloaded or forwarded copies cannot be recalled.";
+"The server confirmed that this guest account and its private files were deleted. Start again only if you want a new guest account." = "The server confirmed cleanup of the active guest account and tracked private files. This status does not confirm that backup copies have expired. Start again only if you want a new guest account.";
 "The server has not yet confirmed removal of all private reference bytes. Keep this saved action and check again; re-enrollment remains unavailable until cleanup is verified." = "The server has not yet confirmed removal of all private reference bytes. Keep this saved action and check again; re-enrollment remains unavailable until cleanup is verified.";
 "The server must confirm completed deletion before starting again." = "The server must confirm completed deletion before starting again.";
 "The server reported a failure. Private-file cleanup has not been confirmed. Keep this receipt and check the status again." = "The server reported a failure. Private-file cleanup has not been confirmed. Keep this receipt and check the status again.";
@@ -877,7 +877,7 @@
 "Your people are out there.\nKeep sharing your photos\nand we'll find them!" = "Your people are out there.\nKeep sharing your photos\nand we'll find them!";
 "Your photos\nfind their people" = "Your photos\nfind their people";
 "Your privacy matters" = "Your privacy matters";
-"Your private status receipt is stored securely on this device and works after your session is retired. Deletion is complete only when the server confirms it." = "Your private status receipt is stored securely on this device and works after your session is retired. Deletion is complete only when the server confirms it.";
+"Your private status receipt is stored securely on this device and works after your session is retired. Deletion is complete only when the server confirms it." = "Your private status receipt is stored securely on this device and works after your session is retired. It tracks active cleanup; it does not confirm that backup copies have expired.";
 "Your profile" = "Your profile";
 "Your profile is current. Verify one fresh selfie with the retained device key to regain account access." = "Your profile is current. Verify one fresh selfie with the retained device key to regain account access.";
 "Your reference is retained for the separately granted matching purpose. Restoring authentication requires current consent and one fresh selfie." = "Your reference is retained for the separately granted matching purpose. Restoring authentication requires current consent and one fresh selfie.";

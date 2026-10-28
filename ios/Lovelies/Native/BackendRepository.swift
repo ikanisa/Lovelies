@@ -1933,7 +1933,8 @@ actor BackendRepository {
     }
     func post(_ path: String, payload: WireValue, operation: String, method: String = "POST") async throws -> WireValue {
         let captured = try await readyScope(anonymous: Self.audienceWeakerPath(path, method: method)), key = UUID().uuidString.lowercased(); var body = payload.object ?? [:]; body["operation_key"] = .string(key)
-        // The same token-free private intent fences an ambiguous non-community write.
+        // The private intent retains the original body for recovery; it can
+        // contain sensitive values such as a provider token until retired.
         if let intent = pending().first(where: { existing in
             !Self.privacyIntentPath(path) || existing.path.map(Self.privacyIntentPath) == true
         }) { throw NativeAPIError.operationUnconfirmed(intent.key) }

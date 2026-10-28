@@ -566,7 +566,7 @@
     <string name="copy_request_not_confirmed_67a30b5a">"Ubusabe ntiburemezwa"</string>
     <string name="copy_before_face_setup_8229d88a">"Mbere yo kwandikisha isura"</string>
     <string name="copy_deletion_status_1_s_6f48fb52">"Uko gusiba bihagaze: %1$s"</string>
-    <string name="copy_the_server_has_confirmed_that_this_g_4cf99951">"Seriveri yemeje ko iyi konti y’umushyitsi yasibwe. Ushobora kongera gutangira igihe witeguye."</string>
+    <string name="copy_the_server_has_confirmed_that_this_g_4cf99951">"Seriveri yemeje ko amakuru akoreshwa y’iyi konti y’umushyitsi n’amadosiye y’ibanga akurikiranwa byakuweho. Iyi raporo ntiyemeza ko igihe cyo kubika kopi z’ububiko cyarangiye. Ushobora kongera gutangira igihe witeguye."</string>
     <string name="copy_we_can_t_retrieve_this_request_s_sta_771de513">"Ntitubashije kubona aho ubu busabe bugeze. Ibi ntibyemeza ko gusiba byarangiye. Icyemezo cy’ubusabe cyabitswe kiguma kuri iki gikoresho."</string>
     <string name="copy_the_approval_window_has_ended_this_d_4f9e978d">"Igihe cyo kwemeza cyarangiye. Ibi ntibyemeza ko gusiba byarangiye. Komeza gushyiraho konti gusa nyuma yo kongera kwemeza ya konti imwe y’umushyitsi."</string>
     <string name="copy_the_deletion_request_was_rejected_yo_bbc1ea13">"Ubusabe bwo gusiba ntibwemewe. Ushobora gukomeza gushyiraho konti nyuma yo kongera kwemeza ya konti imwe y’umushyitsi."</string>
@@ -652,8 +652,8 @@
     <string name="copy_processing_is_still_pending_check_yo_fbeccb6c">"Gutunganya biracyategerejwe. Ongera urebe amafoto yawe mu kanya gato."</string>
     <string name="copy_account_deletion_060c2086">"Gusiba konti"</string>
     <string name="copy_checking_your_original_deletion_requ_640a6e02">"Icyifuzo cyawe cya mbere cyo gusiba kiragenzurwa"</string>
-    <string name="copy_the_server_confirmed_account_cleanup_3edcd640">"Seriveri yemeje ko gukuraho amakuru ya konti byarangiye. Ushobora kongera gutangira kuri konti nshya y’umushyitsi."</string>
-    <string name="copy_your_original_deletion_request_is_sa_c2bdda20">"Ubusabe bwawe bwa mbere bwo gusiba bwabitswe mu ibanga kuri iki gikoresho. Gumana iyi porogaramu yashyizwemo kugira ngo urebe aho bugeze. Kurangira bigaragazwa gusa iyo seriveri yemeje ko gukuraho amakuru byarangiye."</string>
+    <string name="copy_the_server_confirmed_account_cleanup_3edcd640">"Seriveri yemeje ko amakuru akoreshwa ya konti n’amadosiye y’ibanga akurikiranwa byakuweho. Iyi raporo ntiyemeza ko igihe cyo kubika kopi z’ububiko cyarangiye. Ushobora kongera gutangira kuri konti nshya y’umushyitsi."</string>
+    <string name="copy_your_original_deletion_request_is_sa_c2bdda20">"Ubusabe bwawe bwa mbere bwo gusiba bwabitswe mu ibanga kuri iki gikoresho. Gumana iyi porogaramu kugira ngo ukurikirane ikurwaho ry’amakuru akoreshwa. Iyi raporo ntiyemeza ko igihe cyo kubika kopi z’ububiko cyarangiye."</string>
     <string name="copy_offline_and_error_1105424b">"Kutaba ku murongo n’amakosa"</string>
     <string name="copy_no_matches_d29421ef">"Nta bahujwe n’amafoto"</string>
     <string name="copy_account_security_and_devices_63de4688">"Umutekano wa konti n’ibikoresho"</string>
@@ -780,7 +780,7 @@
     <string name="copy_approved_c699109a">"Byemejwe"</string>
     <string name="copy_deletion_queued_33b2465c">"Gusiba biri ku murongo"</string>
     <string name="copy_deleting_account_6750fcb2">"Konti irasibwa"</string>
-    <string name="copy_account_deleted_9c9a92a1">"Konti yasibwe"</string>
+    <string name="copy_account_deleted_9c9a92a1">"Gukuraho amakuru akoreshwa ya konti byemejwe"</string>
     <string name="copy_request_rejected_8ccc55ac">"Ubusabe bwanze"</string>
     <string name="copy_deletion_could_not_finish_1435333a">"Gusiba ntibyarangiye"</string>
     <string name="copy_request_cancelled_166d7001">"Ubusabe bwahagaritswe"</string>

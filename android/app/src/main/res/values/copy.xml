@@ -568,7 +568,7 @@
     <string name="copy_request_not_confirmed_67a30b5a">"Request not confirmed"</string>
     <string name="copy_before_face_setup_8229d88a">"Before face setup"</string>
     <string name="copy_deletion_status_1_s_6f48fb52">"Deletion status: %1$s"</string>
-    <string name="copy_the_server_has_confirmed_that_this_g_4cf99951">"The server has confirmed that this guest account was deleted. You can start again when you’re ready."</string>
+    <string name="copy_the_server_has_confirmed_that_this_g_4cf99951">"The server confirmed cleanup of the active guest account and tracked private files. This status does not confirm that backup copies have expired. You can start again when you’re ready."</string>
     <string name="copy_we_can_t_retrieve_this_request_s_sta_771de513">"We can’t retrieve this request’s status. This does not confirm deletion. Your saved receipt remains on this device."</string>
     <string name="copy_the_approval_window_has_ended_this_d_4f9e978d">"The approval window has ended. This does not confirm deletion. Resume setup only after the same guest account is verified again."</string>
     <string name="copy_the_deletion_request_was_rejected_yo_bbc1ea13">"The deletion request was rejected. You can resume setup after the same guest account is verified again."</string>
@@ -654,8 +654,8 @@
     <string name="copy_processing_is_still_pending_check_yo_fbeccb6c">"Processing is still pending. Check your photos again shortly."</string>
     <string name="copy_account_deletion_060c2086">"Account deletion"</string>
     <string name="copy_checking_your_original_deletion_requ_640a6e02">"Checking your original deletion request"</string>
-    <string name="copy_the_server_confirmed_account_cleanup_3edcd640">"The server confirmed account cleanup. You can start again with a new guest account."</string>
-    <string name="copy_your_original_deletion_request_is_sa_c2bdda20">"Your original deletion request is saved privately on this device. Keep this installation to check its status. Completion is shown only after the server confirms cleanup."</string>
+    <string name="copy_the_server_confirmed_account_cleanup_3edcd640">"The server confirmed cleanup of the active account and tracked private files. This status does not confirm that backup copies have expired. You can start again with a new guest account."</string>
+    <string name="copy_your_original_deletion_request_is_sa_c2bdda20">"Your original deletion request is saved privately on this device. Keep this installation to check active cleanup. That status does not confirm that backup copies have expired."</string>
     <string name="copy_offline_and_error_1105424b">"Offline and error"</string>
     <string name="copy_no_matches_d29421ef">"No matches"</string>
     <string name="copy_account_security_and_devices_63de4688">"Account security and devices"</string>
@@ -782,7 +782,7 @@
     <string name="copy_approved_c699109a">"Approved"</string>
     <string name="copy_deletion_queued_33b2465c">"Deletion queued"</string>
     <string name="copy_deleting_account_6750fcb2">"Deleting account"</string>
-    <string name="copy_account_deleted_9c9a92a1">"Account deleted"</string>
+    <string name="copy_account_deleted_9c9a92a1">"Active account cleanup confirmed"</string>
     <string name="copy_request_rejected_8ccc55ac">"Request rejected"</string>
     <string name="copy_deletion_could_not_finish_1435333a">"Deletion could not finish"</string>
     <string name="copy_request_cancelled_166d7001">"Request cancelled"</string>

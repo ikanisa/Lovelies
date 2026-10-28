@@ -379,13 +379,14 @@ display race and provider work remain open. Evidence:
 `/Volumes/PRO-G40/Projects/Lovelies/verification/android-push-signedout-optout-repo-tests-20261028/root-06-unconfirmed-baseline/result.json`
 and `/Volumes/PRO-G40/Projects/Lovelies/verification/android-push-signedout-optout-repo-tests-20261028/root-07-final/result.json`.
 An unbuilt, unrun Android instrumentation candidate covers real preference
-restart, the signed-out path and the initialized/uninitialized Firebase branches
-without deliberately enabling auto-init. It is bound to the earlier `209782e`
-source and must be rebound to the final commit and full build closure before use.
-Host-enforced guest no-egress, an isolated device and adequate disk space are
-prerequisites; remote token removal and the display race remain separate.
+restart, signed-out and opt-in paths, reported-failure simulation, and the
+initialized/uninitialized Firebase branches without deliberately enabling
+auto-init. Its selected Android inputs match `be382fe` and `6281817`; bind the
+full final build closure before use. Host-enforced guest no-egress, an isolated
+device and adequate disk space are prerequisites; an actual disk failure, remote
+token removal and the display race remain separate.
 Evidence:
-`/Volumes/PRO-G40/Projects/Lovelies/verification/android-push-optout-device-readiness-20261028/attempt-01/TEST_PLAN.md`.
+`/Volumes/PRO-G40/Projects/Lovelies/verification/android-push-optout-device-readiness-20261028/attempt-02/TEST_PLAN.md`.
 An independent iOS source review identified a delayed APNs-token callback that
 can register after OS permission has been denied, and category settings that can
 appear off while their server values have not loaded. Busy retries, current
@@ -1561,11 +1562,24 @@ financial retention, actual processors, applicable notices and operated deletion
 schedule remain unqualified. Evidence:
 `/Volumes/PRO-G40/Projects/Lovelies/verification/privacy-publication-review-20261028/FINDINGS.md`
 and `/Volumes/PRO-G40/Projects/Lovelies/verification/privacy-publication-review-20261028/stage-root-01/local-validation.json`.
+The registered and guest deletion screens now use EN/RW copy that distinguishes
+server-confirmed active cleanup from unconfirmed backup-copy expiry. Local
+resource parsing and key checks passed; translated wording, rendered layouts,
+spoken accessibility, operating backup expiry and safe restore remain unverified.
+Evidence: `/Volumes/PRO-G40/Projects/Lovelies/verification/deletion-status-wording-20261029/result-03.json`.
 The source-only isolated Android compile assessment found Gradle's separate
 read-only dependency cache does not cover generated transforms or build outputs.
 With approximately 3.51 GiB free internally and 4.29 GiB on PRO-G40 at the
 assessment, safe space for a fresh isolated compile was not established; no
 build, cache clone, shared-cache change or T7 action was performed in that step.
+The default iOS simulator device-set alias currently points through an absent
+temporary link; the recorded durable set remains present. Shared simulator
+services were running, and a current exclusive lease and consistent preservation
+copy were not established, so the link was not changed. A failed native
+PostgreSQL run's formerly retained temporary directory is also now absent;
+its logs and receipts remain, but the cause and any other copy are unknown. No
+eligible non-evidence scratch or safe space recovery was identified. Evidence:
+`/Volumes/PRO-G40/Projects/Lovelies/verification/simulator-link-pg-scratch-audit-20261029/root-01/OBSERVATIONS.md`.
 
 ## Work packages and acceptance criteria
 
