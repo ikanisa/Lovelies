@@ -1,6 +1,6 @@
 import { audienceContext } from './audience.ts';
 import { ApiError, jsonBody, ok, stable, digest, uuid, record, type Actor, type AppContext, type Database } from './types.ts';
-import { assertRegisteredActor, executeOperation, prepareOperation, type PreparedOperation } from './operations.ts';
+import { assertOperationReceiptAvailable, assertRegisteredActor, executeOperation, prepareOperation, type PreparedOperation } from './operations.ts';
 export const notificationsSchemaStatements: readonly string[] = [
     `CREATE TABLE IF NOT EXISTS notification_settings(account_id TEXT PRIMARY KEY REFERENCES accounts(id),match_alerts INTEGER NOT NULL DEFAULT 1 CHECK(match_alerts IN(0,1)),payment_alerts INTEGER NOT NULL DEFAULT 1 CHECK(payment_alerts IN(0,1)),support_alerts INTEGER NOT NULL DEFAULT 1 CHECK(support_alerts IN(0,1)),updated_at INTEGER NOT NULL)`,
     `CREATE TABLE IF NOT EXISTS push_devices(id TEXT PRIMARY KEY,account_id TEXT NOT NULL REFERENCES accounts(id),auth_device_id TEXT NOT NULL REFERENCES auth_devices(id),platform TEXT NOT NULL CHECK(platform IN('ios','android')),token_hash TEXT NOT NULL UNIQUE,token_value TEXT NOT NULL,active INTEGER NOT NULL CHECK(active IN(0,1)),created_at INTEGER NOT NULL,updated_at INTEGER NOT NULL)`,
@@ -41,10 +41,84 @@ export async function enqueueNotification(ctx: AppContext, account: string, kind
 }
 export async function handleNotifications(request: Request, ctx: AppContext): Promise<Response | null> {
     const path = new URL(request.url).pathname, read = /^\/me\/notifications\/([0-9a-f-]{36})\/read$/i.exec(path), device = /^\/me\/push-devices\/([0-9a-f-]{36})$/i.exec(path);
-    if (!['/me/notification-settings', '/me/notifications', '/me/push-devices'].includes(path) && !read && !device)
+    const pushOperation = path === '/me/push-operations';
+    if (!['/me/notification-settings', '/me/notifications', '/me/push-devices'].includes(path) && !read && !device && !pushOperation)
         return null;
     const actor = await ctx.authenticate(request);
     (await assertRegisteredActor(ctx, actor));
+    if (pushOperation) {
+        if (request.method !== 'POST') throw new ApiError(405, 'method_not_allowed');
+        if (new URL(request.url).search) throw new ApiError(400, 'invalid_input');
+        const input=await jsonBody(request,1024);
+        await assertRegisteredActor(ctx, actor);
+        if (Object.keys(input).join(',')!=='operation_key' || typeof input.operation_key!=='string' ||
+            !/^[A-Za-z0-9._:-]{16,128}$/.test(input.operation_key)) throw new ApiError(400, 'invalid_input');
+        const key=input.operation_key as string, protocol = 'lovelies-push-operation-receipt-v1';
+        return ok(await ctx.db.read(async () => {
+            await assertRegisteredActor(ctx, actor);
+            try {
+            const operation = await ctx.db.one<{action:string;payload_hash:string;payload_json:string;response_json:string}>(
+                "SELECT action,payload_hash,payload_json,response_json FROM operations WHERE actor_id=? AND source='notification' AND operation_key=?", actor.accountId,key);
+            // The result of this read is available only to the still-current session.
+            await assertRegisteredActor(ctx, actor);
+            if (!operation) return {protocol,operation_key:key,status:'unknown'};
+            assertOperationReceiptAvailable(operation);
+            const register = operation.action === 'notification./me/push-devices.POST';
+            const removed = /^notification\.\/me\/push-devices\/([0-9a-f-]{36})\.DELETE$/i.exec(operation.action);
+            if (!register && !removed) throw new ApiError(409,'push_operation_scope_changed');
+            const unavailable=():never=>{throw new ApiError(503,'push_operation_receipt_unavailable');};
+            const receiptId=(input:unknown):string=>{try{return uuid(input);}catch{return unavailable();}};
+            if (typeof operation.payload_hash !== 'string' || !/^[0-9a-f]{64}$/.test(operation.payload_hash) ||
+                typeof operation.payload_json !== 'string' || new TextEncoder().encode(operation.payload_json).byteLength > 16384 ||
+                typeof operation.response_json !== 'string' || new TextEncoder().encode(operation.response_json).byteLength > 16384) unavailable();
+            let parsedPayload:unknown, result:unknown;
+            try { parsedPayload=JSON.parse(operation.payload_json); result=JSON.parse(operation.response_json); }
+            catch { return unavailable(); }
+            if (!parsedPayload || typeof parsedPayload !== 'object' || Array.isArray(parsedPayload) ||
+                !result || typeof result !== 'object' || Array.isArray(result)) return unavailable();
+            const payload=parsedPayload as Record<string,unknown>, value=result as Record<string,unknown>;
+            if (payload.operation_key!==key) unavailable();
+            const id=receiptId(value.id);
+            let tokenHash:string | undefined;
+            if (register) {
+                const fields=Object.keys(payload).sort().join(',');
+                if (!['ios','android'].includes(payload.platform as string) || value.platform!==payload.platform ||
+                    Object.keys(value).sort().join(',')!=='active,id,platform' || value.active!==true) unavailable();
+                if (fields==='operation_key,platform,protocol,push_token_sha256' &&
+                    payload.protocol==='lovelies-push-registration-receipt-v1' && typeof payload.push_token_sha256==='string' &&
+                    /^[0-9a-f]{64}$/.test(payload.push_token_sha256)) tokenHash=payload.push_token_sha256;
+                else if (fields==='operation_key,platform,push_token' && typeof payload.push_token==='string' &&
+                    payload.push_token.length>=16 && payload.push_token.length<=4096 && !/\s/.test(payload.push_token) &&
+                    !key.includes(payload.push_token)) tokenHash=await digest(payload.push_token);
+                else unavailable();
+            } else {
+                if (Object.keys(payload).sort().join(',')!=='device_id,operation_key' || receiptId(payload.device_id)!==receiptId(removed![1]) ||
+                    Object.keys(value).sort().join(',')!=='active,id' || value.active!==false || id!==receiptId(removed![1])) unavailable();
+            }
+            // Only flat, validated values reach canonicalization; malformed nested
+            // payloads cannot drive unbounded recursive serialization here.
+            if (stable(payload)!==operation.payload_json || stable(value)!==operation.response_json ||
+                await digest(stable({action:operation.action,source:'notification',payload}))!==operation.payload_hash) unavailable();
+            const current=await ctx.db.one<{id:string;auth_device_id:string;platform:string;active:number;token_hash:string}>(
+                'SELECT id,auth_device_id,platform,active,token_hash FROM push_devices WHERE id=? AND account_id=?',id,actor.accountId);
+            if (!current || !['ios','android'].includes(current.platform) || ![0,1].includes(current.active) ||
+                receiptId(current.id)!==id || (register && current.token_hash!==tokenHash)) return unavailable();
+            const currentDevice=receiptId(current.auth_device_id);
+            const session=await ctx.db.one<{device_id:string}>('SELECT device_id FROM sessions WHERE id=? AND account_id=?',actor.sessionId,actor.accountId);
+            if (!session || receiptId(session.device_id)!==currentDevice) throw new ApiError(404,'push_operation_unavailable');
+            await assertRegisteredActor(ctx, actor);
+            // Never return the raw legacy payload or the current token hash.
+            return {protocol,operation_key:key,status:'committed',action:operation.action,payload_hash:operation.payload_hash,
+                result:register?{id,platform:value.platform,active:true}:{id,active:false},
+                current:{id,auth_device_id:currentDevice,platform:current.platform,active:current.active}};
+            } catch (error) {
+                // A state-specific error may follow an awaited read/hash just
+                // as a successful receipt does. Recheck before releasing it.
+                await assertRegisteredActor(ctx, actor);
+                throw error;
+            }
+        }));
+    }
     if (request.method === 'GET')
         return ok((await ctx.db.transaction(async () => { (await assertRegisteredActor(ctx, actor)); if (path === '/me/notification-settings')
             return (await settings(ctx, actor.accountId)); if (path === '/me/notifications')

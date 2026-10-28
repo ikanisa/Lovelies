@@ -156,6 +156,12 @@ recovery can indefinitely hold the gallery, journal-read failure and photo
 share/save publication need additional safeguards, and restore semantics are
 unproved. The owned simulator was removed after the run. Evidence:
 `/Volumes/PRO-G40/Projects/Lovelies/verification/ios-notification-complete-20261028/attempt-03/REVIEW.md`.
+The later isolated iOS revision passed 39 focused cases, including real hosted
+sheet presentation/dismissal and source-aware temporary-file cleanup. It remains
+unintegrated: a claimed sheet that is never presented may leave the presentation
+barrier held, and server terminal-rejection, restore and deletion guarantees
+remain open. Evidence:
+`/Volumes/PRO-G40/Projects/Lovelies/verification/ios-notification-complete-20261028/attempt-07/REVIEW.md`.
 The authenticated request-decision status receipt is now integrated locally.
 It binds a recorded result to the actor, action, source, original key and
 canonical input hash; unknown remains nonterminal. Its read-only database path
@@ -165,6 +171,14 @@ Supabase Edge entrypoint check with unchanged inputs. It has not been deployed
 and does not prove terminal rejection, restore
 continuity, device recovery or account-erasure reconciliation. Evidence:
 `/Volumes/PRO-G40/Projects/Lovelies/verification/request-decision-receipt-integration-20261028/attempt-01/result.json`.
+An authenticated push-operation receipt is also integrated locally. It accepts
+the operation key in a POST body, verifies the stored canonical input and current
+device row, rechecks authority on error paths, and uses read-only database
+admission. The root rerun passed 27 local cases, TypeScript and the offline
+Edge entrypoint check. The Android recovery caller has not yet been adapted to
+this POST contract; a current row is not proof of the original operation's
+device or of provider/restore terminality. Evidence:
+`/Volumes/PRO-G40/Projects/Lovelies/verification/push-receipt-integration-20261028/attempt-01/result.json`.
 An isolated journal worker accidentally opened `/tmp/v4-snippet-review-not-used`
 for writing; it is now empty. Its creation and modification timestamps match
 the reported write, but its prior existence or contents are not conclusively
