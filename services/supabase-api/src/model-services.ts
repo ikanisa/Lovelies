@@ -329,7 +329,11 @@ async function handleFace(request:Request,env:Env):Promise<Response> {
 }
 async function boundary(request:Request,handler:()=>Promise<Response>):Promise<Response> {
   try{return await handler();}catch(error){return json({error:{code:error instanceof BoundaryError?error.code:'private_model_unavailable'}},error instanceof BoundaryError?error.status:503);}
-  finally{if(request.body&&!request.body.locked)await request.body.cancel().catch(()=>{});}
+  finally{
+    // Request teardown is local best effort, not proof that a producer or an
+    // already dispatched inference has stopped. Never await its settlement.
+    try{if(request.body&&!request.body.locked)void request.body.cancel().catch(()=>{});}catch{}
+  }
 }
 
 export function createModelServices(env:Env):{face:ServiceFetcher;photo:PhotoProcessorFetcher;ready:(signal?:AbortSignal)=>Promise<boolean>;generation:()=>string}{

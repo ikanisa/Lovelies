@@ -815,6 +815,18 @@ are not ruled out by this change. Evidence:
 `/Volumes/PRO-G40/Projects/Lovelies/verification/api-request-cleanup-20261027/root-consumers-01/result.json`,
 and `/Volumes/PRO-G40/Projects/Lovelies/verification/api-request-cleanup-20261027/root-deno-01/result.json`.
 
+The separate private-model boundary had the same teardown hang on early face and
+photo rejections. Its isolated baseline recorded six failures, including a
+synchronous cancellation error replacing the intended response. The boundary
+now starts cancellation without awaiting it and contains cancellation errors.
+The integrated run passed 19 focused boundary and transport checks, five
+selected existing model checks, TypeScript checking and the cached Deno Edge
+check with unchanged recorded sources under network and write restrictions.
+This does not establish that a producer or dispatched inference has stopped, or
+qualify a real provider. Evidence:
+`/Volumes/PRO-G40/Projects/Lovelies/verification/model-boundary-cancel-20261029/REVIEW.md`
+and `/Volumes/PRO-G40/Projects/Lovelies/verification/model-boundary-cancel-20261029/root-integrated-01/result.json`.
+
 The shared JSON reader now copies and clears only owned byte views, rejects
 shared-memory and invalid views, bounds fragmented or stalled reads, and checks
 declared lengths for unencoded requests. Decoded provider responses retain their
