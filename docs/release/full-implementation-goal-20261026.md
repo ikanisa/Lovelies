@@ -88,6 +88,28 @@ index choices and write/storage cost against representative deletion, sharing,
 notification and growth workloads; do not remove indexes merely because this
 early project has no observed use. Evidence:
 `/Volumes/PRO-G40/Projects/Lovelies/verification/supabase-performance-advisors-20261028/attempt-01/result.json`.
+The authenticated Supabase dashboard confirms this project is on IKANISA's
+Free plan, which does not include scheduled project backups; point-in-time
+recovery is a separate Pro add-on. No subscription or billing change was made.
+The locally qualified encrypted database tooling does not by itself establish
+an operated backup, off-site custody, Storage object recovery or expiration.
+Evidence:
+`/Volumes/PRO-G40/Projects/Lovelies/verification/supabase-backup-readback-20261028/attempt-01/result.json`.
+Supabase documents a 1 GB average Storage quota shared across a Free-plan
+organization, plus separate database and egress quotas. Capacity for the
+10,000-asset target and actual retention/traffic must be measured against
+these limits and other projects' usage; the quota alone is not a live usage
+measurement. [Supabase quota guidance](https://supabase.com/docs/guides/platform/billing-on-supabase)
+and [Storage usage guidance](https://supabase.com/docs/guides/platform/manage-your-usage/storage-size).
+The dashboard's current-cycle readback displayed 0.00 GB average organization
+Storage and 28.25 MB for the Lovelies database; the rounded Storage figure does
+not prove that no objects exist, and the dashboard says usage can lag. This is
+not a representative capacity test. Evidence:
+`/Volumes/PRO-G40/Projects/Lovelies/verification/supabase-capacity-readback-20261028/attempt-01/result.json`.
+The unfiltered Play bundle list was rechecked on 28 October: the highest of ten
+uploaded versions remained code 16, below the candidate's code 18. Recheck the
+maximum and track state immediately before any upload. Evidence:
+`/Volumes/PRO-G40/Projects/Lovelies/verification/play-version-readback-20261028/attempt-01/result.json`.
 
 Android notification posts and taps previously used a 32-bit UUID hash; two
 valid UUIDs were shown to collide, replacing a notification and retargeting its
@@ -193,6 +215,15 @@ its xcresult is incomplete. The remaining new cases were not run. The owned
 simulator was removed and pre-existing devices were retained. This candidate is
 not integrated and does not establish safe handoff or cleanup. Evidence:
 `/Volumes/PRO-G40/Projects/Lovelies/verification/ios-share-host-implementation-20261028/attempt-02/`.
+The current iOS share-file pruning identifies files by UUID-shaped name and
+extension, rather than a durable ownership record; a second store or an unknown
+file in that directory is therefore not protected merely by its name. Simply
+disabling pruning would leave post-crash files without a verified retention
+deadline. An in-memory item-provider alternative is under isolated review and
+has not been integrated or qualified for actual handoff. Its syntax parsed, but
+none of its 13 prepared tests ran; source review found missing lifecycle/expiry,
+process-wide memory and exact asset/type binding controls. Evidence:
+`/Volumes/PRO-G40/Projects/Lovelies/verification/ios-share-host-implementation-20261028/attempt-03/`.
 The authenticated request-decision status receipt is now integrated locally.
 It binds a recorded result to the actor, action, source, original key and
 canonical input hash; unknown remains nonterminal. Its read-only database path
@@ -233,6 +264,25 @@ It does not accept or complete those deletions. Trusted enumeration, sealing,
 recovery and native PostgreSQL concurrency remain unproved, and activating the
 candidate would fence existing v1 writers. It is not integrated. Evidence:
 `/Volumes/PRO-G40/Projects/Lovelies/verification/restore-v4-control-planning-20261028/attempt-01/REVIEW.md`.
+An isolated maintenance-only observer can identify an exact committed SQL
+successor under the adapter's lock path, while a predecessor stays unknown.
+Fifteen focused local checks passed; the required rollback-classification
+control remains unmet. A PGlite restore regression reused a transaction ID and
+reported an earlier committed ID as aborted after the restore, demonstrating
+that an ID and restored database alone cannot establish rollback. This is not
+native PostgreSQL or provider proof. No production route calls the observer;
+independent restore lineage, real decision producers, erasure, replay and
+clearance remain open. Evidence:
+`/Volumes/PRO-G40/Projects/Lovelies/verification/restore-v4-decision-scoped-admission-20261028/attempt-03/REVIEW.md`.
+Its next isolated successor records the producer connection's transaction and
+attempt identifiers in the independent journal before prepare. The selected
+local journal, deletion-binding, witness and compatibility checks passed, while
+rollback classification remains unknown. Lost binding replies still block the
+same-key retry, lookup is bounded, and an active older control cannot be safely
+upgraded by this prototype. Physical incarnation, native multi-pool behavior,
+terminal reconciliation and replay remain unproved. It is not integrated or
+deployed. Evidence:
+`/Volumes/PRO-G40/Projects/Lovelies/verification/restore-v4-decision-scoped-admission-20261028/attempt-04/REVIEW.md`.
 
 The next local checkpoint adds exact device-revocation facts and a bounded,
 independent journal inventory. Device retirement records the selected old device
