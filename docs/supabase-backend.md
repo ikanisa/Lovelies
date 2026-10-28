@@ -90,10 +90,24 @@ existing native contract.
 | Upload | Existing `/uploads/session`, raw/chunk upload, complete/status/cancel contracts preserved |
 | Support | `GET /support/requests` returns `support_requests`; `POST` with `subject` (3–160), `details` (5–4000), `operation_key` returns `{id,status,revision}`; `GET /support/requests/:id` is owner-only |
 | Store purchases | `POST /subscriptions/apple/transactions`: `product_id`, `signed_transaction`, `operation_key`; Google equivalent `/subscriptions/google/transactions`: `product_id`, `purchase_token`, `operation_key` |
+| Store operation recovery | `POST /me/store-operations` with only `operation_key`; authenticated read-only historical receipt or `unknown` |
 | Entitlement/download | `GET /me/entitlements`; `POST /downloads/sign` with the existing asset/operation-key contract, then guarded returned `download_url` |
 | Push | `GET/POST /me/push-devices`; registration `platform`, `push_token`, `operation_key`; `DELETE /me/push-devices/:id` with `operation_key` |
 | Privacy | Existing `/privacy-requests`, `/privacy/account-deletion`, `/privacy-exports/:request_id/grant` and export retrieval contracts retained |
 | Administration | Existing `/admin/users`, `/admin/users/:id`, user sessions/revocation, support review, safety reports, matches, privacy reviews and retention/metrics routes retained; require current registered-face admin authority |
+
+The locally implemented store-operation receipt is historical, not an entitlement
+or proof that StoreKit/Play completed a transaction. A client must bind a
+committed receipt to its own current account, key, action, source, original
+credential digest and canonical input hash before using the result for recovery;
+`unknown` is nonterminal. New operations persist a versioned SHA-256 credential
+digest instead of the Apple JWS or Play token in the operation input. Exact
+legacy raw-input rows remain replayable and are reported as `legacy-raw-v0`;
+they have not been erased or migrated by this change. `digest-v1` hashes the
+versioned redacted input. A retired receipt is unavailable; malformed receipts
+fail closed. Current access continues to require `/me/entitlements` and its
+current provider-backed state. This handler has only local synthetic tests; it
+has not been deployed or qualified with an actual store transaction.
 
 An inactive push token can move to a verified next account on the same phone:
 its former row receives a retired hash and keeps the old account's delivery

@@ -95,6 +95,15 @@ The locally qualified encrypted database tooling does not by itself establish
 an operated backup, off-site custody, Storage object recovery or expiration.
 Evidence:
 `/Volumes/PRO-G40/Projects/Lovelies/verification/supabase-backup-readback-20261028/attempt-01/result.json`.
+The local encrypted-backup CLI now has a bounded, authenticated catalog health
+check. It checks each managed artifact and lists the newest verified snapshot,
+while reporting stale, expired, unmanaged or inconsistent catalogs without
+deleting them. The root integration run passed 32 synthetic tests, including
+rejection of an incomplete archive by native PostgreSQL 17.11 `pg_restore`.
+A positive listing of a real `pg_dump` archive remains a separate check; the
+command does not establish production scheduling, source provenance, off-site
+custody, Storage-object backups, physical expiry or safe restore. Evidence:
+`/Volumes/PRO-G40/Projects/Lovelies/verification/backup-catalog-health-20261028/attempt-02/root-integrated-native-test.log`.
 Supabase documents a 1 GB average Storage quota shared across a Free-plan
 organization, plus separate database and egress quotas. Capacity for the
 10,000-asset target and actual retention/traffic must be measured against
@@ -241,6 +250,17 @@ Edge entrypoint check. The Android recovery caller has not yet been adapted to
 this POST contract; a current row is not proof of the original operation's
 device or of provider/restore terminality. Evidence:
 `/Volumes/PRO-G40/Projects/Lovelies/verification/push-receipt-integration-20261028/attempt-01/result.json`.
+An authenticated store-operation receipt and digest-only input for new store
+operations are integrated locally. Exact legacy raw-input operations remain
+replayable and have not been erased. Receipts are historical and do not grant
+entitlement or prove StoreKit/Play completion; malformed and retired records
+fail closed. Eleven same-account receipt cases, five targeted provider-failure
+cases, TypeScript and the cached Edge check passed with 161 source inputs
+unchanged. An isolated iOS recovery candidate has not yet been compiled or
+integrated. Actual purchases, ambiguous provider acknowledgement, logout and
+deletion recovery, store completion and hosted operation remain open. Evidence:
+`/Volumes/PRO-G40/Projects/Lovelies/verification/store-operation-receipt-20261028/root-02/result.json`
+and `/Volumes/PRO-G40/Projects/Lovelies/verification/ios-store-operation-recovery-20261028/attempt-02/TEST_PLAN.md`.
 An isolated Android successor uses the POST receipt and passed seven local
 transport cases against the copied API and eleven fake registration cases. Its
 real Android Keystore and repository then preserved a synthetic pending record

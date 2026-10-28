@@ -71,11 +71,39 @@ databases; those artifacts cannot be verified as production backups.
 node scripts/backup-database.mjs create --directory /absolute/private/catalog \
   --pg-dump /absolute/bin/pg_dump --pg-restore /absolute/bin/pg_restore
 node scripts/backup-database.mjs catalog --directory /absolute/private/catalog
+node scripts/backup-database.mjs health --directory /absolute/private/catalog \
+  --pg-restore /absolute/bin/pg_restore --max-age-hours 26
 node scripts/backup-database.mjs verify --directory /absolute/private/catalog --id BACKUP_UUID
 node scripts/backup-database.mjs inspect --directory /absolute/private/catalog \
   --id BACKUP_UUID --pg-restore /absolute/bin/pg_restore
 node scripts/backup-database.mjs expire --directory /absolute/private/catalog
 ```
+
+`health` acquires the catalog's cooperative lease, authenticates and decrypts
+every managed archive, checks an explicit freshness bound and lists the newest
+verified encrypted snapshot using the supplied PostgreSQL 17 `pg_restore`. It
+rechecks the on-disk catalog after listing, then returns
+`local_backup_artifact_verified` only if no archive is expired, future-dated,
+stale, missing, corrupt or accompanied by unmanaged files. The example's 26-hour
+bound is illustrative; operators must use their actual recovery-point target.
+This check refuses a missing directory rather than creating one, never deletes
+files, and returns exit 2 for a catalog needing attention and exit 1 for an
+invalid or unverifiable check. A clock anomaly also fails closed.
+
+To bound work, a health check accepts at most 4,096 directory entries, 256
+archives and 8 GiB of authenticated archive bytes; it verifies the catalog
+twice and reads the archives multiple times. A limit breach is a failure
+requiring operator attention, not a healthy result. The current v1 implementation
+uses one key per catalog: a mixed old/new
+key catalog cannot be verified by this command and fails closed. Safe key
+rotation and monitoring of every retained key generation remain operational
+requirements. Use a trusted PostgreSQL binary and authenticated key source.
+The result is a point-in-time observation of these local artifacts, not proof of
+the original source database, required schema/data completeness, removal of an
+entire catalog entry, scheduler operation, off-site custody, Storage object
+backups, recovery clearance, physical expiry or a usable production restore.
+The lease coordinates the provided tools; it does not prevent an uncooperative
+process from modifying files after the check.
 
 There is no serving restore command. The verified-stream library is available
 for isolated recovery qualification. Normal backup reconstruction omits owner

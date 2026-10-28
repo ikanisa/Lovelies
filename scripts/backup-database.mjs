@@ -3,18 +3,18 @@ import {spawn,spawnSync} from 'node:child_process';
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import {pipeline} from 'node:stream/promises';
-import {backupCatalog,backupDirectory,backupKey,createBackup,expireBackups,PROJECT,verifyBackup,withVerifiedBackup} from './lib/encrypted-backup.mjs';
+import {backupCatalog,backupDirectory,backupHealth,backupKey,createBackup,expireBackups,PROJECT,verifyBackup,withVerifiedBackup} from './lib/encrypted-backup.mjs';
 
 const error=code=>Object.assign(new Error(code),{code});
 function options(args){
   const result={command:args.shift()};
   for(let i=0;i<args.length;i++){
     const name=args[i];if(name==='--local-qualification'){if(result.local)throw error('backup_arguments_invalid');result.local=true;continue;}
-    if(!['--directory','--id','--pg-dump','--pg-restore'].includes(name)||result[name]!==undefined||!args[i+1]||args[i+1].startsWith('--'))throw error('backup_arguments_invalid');
+    if(!['--directory','--id','--pg-dump','--pg-restore','--max-age-hours'].includes(name)||result[name]!==undefined||!args[i+1]||args[i+1].startsWith('--'))throw error('backup_arguments_invalid');
     result[name]=args[++i];
   }
-  if(!['create','catalog','verify','expire','inspect'].includes(result.command)||!result['--directory'])throw error('backup_arguments_invalid');
-  const allowed={create:['--directory','--pg-dump','--pg-restore'],catalog:['--directory'],verify:['--directory','--id'],expire:['--directory'],inspect:['--directory','--id','--pg-restore']}[result.command];
+  if(!['create','catalog','verify','expire','inspect','health'].includes(result.command)||!result['--directory'])throw error('backup_arguments_invalid');
+  const allowed={create:['--directory','--pg-dump','--pg-restore'],catalog:['--directory'],verify:['--directory','--id'],expire:['--directory'],inspect:['--directory','--id','--pg-restore'],health:['--directory','--pg-restore','--max-age-hours']}[result.command];
   if(Object.keys(result).some(name=>!['command','local',...allowed].includes(name))||allowed.some(name=>!result[name]))throw error('backup_arguments_invalid');
   return result;
 }
@@ -47,18 +47,17 @@ function databaseEnvironment(local){
     ...(value('PGPASSWORD')?{PGPASSWORD:value('PGPASSWORD')}:{}),PGSSLMODE:local?'disable':'verify-full',
     ...(!local?{PGSSLROOTCERT:value('PGSSLROOTCERT')}:{}),PGCONNECT_TIMEOUT:'10',PGAPPNAME:'lovelies-encrypted-backup-v1',PGOPTIONS:'-c statement_timeout=180000'};
 }
-async function inspectArchive(config,tool){
-  return withVerifiedBackup(config,async stream=>{
+async function inspectStream(stream,tool){
     const task=producer(tool,['--list'],{PATH:process.env.PATH,LC_ALL:'C'});let lines=0,bytes=0;
     task.child.stdout.on('data',chunk=>{bytes+=chunk.length;lines+=chunk.toString().split('\n').length-1;if(bytes>16*1024*1024)task.child.kill('SIGTERM');});
     try{await Promise.all([pipeline(stream,task.child.stdin),task.completed]);return {archive_listed:true,toc_lines:lines};}
     catch(error){task.child.kill('SIGTERM');await task.completed.catch(()=>{});throw error;}
-  });
 }
+async function inspectArchive(config,tool){return withVerifiedBackup(config,stream=>inspectStream(stream,tool));}
 try{
   const opt=options(process.argv.slice(2)),key=backupKey(process.env.LOVELIES_BACKUP_ENCRYPTION_KEY);
   const config={directory:opt['--directory'],key,environment:opt.local?'local-qualification':'production',id:opt['--id']};
-  await backupDirectory(config.directory);
+  await backupDirectory(config.directory,{create:opt.command!=='health'});
   let result;
   if(opt.command==='create'){
     const tool=await binary(opt['--pg-dump'],'pg_dump'),restore=await binary(opt['--pg-restore'],'pg_restore'),env=databaseEnvironment(opt.local);
@@ -73,6 +72,11 @@ try{
   }else if(opt.command==='catalog'){
     const catalog=await backupCatalog(config);result={status:catalog.unmanaged_entries.length?'catalog_needs_reconciliation':'catalog_verified',environment:config.environment,backups:catalog.backups.map(x=>({id:x.id,created_at:x.created_at,expires_at:x.expires_at})),unmanaged_entries:catalog.unmanaged_entries.length};
     if(catalog.unmanaged_entries.length)process.exitCode=2;
+  }else if(opt.command==='health'){
+    if(!/^(?:[1-9]|[1-9][0-9]|1[0-5][0-9]|16[0-8])$/.test(opt['--max-age-hours']))throw error('backup_arguments_invalid');
+    const tool=await binary(opt['--pg-restore'],'pg_restore');
+    result=await backupHealth({...config,maxAgeHours:Number(opt['--max-age-hours'])},stream=>inspectStream(stream,tool));
+    if(result.status!=='local_backup_artifact_verified')process.exitCode=2;
   }else if(opt.command==='expire'){
     const expiry=await expireBackups(config);result={status:expiry.unmanaged_entries?'expiry_needs_reconciliation':'verified_expiry_complete',environment:config.environment,...expiry};if(expiry.unmanaged_entries)process.exitCode=2;
   }

@@ -26,14 +26,14 @@ function keys(key){
   const derive=purpose=>Buffer.from(hkdfSync('sha256',key,Buffer.from('lovelies-backup-v1'),Buffer.from(purpose),32));
   return {encryption:derive('archive-encryption'),manifest:derive('catalog-authentication'),id:sha(key).slice(0,24)};
 }
-export async function backupDirectory(directory){
+export async function backupDirectory(directory,{create=true}={}){
   if(!path.isAbsolute(directory))throw fail('backup_directory_invalid');
   // Every existing ancestor is real. Never follow a substituted output symlink.
   let current=path.parse(directory).root;
   for(const part of directory.slice(current.length).split(path.sep).filter(Boolean)){
     current=path.join(current,part);
     try{const item=await fs.lstat(current);if(!item.isDirectory()||item.isSymbolicLink())throw fail('backup_directory_invalid');}
-    catch(error){if(error.code!=='ENOENT')throw error;await fs.mkdir(current,{mode:0o700});}
+    catch(error){if(error.code!=='ENOENT')throw error;if(!create)throw fail('backup_directory_missing');await fs.mkdir(current,{mode:0o700});}
   }
   const stat=await fs.lstat(directory);
   if(stat.uid!==process.getuid()||(stat.mode&0o077)!==0)throw fail('backup_directory_permissions');
@@ -44,8 +44,8 @@ async function regular(file){
   if(!stat.isFile()||stat.isSymbolicLink()||stat.nlink!==1||stat.uid!==process.getuid()||(stat.mode&0o077)!==0)throw fail('backup_file_invalid');
   return stat;
 }
-async function locked(directory,work){
-  await backupDirectory(directory);
+async function locked(directory,work,{create=true}={}){
+  await backupDirectory(directory,{create});
   const name=path.join(directory,'.lovelies-backup.lock');
   const handle=await fs.open(name,'wx',0o600);
   try{await handle.writeFile(JSON.stringify({pid:process.pid}));await handle.sync();return await work();}
@@ -111,9 +111,7 @@ export async function verifyBackup({directory,id,key,environment='production'}){
 /** Verify and consume the same unlinked encrypted snapshot. Reopening the catalog
  * path after verification could stream changed, unauthenticated plaintext before
  * GCM's final rejection. The consumer still requires an isolated recovery target. */
-export async function withVerifiedBackup({directory,id,key,environment='production'},consume){
-  environmentName(environment);
-  return locked(directory,async()=>{
+async function withVerifiedBackupUnlocked({directory,id,key,environment},consume){
     const record=await loadManifest(directory,id,key,environment),metadata=record.metadata;
     record.derived.encryption.fill(0);record.derived.manifest.fill(0);
     const archive=path.join(directory,metadata.archive),original=await regular(archive);
@@ -133,7 +131,11 @@ export async function withVerifiedBackup({directory,id,key,environment='producti
       catch(error){output.destroy();await transfer.catch(()=>{});throw error;}
       finally{derived.encryption.fill(0);derived.manifest.fill(0);}
     }finally{await snapshot.close();}
-  });
+}
+
+export async function withVerifiedBackup({directory,id,key,environment='production'},consume){
+  environmentName(environment);
+  return locked(directory,()=>withVerifiedBackupUnlocked({directory,id,key,environment},consume));
 }
 
 export async function createBackup({directory,source,sourceCompleted=Promise.resolve(),key,environment='production',now=Date.now}){
@@ -174,20 +176,76 @@ export async function createBackup({directory,source,sourceCompleted=Promise.res
   });
 }
 
-export async function backupCatalog({directory,key,environment='production'}){
-  environmentName(environment);
-  return locked(directory,async()=>{
+async function backupCatalogUnlocked({directory,key,environment},{maximumEntries=Infinity,maximumBackups=Infinity,maximumBytes=Infinity}={}){
     const entries=await fs.readdir(directory),backups=[],unknown=[];
+    if(entries.length>maximumEntries)throw fail('backup_catalog_limit');
+    let bytes=0;
     for(const name of entries.sort()){
       if(name==='.lovelies-backup.lock')continue;
       const match=manifestPattern.exec(name);
-      if(match){backups.push((await verifyUnlocked(directory,match[1],key,environment)).metadata);}
+      if(match){
+        if(backups.length>=maximumBackups)throw fail('backup_catalog_limit');
+        if(Number.isFinite(maximumBytes)){
+          const record=await loadManifest(directory,match[1],key,environment);
+          try{bytes+=record.metadata.archive_bytes;if(bytes>maximumBytes)throw fail('backup_catalog_limit');}
+          finally{record.derived.encryption.fill(0);record.derived.manifest.fill(0);}
+        }
+        backups.push((await verifyUnlocked(directory,match[1],key,environment)).metadata);
+      }
       else if(!/^lovelies-db-[0-9a-f-]{36}\.lvbk$/.test(name))unknown.push(name);
     }
     const owned=new Set(backups.map(x=>x.archive));
     for(const name of entries)if(name.endsWith('.lvbk')&&!owned.has(name))unknown.push(name);
     return {backups,unmanaged_entries:unknown};
-  });
+}
+
+export async function backupCatalog({directory,key,environment='production'}){
+  environmentName(environment);
+  return locked(directory,()=>backupCatalogUnlocked({directory,key,environment}));
+}
+
+/** Verify one local catalog and inspect the newest archive under one cooperative
+ * lease. This observes private artifacts only; it is not backup operation,
+ * source-database provenance, off-site custody, Storage recovery or expiry. */
+export async function backupHealth({directory,key,environment='production',maxAgeHours,now=Date.now},inspect){
+  environmentName(environment);
+  if(!Number.isSafeInteger(maxAgeHours)||maxAgeHours<1||maxAgeHours>168||typeof now!=='function'||typeof inspect!=='function')throw fail('backup_health_config_invalid');
+  return locked(directory,async()=>{
+    const limits={maximumEntries:4096,maximumBackups:256,maximumBytes:8*1024*1024*1024};
+    const checkedClock=()=>{const at=now();if(!Number.isSafeInteger(at)||at<0||at>Number.MAX_SAFE_INTEGER-120000)throw fail('backup_clock_invalid');return at;};
+    const start=checkedClock();
+    const catalog=await backupCatalogUnlocked({directory,key,environment},limits);
+    const scanned=checkedClock();if(scanned<start)throw fail('backup_clock_invalid');
+    const summarize=at=>{
+      const reasons=[];
+      if(!catalog.backups.length)reasons.push('no_backups');
+      if(catalog.unmanaged_entries.length)reasons.push('unmanaged_entries');
+      if(catalog.backups.some(record=>record.expires_at<=at))reasons.push('expired_backups');
+      if(catalog.backups.some(record=>record.created_at>at||record.completed_at>at))reasons.push('future_timestamps');
+      const latest=catalog.backups.reduce((best,item)=>!best||item.created_at>best.created_at?item:best,null);
+      if(latest&&at-latest.created_at>maxAgeHours*3600000)reasons.push('newest_backup_stale');
+      return {reasons,latest};
+    };
+    let check=summarize(scanned),inspection=null;
+    if(!check.reasons.length){
+      inspection=await withVerifiedBackupUnlocked({directory,id:check.latest.id,key,environment},inspect);
+      if(!inspection||inspection.archive_listed!==true||!Number.isSafeInteger(inspection.toc_lines)||inspection.toc_lines<1)throw fail('backup_health_inspection_invalid');
+      // The stable snapshot protects the inspector, but another process can
+      // change the catalog path while that snapshot is being consumed. Do not
+      // report local health until the on-disk catalog authenticates again and
+      // still describes the same entries under the cooperative lease.
+      const finalCatalog=await backupCatalogUnlocked({directory,key,environment},limits);
+      const identity=value=>JSON.stringify({backups:value.backups.map(canonical).sort(),unmanaged:value.unmanaged_entries.slice().sort()});
+      if(identity(finalCatalog)!==identity(catalog))throw fail('backup_catalog_changed');
+    }
+    const at=checkedClock();if(at<scanned)throw fail('backup_clock_invalid');
+    check=summarize(at);
+    return {status:check.reasons.length?'local_backup_attention':'local_backup_artifact_verified',environment,checked_at:at,max_age_hours:maxAgeHours,
+      managed_count:catalog.backups.length,unmanaged_count:catalog.unmanaged_entries.length,
+      newest_id:check.latest?.id??null,newest_created_at:check.latest?.created_at??null,reasons:check.reasons,
+      ...(inspection?{archive_listed:true,toc_lines:inspection.toc_lines}:{}),
+      not_established:['source_database_provenance','schema_completeness','catalog_history_completeness','scheduler_operation','offsite_custody','storage_objects','independent_suppression','restore_safety','physical_expiry']};
+  },{create:false});
 }
 
 export async function expireBackups({directory,key,environment='production',now=Date.now}){
