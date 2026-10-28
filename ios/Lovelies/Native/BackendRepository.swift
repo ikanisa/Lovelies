@@ -1807,6 +1807,7 @@ actor BackendRepository {
         return rows
     }
     func preview(_ photo: NativePhoto) async throws -> Data {
+        defer { expirePrivateMedia() }
         guard photo.source == "personal" else { throw NativeAPIError.invalidResponse }
         let captured = try await readyScope(), capturedMediaEpoch = mediaEpoch
         let deadline = NativePrivateMediaDeadline(created: privateMediaClock.read(), authorityExpiresAt: credentials?.expiresAt)

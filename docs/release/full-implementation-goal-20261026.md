@@ -243,9 +243,8 @@ synthetic active share file; 31 synthetic ownership checks then passed. An
 existing private-media check failed because the isolated predecessor rejects
 an expired late response before sweeping older cache bytes. The current shared
 `preview` retains the correct sweep ordering; the isolated successor has not
-been integrated. Partial
-writes, legacy unknown files, process-death handoff, iOS file protection and
-unlink races remain open. Evidence:
+been integrated. Partial writes, legacy unknown files, process-death handoff,
+iOS file protection and unlink races remain open. Evidence:
 `/Volumes/PRO-G40/Projects/Lovelies/verification/ios-share-owned-file-cleanup-20261028/root-01/result.json`.
 The next isolated successor restores the sweep and passed the same 31 ownership
 checks and 58 private-media checks, including late failure and newer-cache
@@ -254,6 +253,23 @@ unchanged. These are local fixtures and a build; UIKit and device behavior remai
 open. Evidence:
 `/Volumes/PRO-G40/Projects/Lovelies/verification/ios-share-owned-file-cleanup-20261028/root-02/result.json`
 and `/Volumes/PRO-G40/Projects/Lovelies/verification/ios-share-owned-file-cleanup-20261028/root-03/result.json`.
+A separate instrumented synthetic counterexample reproduced the remaining
+pathname race: a replacement placed after the ownership check was removed by
+the old unlink. The instrumentation is test-only. A source design records the
+unimplemented writer-exclusion, partial-write and handoff requirements. Evidence:
+`/Volumes/PRO-G40/Projects/Lovelies/verification/ios-share-durability-boundary-20261028/root-01/result.json`
+and `/Volumes/PRO-G40/Projects/Lovelies/verification/ios-share-durability-boundary-20261028/attempt-01/DESIGN.md`.
+The shared iOS preview now sweeps expired in-memory entries on every exit,
+including delayed errors and cancellation, without clearing a newer valid
+entry. The baseline counterexamples, 21 focused checks and 35 existing
+private-media checks passed locally; the new focused suite is included in the
+native test runner. The actual shared source also compiled in an unsigned iOS
+Release build with 260 inputs unchanged. Device, real Keychain and lifecycle
+behavior remain separate gates. Evidence:
+`/Volumes/PRO-G40/Projects/Lovelies/verification/ios-preview-exit-expiry-20261028/root-01/result.json`,
+`/Volumes/PRO-G40/Projects/Lovelies/verification/ios-preview-exit-expiry-20261028/root-02/result.json`,
+`/Volumes/PRO-G40/Projects/Lovelies/verification/ios-preview-exit-expiry-20261028/root-03/result.json`
+and `/Volumes/PRO-G40/Projects/Lovelies/verification/ios-preview-exit-expiry-20261028/root-04/result.json`.
 The authenticated request-decision status receipt is now integrated locally.
 It binds a recorded result to the actor, action, source, original key and
 canonical input hash; unknown remains nonterminal. Its read-only database path
@@ -300,6 +316,26 @@ but does not implement, durable finish states, semantic replay protection and ex
 deletion-receipt-guarded cleanup. Evidence:
 `/Volumes/PRO-G40/Projects/Lovelies/verification/ios-store-operation-recovery-20261028/independent-lifecycle-review-20261028/REVIEW.md`
 and `/Volumes/PRO-G40/Projects/Lovelies/verification/store-deletion-fence-review-20261028/REVIEW.md`.
+The deferred callback and Google acknowledgement design identifies two private
+tables, encrypted input custody, provider-aware replay, deletion and restore
+behavior. It requires an independently recoverable inbox and a qualified
+exclusive provider-mutation gateway before accepting or dispatching effects;
+neither prerequisite has been implemented or tested. Evidence:
+`/Volumes/PRO-G40/Projects/Lovelies/verification/store-deferred-delivery-design-20261028/DESIGN.md`
+and `/Volumes/PRO-G40/Projects/Lovelies/verification/store-deferred-delivery-design-20261028/TEST-PLAN.md`.
+Four isolated journal checks further showed that current format-3 admission
+does not bind an escrow namespace, an erasure fact can precede final commit,
+the worker has no escrow route, and a full callback exceeds the operation-input
+limit. A versioned capability, bounded encrypted chunks and a pre-completion
+erasure permit remain design requirements, not a working escrow. Evidence:
+`/Volumes/PRO-G40/Projects/Lovelies/verification/store-escrow-architecture-20261028/RESULT.md`
+and `/Volumes/PRO-G40/Projects/Lovelies/verification/store-escrow-architecture-20261028/DEPENDENCY.md`.
+An isolated in-memory escrow model passed 11 synthetic checks for bounded
+encrypted chunks, exact retry, old-reader denial and retained journal history.
+It cannot serve callbacks or grant erasure. A rollback of the entire independent
+store to an earlier consistent snapshot remains undetectable without an external
+acceptance anchor; the model is not integrated or deployable. Evidence:
+`/Volumes/PRO-G40/Projects/Lovelies/verification/store-escrow-capability-20261028/README.md`.
 An isolated Android successor uses the POST receipt and passed seven local
 transport cases against the copied API and eleven fake registration cases. Its
 real Android Keystore and repository then preserved a synthetic pending record
@@ -313,6 +349,12 @@ with that image; its exact bytes were not preserved, and no pre-existing user
 file was targeted. Evidence:
 `/Volumes/PRO-G40/Projects/Lovelies/verification/android-push-post-transport-20261028/attempt-01/REVIEW.md`
 and `/Volumes/T7/Lovelies-PushVault-20261028-e53cdc66ba/README.md`.
+A source review of that candidate found that an unresolved pending registration
+can retain its raw FCM token across logout and a synthetic completed-deletion
+rewrite. A digest-only local record and independent generation-retirement fence
+are proposed but not implemented; unknown registration and provider effects
+cannot be treated as terminal. Evidence:
+`/Volumes/PRO-G40/Projects/Lovelies/verification/android-push-erasure-terminality-20261028/design-01/DESIGN.md`.
 An isolated journal worker accidentally opened `/tmp/v4-snippet-review-not-used`
 for writing; it is now empty. Its creation and modification timestamps match
 the reported write, but its prior existence or contents are not conclusively
@@ -1434,6 +1476,19 @@ possible process-specific host-temp JVM files from the interrupted earlier
 build could not be identified, so their current existence is unknown. Evidence:
 `/Volumes/T7/Lovelies-TLS-20261028-3bc64da245/recovery-01/result.json` and
 `/Volumes/T7/Lovelies-TLS-20261028-3bc64da245/recovery-01/cleanup-receipt.json`.
+The subsequent app-transport candidate built its synthetic APKs and started
+an owned API 24 emulator, but its proxy rejected the CONNECT host header before
+any upstream connection. No app-transport or health pass was established; the
+test image was detached and removed after preserving its artifacts and sidecar.
+The guard is under review before a changed, runtime-only retry. Evidence:
+`/Volumes/T7/Lovelies-TLS-20261028-3bc64da245/http-exec-4d7e91a3c2b8/run-summary.json`.
+The changed guard then accepted Android's bare host form. On API 24 the
+correct-host relay exchanged encrypted application records with Supabase and
+observed retained TLS 1.2 cipher `c02b`. Both wrong-SNI controls received a
+server alert before a certificate, so the hostname control and full test were
+inconclusive; the probe did not retain the positive HTTP status. API 25 did not
+run. The reused-package test image was removed after preservation. Evidence:
+`/Volumes/T7/Lovelies-TLS-20261028-3bc64da245/http-exec-9deedf4032c0/run-summary.json`.
 Qualify actual final signed clients and the same app transport against the future
 suite set, including a no-shared-suite failure, without recording credentials
 or payloads. See the

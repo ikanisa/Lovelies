@@ -30,7 +30,7 @@ PRODUCTION = [
 CONTROLLED = [
     'NativeProtocolTests', 'NativeConnectionTests', 'NativeOrdinaryLoginTests', 'NativeCameraRecoveryTests',
     'NativeEnrollmentRecoveryTests', 'NativeFaceProfileLifecycleTests',
-    'NativeAccountRecoveryTests', 'NativeRefreshDeliveryTests',
+    'NativeAccountRecoveryTests', 'NativeRefreshDeliveryTests', 'NativePreviewExitExpiryTests',
 ]
 HTTP = {
     'live': ('NativeLiveHTTPJourney', [None]),
@@ -42,7 +42,7 @@ HTTP = {
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('--suite', choices=['wire', 'controlled', *HTTP], required=True)
+    parser.add_argument('--suite', choices=['wire', 'controlled', 'preview-expiry', *HTTP], required=True)
     parser.add_argument('--config', type=Path, help='Frozen shared native fixture config; required for HTTP suites')
     parser.add_argument('--output', type=Path, required=True, help='A new private evidence directory; existing attempts are preserved')
     args = parser.parse_args()
@@ -55,7 +55,8 @@ def main():
     env.setdefault('DEVELOPER_DIR', '/Applications/Xcode.app/Contents/Developer')
     if not Path(env['DEVELOPER_DIR']).is_dir():
         parser.error('Select the installed full Xcode using DEVELOPER_DIR')
-    names = ['NativeProtocolTests'] if args.suite == 'wire' else CONTROLLED if args.suite == 'controlled' else [HTTP[args.suite][0]]
+    names = (['NativeProtocolTests'] if args.suite == 'wire' else CONTROLLED if args.suite == 'controlled'
+             else ['NativePreviewExitExpiryTests'] if args.suite == 'preview-expiry' else [HTTP[args.suite][0]])
     source_paths = [ROOT / name for name in PRODUCTION]
     source_paths += [ROOT / 'ios/Tests' / (name + '.swift') for name in names]
     source_paths.append(Path(__file__).resolve())
@@ -138,9 +139,11 @@ def main():
         report['toolchain'] = (output / 'swift-toolchain.log').read_text().strip()
         for name in names:
             binary = output / name
-            run(name + '-compile', ['xcrun', 'swiftc', *PRODUCTION, 'ios/Tests/' + name + '.swift', '-o', str(binary)], 300)
-            if args.suite in ['wire', 'controlled']:
-                row = run(name + '-tests', [str(binary)], 180)
+            compiler = ['xcrun', 'swiftc'] + (['-j', '1'] if args.suite == 'preview-expiry' else [])
+            run(name + '-compile', [*compiler, *PRODUCTION, 'ios/Tests/' + name + '.swift', '-o', str(binary)], 300)
+            if args.suite in ['wire', 'controlled', 'preview-expiry']:
+                arguments = ['--fixed'] if name == 'NativePreviewExitExpiryTests' else []
+                row = run(name + '-tests', [str(binary), *arguments], 180)
                 match = re.search(r'checks passed: (\d+)', (output / (name + '-tests.log')).read_text())
                 if not match:
                     row['status'] = 'failed'
