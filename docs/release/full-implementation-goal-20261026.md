@@ -396,6 +396,17 @@ pending registration intent contains the APNs token in protected storage; it is
 not a token-free receipt. This source review did not test actual APNs, provider
 delivery or device behavior. Evidence:
 `/Volumes/PRO-G40/Projects/Lovelies/verification/ios-push-settings-review-20261028/FINDINGS.md`.
+An isolated category-settings candidate hides unconfirmed toggles and binds its
+typed protocol to the current session. Its first source revision contained a
+duplicate declaration; a successor corrected it. The first host compile failed
+because the Swift macro helper could not nest the network-denied sandbox; a
+second compile outside that sandbox and network-denied synthetic test passed
+seven protocol checks with stable selected inputs. This does not test SwiftUI,
+the actual recovery paths, real Keychain or provider behavior. Deletion/legacy
+journal handling and concurrent current-value publication remain open; the
+candidate is not integrated. Evidence:
+`/Volumes/PRO-G40/Projects/Lovelies/verification/ios-notification-categories-20261029/attempt-02/host-run-01/result.json`
+and `/Volumes/PRO-G40/Projects/Lovelies/verification/ios-notification-categories-20261029/attempt-02/host-run-02/result.json`.
 An independent local-display candidate serializes its app-created notification
 post with opt-out and observed session retirement. Eleven gate checks and six
 baseline/six candidate adapter checks passed with synthetic host fakes. It is
@@ -1562,11 +1573,21 @@ financial retention, actual processors, applicable notices and operated deletion
 schedule remain unqualified. Evidence:
 `/Volumes/PRO-G40/Projects/Lovelies/verification/privacy-publication-review-20261028/FINDINGS.md`
 and `/Volumes/PRO-G40/Projects/Lovelies/verification/privacy-publication-review-20261028/stage-root-01/local-validation.json`.
+The age declaration also appears in operation payloads and pending native or
+operator journals; a schema-only change would not remove those copies. The two
+selected decision flags can encode the same three age bands, so renaming them
+alone does not reduce their information content. Adult annual review and a
+supported renewal route also remain open. A source-only compatibility proposal
+preserves legacy data and same-key recovery; it has not run tests or migrations
+and must be rebound to current inputs before use. Evidence:
+`/Volumes/PRO-G40/Projects/Lovelies/verification/audience-decision-minimization-20261029/proposal-01/PROPOSAL.md`.
 The registered and guest deletion screens now use EN/RW copy that distinguishes
 server-confirmed active cleanup from unconfirmed backup-copy expiry. Local
-resource parsing and key checks passed; translated wording, rendered layouts,
-spoken accessibility, operating backup expiry and safe restore remain unverified.
-Evidence: `/Volumes/PRO-G40/Projects/Lovelies/verification/deletion-status-wording-20261029/result-03.json`.
+resource parsing, key checks and offline Android SDK resource compilation passed;
+translated wording, rendered layouts, spoken accessibility, operating backup
+expiry and safe restore remain unverified. Evidence:
+`/Volumes/PRO-G40/Projects/Lovelies/verification/deletion-status-wording-20261029/result-03.json`
+and `/Volumes/PRO-G40/Projects/Lovelies/verification/deletion-status-wording-20261029/aapt2-01/result.json`.
 The source-only isolated Android compile assessment found Gradle's separate
 read-only dependency cache does not cover generated transforms or build outputs.
 With approximately 3.51 GiB free internally and 4.29 GiB on PRO-G40 at the
