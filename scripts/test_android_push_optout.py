@@ -43,7 +43,7 @@ def run(args,out):
     offline='macos-sandbox' if sys.platform=='darwin' and sandbox.is_file() else 'synthetic-fakes-only'
     if offline=='macos-sandbox':test_cmd=[str(sandbox),'-p','(version 1) (allow default) (deny network*)',*test_cmd]
     steps=[]
-    for name,cmd,marker in (('compile',compile_cmd,None),('test',test_cmd,'RESULT total=10 passed=10 failed=0')):
+    for name,cmd,marker in (('compile',compile_cmd,None),('test',test_cmd,'RESULT total=15 passed=15 failed=0')):
         if name=='test' and steps[-1].get('exit')!=0:
             steps.append({'name':name,'skipped':'compile failed'});continue
         try:

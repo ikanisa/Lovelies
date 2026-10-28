@@ -21,6 +21,9 @@ import kotlin.coroutines.resume
 import kotlin.coroutines.resumeWithException
 
 internal object PushConfiguration {
+    // SharedPreferences may change its in-memory value even when commit fails.
+    // Do not treat that unconfirmed write as an opt-in in this process.
+    @Volatile private var preferenceWriteUnconfirmed=false
     fun initialize(context: Context): FirebaseMessaging {
         val required=listOf(BuildConfig.FIREBASE_PROJECT_ID,BuildConfig.FIREBASE_APP_ID,BuildConfig.FIREBASE_API_KEY,BuildConfig.FIREBASE_SENDER_ID)
         if(required.any(String::isBlank))throw LiveFailure("push_provider_unconfigured")
@@ -29,8 +32,13 @@ internal object PushConfiguration {
         return FirebaseMessaging.getInstance()
     }
     fun permitted(context: Context)=Build.VERSION.SDK_INT<33 || ContextCompat.checkSelfPermission(context,Manifest.permission.POST_NOTIFICATIONS)==PackageManager.PERMISSION_GRANTED
-    fun optedIn(context: Context)=context.getSharedPreferences("lovelies-device-push",Context.MODE_PRIVATE).getBoolean("opted_in",false)
-    fun setOptedIn(context: Context,value: Boolean): Boolean = context.getSharedPreferences("lovelies-device-push",Context.MODE_PRIVATE).edit().putBoolean("opted_in",value).commit()
+    fun optedIn(context: Context)=!preferenceWriteUnconfirmed && context.getSharedPreferences("lovelies-device-push",Context.MODE_PRIVATE).getBoolean("opted_in",false)
+    @Synchronized fun setOptedIn(context: Context,value: Boolean): Boolean {
+        preferenceWriteUnconfirmed=true
+        val saved=context.getSharedPreferences("lovelies-device-push",Context.MODE_PRIVATE).edit().putBoolean("opted_in",value).commit()
+        if(saved)preferenceWriteUnconfirmed=false
+        return saved
+    }
     fun disableAutoInitIfInitialized(context: Context) {
         if(FirebaseApp.getApps(context).isNotEmpty())FirebaseMessaging.getInstance().isAutoInitEnabled=false
     }
@@ -42,8 +50,15 @@ class PushRegistration(private val context: Context,private val repository: Clou
             runCatching { PushConfiguration.disableAutoInitIfInitialized(context) }
             if(!saved)throw LiveFailure("push_preference_unavailable")
         }
-        val owned=repository.currentScope();val account=repository.credentials?.takeIf { it.method=="registered_face" }?.account ?: return
-        if(enable==true)PushConfiguration.setOptedIn(context,true)
+        val owned=repository.currentScope();val account=repository.credentials?.takeIf { it.method=="registered_face" }?.account
+        if(account==null) {
+            if(enable==true)throw LiveFailure("registered_face_required",403)
+            return
+        }
+        if(enable==true) {
+            val saved=runCatching { PushConfiguration.setOptedIn(context,true) }.getOrDefault(false)
+            if(!saved)throw LiveFailure("push_preference_unavailable")
+        }
         val previous=(repository.saved("push_registration") as? Map<*,*>)?.let(NativeProtocol::obj)
         if(!PushConfiguration.optedIn(context) || !PushConfiguration.permitted(context)) {
             if(previous?.get("account")==account) {

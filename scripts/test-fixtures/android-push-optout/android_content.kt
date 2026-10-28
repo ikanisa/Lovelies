@@ -15,7 +15,7 @@ class SharedPreferences {
     class Editor(private val values:MutableMap<String,Boolean>) {
         private val staged=mutableMapOf<String,Boolean>()
         fun putBoolean(key:String,value:Boolean)=apply { staged[key]=value }
-        fun commit():Boolean { values.putAll(staged);return FakeSystem.commitResult }
+        fun commit():Boolean { values.putAll(staged);if(FakeSystem.commitThrows)throw IllegalStateException("synthetic preference failure");return FakeSystem.commitResult }
         fun apply() { commit() }
     }
 }
@@ -31,7 +31,8 @@ object FakeSystem {
     @Volatile var manager=NotificationManager()
     @Volatile var permission=0
     @Volatile var commitResult=true
+    @Volatile var commitThrows=false
     @Volatile var beforeBuild:(()->Unit)?=null
     @Volatile var beforeNotify:(()->Unit)?=null
-    fun reset() { preferences.clear();manager=NotificationManager();permission=0;commitResult=true;beforeBuild=null;beforeNotify=null;com.google.firebase.messaging.FakeFirebase.reset() }
+    fun reset() { preferences.clear();manager=NotificationManager();permission=0;commitResult=true;commitThrows=false;beforeBuild=null;beforeNotify=null;com.google.firebase.messaging.FakeFirebase.reset() }
 }

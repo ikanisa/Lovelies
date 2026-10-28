@@ -30,10 +30,46 @@ fun main() {
         runBlocking { PushRegistration(c,repo).sync() }
         check(PushConfiguration.optedIn(c) && repo.mutations.isEmpty())
     }
-    run("enabling without registered credentials remains unchanged") {
+    run("enabling without registered credentials reports the missing session") {
         val (c,repo)=setup(false);repo.credentials=null
+        val error=runBlocking { runCatching { PushRegistration(c,repo).sync(true) }.exceptionOrNull() }
+        check((error as? LiveFailure)?.code=="registered_face_required")
+        check(!PushConfiguration.optedIn(c) && repo.mutations.isEmpty() && FakeFirebase.setAttempts==0)
+    }
+    run("enabling from an anonymous session reports the missing registered session") {
+        val (c,repo)=setup(false);repo.credentials=Credentials(repo.credentials!!.account,"anonymous")
+        val error=runBlocking { runCatching { PushRegistration(c,repo).sync(true) }.exceptionOrNull() }
+        check((error as? LiveFailure)?.code=="registered_face_required")
+        check(!PushConfiguration.optedIn(c) && repo.mutations.isEmpty() && FakeFirebase.setAttempts==0)
+    }
+    run("failed opt-in preference commit is surfaced before provider or backend work") {
+        val (c,repo)=setup(false);FakeSystem.commitResult=false;FakeFirebase.initialized=false
+        val error=runBlocking { runCatching { PushRegistration(c,repo).sync(true) }.exceptionOrNull() }
+        check((error as? LiveFailure)?.code=="push_preference_unavailable")
+        check(!PushConfiguration.optedIn(c) && FakeFirebase.initializations==0 && FakeFirebase.setAttempts==0 && repo.mutations.isEmpty())
+    }
+    run("exception saving opt-in is surfaced before provider or backend work") {
+        val (c,repo)=setup(false);FakeSystem.commitThrows=true;FakeFirebase.initialized=false
+        val error=runBlocking { runCatching { PushRegistration(c,repo).sync(true) }.exceptionOrNull() }
+        check((error as? LiveFailure)?.code=="push_preference_unavailable")
+        check(!PushConfiguration.optedIn(c) && FakeFirebase.initializations==0 && FakeFirebase.setAttempts==0 && repo.mutations.isEmpty())
+    }
+    run("a later successful opt-in clears the process-local failure fence") {
+        val (c,repo)=setup(false);FakeSystem.commitResult=false
+        val error=runBlocking { runCatching { PushRegistration(c,repo).sync(true) }.exceptionOrNull() }
+        check((error as? LiveFailure)?.code=="push_preference_unavailable" && !PushConfiguration.optedIn(c))
+        FakeSystem.commitResult=true
+        val previous=mapOf("account" to repo.credentials!!.account,"id" to registrationID,"device" to repo.identity!!.device,"hash" to NativeProtocol.sha256(FakeFirebase.token.toByteArray()))
+        repo.registration=previous;FakeFirebase.autoInit=false
         runBlocking { PushRegistration(c,repo).sync(true) }
-        check(!PushConfiguration.optedIn(c) && repo.mutations.isEmpty())
+        check(PushConfiguration.optedIn(c) && FakeFirebase.autoInit && repo.registration==previous && repo.mutations.isEmpty())
+    }
+    run("successful registered opt-in preserves an existing matching registration") {
+        val (c,repo)=setup(false)
+        val previous=mapOf("account" to repo.credentials!!.account,"id" to registrationID,"device" to repo.identity!!.device,"hash" to NativeProtocol.sha256(FakeFirebase.token.toByteArray()))
+        repo.registration=previous;FakeFirebase.autoInit=false
+        runBlocking { PushRegistration(c,repo).sync(true) }
+        check(PushConfiguration.optedIn(c) && FakeFirebase.autoInit && repo.registration==previous && repo.mutations.isEmpty())
     }
     run("registered opt-out removes the same saved device once") {
         val (c,repo)=setup(true)
