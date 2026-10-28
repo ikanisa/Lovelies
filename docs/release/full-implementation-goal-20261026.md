@@ -387,6 +387,23 @@ device and adequate disk space are prerequisites; an actual disk failure, remote
 token removal and the display race remain separate.
 Evidence:
 `/Volumes/PRO-G40/Projects/Lovelies/verification/android-push-optout-device-readiness-20261028/attempt-02/TEST_PLAN.md`.
+An independent Android permission candidate adds app/channel/runtime checks and
+aligns toggle actions with their shown state. Two baseline counterexamples and
+29 candidate host cases ran with synthetic one-subject fakes and the test
+process network-denied. It remains unintegrated: encrypted persistence under
+the session-fence lock can delay session retirement (the existing generic
+mutation path also saves under that lock), reused device IDs can make an older
+removal clear a newer same-subject registration, ambiguous server writes
+can leave an unknown registration, and actual Android build, permission UI,
+device/provider behavior and notification-display ordering are unverified. The
+prepared device test must be updated for this candidate's permission semantics.
+Evidence:
+`/Volumes/PRO-G40/Projects/Lovelies/verification/android-notification-permission-20261029/attempt-01/root-baseline-01/result.json`
+and `/Volumes/PRO-G40/Projects/Lovelies/verification/android-notification-permission-20261029/attempt-01/root-candidate-01/result.json`.
+A 30th network-denied fake case deliberately reproduced the blocked-storage
+ordering: session retirement waited on the writer-owned fence. Its passing result
+is a counterexample, not a fix or release pass. Evidence:
+`/Volumes/PRO-G40/Projects/Lovelies/verification/android-notification-permission-20261029/attempt-02/root-counterexample-01/result.json`.
 An independent iOS source review identified a delayed APNs-token callback that
 can register after OS permission has been denied, and category settings that can
 appear off while their server values have not loaded. Busy retries, current
@@ -407,6 +424,13 @@ journal handling and concurrent current-value publication remain open; the
 candidate is not integrated. Evidence:
 `/Volumes/PRO-G40/Projects/Lovelies/verification/ios-notification-categories-20261029/attempt-02/host-run-01/result.json`
 and `/Volumes/PRO-G40/Projects/Lovelies/verification/ios-notification-categories-20261029/attempt-02/host-run-02/result.json`.
+A subsequent isolated host fixture passed 29 same-account checks against the
+candidate repository, including lost responses, original-key retry, malformed
+replies and simulated protected-storage failure. Its test process was
+network-denied; the compiler was not. This still does not qualify SwiftUI,
+actual Keychain, cross-process publication, account-deletion cleanup or provider
+operation. Evidence:
+`/Volumes/PRO-G40/Projects/Lovelies/verification/ios-notification-categories-20261029/attempt-03/host-run-01/result.json`.
 An independent local-display candidate serializes its app-created notification
 post with opt-out and observed session retirement. Eleven gate checks and six
 baseline/six candidate adapter checks passed with synthetic host fakes. It is
@@ -1581,6 +1605,15 @@ supported renewal route also remain open. A source-only compatibility proposal
 preserves legacy data and same-key recovery; it has not run tests or migrations
 and must be rebound to current inputs before use. Evidence:
 `/Volumes/PRO-G40/Projects/Lovelies/verification/audience-decision-minimization-20261029/proposal-01/PROPOSAL.md`.
+An isolated additive schema candidate preserves the legacy age field and rows;
+tagged decision rows remain unavailable to current readers. Four pure shape
+checks and two single-subject in-process PostgreSQL runtime checks passed under
+network denial with stable selected source/dependency inputs. This does not
+prove legacy-data preservation, multi-connection behavior, final minimization,
+deployment or a safe v13/v14 cutover. The candidate is not integrated or applied
+to Supabase. Evidence:
+`/Volumes/PRO-G40/Projects/Lovelies/verification/audience-v14-schema-step-20261029/root-pure-01/result.json`
+and `/Volumes/PRO-G40/Projects/Lovelies/verification/audience-v14-schema-step-20261029/root-runtime-01/result.json`.
 The registered and guest deletion screens now use EN/RW copy that distinguishes
 server-confirmed active cleanup from unconfirmed backup-copy expiry. Local
 resource parsing, key checks and offline Android SDK resource compilation passed;
