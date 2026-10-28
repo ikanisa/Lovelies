@@ -1,0 +1,7 @@
+# Android explicit push opt-out host fixture
+
+Run `python3 scripts/test_android_push_optout.py` from any directory. The runner locates the repository from its own path, compiles the actual `PushMessaging.kt` and `NativeProtocol.kt` with these synthetic Kotlin Android/Firebase/repository fakes, and runs ten same-account checks. Nothing in this directory is an Android release source.
+
+For a retained receipt, pass `--evidence-dir /absolute/new/directory`. Set `KOTLINC`, `JAVA`, and `KOTLIN_COROUTINES_JAR`, or pass `--kotlinc`, `--java`, and `--coroutines`, if those tools are not on the host's normal paths. The runner hashes source, fixture and selected tool inputs before and after; it does not seal the entire JDK/compiler dependency closure. It writes only to the selected new evidence directory or its temporary directory.
+
+The fixture does not contact Firebase, an app backend, an emulator, or a real notification manager. On macOS the **test process** is also launched with network access denied through `sandbox-exec`; on other systems the result explicitly states that only synthetic fakes provide the offline boundary. The compiler itself is not OS-network-sandboxed. A pass covers local explicit preference behavior and the fake SDK call only; it is not proof of real preference-disk durability, live provider behavior, remote push removal, notification cancellation, or the separate notify/opt-out race.

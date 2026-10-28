@@ -30,12 +30,20 @@ internal object PushConfiguration {
     }
     fun permitted(context: Context)=Build.VERSION.SDK_INT<33 || ContextCompat.checkSelfPermission(context,Manifest.permission.POST_NOTIFICATIONS)==PackageManager.PERMISSION_GRANTED
     fun optedIn(context: Context)=context.getSharedPreferences("lovelies-device-push",Context.MODE_PRIVATE).getBoolean("opted_in",false)
-    fun setOptedIn(context: Context,value: Boolean) { context.getSharedPreferences("lovelies-device-push",Context.MODE_PRIVATE).edit().putBoolean("opted_in",value).commit() }
+    fun setOptedIn(context: Context,value: Boolean): Boolean = context.getSharedPreferences("lovelies-device-push",Context.MODE_PRIVATE).edit().putBoolean("opted_in",value).commit()
+    fun disableAutoInitIfInitialized(context: Context) {
+        if(FirebaseApp.getApps(context).isNotEmpty())FirebaseMessaging.getInstance().isAutoInitEnabled=false
+    }
 }
 class PushRegistration(private val context: Context,private val repository: CloudflareRepository) {
     suspend fun sync(enable: Boolean?=null) {
+        if(enable==false) {
+            val saved=runCatching { PushConfiguration.setOptedIn(context,false) }.getOrDefault(false)
+            runCatching { PushConfiguration.disableAutoInitIfInitialized(context) }
+            if(!saved)throw LiveFailure("push_preference_unavailable")
+        }
         val owned=repository.currentScope();val account=repository.credentials?.takeIf { it.method=="registered_face" }?.account ?: return
-        if(enable!=null)PushConfiguration.setOptedIn(context,enable)
+        if(enable==true)PushConfiguration.setOptedIn(context,true)
         val previous=(repository.saved("push_registration") as? Map<*,*>)?.let(NativeProtocol::obj)
         if(!PushConfiguration.optedIn(context) || !PushConfiguration.permitted(context)) {
             if(previous?.get("account")==account) {

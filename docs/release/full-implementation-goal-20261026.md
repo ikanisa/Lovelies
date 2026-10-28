@@ -355,6 +355,16 @@ rewrite. A digest-only local record and independent generation-retirement fence
 are proposed but not implemented; unknown registration and provider effects
 cannot be treated as terminal. Evidence:
 `/Volumes/PRO-G40/Projects/Lovelies/verification/android-push-erasure-terminality-20261028/design-01/DESIGN.md`.
+The shared Android code now saves an explicit notification opt-out before the
+missing-session return, reports a failed preference write, and best-effort
+disables auto-init only for an already initialized Firebase app. Ten baseline
+and ten candidate synthetic adapter cases passed; the repository's targeted
+runner also passed all ten against the shared source with its test process
+network-denied. This does not prove durable device preferences, remote token
+removal, actual provider delivery or the separate display race. A full Android
+Gradle build and device checks remain open. Evidence:
+`/Volumes/PRO-G40/Projects/Lovelies/verification/android-push-signedout-optout-20261028/root-01/result.json`
+and `/Volumes/PRO-G40/Projects/Lovelies/verification/android-push-signedout-optout-repo-tests-20261028/root-01/result.json`.
 An independent local-display candidate serializes its app-created notification
 post with opt-out and observed session retirement. Eleven gate checks and six
 baseline/six candidate adapter checks passed with synthetic host fakes. It is
