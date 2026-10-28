@@ -237,6 +237,23 @@ has not been integrated or qualified for actual handoff. Its syntax parsed, but
 none of its 13 prepared tests ran; source review found missing lifecycle/expiry,
 process-wide memory and exact asset/type binding controls. Evidence:
 `/Volumes/PRO-G40/Projects/Lovelies/verification/ios-share-host-implementation-20261028/attempt-03/`.
+An ownership-journal successor is also isolated. Its predecessor negative
+control reproduced deletion of an unknown UUID-shaped file and a second
+synthetic active share file; 31 synthetic ownership checks then passed. An
+existing private-media check failed because the isolated predecessor rejects
+an expired late response before sweeping older cache bytes. The current shared
+`preview` retains the correct sweep ordering; the isolated successor has not
+been integrated. Partial
+writes, legacy unknown files, process-death handoff, iOS file protection and
+unlink races remain open. Evidence:
+`/Volumes/PRO-G40/Projects/Lovelies/verification/ios-share-owned-file-cleanup-20261028/root-01/result.json`.
+The next isolated successor restores the sweep and passed the same 31 ownership
+checks and 58 private-media checks, including late failure and newer-cache
+overlap. It also compiled as an unsigned iOS Release app with 261 copied inputs
+unchanged. These are local fixtures and a build; UIKit and device behavior remain
+open. Evidence:
+`/Volumes/PRO-G40/Projects/Lovelies/verification/ios-share-owned-file-cleanup-20261028/root-02/result.json`
+and `/Volumes/PRO-G40/Projects/Lovelies/verification/ios-share-owned-file-cleanup-20261028/root-03/result.json`.
 The authenticated request-decision status receipt is now integrated locally.
 It binds a recorded result to the actor, action, source, original key and
 canonical input hash; unknown remains nonterminal. Its read-only database path
@@ -272,6 +289,17 @@ deletion recovery, store completion and hosted operation remain open. Evidence:
 and `/Volumes/PRO-G40/Projects/Lovelies/verification/backup-catalog-health-20261028/attempt-03/execution-cc10d6825a38f11e/store-receipts.json`
 and `/Volumes/PRO-G40/Projects/Lovelies/verification/ios-store-operation-recovery-20261028/root-01/result.json`
 and `/Volumes/PRO-G40/Projects/Lovelies/verification/ios-store-operation-recovery-20261028/root-02/result.json`.
+An independent source review additionally found that the purchase sheet can be
+opened before the recovery slot is available. Direct store commits use the
+existing audience check that blocks outstanding deletion requests; ordering and
+the outcome of an in-flight provider acknowledgement still need proof. Signed
+provider callbacks use a separate path that can update subscription rows during
+an outstanding deletion; a reject-only guard would not preserve the event for
+recovery after rejection or cancellation of the deletion. The review proposes,
+but does not implement, durable finish states, semantic replay protection and exact
+deletion-receipt-guarded cleanup. Evidence:
+`/Volumes/PRO-G40/Projects/Lovelies/verification/ios-store-operation-recovery-20261028/independent-lifecycle-review-20261028/REVIEW.md`
+and `/Volumes/PRO-G40/Projects/Lovelies/verification/store-deletion-fence-review-20261028/REVIEW.md`.
 An isolated Android successor uses the POST receipt and passed seven local
 transport cases against the copied API and eleven fake registration cases. Its
 real Android Keystore and repository then preserved a synthetic pending record
