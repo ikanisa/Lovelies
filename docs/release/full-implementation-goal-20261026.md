@@ -78,6 +78,12 @@ Evidence: `/Volumes/PRO-G40/Projects/Lovelies/verification/ios-release-link-host
 A fresh read-only inventory found five paired iOS devices, all disconnected or
 unavailable; Android's device list was empty. No physical device was modified.
 Evidence: `/Volumes/PRO-G40/Projects/Lovelies/verification/physical-device-readback-20261028/attempt-01/device-inventory.json`.
+A 29 October read-only follow-up reached a paired iPhone 12 Pro over the local
+network. Its exact bundle-ID inventory showed an installed app named Lovelies,
+version 1.1.0 build 18. This does not identify its source, installation or signing
+lineage, inspect app data, or prove an in-place update. No app was launched or
+modified. Evidence:
+`/Volumes/PRO-G40/Projects/Lovelies/verification/physical-device-readback-20261029/result.json`.
 The selected Supabase project's security advisor returned no lints on 28 October.
 This is a point-in-time advisor result, not a complete security audit. Evidence:
 `/Volumes/PRO-G40/Projects/Lovelies/verification/supabase-security-advisors-20261028/attempt-01/result.json`.
@@ -433,6 +439,15 @@ pending registration intent contains the APNs token in protected storage; it is
 not a token-free receipt. This source review did not test actual APNs, provider
 delivery or device behavior. Evidence:
 `/Volumes/PRO-G40/Projects/Lovelies/verification/ios-push-settings-review-20261028/FINDINGS.md`.
+A further source review records that an `unknown` push receipt cannot rule out a
+later registration commit, and generic reconciliation can replay a saved
+registration after permission is denied. Existing restrictive-audience behavior
+can also deny both receipt lookup and device removal while a registration stays
+active. A token-free exact-key hold is proposed to preserve an unresolved state, but bounded
+terminal cleanup needs an atomic server cancellation or generation fence with
+appropriately restricted authority. No client or backend fix is integrated.
+Evidence:
+`/Volumes/PRO-G40/Projects/Lovelies/verification/ios-push-permission-recovery-20261029/attempt-01/REVIEW.md`.
 An isolated category-settings candidate hides unconfirmed toggles and binds its
 typed protocol to the current session. Its first source revision contained a
 duplicate declaration; a successor corrected it. The first host compile failed
@@ -520,6 +535,24 @@ The next integration dependency is a format-aware, independently pinned
 serving consumer and transition that preserves v1/v3 behavior; a per-route v1
 fallback would mix authority generations. Evidence:
 `/Volumes/PRO-G40/Projects/Lovelies/verification/restore-serving-integration-assessment-20261029/assessment-01/ASSESSMENT.md`.
+Five current-source, single-subject checks then confirmed the v1 path, its
+fail-closed response to synthetic v3 control, strict v1 response shape, the
+absence of SQL mode/binding/generation pins and absence of a v4 route. These
+ran with PGlite and an in-process journal under an outer network-denied sandbox;
+they do not prove hosted transition or restore safety. Evidence:
+`/Volumes/PRO-G40/Projects/Lovelies/verification/restore-admission-selector-assessment-20261029/root-01/result.json`
+and `/Volumes/PRO-G40/Projects/Lovelies/verification/restore-admission-selector-assessment-20261029/root-01/outer-sandbox-controls.json`.
+Four additional single-subject, in-memory checks on the preserved v3 and v4
+journal forks passed under an independently checked network-denied, write-restricted
+sandbox. They confirm that the current v4 upgrade rejects a caller-bound v3
+control, while a v4 prepare validates its transaction-binding fact but lacks the
+v3 proposal's caller-bound per-plan acceptance. A safe transition also needs to
+bind the final writer generation and independently verify the SQL cutoff's last
+operation and plan, not only its marker. No SQL migration or dormant pins were
+added. These tests do not establish hosted recovery, custody or clearance.
+Evidence:
+`/Volumes/PRO-G40/Projects/Lovelies/verification/restore-metadata-receipt-boundary-20261029/assessment-01/RECEIPT-CONTRACT.md`
+and `/Volumes/PRO-G40/Projects/Lovelies/verification/restore-metadata-receipt-boundary-20261029/root-01/result.json`.
 
 The next local checkpoint adds exact device-revocation facts and a bounded,
 independent journal inventory. Device retirement records the selected old device
@@ -1680,6 +1713,14 @@ Swift source parsed and the changed localization resources passed lint/Android
 resource compilation. Full app builds, bundle fallback, Kinyarwanda review and
 rendered/accessibility checks remain open. Evidence:
 `/Volumes/PRO-G40/Projects/Lovelies/verification/deletion-status-wording-20261029/status-label-root-02/result.json`.
+An isolated, unrun proposal would add an opt-in deletion-status field that can
+only say backup expiry is unverified. The existing screens already disclose that
+limitation, and the proposal supplies no independent backup evidence. It was not
+integrated; a useful future status needs a verified custody/expiry feed and
+compatibility across retained receipts and restore. The current status handler
+uses a transaction that can advance a restore checkpoint when fenced, so its
+unfenced fixture cannot prove read-only journal behavior. Evidence:
+`/Volumes/PRO-G40/Projects/Lovelies/verification/deletion-backup-state-candidate-20261029/README.md`.
 The source-only isolated Android compile assessment found Gradle's separate
 read-only dependency cache does not cover generated transforms or build outputs.
 With approximately 3.51 GiB free internally and 4.29 GiB on PRO-G40 at the
