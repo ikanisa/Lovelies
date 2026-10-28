@@ -328,6 +328,21 @@ and memory-only staging; no production protocol or native recovery is integrated
 Evidence:
 `/Volumes/PRO-G40/Projects/Lovelies/verification/privacy-export-v2-model-20261029/DESIGN.md`
 and `/Volumes/PRO-G40/Projects/Lovelies/verification/privacy-export-v2-model-20261029/model-run-03/result.json`.
+An isolated iOS share-slot candidate reserves presentation before either a
+photo or JSON retrieval and fences stale completion IDs. Sixteen extracted slot
+checks passed, but the actual-store and UIKit tests did not run. A missing
+UIKit completion can leave the slot occupied until its deadline or forced
+retirement, and the existing UUID-based pruning risk remains. The candidate
+is not integrated. Evidence:
+`/Volumes/PRO-G40/Projects/Lovelies/verification/ios-share-slot-arbitration-20261029/attempt-01/REVIEW.md`
+and `/Users/jeanbosco/Library/Application Support/LoveliesVerification/ios-share-slot-arbitration-20261029-root-01/result.json`.
+Android has a related selection race after a Save permission prompt and during
+original-photo download. A preservation-first isolated candidate captures the
+selection for Save, Share and purchase recovery; 30 synthetic host checks passed.
+It is not integrated: the app has not been built or exercised on a device, and
+Compose scheduling, the MediaStore handoff and ownership-safe cleanup of a stale
+private share remain unverified. Evidence:
+`/Volumes/PRO-G40/Projects/Lovelies/verification/android-photo-action-fence-20261029/successor-02/README.md`.
 The shared iOS preview now sweeps expired in-memory entries on every exit,
 including delayed errors and cancellation, without clearing a newer valid
 entry. The baseline counterexamples, 21 focused checks and 35 existing
@@ -620,6 +635,34 @@ receipts. Pending plans, advanced f3 observations and longer histories still
 fail closed; no serving, SQL or restore qualification follows. Evidence:
 `/Volumes/PRO-G40/Projects/Lovelies/verification/restore-bound-v4-journal-20261029/attempt-02/REVIEW.md`
 and `/Volumes/PRO-G40/Projects/Lovelies/verification/restore-bound-v4-journal-20261029/root-02/result.json`.
+Three single-subject PGlite checks then demonstrated that an arbitrary new SQL
+pin would be ignored by the existing v1 reader and remains writable under its
+table-wide grant, even after a column-only revoke. A simulated lost journal-first
+reply left SQL unchanged and v1 unavailable; a placeholder rollback preserved
+the fixture's prior state. These tests substituted the advisory lock and do not
+establish native concurrent transactions or external-effect drainage. A safe
+cutover still needs verified writer/read admission, a trusted control plane and
+separate fencing for already-dispatched effects. Evidence:
+`/Volumes/PRO-G40/Projects/Lovelies/verification/restore-sql-pin-transition-20261029/attempt-01/FINDINGS.md`
+and `/Volumes/PRO-G40/Projects/Lovelies/verification/restore-sql-pin-transition-20261029/root-01/result.json`.
+A disposable PostgreSQL 17 follow-up failed before its SQL cases because the
+network-restricted sandbox could not launch macOS's setuid process-inspection
+utility. Independent readback found the recorded PID absent, `pg_ctl` reporting
+no server and no open scratch consumers; the old PID and socket files remain
+in the retained task-owned scratch directory. The cause of the server's exit
+is unknown, and no native concurrency result was established. Evidence:
+`/Volumes/PRO-G40/Projects/Lovelies/verification/restore-sql-pin-transition-20261029/root-native-01/result.json`
+and `/Volumes/PRO-G40/Projects/Lovelies/verification/restore-sql-pin-transition-20261029/root-native-01/independent-postflight.json`.
+The corrected disposable PostgreSQL 17 probe passed with two local sessions and
+one synthetic subject. A transaction that had already updated committed after
+an unlocked privilege revoke; the shared advisory lock instead waited for both
+the commit and rollback cases before revocation. The old role then lost control
+read/update access, but a deliberately unfenced domain update still committed.
+The owned server stopped and its scratch directory was removed, with an
+independent absence check. These are local fixture observations, not proof of
+hosted roles, external-effect drainage or safe restore. Evidence:
+`/Volumes/PRO-G40/Projects/Lovelies/verification/restore-sql-pin-transition-20261029/root-native-02/result.json`
+and `/Volumes/PRO-G40/Projects/Lovelies/verification/restore-sql-pin-transition-20261029/root-native-02/independent-postflight.json`.
 
 The next local checkpoint adds exact device-revocation facts and a bounded,
 independent journal inventory. Device retirement records the selected old device
