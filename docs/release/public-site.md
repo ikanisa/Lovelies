@@ -1,6 +1,6 @@
-# Lovelies public-information site — checked 25 October 2026
+# Lovelies public-information site — local review draft
 
-The unchanged 24 October review edition applies the owner-selected 13+ audience, supported
+The review edition applies the owner-selected 13+ audience, supported
 independent guardian review for ages 13–17, and the numerical retention decisions
 in `retention-and-young-users.md`. Enforcement and provider/operating
 qualification remain separate. The earlier preview was deployed only to
@@ -9,7 +9,10 @@ shared admin/photo hosts were preserved. Terminal readback later returned
 Cloudflare 403/error1010, so that later attempt does not refresh hosted acceptance.
 Use `scripts/prepare-public-site.py` to stage the explicit 13-file allow-list;
 never upload review manifests or the repository root. The local-check section
-below distinguishes the refreshed local source check from prior HTTP/browser proof.
+below distinguishes the current local source check from prior HTTP/browser proof.
+On 28 October, the local draft was clarified to describe observed age and
+guardian records, possible embedded photo metadata, and the distinction between
+active-erasure status and backup expiry. It remains a draft pending the gates below.
 
 The new `web/` directory is a **local review draft** for the next native release.
 It has not replaced the current published website, policy edition or store URLs.
@@ -51,13 +54,17 @@ operation, enabled processors and their retention remain explicit publication in
 
 ## Local checks completed
 
-The current source check at
+The 25 October source check at
 `verification/supabase-release-20261023/audience-implementation/public-source-checkpoint-20261025/local-validation.json`
 rechecks all five HTML pages,95 references and11 mail links. All13 public-source
-files match the exact v2 preview manifest
+files matched the exact v2 preview manifest
 `91b55ac6b5bd86ce930b2a7711c90660d837d8ac09e5c8e1ae8c7c300e0a77fc`.
-This is file/HTML/link identity proof; no fresh HTTP, browser, header, mailbox or
-publication pass is inferred.
+That identity applies to the earlier edition, not the current changed pages.
+The 28 October local draft was staged from the 13-file allow-list and checked for
+five parseable HTML pages, 83 local references, draft markers, and the updated
+wording. The archive manifest and bounded validation are at
+`/Volumes/PRO-G40/Projects/Lovelies/verification/privacy-publication-review-20261028/stage-root-01/`.
+This is not fresh HTTP, browser, header, mailbox, legal or publication proof.
 
 The preserved prior-edition `web/local-checks.json` records:
 

@@ -365,6 +365,36 @@ removal, actual provider delivery or the separate display race. A full Android
 Gradle build and device checks remain open. Evidence:
 `/Volumes/PRO-G40/Projects/Lovelies/verification/android-push-signedout-optout-20261028/root-01/result.json`
 and `/Volumes/PRO-G40/Projects/Lovelies/verification/android-push-signedout-optout-repo-tests-20261028/root-01/result.json`.
+The subsequent explicit opt-in path now reports an unsuccessful preference
+commit before initiating provider or backend work, and rejects an absent or
+anonymous session instead of reporting registration as current. A process-local
+fence also suppresses an unconfirmed preference write until a later successful
+write. The preceding branches reproduced the respective failures before the
+fixes. Fifteen focused host checks pass against the actual Android source and
+synthetic fakes; the fence does not establish the value after process restart.
+Real-device persistence, a full Gradle build, OS notification state, the separate
+display race and provider work remain open. Evidence:
+`/Volumes/PRO-G40/Projects/Lovelies/verification/android-push-signedout-optout-repo-tests-20261028/root-02-baseline/result.json`,
+`/Volumes/PRO-G40/Projects/Lovelies/verification/android-push-signedout-optout-repo-tests-20261028/root-04-no-session-baseline/result.json`,
+`/Volumes/PRO-G40/Projects/Lovelies/verification/android-push-signedout-optout-repo-tests-20261028/root-06-unconfirmed-baseline/result.json`
+and `/Volumes/PRO-G40/Projects/Lovelies/verification/android-push-signedout-optout-repo-tests-20261028/root-07-final/result.json`.
+An unbuilt, unrun Android instrumentation candidate covers real preference
+restart, the signed-out path and the initialized/uninitialized Firebase branches
+without deliberately enabling auto-init. It is bound to the earlier `209782e`
+source and must be rebound to the final commit and full build closure before use.
+Host-enforced guest no-egress, an isolated device and adequate disk space are
+prerequisites; remote token removal and the display race remain separate.
+Evidence:
+`/Volumes/PRO-G40/Projects/Lovelies/verification/android-push-optout-device-readiness-20261028/attempt-01/TEST_PLAN.md`.
+An independent iOS source review identified a delayed APNs-token callback that
+can register after OS permission has been denied, and category settings that can
+appear off while their server values have not loaded. Busy retries, current
+permission/operation fencing, Keychain-failure and unknown logout/registration
+outcomes require implementation and same-account recovery tests. The generic
+pending registration intent contains the APNs token in protected storage; it is
+not a token-free receipt. This source review did not test actual APNs, provider
+delivery or device behavior. Evidence:
+`/Volumes/PRO-G40/Projects/Lovelies/verification/ios-push-settings-review-20261028/FINDINGS.md`.
 An independent local-display candidate serializes its app-created notification
 post with opt-out and observed session retirement. Eleven gate checks and six
 baseline/six candidate adapter checks passed with synthetic host fakes. It is
@@ -1518,6 +1548,24 @@ Qualify actual final signed clients and the same app transport against the futur
 suite set, including a no-shared-suite failure, without recording credentials
 or payloads. See the
 [Supabase notice](https://supabase.com/changelog/cbc-tls-ciphers-deprecated).
+
+The local privacy and deletion drafts now disclose observed age/guardian records,
+possible embedded photo metadata and the distinction between server-confirmed
+active erasure and backup expiry. The chosen 365-day receipt period is qualified
+by possible earlier valid erasure. A 13-file staging and five-page local
+HTML/link check passed; no policy was published. The selected specification says
+the age band is transient, whereas the current schema stores an age band; align
+the specification, schema and exports before release. Server deletion-complete
+does not itself prove backup-copy expiry. The independent guardian operation,
+financial retention, actual processors, applicable notices and operated deletion
+schedule remain unqualified. Evidence:
+`/Volumes/PRO-G40/Projects/Lovelies/verification/privacy-publication-review-20261028/FINDINGS.md`
+and `/Volumes/PRO-G40/Projects/Lovelies/verification/privacy-publication-review-20261028/stage-root-01/local-validation.json`.
+The source-only isolated Android compile assessment found Gradle's separate
+read-only dependency cache does not cover generated transforms or build outputs.
+With approximately 3.51 GiB free internally and 4.29 GiB on PRO-G40 at the
+assessment, safe space for a fresh isolated compile was not established; no
+build, cache clone, shared-cache change or T7 action was performed in that step.
 
 ## Work packages and acceptance criteria
 
