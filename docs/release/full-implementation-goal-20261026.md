@@ -35,6 +35,23 @@ not waived. Evidence:
 
 The exact immutable Linux AMD64 inference platform manifest is `sha256:982e2ed7bb66b17db17979495495892579f1b734c55d93516a2aeedbf70e1c6c`. Existing native/service/fixture and technical High-disposition proof must not be reopened solely because the unmodified scanner returns exit2. The 26 October lower-row assessment is `verification/openface-integration-20261024/continuation/native-security-disposition-20261025/root-verification-20261026/assessment.json`, SHA256 `ec3f8c1ada7e9a4f88c146c3edb9cb90d61750ffa223fd654c79042d245ea941`. It retains lower-severity findings and does not claim every vulnerability fixed, fresh scanner execution, changed runtime or production recognition acceptance. The ML owner reports gateway cleanup delivered at `5e7cb856acae018f3fdac8bcaf0db1254ea5c269`, with affected22 Worker tests, types and default Supabase dry run passing. Verify exact source/receipt bindings before adopting those results. Temporary-builder retirement has its own postflight receipt; the serving gateway was untouched. Do not recreate removed unverified receipt-shaped/serving flags or an obsolete builder merely to satisfy old notes.
 
+### Local job lease correction, 29 October 2026
+
+The local queue now counts completion only when its own processing lease is
+still present and its completion update returns the row. Its error update also
+requires that processing state, preserving a changed or successor row. An
+unconfirmed completion counts as a failed attempt for the existing maintenance
+response; it does not determine whether a domain or provider effect occurred.
+The source and regression fixture were committed as `e3428e0b74f8b5329acd8e7be9ed64dd18081f32`.
+The baseline tests reproduced false success and two changed-state overwrites.
+After an initial independent run failed because macOS rejected a nested sandbox
+before Node started, the corrected sandboxed run and the integrated source each
+passed eight one-subject checks, including the maintenance handler. TypeScript
+checking passed. PGlite substituted the advisory lock; native multi-session,
+provider, restore and deployed behavior remain unqualified. Evidence:
+`/Users/jeanbosco/Library/Application Support/LoveliesVerification/queue-stale-completion-20261029/root-01/result.json`
+and `/Users/jeanbosco/Library/Application Support/LoveliesVerification/queue-stale-completion-20261029/root-integrated-01/result.json`.
+
 ### Execution checkpoint, 26–28 October 2026
 
 Newer receipts supersede the initial baseline only within their tested scopes.
@@ -328,6 +345,22 @@ and memory-only staging; no production protocol or native recovery is integrated
 Evidence:
 `/Volumes/PRO-G40/Projects/Lovelies/verification/privacy-export-v2-model-20261029/DESIGN.md`
 and `/Volumes/PRO-G40/Projects/Lovelies/verification/privacy-export-v2-model-20261029/model-run-03/result.json`.
+An isolated iOS protected-stage prototype passed 66 synthetic host checks,
+including a 20 MiB interrupted write and recovery, tampered or mismatched inputs,
+and missing or partial local state. An initial fixture failed to compile, and
+a later full-source compile failed when Swift attempted a nested sandbox; those
+failures remain preserved. The final narrow compile and execution denied
+network access, but used an in-memory secret store and injected authority. The
+prototype is not integrated: current-session and trusted-time bindings, real
+Keychain/APFS durability, acknowledgment, user save, and ownership-safe cleanup
+remain open. Evidence:
+`/Volumes/PRO-G40/Projects/Lovelies/verification/ios-export-protected-stage-20261029/attempt-05/REVIEW.md`.
+Five task-created Swift module caches were then inventoried, checked for open
+consumers and removed, recovering approximately 155 MB of internal space.
+Sixteen associated result, log and binary artifacts were independently
+hash-checked unchanged; synthetic scratch was retained. Evidence:
+`/Users/jeanbosco/Library/Application Support/LoveliesVerification/ios-export-stage-cache-cleanup-20261029/result.json`
+and `/Users/jeanbosco/Library/Application Support/LoveliesVerification/ios-export-stage-cache-cleanup-20261029/independent-postflight.json`.
 An isolated iOS share-slot candidate reserves presentation before either a
 photo or JSON retrieval and fences stale completion IDs. Sixteen extracted slot
 checks passed, but the actual-store and UIKit tests did not run. A missing
@@ -653,6 +686,18 @@ in the retained task-owned scratch directory. The cause of the server's exit
 is unknown, and no native concurrency result was established. Evidence:
 `/Volumes/PRO-G40/Projects/Lovelies/verification/restore-sql-pin-transition-20261029/root-native-01/result.json`
 and `/Volumes/PRO-G40/Projects/Lovelies/verification/restore-sql-pin-transition-20261029/root-native-01/independent-postflight.json`.
+An attempt to preserve that failed scratch before cleanup stopped before
+creating an archive because macOS Python lacked the requested extended-attribute
+API. A read-only follow-up found provenance attributes, and a one-file clone
+changed its group. The original scratch, PID file and stale socket were left
+untouched; full metadata preservation is not yet established. Evidence:
+`/Users/jeanbosco/Library/Application Support/LoveliesVerification/failed-native-01-preserved-20261029/OBSERVATIONS.md`.
+A later task-owned archive preserved and hash-checked all 970 regular files
+and 29 directories. Its separate manifest records raw extended attributes,
+permissions, ownership, flags and the stale socket's metadata; independent gzip
+and archive-list checks passed. Reconstruction and restoring group or macOS
+attributes have not been tested, so the original scratch remains in place.
+Evidence: `/Users/jeanbosco/Library/Application Support/LoveliesVerification/failed-native-01-archive-20261029/independent-readback.json`.
 The corrected disposable PostgreSQL 17 probe passed with two local sessions and
 one synthetic subject. A transaction that had already updated committed after
 an unlocked privilege revoke; the shared advisory lock instead waited for both
@@ -663,6 +708,14 @@ independent absence check. These are local fixture observations, not proof of
 hosted roles, external-effect drainage or safe restore. Evidence:
 `/Volumes/PRO-G40/Projects/Lovelies/verification/restore-sql-pin-transition-20261029/root-native-02/result.json`
 and `/Volumes/PRO-G40/Projects/Lovelies/verification/restore-sql-pin-transition-20261029/root-native-02/independent-postflight.json`.
+An offline pin-recording prototype then passed 11 source-bound, one-subject
+checks with PGlite and a substituted lock. It grants no serving permit. An
+independent read-only review identified an unchecked path for assuming the
+table-owner role and a split journal read that can report stale reconciliation;
+managed-provider owner/RLS compatibility is also unverified. The prototype is
+not integrated. Evidence:
+`/Volumes/PRO-G40/Projects/Lovelies/verification/restore-serving-pin-installer-20261029/self-06/result.json`
+and `/Users/jeanbosco/Library/Application Support/LoveliesVerification/restore-pin-review-20261029/REVIEW.md`.
 
 The next local checkpoint adds exact device-revocation facts and a bounded,
 independent journal inventory. Device retirement records the selected old device
@@ -1848,6 +1901,14 @@ read-only dependency cache does not cover generated transforms or build outputs.
 With approximately 3.51 GiB free internally and 4.29 GiB on PRO-G40 at the
 assessment, safe space for a fresh isolated compile was not established; no
 build, cache clone, shared-cache change or T7 action was performed in that step.
+A subsequent qualification stopped before compilation when PRO-G40 was below
+the 4 GiB free-space floor. The retained application resource artifacts lack a
+string referenced by current source, and the 79 historical dependency jars do
+not prove a current resolved classpath. Fresh resources and a current classpath
+remain necessary before the Android candidate can be qualified. A task-owned
+copy of the stopped qualification's source and receipt was content-hash and
+mode checked; the original remains in temporary storage. Evidence:
+`/Users/jeanbosco/Library/Application Support/LoveliesVerification/android-photoqual-preserved-20261029/result.json`.
 The default iOS simulator device-set alias currently points through an absent
 temporary link; the recorded durable set remains present. Shared simulator
 services were running, and a current exclusive lease and consistent preservation
