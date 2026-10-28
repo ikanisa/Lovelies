@@ -369,6 +369,15 @@ retirement, and the existing UUID-based pruning risk remains. The candidate
 is not integrated. Evidence:
 `/Volumes/PRO-G40/Projects/Lovelies/verification/ios-share-slot-arbitration-20261029/attempt-01/REVIEW.md`
 and `/Users/jeanbosco/Library/Application Support/LoveliesVerification/ios-share-slot-arbitration-20261029-root-01/result.json`.
+An additional source-only proposal uses a bounded in-memory share provider and
+leaves unknown legacy files untouched. Its isolated compile stopped at the
+task's output-size guard, so no host tests ran; actual UIKit/recipient behavior,
+active-handoff expiry and export recovery remain unverified. The proposal and
+failure evidence were copied and hash-checked; its task-created partial Swift
+cache was inventoried and removed, recovering approximately 94 MB of logical
+file data. Evidence:
+`/Users/jeanbosco/Library/Application Support/LoveliesVerification/ios-share-memory-preserved-20261029/snapshot/HANDOFF.md`
+and `/Users/jeanbosco/Library/Application Support/LoveliesVerification/ios-share-memory-preserved-20261029/independent-postflight.json`.
 Android has a related selection race after a Save permission prompt and during
 original-photo download. A preservation-first isolated candidate captures the
 selection for Save, Share and purchase recovery; 30 synthetic host checks passed.
@@ -716,6 +725,15 @@ managed-provider owner/RLS compatibility is also unverified. The prototype is
 not integrated. Evidence:
 `/Volumes/PRO-G40/Projects/Lovelies/verification/restore-serving-pin-installer-20261029/self-06/result.json`
 and `/Users/jeanbosco/Library/Application Support/LoveliesVerification/restore-pin-review-20261029/REVIEW.md`.
+An isolated successor reads the control, lineage and committed plan in one
+journal transaction. Twelve single-subject checks passed, and an independent
+source review found the split-read issue closed if the storage port actually
+provides a consistent transaction snapshot. A journal change after that final
+snapshot can still make the evidence stale; owner-role closure, writer drainage,
+independent custody and a serving consumer remain open. The successor still
+returns serving-unavailable and is not integrated. Evidence:
+`/Users/jeanbosco/Library/Application Support/LoveliesVerification/restore-pin-single-snapshot-20261029/self-02/result.json`
+and `/Users/jeanbosco/Library/Application Support/LoveliesVerification/restore-pin-snapshot-review-20261029/REVIEW.md`.
 
 The next local checkpoint adds exact device-revocation facts and a bounded,
 independent journal inventory. Device retirement records the selected old device
