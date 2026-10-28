@@ -100,10 +100,14 @@ check. It checks each managed artifact and lists the newest verified snapshot,
 while reporting stale, expired, unmanaged or inconsistent catalogs without
 deleting them. The root integration run passed 32 synthetic tests, including
 rejection of an incomplete archive by native PostgreSQL 17.11 `pg_restore`.
-A positive listing of a real `pg_dump` archive remains a separate check; the
-command does not establish production scheduling, source provenance, off-site
-custody, Storage-object backups, physical expiry or safe restore. Evidence:
-`/Volumes/PRO-G40/Projects/Lovelies/verification/backup-catalog-health-20261028/attempt-02/root-integrated-native-test.log`.
+A separate disposable PostgreSQL 17.11 cluster produced a real synthetic dump;
+the byte-matching candidate CLI encrypted it, native `pg_restore` listed its
+table and table-data entries, and the health check passed. Two source rows were
+unchanged and the owned cluster and scratch tree were removed. This does not
+establish production scheduling, source provenance, off-site custody,
+Storage-object backups, physical expiry or safe restore. Evidence:
+`/Volumes/PRO-G40/Projects/Lovelies/verification/backup-catalog-health-20261028/attempt-02/root-integrated-native-test.log`
+and `/Volumes/PRO-G40/Projects/Lovelies/verification/backup-catalog-health-20261028/attempt-03/execution-cc10d6825a38f11e/result.json`.
 Supabase documents a 1 GB average Storage quota shared across a Free-plan
 organization, plus separate database and egress quotas. Capacity for the
 10,000-asset target and actual retention/traffic must be measured against
@@ -256,11 +260,18 @@ replayable and have not been erased. Receipts are historical and do not grant
 entitlement or prove StoreKit/Play completion; malformed and retired records
 fail closed. Eleven same-account receipt cases, five targeted provider-failure
 cases, TypeScript and the cached Edge check passed with 161 source inputs
-unchanged. An isolated iOS recovery candidate has not yet been compiled or
-integrated. Actual purchases, ambiguous provider acknowledgement, logout and
+unchanged. The same 11 receipt cases also passed on the disposable native
+PostgreSQL 17.11 cluster with selected inputs unchanged and no test databases
+left behind. An isolated iOS recovery candidate passed 70 synthetic host checks
+and an unsigned Release app build with 261 copied iOS inputs unchanged. It is
+not integrated: cleanup after a crash following StoreKit finish, legacy intent
+loss before migration, and finite retention/deletion of unresolved metadata
+remain open. Actual purchases, ambiguous provider acknowledgement, logout and
 deletion recovery, store completion and hosted operation remain open. Evidence:
 `/Volumes/PRO-G40/Projects/Lovelies/verification/store-operation-receipt-20261028/root-02/result.json`
-and `/Volumes/PRO-G40/Projects/Lovelies/verification/ios-store-operation-recovery-20261028/attempt-02/TEST_PLAN.md`.
+and `/Volumes/PRO-G40/Projects/Lovelies/verification/backup-catalog-health-20261028/attempt-03/execution-cc10d6825a38f11e/store-receipts.json`
+and `/Volumes/PRO-G40/Projects/Lovelies/verification/ios-store-operation-recovery-20261028/root-01/result.json`
+and `/Volumes/PRO-G40/Projects/Lovelies/verification/ios-store-operation-recovery-20261028/root-02/result.json`.
 An isolated Android successor uses the POST receipt and passed seven local
 transport cases against the copied API and eleven fake registration cases. Its
 real Android Keystore and repository then preserved a synthetic pending record
@@ -303,6 +314,15 @@ upgraded by this prototype. Physical incarnation, native multi-pool behavior,
 terminal reconciliation and replay remain unproved. It is not integrated or
 deployed. Evidence:
 `/Volumes/PRO-G40/Projects/Lovelies/verification/restore-v4-decision-scoped-admission-20261028/attempt-04/REVIEW.md`.
+An isolated successor retries an identical journal binding once while the same
+SQL transaction remains open, and denies an exact late duplicate without
+quarantining a newer marker. One predecessor counterexample, 14 journal checks
+and nine same-subject API checks passed, as did API typechecking. It remains
+unintegrated: the retry currently catches every binding error, the original
+rollback classification remains unknown, and transaction exit, independent
+restore lineage, native concurrency, cancellation and hosted recovery remain
+unproved. Evidence:
+`/Volumes/PRO-G40/Projects/Lovelies/verification/restore-binding-same-transaction-retry-20261028/root-01/result.json`.
 
 The next local checkpoint adds exact device-revocation facts and a bounded,
 independent journal inventory. Device retirement records the selected old device
@@ -1375,11 +1395,20 @@ the actual deployment and any candidate source. Evidence:
 `/Volumes/PRO-G40/Projects/Lovelies/verification/public-hosting-readback-20261027/attempt-03/result.json`.
 
 Supabase plans to disable four older TLS 1.2 CBC suites no earlier than 10 November 2026.
-Official Android API 24/25 and iOS 17+ defaults indicate overlap with retained
-TLS suites, but existing compatibility fixtures do not prove an HTTPS handshake.
-Qualify actual final signed clients against the chosen project and a test build
-using the same transport against the future suite set, including a no-shared-suite
-failure, without recording credentials or payloads. See the
+A synthetic Android SSL-socket probe on API 24 and 25 now completed TLS 1.2
+handshakes with the selected project using both its default-enabled and a
+restricted retained cipher set. Correct-host verification passed, wrong-host
+verification failed and no application-data records were forwarded. This is
+not the unmodified app HTTP transport, a signed release, a physical/OEM device,
+a no-shared-suite control or proof of future provider configuration. The owned
+emulator image and recorded processes were removed after preservation; two
+possible process-specific host-temp JVM files from the interrupted earlier
+build could not be identified, so their current existence is unknown. Evidence:
+`/Volumes/T7/Lovelies-TLS-20261028-3bc64da245/recovery-01/result.json` and
+`/Volumes/T7/Lovelies-TLS-20261028-3bc64da245/recovery-01/cleanup-receipt.json`.
+Qualify actual final signed clients and the same app transport against the future
+suite set, including a no-shared-suite failure, without recording credentials
+or payloads. See the
 [Supabase notice](https://supabase.com/changelog/cbc-tls-ciphers-deprecated).
 
 ## Work packages and acceptance criteria

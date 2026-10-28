@@ -1,7 +1,7 @@
 /** Local, same-account checks of the actual API handler. No real store,
  * external network, cross-account simulation or production data is used. */
 import assert from 'node:assert/strict';
-import {test} from 'node:test';
+import {after,test} from 'node:test';
 import {randomUUID} from 'node:crypto';
 import {createApp,createHandler} from '../src/index.ts';
 import {executeOperation,prepareOperation} from '../src/operations.ts';
@@ -9,8 +9,13 @@ import {stable} from '../src/types.ts';
 import {fixture as journalFixture} from './restore-database-fixture.mjs';
 import {startHarness,enroll,faceVerifierFixture,sha256} from './runtime-harness.mjs';
 
-const localTest=process.env.TEST_DATABASE_URL===undefined?test:test.skip;
-if(process.env.TEST_DATABASE_URL===undefined)globalThis.fetch=async()=>{throw Error('external_fetch_prohibited');};
+// The harness uses its disposable local PostgreSQL lane when explicitly
+// supplied, otherwise an in-memory PGlite database. Provider calls are always
+// synthetic and must never fall through to the network in either lane.
+const localTest=test;
+const originalFetch=globalThis.fetch;
+globalThis.fetch=async()=>{throw Error('external_fetch_prohibited');};
+after(()=>{globalThis.fetch=originalFetch;});
 const vars={APPLE_BUNDLE_ID:'com.lovelies.memories',APPLE_APP_ID:'987654321',
  APPLE_SUBSCRIPTION_PRODUCT_ID:'com.lovelies.memories.pro.monthly',GOOGLE_PLAY_PACKAGE_NAME:'com.lovelies.memories',
  GOOGLE_PLAY_SUBSCRIPTION_PRODUCT_ID:'com.lovelies.memories.pro.monthly'};
