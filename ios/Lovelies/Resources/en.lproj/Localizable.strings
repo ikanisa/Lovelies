@@ -20,7 +20,7 @@
 "A camera is unavailable on this device. Choose a photo using Photos or Files." = "A camera is unavailable on this device. Choose a photo using Photos or Files.";
 "A current matching selfie may restore existing authentication on this device. It does not regrant withdrawn consent or renew this management control." = "A current matching selfie may restore existing authentication on this device. It does not regrant withdrawn consent or renew this management control.";
 "A front camera is unavailable. Try again on a device with a working front camera." = "A front camera is unavailable. Try again on a device with a working front camera.";
-"A new account can start only after completed deletion is confirmed." = "A new account can start only after completed deletion is confirmed.";
+"A new account can start only after completed deletion is confirmed." = "A new account can start only after active account cleanup is confirmed.";
 "A recovery receipt was saved before sending the request. Check its status first. If no request is found, retry uses the original request and the same guest credentials." = "A recovery receipt was saved before sending the request. Check its status first. If no request is found, retry uses the original request and the same guest credentials.";
 "A selfie could not be read. Check the saved capture status before retaking it." = "A selfie could not be read. Check the saved capture status before retaking it.";
 "A selfie could not be read. Retake the selfies." = "A selfie could not be read. Retake the selfies.";
@@ -299,7 +299,7 @@
 "Getting Started" = "Getting Started";
 "Go Back" = "Go Back";
 "Great matches!\nYour photos found people\nin your memories." = "Great matches!\nYour photos found people\nin your memories.";
-"Guest account deleted" = "Guest account cleanup confirmed";
+"Guest account deleted" = "Active guest account cleanup confirmed";
 "Guest account privacy" = "Guest account privacy";
 "Help Center" = "Help Center";
 "Help Lovelies find you in photos\nacross your matches." = "Help Lovelies find you in photos\nacross your matches.";
@@ -723,7 +723,7 @@
 "The server confirmed account erasure and private-file cleanup. Previously downloaded or forwarded copies cannot be recalled." = "The server confirmed cleanup of the active account and tracked private files. This status does not confirm that backup copies have expired. Previously downloaded or forwarded copies cannot be recalled.";
 "The server confirmed that this guest account and its private files were deleted. Start again only if you want a new guest account." = "The server confirmed cleanup of the active guest account and tracked private files. This status does not confirm that backup copies have expired. Start again only if you want a new guest account.";
 "The server has not yet confirmed removal of all private reference bytes. Keep this saved action and check again; re-enrollment remains unavailable until cleanup is verified." = "The server has not yet confirmed removal of all private reference bytes. Keep this saved action and check again; re-enrollment remains unavailable until cleanup is verified.";
-"The server must confirm completed deletion before starting again." = "The server must confirm completed deletion before starting again.";
+"The server must confirm completed deletion before starting again." = "The server must confirm active account cleanup before starting again.";
 "The server reported a failure. Private-file cleanup has not been confirmed. Keep this receipt and check the status again." = "The server reported a failure. Private-file cleanup has not been confirmed. Keep this receipt and check the status again.";
 "The service could not allow this action (%@)." = "The service could not allow this action (%@).";
 "The service returned an unverified result. Nothing has been confirmed." = "The service returned an unverified result. Nothing has been confirmed.";
@@ -758,7 +758,8 @@
 "This purchase belongs to another Lovelies account. Sign in to the purchasing account before restoring." = "This purchase belongs to another Lovelies account. Sign in to the purchasing account before restoring.";
 "This reference was removed. Confirm cleanup before enrolling again." = "This reference was removed. Confirm cleanup before enrolling again.";
 "This request did not complete deletion. Resume setup checks the same guest account and restores it only if the server still accepts its credentials." = "This request did not complete deletion. Resume setup checks the same guest account and restores it only if the server still accepts its credentials.";
-"This requests deletion of the guest account created on this device. Setup will pause while the request is checked. Independent review and verified cleanup are required before deletion is complete." = "This requests deletion of the guest account created on this device. Setup will pause while the request is checked. Independent review and verified cleanup are required before deletion is complete.";
+"This status does not confirm that backup copies have expired." = "This status does not confirm that backup copies have expired.";
+"This requests deletion of the guest account created on this device. Setup will pause while the request is checked. Independent review and verified cleanup are required before deletion is complete." = "This requests deletion of the guest account created on this device. Setup will pause while the request is checked. Independent review and verified active cleanup are required before starting again. This status does not confirm that backup copies have expired.";
 "This requests erasure of your account, face profile and retained private photos after review and verified cleanup. Copies already saved or forwarded cannot be recalled. App Store subscriptions must also be cancelled in your Apple Account." = "This requests erasure of your account, face profile and retained private photos after review and verified cleanup. Copies already saved or forwarded cannot be recalled. App Store subscriptions must also be cancelled in your Apple Account.";
 "This retrieves an account-bound, one-time export. Choose Save to Files in the system share sheet. Keep the saved copy private." = "This retrieves an account-bound, one-time export. Choose Save to Files in the system share sheet. Keep the saved copy private.";
 "This returns to the sign-in screen. No real account session is connected." = "This returns to the sign-in screen. No real account session is connected.";

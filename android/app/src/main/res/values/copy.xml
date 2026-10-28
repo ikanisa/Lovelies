@@ -574,7 +574,7 @@
     <string name="copy_the_deletion_request_was_rejected_yo_bbc1ea13">"The deletion request was rejected. You can resume setup after the same guest account is verified again."</string>
     <string name="copy_the_deletion_request_was_cancelled_y_c140e516">"The deletion request was cancelled. You can resume setup after the same guest account is verified again."</string>
     <string name="copy_deletion_could_not_finish_check_the__4d983adb">"Deletion could not finish. Check the status again for an update. Your account is not confirmed deleted."</string>
-    <string name="copy_deletion_is_in_progress_completion_w_14c02189">"Deletion is in progress. Completion will appear here after the server confirms cleanup."</string>
+    <string name="copy_deletion_is_in_progress_completion_w_14c02189">"Active account cleanup is in progress. This status does not confirm that backup copies have expired."</string>
     <string name="copy_your_deletion_request_is_saved_for_r_de7a1f60">"Your deletion request is saved for review. Face setup is paused while this request is unresolved."</string>
     <string name="copy_we_couldn_t_confirm_whether_the_requ_62716374">"We couldn’t confirm whether the request reached the server. Check status to reconcile your saved request."</string>
     <string name="copy_request_deletion_of_this_guest_accou_e9092bdc">"Request deletion of this guest account before registering your face. The request requires review; submitting it does not mean deletion is complete."</string>
@@ -783,6 +783,7 @@
     <string name="copy_deletion_queued_33b2465c">"Deletion queued"</string>
     <string name="copy_deleting_account_6750fcb2">"Deleting account"</string>
     <string name="copy_account_deleted_9c9a92a1">"Active account cleanup confirmed"</string>
+    <string name="deletion_backup_expiry_unconfirmed">"This status does not confirm that backup copies have expired."</string>
     <string name="copy_request_rejected_8ccc55ac">"Request rejected"</string>
     <string name="copy_deletion_could_not_finish_1435333a">"Deletion could not finish"</string>
     <string name="copy_request_cancelled_166d7001">"Request cancelled"</string>

@@ -572,7 +572,7 @@
     <string name="copy_the_deletion_request_was_rejected_yo_bbc1ea13">"Ubusabe bwo gusiba ntibwemewe. Ushobora gukomeza gushyiraho konti nyuma yo kongera kwemeza ya konti imwe y’umushyitsi."</string>
     <string name="copy_the_deletion_request_was_cancelled_y_c140e516">"Ubusabe bwo gusiba bwahagaritswe. Ushobora gukomeza gushyiraho konti nyuma yo kongera kwemeza ya konti imwe y’umushyitsi."</string>
     <string name="copy_deletion_could_not_finish_check_the__4d983adb">"Gusiba ntibyarangiye. Ongera urebe uko bihagaze kugira ngo ubone amakuru mashya. Ntibiremezwa ko konti yawe yasibwe."</string>
-    <string name="copy_deletion_is_in_progress_completion_w_14c02189">"Gusiba biracyakorwa. Ko byarangiye bizagaragara hano nyuma y’uko seriveri yemeje ko gukuraho amakuru byarangiye."</string>
+    <string name="copy_deletion_is_in_progress_completion_w_14c02189">"Ikurwaho ry’amakuru akoreshwa ya konti riracyakorwa. Iyi raporo ntiyemeza ko igihe cyo kubika kopi z’ububiko cyarangiye."</string>
     <string name="copy_your_deletion_request_is_saved_for_r_de7a1f60">"Ubusabe bwawe bwo gusiba bwabitswe kugira ngo busuzumwe. Gushyiraho isura byahagaritswe by’agateganyo mu gihe ubu busabe butarakemuka."</string>
     <string name="copy_we_couldn_t_confirm_whether_the_requ_62716374">"Ntitubashije kwemeza niba ubusabe bwageze kuri seriveri. Reba aho bigeze kugira ngo umenye uko ubusabe bwabitswe bwagenze."</string>
     <string name="copy_request_deletion_of_this_guest_accou_e9092bdc">"Saba gusiba iyi konti y’umushyitsi mbere yo kwandikisha isura yawe. Ubusabe bugomba gusuzumwa; kubwohereza ntibivuze ko gusiba byarangiye."</string>
@@ -781,6 +781,7 @@
     <string name="copy_deletion_queued_33b2465c">"Gusiba biri ku murongo"</string>
     <string name="copy_deleting_account_6750fcb2">"Konti irasibwa"</string>
     <string name="copy_account_deleted_9c9a92a1">"Gukuraho amakuru akoreshwa ya konti byemejwe"</string>
+    <string name="deletion_backup_expiry_unconfirmed">"Iyi raporo ntiyemeza ko igihe cyo kubika kopi z’ububiko cyarangiye."</string>
     <string name="copy_request_rejected_8ccc55ac">"Ubusabe bwanze"</string>
     <string name="copy_deletion_could_not_finish_1435333a">"Gusiba ntibyarangiye"</string>
     <string name="copy_request_cancelled_166d7001">"Ubusabe bwahagaritswe"</string>

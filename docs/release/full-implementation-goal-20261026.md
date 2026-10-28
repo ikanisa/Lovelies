@@ -259,6 +259,12 @@ the old unlink. The instrumentation is test-only. A source design records the
 unimplemented writer-exclusion, partial-write and handoff requirements. Evidence:
 `/Volumes/PRO-G40/Projects/Lovelies/verification/ios-share-durability-boundary-20261028/root-01/result.json`
 and `/Volumes/PRO-G40/Projects/Lovelies/verification/ios-share-durability-boundary-20261028/attempt-01/DESIGN.md`.
+The current share sheet serves both original photos and one-time JSON exports.
+A typed in-memory item provider is a possible way to avoid new app-owned share
+files, but filename/recipient compatibility and background byte lifetime are
+not established. Unknown legacy files and already-shared external copies cannot
+be treated as owned cleanup. No replacement was integrated. Evidence:
+`/Volumes/PRO-G40/Projects/Lovelies/verification/ios-share-source-assessment-20261029/ASSESSMENT.md`.
 The shared iOS preview now sweeps expired in-memory entries on every exit,
 including delayed errors and cancellation, without clearing a newer valid
 entry. The baseline counterexamples, 21 focused checks and 35 existing
@@ -404,6 +410,13 @@ A 30th network-denied fake case deliberately reproduced the blocked-storage
 ordering: session retirement waited on the writer-owned fence. Its passing result
 is a counterexample, not a fix or release pass. Evidence:
 `/Volumes/PRO-G40/Projects/Lovelies/verification/android-notification-permission-20261029/attempt-02/root-counterexample-01/result.json`.
+The subsequent source audit found the same monitor assumptions across session,
+recovery, deletion and upload operations. A durable authority design considers a
+pre-armed dirty marker and quiescent clean checkpoint, but an old clean write
+could race accepted logout and revive credentials after a crash. No implementation
+or workflow-preserving fix has been proved. Evidence:
+`/Volumes/PRO-G40/Projects/Lovelies/verification/android-session-retirement-audit-20261029/attempt-01/AUDIT.md`
+and `/Volumes/PRO-G40/Projects/Lovelies/verification/android-durable-authority-design-20261029/attempt-01/PROTOCOL.md`.
 An independent iOS source review identified a delayed APNs-token callback that
 can register after OS permission has been denied, and category settings that can
 appear off while their server values have not loaded. Busy retries, current
@@ -476,6 +489,30 @@ rollback classification remains unknown, and transaction exit, independent
 restore lineage, native concurrency, cancellation and hosted recovery remain
 unproved. Evidence:
 `/Volumes/PRO-G40/Projects/Lovelies/verification/restore-binding-same-transaction-retry-20261028/root-01/result.json`.
+An isolated successor is designed to limit retry to its locally observed
+binding-response deadline and propagate other errors at the bridge. Its five journal checks
+passed; the API phase recorded 16 passes and one failure because a test expected
+HTTP 500 while the invocation's existing fail-closed wrapper returned 503.
+Typechecking was not reached in that run. The result and outer sandbox controls
+are preserved while the test expectation is reviewed; no v4 bridge was integrated
+and independent restore safety remains open. Evidence:
+`/Volumes/PRO-G40/Projects/Lovelies/verification/restore-binding-classified-timeout-20261029/root-01/result.json`
+and `/Volumes/PRO-G40/Projects/Lovelies/verification/restore-binding-classified-timeout-20261029/root-01/outer-sandbox-controls.json`.
+The corrected test checks the original error at the bridge and the existing
+fail-closed 503 response. A second isolated run passed all five journal and 17
+same-subject API checks plus TypeScript checking under an outer network-denied,
+task-directory-write sandbox. The earlier failure remains preserved. This
+candidate is still not part of the serving stack and does not establish physical
+restore lineage, rollback classification, custody or recovery clearance.
+Evidence:
+`/Volumes/PRO-G40/Projects/Lovelies/verification/restore-binding-classified-timeout-20261029/root-02/result.json`
+and `/Volumes/PRO-G40/Projects/Lovelies/verification/restore-binding-classified-timeout-20261029/root-02/outer-sandbox-controls.json`.
+The serving entrypoint still constructs the v1 fence, while the isolated v4
+fence rejects ordinary no-intent transactions and resource-bearing history.
+The next integration dependency is a format-aware, independently pinned
+serving consumer and transition that preserves v1/v3 behavior; a per-route v1
+fallback would mix authority generations. Evidence:
+`/Volumes/PRO-G40/Projects/Lovelies/verification/restore-serving-integration-assessment-20261029/assessment-01/ASSESSMENT.md`.
 
 The next local checkpoint adds exact device-revocation facts and a bounded,
 independent journal inventory. Device retirement records the selected old device
@@ -1614,6 +1651,12 @@ deployment or a safe v13/v14 cutover. The candidate is not integrated or applied
 to Supabase. Evidence:
 `/Volumes/PRO-G40/Projects/Lovelies/verification/audience-v14-schema-step-20261029/root-pure-01/result.json`
 and `/Volumes/PRO-G40/Projects/Lovelies/verification/audience-v14-schema-step-20261029/root-runtime-01/result.json`.
+A separate four-case PGlite migration fixture passed with one synthetic subject,
+including its existing row, receipt and hold, 69 table projections, access
+controls, invalid tuples and rollback controls. Its guardian tables were empty;
+it does not prove preservation of other or hosted data. The process was
+network-denied and task-directory write controls were checked. Evidence:
+`/Volumes/PRO-G40/Projects/Lovelies/verification/audience-v14-single-subject-20261029/root-run-01/result.json`.
 The registered and guest deletion screens now use EN/RW copy that distinguishes
 server-confirmed active cleanup from unconfirmed backup-copy expiry. Local
 resource parsing, key checks and offline Android SDK resource compilation passed;
@@ -1621,6 +1664,15 @@ translated wording, rendered layouts, spoken accessibility, operating backup
 expiry and safe restore remain unverified. Evidence:
 `/Volumes/PRO-G40/Projects/Lovelies/verification/deletion-status-wording-20261029/result-03.json`
 and `/Volumes/PRO-G40/Projects/Lovelies/verification/deletion-status-wording-20261029/aapt2-01/result.json`.
+The deletion-specific privacy-list labels now use the qualified cleanup wording
+and a backup-expiry caveat on both platforms; export labels remain unchanged. An inconsistent iOS receipt
+with a raw completed status but no validated completion shows awaiting
+confirmation. Guest processing and restart messages were similarly qualified.
+The exact extracted selectors passed five Kotlin and six Swift synthetic checks;
+Swift source parsed and the changed localization resources passed lint/Android
+resource compilation. Full app builds, bundle fallback, Kinyarwanda review and
+rendered/accessibility checks remain open. Evidence:
+`/Volumes/PRO-G40/Projects/Lovelies/verification/deletion-status-wording-20261029/status-label-root-02/result.json`.
 The source-only isolated Android compile assessment found Gradle's separate
 read-only dependency cache does not cover generated transforms or build outputs.
 With approximately 3.51 GiB free internally and 4.29 GiB on PRO-G40 at the

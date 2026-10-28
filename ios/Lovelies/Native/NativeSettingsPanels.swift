@@ -87,7 +87,10 @@ struct NativePrivacyPanel: View {
             ForEach(Array(requests.enumerated()), id: \.offset) { _, item in
                 VStack(alignment: .leading, spacing: 8) {
                     Text(item["request_type"].string == "delete" ? String(localized: "Account deletion") : String(localized: "Data export")).font(.headline)
-                    Text(item["status"].string.map(NativeStatusCopy.privacy) ?? String(localized: "Unavailable")).font(.body).foregroundStyle(LoveliesTheme.pink)
+                    Text(item["request_type"].string == "delete" && item["status"].string == "completed" ? String(localized: "Account deletion completed") : (item["status"].string.map(NativeStatusCopy.privacy) ?? String(localized: "Unavailable"))).font(.body).foregroundStyle(LoveliesTheme.pink)
+                    if item["request_type"].string == "delete" && item["status"].string == "completed" {
+                        Text("This status does not confirm that backup copies have expired.").font(.footnote).foregroundStyle(LoveliesTheme.secondary)
+                    }
                     if let failure = item["failure_code"].string { Text(failure).font(.footnote).foregroundStyle(LoveliesTheme.secondary) }
                     if let id = item["id"].string {
                         if item["download_state"].string == "ready" {
@@ -119,7 +122,10 @@ struct NativeRegisteredDeletionView: View {
             ScrollView { VStack(alignment: .leading, spacing: 18) {
                 if let receipt = live.registeredDeletion {
                     Text(receipt.completed ? String(localized: "Account deletion completed") : String(localized: "Deletion request saved")).font(.title2.weight(.semibold))
-                    Text(receipt.response?["privacy_request"]["status"].string.map(NativeStatusCopy.privacy) ?? String(localized: "Awaiting confirmation")).font(.headline).foregroundStyle(LoveliesTheme.pink)
+                    if !receipt.completed {
+                        let status = receipt.response?["privacy_request"]["status"].string
+                        Text(status == "completed" ? String(localized: "Awaiting confirmation") : (status.map(NativeStatusCopy.privacy) ?? String(localized: "Awaiting confirmation"))).font(.headline).foregroundStyle(LoveliesTheme.pink)
+                    }
                     Text(receipt.completed ? String(localized: "The server confirmed account erasure and private-file cleanup. Previously downloaded or forwarded copies cannot be recalled.") : String(localized: "Your private status receipt is stored securely on this device and works after your session is retired. Deletion is complete only when the server confirms it.")).font(.body).foregroundStyle(LoveliesTheme.secondary)
                     if receipt.completed { PinkButton(title: String(localized: "Start again"), enabled: !live.busy) { live.startAfterRegisteredDeletion() } }
                     else {

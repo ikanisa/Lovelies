@@ -899,9 +899,11 @@ private fun LiveAccount(state: PreviewState,choose: ()->Unit) {
             NativeProtocol.rows(live.privacyCenter["requests"] ?: emptyList<WireObject>()).forEach { row ->
                 val id=NativeProtocol.id(row["id"])
                 val ready=row["request_type"]=="export" && (row["download_state"]=="ready" || live.repository.stagedExport()?.get("request")==id)
-                SettingRow(row["request_type"] as? String ?: uiContext.getString(R.string.copy_request_82454152),subtitle=listOfNotNull(row["status"] as? String,row["failure_code"] as? String).joinToString(" · "),trailing=if(ready)uiContext.getString(R.string.copy_save_efc007a3) else uiContext.getString(R.string.copy_status_005ef20f),icon=Glyph.EXPORT,modifier=Modifier.padding(bottom=8.dp)) {
+                val displayedStatus=if(row["request_type"]=="delete" && row["status"]=="completed")uiContext.getString(R.string.copy_account_deleted_9c9a92a1) else row["status"] as? String
+                val backupNotice=if(row["request_type"]=="delete" && row["status"]=="completed")uiContext.getString(R.string.deletion_backup_expiry_unconfirmed) else null
+                SettingRow(row["request_type"] as? String ?: uiContext.getString(R.string.copy_request_82454152),subtitle=listOfNotNull(displayedStatus,row["failure_code"] as? String).joinToString(" · "),trailing=if(ready)uiContext.getString(R.string.copy_save_efc007a3) else uiContext.getString(R.string.copy_status_005ef20f),icon=Glyph.EXPORT,modifier=Modifier.padding(bottom=8.dp)) {
                     if(ready) { selectedExport=id;document.launch("lovelies-export-$id.json") }
-                    else state.info(uiContext.getString(R.string.copy_request_status_2b321858),listOfNotNull(row["status"] as? String,row["reason"] as? String,row["failure_code"] as? String).joinToString("\n"))
+                    else state.info(uiContext.getString(R.string.copy_request_status_2b321858),listOfNotNull(displayedStatus,backupNotice,row["reason"] as? String,row["failure_code"] as? String).joinToString("\n"))
                 }
             }
             OutlineButton(stringResource(R.string.copy_refresh_requests_3dc3afd4),enabled=!live.busy) { live.refreshPrivacy() }
