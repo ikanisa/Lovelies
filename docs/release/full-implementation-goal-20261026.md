@@ -964,6 +964,13 @@ but does not implement, durable finish states, semantic replay protection and ex
 deletion-receipt-guarded cleanup. Evidence:
 `/Volumes/PRO-G40/Projects/Lovelies/verification/ios-store-operation-recovery-20261028/independent-lifecycle-review-20261028/REVIEW.md`
 and `/Volumes/PRO-G40/Projects/Lovelies/verification/store-deletion-fence-review-20261028/REVIEW.md`.
+An isolated iOS entitlement-refresh candidate is held after source review found
+same-session out-of-order results and a token-rotation recovery gap. A successor
+and synthetic cases are prepared but have not run. The actor-to-main publication
+and retirement race, StoreKit purchase-sheet/recovery behavior and real provider
+verification remain open. Evidence:
+`/Volumes/PRO-G40/Projects/Lovelies/verification/ios-store-entitlement-publication-independent-review-20261029-agent-01/REVIEW.md`
+and `/Volumes/PRO-G40/Projects/Lovelies/verification/ios-store-entitlement-order-recovery-20261029-agent-02/README.md`.
 The deferred callback and Google acknowledgement design identifies two private
 tables, encrypted input custody, provider-aware replay, deletion and restore
 behavior. It requires an independently recoverable inbox and a qualified
@@ -1303,6 +1310,15 @@ including two JARs from a failed predecessor. All 29 associated evidence files
 and the failed status remained unchanged. The same archive-location,
 original-path restoration and pathname-race limits apply. Evidence:
 `/Volumes/PRO-G40/Projects/Lovelies/verification/internal-test-output-preservation-20261029-02/postflight.json`.
+One additional 78-file iOS SDK module cache was archived and restored on a
+separate volume before the exact original was removed. Independent postflight
+matched the retained archive, restored files, build evidence and removal
+receipt. The measured internal free-space increase during removal was about
+63 MiB. The archive shares the internal volume with the original; the restored
+copy was retained at postflight, and original-path restoration and independent
+custody are not claimed. Evidence:
+`/Volumes/PRO-G40/Projects/Lovelies/verification/internal-sdk-cache-preservation-20261029-agent-03/run-01/verified.json`
+and `/Volumes/PRO-G40/Projects/Lovelies/verification/internal-sdk-cache-original-cleanup-postflight-20261029-independent-agent-01/POSTFLIGHT.json`.
 Five separate current-source, single-subject checks confirmed the v1 path, its
 fail-closed response to synthetic v3 control, strict v1 response shape, the
 absence of SQL mode/binding/generation pins and absence of a v4 route. These
