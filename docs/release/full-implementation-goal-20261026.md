@@ -507,10 +507,14 @@ The integrated files also ran through the Node command expanded from the
 one optional native-tool skip. The enclosing harness recorded failure because
 it expected TAP while Node emitted its default reporter; a separate readback
 matched all 40 named cases, the zero exit, logs, source hashes and process-group
-absence. The harness failure is retained and this does not establish a pnpm
-wrapper, independent CI or production backup pass. Evidence:
-`/Volumes/PRO-G40/Projects/Lovelies/verification/backup-test-glob-shared-runner-20261029-agent-01/root-run-01/result.json`
-and `/Volumes/PRO-G40/Projects/Lovelies/verification/backup-test-glob-shared-readback-20261029-independent-01/result.json`.
+absence. A successor that parses Node's default reporter then passed the same
+39 cases and one skip; its postflight checked names, controls, inputs and process
+groups. The prior harness failure is retained. These runs do not establish a
+pnpm wrapper, independent CI or production backup pass. Evidence:
+`/Volumes/PRO-G40/Projects/Lovelies/verification/backup-test-glob-shared-runner-20261029-agent-01/root-run-01/result.json`,
+`/Volumes/PRO-G40/Projects/Lovelies/verification/backup-test-glob-shared-readback-20261029-independent-01/result.json`,
+`/Volumes/PRO-G40/Projects/Lovelies/verification/backup-test-glob-spec-runner-20261029-agent-01/root-run-01/result.json`,
+and `/Volumes/PRO-G40/Projects/Lovelies/verification/backup-test-glob-spec-postflight-20261029-independent-01/result.json`.
 Supabase documents a 1 GB average Storage quota shared across a Free-plan
 organization, plus separate database and egress quotas. Capacity for the
 10,000-asset target and actual retention/traffic must be measured against
