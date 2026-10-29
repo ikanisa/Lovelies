@@ -4,6 +4,7 @@ import { assertOperationReceiptAvailable, assertRegisteredActor, executeOperatio
 import { parseMediaAuthority, protectedRendition, type Asset, type MediaAuthority } from './gallery.ts';
 import { mediaHeld } from './operators.ts';
 import { enqueueNotification } from './notifications.ts';
+import { assertStoreAuthorityFresh, storeAuthorityDeadlines, type StoreAuthorityDeadlines } from './store-authority.ts';
 // Pure provider cryptography/API helpers only; no historical router or database adapter.
 import { Buffer } from 'node:buffer';
 import type { GooglePlayServiceAccountCredentials, GooglePlaySubscriptionVerifier } from './google-play-types.ts';
@@ -589,6 +590,16 @@ export async function handleEntitlements(request: Request, ctx: AppContext): Pro
     }
     const actor = await ctx.authenticate(request);
     (await assertRegisteredActor(ctx, actor));
+    if (store || path === '/me/store-operations' || path === '/me/entitlements') {
+        // Snapshot exactly the authenticated actor. The database invocation
+        // checks it after independent prepare and at final response admission.
+        const bound = { ...actor, roles: [...actor.roles] };
+        let deadlines: StoreAuthorityDeadlines | undefined;
+        ctx.db.bindInvocationAuthority(async () => { deadlines = await storeAuthorityDeadlines(ctx, bound); }, () => {
+            if (!deadlines) throw new ApiError(503, 'store_authority_unavailable');
+            assertStoreAuthorityFresh(deadlines, ctx.now());
+        });
+    }
     if (path === '/me/store-operations')
         return await storeOperationReceipt(request, ctx, actor);
     if (store)

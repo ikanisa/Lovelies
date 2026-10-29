@@ -56,14 +56,15 @@ jobs:
             test/service-fetcher-push-consumer.test.mjs \
             test/apple-submission-v2.test.mjs \
             test/apple-submission-v2-restore.test.mjs \
+            test/store-session-authority.test.mjs \
             test/job-stale-completion.test.mjs \
             test/notification-terminal-race.test.mjs \
             test/notification-unconfirmed-delivery.test.mjs \
             test/notification-device-removal-race.test.mjs \
             test/notification-logout-delivery-race.test.mjs \
             test/storage-status-cleanup-runtime.test.mjs | tee "$report_file"
-          grep -qx '# tests 84' "$report_file"
-          grep -qx '# pass 84' "$report_file"
+          grep -qx '# tests 104' "$report_file"
+          grep -qx '# pass 104' "$report_file"
           grep -qx '# fail 0' "$report_file"
           grep -qx '# skipped 0' "$report_file"
       - run: pnpm backend:client:test

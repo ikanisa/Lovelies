@@ -1014,19 +1014,38 @@ cases, six affected consumer cases, TypeScript and the cached Edge check. The
 updated local PGlite workflow step passed 84/84; configured-database controls
 confirmed its 68 selected PGlite-only cases skip in the PostgreSQL lane. These
 are local checks, not GitHub CI, native multi-connection, real store or hosted
-proof. An inherited session-expiry window during independent journal preparation,
-acknowledgement and final admission remains open. Evidence:
+proof. A later local change below addresses an identified session-expiry window;
+hosted and client recovery qualification remain open. Evidence:
 `/Users/jeanbosco/Library/Application Support/LoveliesVerification/store-apple-consistency-pglite-20261029-root-01/result.json`,
 `/Users/jeanbosco/Library/Application Support/LoveliesVerification/store-apple-consistency-consumers-20261029-root-01/result.json`,
 `/Users/jeanbosco/Library/Application Support/LoveliesVerification/backend-ci-pglite-20261029-eightyfour-root-01/result.json`
 and `/Users/jeanbosco/Library/Application Support/LoveliesVerification/store-apple-consistency-edge-20261029-root-01/edge-01/result.json`.
-An isolated iOS purchase-recovery implementation passed 21 synthetic
-same-subject actor and extracted-coordinator checks after correcting two local
-ordering issues. It remains unintegrated: its eight retained journal records
-can eventually block renewals, and account deletion does not yet dispose of the
-dedicated slot. Legacy migration, actual Keychain and StoreKit behavior, and
-the backend contract remain unqualified. Evidence:
-`/Users/jeanbosco/Library/Application Support/LoveliesVerification/ios-store-durable-operation-implementation-20261029-agent-01/README.md`.
+Store transactions and entitlement reads now bind the current registered actor
+to the database invocation. The local guard rechecks session, consent and
+audience authority after journal preparation and at response admission; a
+possibly committed store write whose authority is lost returns an unresolved
+503 rather than a definitive rejection. Twenty targeted one-subject cases and
+28 receipt consumers passed in the isolated candidate, and the exact updated
+local workflow step passed 104/104 with no skips. TypeScript and the cached
+Edge check passed. The implementation matches the reviewed candidate. Guardian
+relationship execution, native-client recovery, hosted multi-connection locking,
+real providers and durable noncommit recovery remain open. Store replay and
+entitlement reads still use no-op write transactions that can leave the
+independent journal pending; their availability behavior needs correction.
+Evidence:
+`/Users/jeanbosco/Library/Application Support/LoveliesVerification/store-authority-offline-20261029-agent-01/result.json`,
+`/Users/jeanbosco/Library/Application Support/LoveliesVerification/backend-ci-pglite-20261029-onehundredfour-root-01/result.json`
+and `/Users/jeanbosco/Library/Application Support/LoveliesVerification/store-authority-edge-20261029-root-01/edge-01/result.json`.
+An isolated iOS purchase-recovery successor passed 55 synthetic same-subject
+actor and extracted-coordinator assertions, including journal compaction and
+deletion cases. It remains unintegrated: independent review found the purchase
+sheet can open before pending recovery is settled, and the export grant key is
+cleared before download. A successful StoreKit finish followed by a crash or
+failed journal write can also leave a verified record without a qualifying
+recovery path. Uncertain post-deletion outcomes, legacy migration, actual
+Keychain and StoreKit behavior, and the server grant contract remain
+unqualified. Evidence:
+`/Users/jeanbosco/Library/Application Support/LoveliesVerification/ios-store-disposition-20261029-agent-01/README.md`.
 An independent source review additionally found that the purchase sheet can be
 opened before the recovery slot is available. Direct store commits use the
 existing audience check that blocks outstanding deletion requests; ordering and

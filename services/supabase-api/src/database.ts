@@ -50,7 +50,9 @@ export interface DatabaseFence {
 }
 export type DatabaseLineage=Readonly<{database_id:string;incarnation_id:string}>;
 type TransactionFrame={connection:SqlConnection;readOnly:boolean;restore:RestoreTransactionScope};
-type InvocationFrame={lineage?:DatabaseLineage;closed:boolean;failed:boolean};
+type InvocationAuthority={check:()=>Promise<void>;fresh:()=>void};
+type InvocationFrame={lineage?:DatabaseLineage;closed:boolean;failed:boolean;failureCode?:string;
+  authority?:InvocationAuthority;mayHaveCommitted?:boolean};
 const lineageID=/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
 
 /** Every mutation runs on one reserved PostgreSQL connection. The advisory lock
@@ -64,7 +66,31 @@ export class PostgresDatabase implements Database {
   constructor(private readonly connection:SqlConnection,private readonly fence?:DatabaseFence){}
   private unavailable(frame=this.invocations.getStore()):never {
     if(frame)frame.failed=true;
-    throw new ApiError(503,'restore_reconciliation_required');
+    throw new ApiError(503,frame?.failureCode??'restore_reconciliation_required');
+  }
+  private authorityError(frame:InvocationFrame,error:unknown):never {
+    // Once a guarded write may have reached an independent prepare or SQL
+    // COMMIT, expired authority cannot prove that the operation did not run.
+    if(frame.mayHaveCommitted){frame.failureCode='store_operation_outcome_unresolved';return this.unavailable(frame);}
+    throw error;
+  }
+  private async checkBoundAuthority(frame:InvocationFrame):Promise<void> {
+    if(!frame.authority)return;
+    try{await frame.authority.check();frame.authority.fresh();}
+    catch(error){return this.authorityError(frame,error);}
+  }
+  private checkBoundFreshness(frame:InvocationFrame):void {
+    if(!frame.authority)return;
+    try{frame.authority.fresh();}
+    catch(error){return this.authorityError(frame,error);}
+  }
+  /** Only the selected request installs this; terminal/self-revocation and
+   * anonymous routes retain their existing invocation semantics. */
+  bindInvocationAuthority(check:()=>Promise<void>,fresh:()=>void):void {
+    const frame=this.assertInvocation();
+    if(!frame||frame.authority||this.transactions.getStore()||typeof check!=='function'||typeof fresh!=='function')
+      throw new ApiError(500,'invocation_authority_invalid');
+    frame.authority=Object.freeze({check,fresh});
   }
   private assertInvocation():InvocationFrame|undefined {
     const frame=this.invocations.getStore();
@@ -94,8 +120,10 @@ export class PostgresDatabase implements Database {
     return this.invocations.run(frame,async()=>{
       try{
         const value=await callback();this.assertInvocation();
-        if(frame.lineage)await this.read(()=>{});
-        this.assertInvocation();return value;
+        // The actor check runs inside the final independently admitted read.
+        // Repeat its synchronous deadline check after that transaction closes.
+        if(frame.lineage||frame.authority)await this.read(()=>this.checkBoundAuthority(frame));
+        this.assertInvocation();this.checkBoundFreshness(frame);return value;
       }finally{frame.closed=true;}
     });
   }
@@ -135,9 +163,9 @@ export class PostgresDatabase implements Database {
   }
   private async execute<T>(callback:(restore:RestoreTransactionScope)=>T|Promise<T>,readOnly:boolean,intent?:unknown):Promise<T>{
     this.assertInvocation();
-    let prepared:unknown;
+    let prepared:unknown,commitDispatched=false,result:T;
     const collector=new RestoreTransactionCollector(readOnly,intent!==undefined),restore=collector.scope;
-    const result=await this.connection.begin(connection=>this.transactions.run({connection,readOnly,restore},async()=>{
+    try{result=await this.connection.begin(connection=>this.transactions.run({connection,readOnly,restore},async()=>{
       try{
         // This is enforced by PostgreSQL, including modifying CTEs and volatile
         // functions. SQL spelling/method names cannot prove a query read-only.
@@ -152,17 +180,37 @@ export class PostgresDatabase implements Database {
         this.assertInvocation();
         const manifest=await collector.seal(intent);
         this.assertInvocation();
+        const invocation=this.invocations.getStore();
+        if(!readOnly&&invocation?.authority)await this.checkBoundAuthority(invocation);
         // SQL remains uncommitted until independent acknowledgement. Domain
         // effects must register exact restrictions and external ports must fence
         // effects; this adapter never automatically reruns a callback on error.
         if(this.fence&&!readOnly){
+          // The independent plan may be accepted even if its reply is lost.
+          if(invocation?.authority)invocation.mayHaveCommitted=true;
           try{prepared=await this.fence.prepare(connection,admission,manifest);}
           catch(error){const frame=this.invocations.getStore();if(frame)frame.failed=true;throw error;}
+          // This query runs on the still-open SQL transaction after prepare.
+          // Expiry rolls back SQL while preserving the independent plan.
+          if(invocation?.authority)await this.checkBoundAuthority(invocation);
         }
         this.assertInvocation();
+        // Last synchronous check before returning to the SQL COMMIT port.
+        // Even without a journal, that COMMIT can have an ambiguous outcome.
+        if(!readOnly&&invocation?.authority){
+          invocation.mayHaveCommitted=true;this.checkBoundFreshness(invocation);commitDispatched=true;
+        }
         return value;
       }finally{collector.close();}
-    }));
+    }));}catch(error){
+      const invocation=this.invocations.getStore();
+      // Once the callback has returned for COMMIT, a lost reply cannot prove
+      // that SQL rolled back. Preserve any accepted independent plan.
+      if(commitDispatched&&invocation?.authority){
+        invocation.failureCode='store_operation_outcome_unresolved';return this.unavailable(invocation);
+      }
+      throw error;
+    }
     if(this.fence&&prepared!==undefined){
       // The first transaction may have committed while its acknowledgement was
       // lost or taken over by another pool. Reacquire the same lock and reread
@@ -177,7 +225,14 @@ export class PostgresDatabase implements Database {
       });}catch(error){const frame=this.invocations.getStore();if(frame)frame.failed=true;throw error;}
     }
     this.assertInvocation();
-    return result;
+    // COMMIT or independent acknowledgement may have outlived the session.
+    // Re-admit the same lineage and actor before this write result is released.
+    const invocation=this.invocations.getStore();
+    if(!readOnly&&invocation?.authority){
+      await this.read(()=>this.checkBoundAuthority(invocation));
+      this.assertInvocation();this.checkBoundFreshness(invocation);
+    }
+    this.assertInvocation();return result;
   }
   async close():Promise<void>{await this.connection.close?.();}
 }
