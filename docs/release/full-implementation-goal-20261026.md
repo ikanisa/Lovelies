@@ -2084,8 +2084,7 @@ adapter cases, one one-subject handler case and 87 existing cases passed, as did
 the isolated TypeScript check. Independent postflight matched the inputs, logs
 and process absence; the integrated files match the tested candidate bytes. The
 selected Supabase adapter requires JSON content and an 8 MiB body limit for
-this read, while request-header waits, other preview reads and DELETE/cleanup
-semantics remain unchanged. An additional correction rechecks current session,
+this read. An additional correction rechecks current session,
 consent and preview authority when that initial read fails. Six same-subject
 baseline cases reproduced the stale error, and six corrected cases passed for
 direct and ticket previews with unchanged authority, logout and consent
@@ -2106,6 +2105,26 @@ deployment proof. Evidence:
 `/Volumes/PRO-G40/Projects/Lovelies/verification/preview-metadata-auth-error-20261029-agent-01/integration-postflight.json`,
 `/Volumes/PRO-G40/Projects/Lovelies/verification/storage-preview-deno-edge-20261029-agent-01/root-run-01/result.json`
 and `/Volumes/PRO-G40/Projects/Lovelies/verification/storage-preview-deno-edge-20261029-agent-01/root-run-01-independent-postflight.json`.
+
+A further reviewed change applies one 55-second local budget to that first
+preview metadata read, including the response headers, missing-object envelope
+classification and successful body. The transport receives an abort signal;
+late response bodies are discarded best-effort, without claiming the remote
+request stopped. The baseline reproduced a stalled header, and 120 local checks
+including the baseline, adapter, same-subject authority and existing Storage
+cases passed with TypeScript. The tested source matched the integrated files;
+independent postflight checked the sealed inputs, named results and process
+groups. The integrated Edge entrypoint also passed an offline cached Deno check
+in manual module mode. These fixtures do not establish hosted provider behavior,
+native PostgreSQL concurrency or a complete preview deadline. Other preview
+reads, the authority database recheck, and DELETE/cleanup remain outside this
+budget. Evidence:
+`/Volumes/PRO-G40/Projects/Lovelies/verification/preview-info-header-deadline-runner-20261029-agent-01/root-run-01/result.json`,
+`/Volumes/PRO-G40/Projects/Lovelies/verification/preview-info-header-deadline-postflight-20261029-independent-agent-01/REVIEW.md`,
+`/Volumes/PRO-G40/Projects/Lovelies/verification/preview-info-header-deadline-runner-20261029-agent-01/root-run-01/root-process-postflight.json`,
+`/Volumes/PRO-G40/Projects/Lovelies/verification/preview-info-header-deadline-20261029-agent-01/integration-postflight.json`,
+`/Volumes/PRO-G40/Projects/Lovelies/verification/storage-preview-deno-edge-20261029-agent-01/root-run-02/result.json`,
+and `/Volumes/PRO-G40/Projects/Lovelies/verification/storage-preview-deno-edge-postflight-20261029-independent-agent-02/REVIEW.md`.
 
 The second local Edge attempt failed at the missing-auth Storage control before
 starting Edge or its database. Docker stop commands succeeded, but their output

@@ -1,4 +1,4 @@
-import { ApiError, jsonBody, type PrivateBucket, type PrivateObject } from './types.ts';
+import { ApiError, JSON_BODY_LIMITS, jsonBody, type PrivateBucket, type PrivateObject } from './types.ts';
 
 const MAX_STORAGE_ERROR_BYTES=2048;
 const MAX_STORAGE_ERROR_CHUNKS=256;
@@ -33,16 +33,23 @@ async function finishPutResponse(response:Response):Promise<void> {
 
 /** storage-api v1.68.10 uses HTTP 400 for this specific missing-key error.
  * An arbitrary 400, denied credential or malformed error is never absence. */
-async function missingObjectEnvelope(response:Response):Promise<boolean>{
+async function missingObjectEnvelope(response:Response,signal?:AbortSignal):Promise<boolean>{
   const type=response.headers.get('content-type')??'',length=response.headers.get('content-length');
   if(!/^application\/json(?:;|$)/i.test(type)||length!==null&&(!/^\d+$/.test(length)||Number(length)>MAX_STORAGE_ERROR_BYTES)||!response.body)return false;
+  if(signal?.aborted){discardResponseBody(response);return false;}
   let reader:ReadableStreamDefaultReader<Uint8Array>;
   try{reader=response.body.getReader();}catch{return false;}
   const buffer=new Uint8Array(MAX_STORAGE_ERROR_BYTES);let bytes=0,chunks=0,timer:ReturnType<typeof setTimeout>|undefined;
   const expired=new Promise<never>((_,reject)=>{timer=setTimeout(()=>reject(new Error('storage_error_body_timeout')),STORAGE_ERROR_TIMEOUT_MS);});
+  let stop:(()=>void)|undefined;
+  const aborted=signal?new Promise<never>((_,reject)=>{
+    stop=()=>reject(new Error('storage_preview_info_aborted'));
+    signal.addEventListener('abort',stop,{once:true});if(signal.aborted)stop();
+  }):undefined;
+  if(aborted)void aborted.catch(()=>{});
   try{
     for(;;){
-      const next=await Promise.race([reader.read(),expired]);if(next.done)break;
+      const next=await Promise.race(aborted?[reader.read(),expired,aborted]:[reader.read(),expired]);if(next.done)break;
       if(++chunks>MAX_STORAGE_ERROR_CHUNKS||bytes+next.value.byteLength>MAX_STORAGE_ERROR_BYTES)return false;
       buffer.set(next.value,bytes);bytes+=next.value.byteLength;
     }
@@ -51,7 +58,7 @@ async function missingObjectEnvelope(response:Response):Promise<boolean>{
     return !!value&&typeof value==='object'&&!Array.isArray(value)&&Object.keys(value).length===4&&
       value.statusCode==='404'&&value.error==='not_found'&&value.code==='NoSuchKey'&&value.message==='Object not found';
   }catch{return false;}
-  finally{clearTimeout(timer);void reader.cancel().catch(()=>{});reader.releaseLock();}
+  finally{clearTimeout(timer);if(signal&&stop)signal.removeEventListener('abort',stop);void reader.cancel().catch(()=>{});reader.releaseLock();}
 }
 
 /** Storage credentials remain server-only. All end-user reads pass the app's
@@ -67,14 +74,17 @@ export class SupabasePrivateBucket implements PrivateBucket {
     if(!key||key.startsWith('/')||key.split('/').some(part=>!part||part==='.'||part==='..')||key.includes('\\')||/[\u0000-\u001f]/.test(key))throw new ApiError(500,'invalid_private_object_key');
     return this.bucket+'/'+key.split('/').map(encodeURIComponent).join('/');
   }
-  private async request(path:string,init:RequestInit={}):Promise<Response>{
+  private async request(path:string,init:RequestInit={},discardExpired?:()=>boolean):Promise<Response>{
     const headers=new Headers(init.headers);headers.set('apikey',this.secret);
     // New sb_secret keys are apikeys, not JWTs; legacy service_role is a JWT.
     if(this.secret.split('.').length===3)headers.set('Authorization','Bearer '+this.secret);
     const response=await this.fetcher(this.base+path,{...init,headers,redirect:'manual'});
+    // Only the bounded preview-info read opts in. A transport may ignore its
+    // abort and return later; do not inspect even an error envelope then.
+    if(discardExpired?.()){discardResponseBody(response);throw new ApiError(503,'private_storage_unavailable');}
     if(response.redirected||response.status>=300&&response.status<400){discardResponseBody(response);throw new ApiError(503,'storage_redirect_denied');}
     const objectRead=(init.method??'GET')==='GET'&&(path.startsWith('/object/info/')||path.startsWith('/object/authenticated/'));
-    if(response.status===400&&objectRead&&await missingObjectEnvelope(response))return new Response(null,{status:404});
+    if(response.status===400&&objectRead&&await missingObjectEnvelope(response,discardExpired?init.signal??undefined:undefined))return new Response(null,{status:404});
     // Only the classified object-read envelope above may become absence. A
     // native 404 can instead be an unknown bucket or route, including DELETE.
     if(!response.ok){
@@ -84,13 +94,59 @@ export class SupabasePrivateBucket implements PrivateBucket {
     }
     return response;
   }
+  /** One read-only preview-info budget covers headers, error classification
+   * and the successful metadata body. Abort and late-body disposal are best
+   * effort; neither says that the remote request has terminated. */
+  private async previewInfo(path:string):Promise<Record<string,any>|null>{
+    const controller=new AbortController(),deadline=performance.now()+JSON_BODY_LIMITS.timeoutMs;
+    let response:Response|undefined,phase:'headers'|'body'='headers',expired=false,reason:ApiError|undefined;
+    let rejectExpired!:(error:ApiError)=>void;
+    const timeout=new Promise<never>((_,reject)=>{rejectExpired=reject;});
+    const expire=()=>{
+      if(expired)return;
+      expired=true;
+      reason=new ApiError(503,phase==='headers'?'private_storage_unavailable':'private_storage_metadata_invalid');
+      rejectExpired(reason);
+      try{controller.abort(reason);}catch{}
+      if(response)discardResponseBody(response);
+    };
+    const assertBudget=()=>{
+      if(!expired&&performance.now()>=deadline)expire();
+      if(expired)throw reason!;
+    };
+    const timer=setTimeout(expire,JSON_BODY_LIMITS.timeoutMs);
+    try{
+      const pending=this.request(path,{signal:controller.signal},()=>{
+        if(!expired&&performance.now()>=deadline)expire();
+        return expired;
+      });
+      // Observe a transport which ignores abort, and release any late body.
+      void pending.then(late=>{if(expired)discardResponseBody(late);},()=>{});
+      try{response=await Promise.race([pending,timeout]);}
+      catch(error){assertBudget();throw error;}
+      assertBudget();
+      if(response.status===404){discardResponseBody(response);return null;}
+      phase='body';
+      try{
+        const object=await Promise.race([jsonBody(response,MAX_PREVIEW_INFO_BYTES,{signal:controller.signal}),timeout]);
+        assertBudget();
+        return object;
+      }catch{
+        discardResponseBody(response);
+        assertBudget();
+        throw new ApiError(503,'private_storage_metadata_invalid');
+      }
+    }finally{clearTimeout(timer);}
+  }
   async head(key:string,options?:{metadataBody?:'preview-read'}):Promise<Omit<PrivateObject,'body'|'arrayBuffer'>|null>{
-    const response=await this.request('/object/info/'+this.path(key));if(response.status===404){void response.body?.cancel().catch(()=>{});return null;}
+    const path='/object/info/'+this.path(key);
     let object:Record<string,any>;
     if(options?.metadataBody==='preview-read'){
-      try{object=await jsonBody(response,MAX_PREVIEW_INFO_BYTES);}
-      catch{discardResponseBody(response);throw new ApiError(503,'private_storage_metadata_invalid');}
-    }else object=await response.json() as Record<string,any>;
+      const preview=await this.previewInfo(path);if(preview===null)return null;object=preview;
+    }else{
+      const response=await this.request(path);if(response.status===404){void response.body?.cancel().catch(()=>{});return null;}
+      object=await response.json() as Record<string,any>;
+    }
     const metadata=object.metadata??{},user=object.user_metadata??object.userMetadata??object.metadata??{};
     const size=Number(object.size??metadata.size),etag=String(object.etag??object.eTag??metadata.eTag??metadata.etag??object.version??'');
     if(!Number.isSafeInteger(size)||size<0||!etag||!user||typeof user!=='object'||Array.isArray(user))throw new ApiError(503,'private_storage_metadata_invalid');
