@@ -113,6 +113,19 @@ open; no provider delivery or hosted deployment was tested. Evidence:
 `/Users/jeanbosco/Library/Application Support/LoveliesVerification/notification-outbox-ambiguity-20261029-root-x3RA1t/edge-01/result.json`,
 `/Users/jeanbosco/Library/Application Support/LoveliesVerification/backend-ci-pglite-20261029-fortyseven-GDlJvO/result.json`
 and `/Users/jeanbosco/Library/Application Support/LoveliesVerification/backend-ci-pglite-20261029-fortyseven-GDlJvO/committed-input-postflight.json`.
+An isolated queue review reproduced six cases across the real photo, privacy
+and notification outboxes where a completed or failed stable-ID queue row
+was treated as successful handoff despite active work. A queue-only candidate
+passed 45 local checks and typechecking but remains unintegrated: independent
+review found that its errors can block later outbox items, and its photo and
+privacy terminal-evidence checks accept inconsistent local state. A passing
+negative control also demonstrates that a job can fail after queue admission
+and before a separate outbox acknowledgement. The next combined change needs
+exact queue/outbox linkage, failure visibility and fair bounded revisitation;
+admission is not proof of completed work. These are one-subject PGlite
+observations, not native concurrency or provider results. Evidence:
+`/Users/jeanbosco/Library/Application Support/LoveliesVerification/queue-stable-id-20261029/attempt-01/README.md`
+and `/Users/jeanbosco/Library/Application Support/LoveliesVerification/queue-stable-id-20261029/attempt-01/final-run/result.json`.
 An isolated successor adds a tentative schema-14 numeric scan order and a
 separate bounded high-water cursor without copying account or notification IDs
 into it. Its local checks covered 61 older unresolved jobs, scan wrap, a
