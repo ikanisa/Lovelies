@@ -51,6 +51,17 @@ checking passed. PGlite substituted the advisory lock; native multi-session,
 provider, restore and deployed behavior remain unqualified. Evidence:
 `/Users/jeanbosco/Library/Application Support/LoveliesVerification/queue-stale-completion-20261029/root-01/result.json`
 and `/Users/jeanbosco/Library/Application Support/LoveliesVerification/queue-stale-completion-20261029/root-integrated-01/result.json`.
+The no-device notification path now rechecks the job and retained deliveries in
+one transaction. A concurrent terminal state is preserved, and ambiguous or
+other non-cancelled delivery evidence raises the existing reconciliation error
+instead of being marked inbox-only. The real local queue keeps such work pending.
+Earlier tests reproduced both cancellation overwrites and false inbox-only
+results. The integrated notification and queue suites passed 27 one-subject
+checks and TypeScript checking; their PGlite adapter substitutes the advisory
+lock. Subsequent delivery inserts, cancelled rows masking older uncertainty,
+provider terminality, actual device delivery and safe restore remain open. The
+source and fixtures were committed as `018a983`. Evidence:
+`/Users/jeanbosco/Library/Application Support/LoveliesVerification/notification-terminal-race-20261029/root-integrated-01/result.json`.
 
 ### Execution checkpoint, 26–28 October 2026
 
@@ -335,6 +346,15 @@ run passed. Reliable recovery needs a versioned logical delivery and durable
 client acknowledgement, with current session, deletion, restore and exact-object
 barriers; no export fix is integrated. Evidence:
 `/Volumes/PRO-G40/Projects/Lovelies/verification/privacy-export-delivery-loss-20261029/REVIEW.md`.
+An isolated opt-in grant-issuance candidate preserves the existing one-use GET
+and legacy route while returning the original token and deadline for a matching
+same-session issuance retry. The copied handler/PGlite checks, old-server 404
+control and strict typecheck passed; a clock-rewind failure in its first version
+was retained and corrected for an observed expiry in the successor. It is not
+integrated: native intent storage, trusted time, independent consumption/restore
+replay, receipt retention and compatible schema rollout remain open. It does not
+recover a lost download body. Evidence:
+`/Volumes/PRO-G40/Projects/Lovelies/verification/privacy-export-issuance-retry-20261029/attempt-02/REVIEW.md`.
 An isolated v2 model passed 17 same-subject checks for a pre-saved identity,
 same-session retries, fixed expiry and acknowledgement of an exact dispatch.
 It permits retransmission within one logical delivery, which differs from v1's
@@ -378,6 +398,20 @@ cache was inventoried and removed, recovering approximately 94 MB of logical
 file data. Evidence:
 `/Users/jeanbosco/Library/Application Support/LoveliesVerification/ios-share-memory-preserved-20261029/snapshot/HANDOFF.md`
 and `/Users/jeanbosco/Library/Application Support/LoveliesVerification/ios-share-memory-preserved-20261029/independent-postflight.json`.
+A second bounded host compile failed because its simulated SwiftUI protocol
+omitted required methods; no tests ran and no production SwiftUI defect was
+established. The result and logs were copied and checked, and the task-created
+partial module cache was removed. Evidence:
+`/Users/jeanbosco/Library/Application Support/LoveliesVerification/ios-share-memory-preserved-02-20261029/snapshot/HOST-ATTEMPT-02.md`
+and `/Users/jeanbosco/Library/Application Support/LoveliesVerification/ios-share-memory-preserved-02-20261029/result.json`.
+After correcting only that host stub, a fresh bounded compile and 40 synthetic
+checks passed under network denial. This uses simulated UIKit and providers; it
+does not establish actual share-sheet or recipient behavior. The successor's
+logs, binary and synthetic fixtures were copied and hash-checked, and only its
+task-created compiler cache was removed. Its preserved fixture symlink and
+embedded paths still refer to the original temporary directory. Evidence:
+`/Users/jeanbosco/Library/Application Support/LoveliesVerification/ios-share-memory-successor-preserved-20261029/snapshot/HANDOFF.md`
+and `/Users/jeanbosco/Library/Application Support/LoveliesVerification/ios-share-memory-successor-preserved-20261029/result.json`.
 Android has a related selection race after a Save permission prompt and during
 original-photo download. A preservation-first isolated candidate captures the
 selection for Save, Share and purchase recovery; 30 synthetic host checks passed.
