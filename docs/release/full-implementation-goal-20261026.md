@@ -126,6 +126,19 @@ admission is not proof of completed work. These are one-subject PGlite
 observations, not native concurrency or provider results. Evidence:
 `/Users/jeanbosco/Library/Application Support/LoveliesVerification/queue-stable-id-20261029/attempt-01/README.md`
 and `/Users/jeanbosco/Library/Application Support/LoveliesVerification/queue-stable-id-20261029/attempt-01/final-run/result.json`.
+An isolated combined queue/outbox successor adds durable handoff links and
+separate finite scan cursors. Its latest revision passed 36 focused cases, an
+adapted 47-case regression suite and TypeScript checking with a test-only v14
+pin. It is not integrated: independent review of its predecessor found that
+deletion tombstones lack request attribution and resolution, and a clean
+maintenance response can precede examination of inconsistent terminal
+evidence. The v13 serving gate, migration/cutover, old-writer and restore
+fencing, native concurrency and provider outcomes remain unqualified. The
+latest revision fixes two narrower photo-state findings but has not had a full
+independent review. Evidence:
+`/Users/jeanbosco/Library/Application Support/LoveliesVerification/queue-outbox-combined-20261029/attempt-04/README.md`,
+`/Users/jeanbosco/Library/Application Support/LoveliesVerification/queue-outbox-combined-20261029/attempt-04/final-run/result.json`
+and `/Users/jeanbosco/Library/Application Support/LoveliesVerification/queue-outbox-independent-review-20261029/attempt-02-review/REVIEW.md`.
 An isolated successor adds a tentative schema-14 numeric scan order and a
 separate bounded high-water cursor without copying account or notification IDs
 into it. Its local checks covered 61 older unresolved jobs, scan wrap, a
@@ -999,6 +1012,40 @@ not establish current deployed behavior or safe restore. Evidence:
 `/Volumes/PRO-G40/Projects/Lovelies/verification/native-cache-cleanup-20261029-attempt-01/export-stage-preservation-02/postflight.json`,
 `/Volumes/PRO-G40/Projects/Lovelies/verification/native-media-pg17-20261029-attempt-03/native-run-01/result.json`
 and `/Volumes/PRO-G40/Projects/Lovelies/verification/native-media-pg17-20261029-attempt-03/native-run-01/postflight.json`.
+A fifth, separately identified synthetic export-stage file was later preserved,
+restore-checked and removed from its original scratch path; its test source,
+binary, logs and other fixtures remain. Its independent postflight is
+`/Volumes/PRO-G40/Projects/Lovelies/verification/native-cache-cleanup-20261029-attempt-01/export-stage-agent-02-preservation-03/postflight.json`.
+One historical Lovelies Xcode module cache was separately archived and restored
+to a task-owned verification location. After a manifest-based creation-time
+repair, its contents and recorded metadata matched; the original cache and the
+verification copy were then removed through identity-checked operations. The
+archive and restore instructions remain, while source, build products, logs
+and QA were untouched. The original-path restore procedure is documented but
+has not itself been run. Net external free space increased by about 25.7 MiB
+at that sample; the 4 GiB full-build floor was still unmet. Evidence:
+`/Volumes/PRO-G40/Projects/Lovelies/verification/ios-sdk-cache-pilot-20261029-01/README.md`
+and `/Volumes/PRO-G40/Projects/Lovelies/verification/ios-sdk-cache-pilot-20261029-01/postflight.json`.
+Fifteen additional specified Lovelies module caches were individually archived,
+restored to task-owned locations and checked before their originals were
+removed. Each retains its archive, metadata manifest and original-path restore
+instructions; those original-path procedures have not been executed. The
+sum of individual measured gains was 488,878,080 bytes; it is not a global
+before/after measurement because other disk activity continued. At final
+postflight PRO-G40 had 145,788,928 bytes above the 4 GiB build floor, and the
+internal 3 GiB floor was met. That snapshot is not a claim that a fresh build
+will fit. Evidence:
+`/Volumes/PRO-G40/Projects/Lovelies/verification/ios-sdk-cache-batch-20261029-01/batch-postflight.json`.
+Fourteen more explicitly selected caches were archived and separately restored
+and checked before removal. The larger 163-file procedure first passed a
+synthetic positive and two refusal controls. At the final postflight the
+external volume had 659,701,760 bytes above the 4 GiB floor, and the internal
+3 GiB floor was met. Individual measured gains total 524,562,432 bytes; those
+figures are not a global before/after measurement. Original-path restore
+procedures are documented but untested. Historical full-tree relocation
+receipts still describe their earlier state; the current trees omit the
+archived cache directories until restored. Evidence:
+`/Volumes/PRO-G40/Projects/Lovelies/verification/ios-sdk-cache-batch-20261029-01/headroom-postflight.json`.
 Five current-source, single-subject checks then confirmed the v1 path, its
 fail-closed response to synthetic v3 control, strict v1 response shape, the
 absence of SQL mode/binding/generation pins and absence of a v4 route. These
@@ -2055,6 +2102,15 @@ with104 sealed source files and19 declared JPEGs in the refreshed run-07, includ
 cutover, store submission or live/stable replacement is claimed. See the current
 [integration checkpoint](audience-readiness-20261024.md) for source-bound receipts
 and preserved failures. GitHub billing remains parked without a substitute CI pass.
+The 29 October read-only self-hosted-runner assessment found no configured
+repository runner or qualifying independent Linux environment on this host;
+organization runner policy remained inaccessible with the available token.
+The current workflow requires Linux and a PostgreSQL service container, and
+no Docker daemon was reachable. A uniquely targeted, independently provisioned
+runner remains a possible future route, subject to actual organization policy
+and dispatch verification. No runner, workflow, spending setting or CI job was
+changed; independent CI remains open. Evidence:
+`/Volumes/PRO-G40/Projects/Lovelies/verification/github-self-hosted-feasibility-20261029/read-only-review-01/ASSESSMENT.md`.
 
 The 27 October dashboard readback showed no Supabase Edge functions, the expected
 inference secret names and matching local/dashboard digests for the URL and two
