@@ -223,10 +223,10 @@ export async function runRetention(ctx: AppContext, maximum = 50): Promise<{
                 (await ctx.db.transaction(async () => { (await check()); if (remains)
                     throw new ApiError(503, 'retention_delete_unconfirmed'); (await ctx.db.run("UPDATE retention_objects SET status='verified',attempts=attempts+1,verified_at=? WHERE id=?", ctx.now(), item.id)); }));
             }
-            (await ctx.db.transaction(async () => {
+            const finalized = await ctx.db.transaction(async () => {
                 (await current(ctx, row.id, lease));
                 if ((await ctx.db.one("SELECT id FROM retention_objects WHERE job_id=? AND status<>'verified' LIMIT 1", row.id)))
-                    return;
+                    return false;
                 // Keep a non-sensitive asset tombstone for exact immutable sharing and
                 // financial receipt references. Profile templates have no foreign graph access.
                 if (row.kind === 'raw') {
@@ -236,8 +236,11 @@ export async function runRetention(ctx: AppContext, maximum = 50): Promise<{
                 if (row.kind === 'profile')
                     (await ctx.db.run('DELETE FROM face_profiles WHERE account_id=? AND revision=?', row.subject_id, row.object_version));
                 (await ctx.db.run("UPDATE retention_jobs SET status='verified',lease_token=NULL,lease_until=NULL,verified_at=? WHERE id=?", ctx.now(), row.id));
-                verified++;
-            }));
+                return true;
+            });
+            // The callback can finish even when COMMIT or the independent
+            // acknowledgment fails. Count only a returned final transaction.
+            if (finalized) verified++;
         }
         catch (error) {
             const code = error instanceof ApiError ? error.code : 'retention_storage_failed';
