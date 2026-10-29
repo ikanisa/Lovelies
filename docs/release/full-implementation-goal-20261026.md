@@ -507,6 +507,13 @@ uncooperative child before the catalog lock is held. A proposed coordinator,
 durable lease and unknown-outcome reconciliation design is not yet implemented
 or tested. Evidence:
 `/Users/jeanbosco/Library/Application Support/LoveliesVerification/backup-child-termination-design-20261029-agent-01/DESIGN.md`.
+The current-source follow-up identified the missing integration contract: a
+durable gate, worker/descendant and stream custody, identity-bound release, and
+one lease respected by every backup caller. No supported-host adapter providing
+those facts is yet qualified, and the existing hold alone has no release path.
+The backup CLI therefore remains unchanged and its process and operating gates
+remain open. Evidence:
+`/Users/jeanbosco/Library/Application Support/LoveliesVerification/backup-bounded-coordinator-20261029-agent-01/HANDOFF.md`.
 An isolated hold primitive passed 56 local filesystem cases after review of
 identity and error handling. It has no release path and is not integrated; a
 qualified coordinator, terminal evidence, recovery gate and operator
@@ -1061,6 +1068,31 @@ the exact row at final admission. Three targeted local cases and TypeScript
 passed against the combined runtime; the full affected store suites and
 updated workflow count still need verification before integration. Evidence:
 `/Users/jeanbosco/Library/Application Support/LoveliesVerification/store-replay-final-error-rebound-20261029-root-02/local-run-01/result.json`.
+The rebound successor then passed 70 individually selected local cases and
+TypeScript, with no surviving owned processes and unchanged sealed inputs. The
+first rebound attempt remains a failure: a fixture expected two reads after the
+new final-admission guard caused a third. The corrected 70-case result covers
+59 of the 126 proposed workflow cases and 11 additional receipt consumers;
+the other 67 cases and independent postflight remained required at that point.
+Neither the aggregate workflow nor GitHub CI has passed. Evidence:
+`/Users/jeanbosco/Library/Application Support/LoveliesVerification/store-replay-final-error-rebound-20261029-root-03/focused-run-01/result.json`
+and `/Users/jeanbosco/Library/Application Support/LoveliesVerification/store-replay-final-error-rebound-20261029-root-04/focused-run-01/result.json`.
+An independently reviewed complement then passed the remaining 67 cases in
+separate sandboxed processes. Its input differs from the 70-case run only by a
+sealed test helper needed by the retention cases. The combined selections are
+126 workflow cases and 11 supplemental receipt cases; every selected local case
+passed. Independent postflight matched all 67 logs, names, counters and hashes,
+the two controls, dependency closure and recorded process absence. The aggregate
+workflow and GitHub CI remain open. Root also rechecked all 67 TAP logs against
+a closed-world classifier. A cached Deno Edge typecheck also passed against the
+isolated candidate with network denied and inputs unchanged. The six source,
+test and workflow files are now integrated locally and match the sealed tested
+bytes. Provider acknowledgement, Android/iOS recovery, hosted and store gates
+remain open. Evidence:
+`/Users/jeanbosco/Library/Application Support/LoveliesVerification/store-replay-final-error-complement-20261029-root-03/complement-run-01/result.json`
+and `/Users/jeanbosco/Library/Application Support/LoveliesVerification/store-replay-final-error-complement-20261029-root-03/root-tap-postflight-01.json`
+and `/Users/jeanbosco/Library/Application Support/LoveliesVerification/store-replay-independent-postflight-20261029-reviewer-01/REPORT.md`
+and `/Users/jeanbosco/Library/Application Support/LoveliesVerification/store-replay-edge-20261029-root-01/result.json`.
 An isolated Android typed store-recovery candidate compiled and passed 44
 focused host unit tests, including 13 new recovery cases, without provider
 calls. A vault-write ambiguity successor then compiled and passed 48 focused
@@ -1071,6 +1103,20 @@ remains unintegrated while those cases are corrected. An unknown store receipt
 does not prove whether a Google acknowledgement occurred. Evidence:
 `/Users/jeanbosco/Documents/LoveliesVerification/android-store-recovery-20261029/RESULTS-1.json`
 and `/Users/jeanbosco/Documents/LoveliesVerification/android-store-recovery-20261029-v2/RESULTS-1.json`.
+The v3 successor passed 70 local Android host tests with 271 inputs unchanged,
+including actual repository deletion and competing-write cases. An independent
+review found one remaining hold: guest Start Again can retain a legacy purchase
+intent in the vault while clearing its in-memory copy, allowing a subsequent
+logout to erase it before bootstrap reloads it. A real-repository regression and
+corrected successor are needed before integration. The same review found that
+logout and bootstrap authentication failure use a narrower store-intent predicate
+than the legacy/unknown safety hold; those paths need consistent preservation.
+The production vault checks for the AtomicFile base before reading; on Android
+implementations that restore a backup during read, a backup-only interrupted
+write can therefore be mistaken for empty storage. File-backed recovery and
+ambiguous auxiliary-file handling need correction and device qualification.
+This does not establish device, Play provider or hosted behavior. Evidence:
+`/Users/jeanbosco/Documents/LoveliesVerification/android-store-recovery-20261029-v3/RESULTS-1.json`.
 An isolated keyed privacy-grant successor passed 27 single-subject cases and
 TypeScript. Independent review found that final grant/publication changes,
 some retired-receipt classifications and corrupted row linkage require further
@@ -1156,6 +1202,23 @@ Evidence:
 `/Users/jeanbosco/Library/Application Support/LoveliesVerification/ios-privacy-receipt-cleanup-20261029-agent-01/result-01/result.json`,
 `/Users/jeanbosco/Library/Application Support/LoveliesVerification/ios-privacy-receipt-sdk-20261029-root-01/build-result.json`
 and `/Users/jeanbosco/Library/Application Support/LoveliesVerification/ios-privacy-receipt-cleanup-independent-review-20261029-agent-01/REVIEW.md`.
+A subsequent same-account session-fence successor passed 184 main, 16 guest and
+10 face consumer checks with network denied and inputs unchanged. Its first
+attempt failed to compile a duplicate test-fixture variable; that failure and
+the corrected successor are retained. Independent review found that a generic
+mutation can receive a successful server response, fail a later audience fence
+with 409, and then discard the original recovery key as if the mutation had
+been denied. The `post` path has the same classification risk. Both require
+correction before integration. The review also found that delayed privacy-center
+responses can repopulate cleared UI state during logout because several actual
+consumers do not recheck their publication fence. A fresh iOS SDK build is also
+required. The same review identified a pending StoreKit reservation that can
+remain held after a later transaction and a stale repository that can erase a
+newer persisted credential. Provider correlation and shared-slot transition
+handling need separate proof. Neither host test establishes real
+Keychain, device, StoreKit, provider or release behavior. Evidence:
+`/Users/jeanbosco/Library/Application Support/LoveliesVerification/ios-privacy-session-fence-20261029-agent-01/result-01/result.json`
+and `/Users/jeanbosco/Library/Application Support/LoveliesVerification/ios-privacy-session-fence-fixed-20261029-agent-01/result-01/result.json`.
 An independent source review additionally found that the purchase sheet can be
 opened before the recovery slot is available. Direct store commits use the
 existing audience check that blocks outstanding deletion requests; ordering and
@@ -2290,6 +2353,23 @@ provider deletion or restore rehearsal was completed by those six checks.
 Evidence:
 `/Users/jeanbosco/Library/Application Support/LoveliesVerification/restore-retention-semantic-merge-20261029-root-01/README.md`
 and `/Users/jeanbosco/Library/Application Support/LoveliesVerification/restore-retention-semantic-merge-20261029-root-01/adapter-test-01/result.json`.
+A separately sealed successor is rebound to `b44e7b3` and adds defined-database
+skip guards and a selected offline CI step for the new PGlite-only suites. It
+and its 202-plus-15-case local runner still require independent review and
+execution. The existing broad `pnpm backend:test` can select multi-account
+tests; its exact scope must be reviewed before any dispatch in light of the
+automated safety review that blocked a proposed cross-account ownership
+simulation. That blocked simulation must not be repeated, rerouted or bypassed.
+The native-only suite also remains unqualified. No database, provider or CI
+action was performed for this successor. Evidence:
+`/Users/jeanbosco/Library/Application Support/LoveliesVerification/restore-retention-semantic-merge-ci-b44e7b3-20261029-agent-01/source-seal.json`
+and `/Users/jeanbosco/Library/Application Support/LoveliesVerification/restore-retention-inventory-pglite-runner-ci-b44e7b3-20261029-agent-01/runner-seal.json`.
+The first execution passed the sandbox and Node controls, then stopped at the
+defined-empty database skip control: Node reported 89 skips and no failures, but
+the runner rejected the observed names/order. No retention candidate case ran.
+All recorded child PIDs were absent afterward. The harness needs correction and
+independent review before a new attempt. Evidence:
+`/Users/jeanbosco/Library/Application Support/LoveliesVerification/restore-retention-inventory-pglite-runner-ci-b44e7b3-20261029-agent-01/result-01/result.json`.
 
 The Storage status adapter previously treated arbitrary native HTTP 404s as
 object absence and could accept a 404 DELETE. Six isolated regressions reproduced
@@ -2668,6 +2748,20 @@ runner remains a possible future route, subject to actual organization policy
 and dispatch verification. No runner, workflow, spending setting or CI job was
 changed; independent CI remains open. Evidence:
 `/Volumes/PRO-G40/Projects/Lovelies/verification/github-self-hosted-feasibility-20261029/read-only-review-01/ASSESSMENT.md`.
+
+The owner subsequently restricted this project to GitHub Free and prohibited
+paid GitHub plans, runners, add-ons and charges. Read-only GitHub API checks
+identified both the authenticated `IKANISA1` account and the `ikanisa`
+organization plans as `free`, and `ikanisa/Lovelies` as private. GitHub's current
+published Free-for-organizations allowance is $12 of
+eligible monthly compute and 500 MB shared artifact/package storage; usage
+beyond included allowances can incur charges, and operating-system rates differ.
+Self-hosted Actions compute has no GitHub usage charge, but storage and machine
+costs need separate control. Actual remaining allowance, an effective no-charge
+stop and dispatch eligibility are not established. Do not dispatch metered jobs
+or change billing while those facts remain unresolved. Independent CI remains
+open. Sources: [included usage](https://docs.github.com/en/billing/reference/product-usage-included),
+[Actions billing](https://docs.github.com/en/billing/concepts/product-billing/github-actions).
 
 The 27 October dashboard readback showed no Supabase Edge functions, the expected
 inference secret names and matching local/dashboard digests for the URL and two

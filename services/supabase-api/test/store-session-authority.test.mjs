@@ -6,6 +6,7 @@ import {createApp,createHandler} from '../src/index.ts';
 import {restoreOperationID} from '../src/restore-transaction.ts';
 import {stable} from '../src/types.ts';
 import {assertStoreAuthorityFresh} from '../src/store-authority.ts';
+import {executeOperation,prepareOperation} from '../src/operations.ts';
 import {fixture} from './restore-database-fixture.mjs';
 import {enroll,faceVerifierFixture,sha256} from './runtime-harness.mjs';
 
@@ -311,4 +312,265 @@ for(const source of ['face-consent','audience-review'])test(`${source} deadline 
  // Only the local clock is reset; the independent pending plan is not cleared.
  f.restoreClock();const retry=await f.purchase(key);assert.equal(retry.status,503);await retry.body?.cancel();
  assert.deepEqual(await f.journal.lookup(id),plan);assert.equal(f.calls,1);
+});
+
+// This lane exercises only a single synthetic account and the in-process
+// verifier/journal. The trace excludes credentials and proves which side of the
+// independent admission/prepare boundary each result actually used.
+const storeRowSql="SELECT action,payload_hash,payload_json,response_json FROM operations WHERE actor_id=? AND source='store' AND operation_key=?";
+function assertNoPreparedCheckpoint(trace,{allowAcknowledgement=false}={}){
+ assert(trace.some(item=>item.kind==='sql'&&item.sql==='SET TRANSACTION READ ONLY'));
+ assert(trace.some(item=>item.kind==='journal_ok'&&item.path==='/v1/admission'));
+ assert(!trace.some(item=>item.kind==='journal'&&item.path==='/v1/operations/prepare'));
+ assert(!trace.some(item=>item.kind==='sql'&&/^(INSERT|UPDATE|DELETE|MERGE|TRUNCATE)\b/i.test(item.sql)));
+ if(!allowAcknowledgement)assert(!trace.some(item=>item.kind==='journal'&&/\/acknowledge$/.test(item.path)));
+}
+function sameSubjectStoreRead(sql,bindings,f,key){
+ return sql===storeRowSql&&bindings.length===2&&bindings[0]===f.owner.accountId&&bindings[1]===key;
+}
+async function assertPrivateFailure(response,code,secret){
+ assert.equal(response.status,503);const text=await response.text();assert.equal(JSON.parse(text).error.code,code);
+ assert(!text.includes(secret));assert(!text.includes('synthetic-transaction'));
+}
+
+test('absent and committed store reads do not prepare a checkpoint; a new purchase prepares once',{timeout:30000},async t=>{
+ const f=await setup(t),key=randomUUID();let before=await f.journal.control();
+ f.trace.length=0;let r=await f.request('/me/entitlements');assert.equal(r.status,200);assert.equal((await r.json()).pro_active,false);
+ let trace=f.trace.slice();assertNoPreparedCheckpoint(trace);let after=await f.journal.control();assert.deepEqual(after.marker,before.marker);
+ f.trace.length=0;r=await f.lookup(key);assert.equal(r.status,200);assert.equal((await r.json()).status,'unknown');
+ trace=f.trace.slice();assertNoPreparedCheckpoint(trace);after=await f.journal.control();assert.deepEqual(after.marker,before.marker);
+ const fake=f.h.env.STORE_VERIFIER.fetch;let beforeVerification;
+ f.h.env.STORE_VERIFIER.fetch=async(...args)=>{beforeVerification=f.trace.slice();return fake(...args);};
+ f.trace.length=0;r=await f.purchase(key);assert.equal(r.status,200);const receipt=await r.json();assert(beforeVerification);
+ assertNoPreparedCheckpoint(beforeVerification);
+ trace=f.trace.slice();assert.equal(trace.filter(item=>item.kind==='journal'&&item.path==='/v1/operations/prepare').length,1);
+ assert.equal(trace.filter(item=>item.kind==='sql'&&item.sql.startsWith('UPDATE restore_control SET')).length,1);
+ assert.equal(trace.filter(item=>item.kind==='journal'&&/\/acknowledge$/.test(item.path)).length,1);
+ after=await f.journal.control();assert.equal(after.marker.checkpoint.revision,before.marker.checkpoint.revision+1);before=after;
+ f.trace.length=0;r=await f.purchase(key);assert.equal(r.status,200);assert.deepEqual(await r.json(),receipt);assert.equal(f.calls,1);
+ trace=f.trace.slice();assertNoPreparedCheckpoint(trace);after=await f.journal.control();assert.deepEqual(after.marker,before.marker);
+ f.trace.length=0;r=await f.request('/me/entitlements');assert.equal(r.status,200);assert.equal((await r.json()).pro_active,true);
+ trace=f.trace.slice();assertNoPreparedCheckpoint(trace);after=await f.journal.control();assert.deepEqual(after.marker,before.marker);
+});
+
+for(const change of ['missing','hash','response'])test(`replay with a same-subject ${change} row change releases neither version`,{timeout:30000},async t=>{
+ const f=await setup(t),key=randomUUID();let r=await f.purchase(key);assert.equal(r.status,200);await r.body?.cancel();
+ const original=await f.row(key),one=f.db.one;let reads=0;
+ f.db.one=async function(sql,...bindings){
+  const row=await one.call(this,sql,...bindings);
+  if(sameSubjectStoreRead(sql,bindings,f,key)&&++reads===2){
+   if(change==='missing')return null;
+   if(change==='hash')return {...row,payload_hash:'0'.repeat(64)};
+   const result=JSON.parse(row.response_json);result.transaction_id='synthetic-changed-transaction';
+   return {...row,response_json:stable(result)};
+  }
+  return row;
+ };
+ t.after(()=>{f.db.one=one;});f.trace.length=0;r=await f.purchase(key);
+ await assertPrivateFailure(r,'store_operation_receipt_unavailable',f.signed);assert.equal(reads,3);
+ assertNoPreparedCheckpoint(f.trace.slice());assert.deepEqual(await f.row(key),original);assert.equal(f.calls,1);
+ // The narrow substituted row models READ COMMITTED drift without bypassing
+ // this database schema or claiming a multi-connection PGlite race.
+});
+
+test('same-subject receipt retirement between read and final admission suppresses replay',{timeout:30000},async t=>{
+ const f=await setup(t),key=randomUUID();let r=await f.purchase(key);assert.equal(r.status,200);await r.body?.cancel();
+ const one=f.db.one,admit=f.journal.admission.bind(f.journal);let seen=false,scheduled=false,changed=false;
+ f.db.one=async function(sql,...bindings){const row=await one.call(this,sql,...bindings);
+  if(sameSubjectStoreRead(sql,bindings,f,key))seen=true;return row;};
+ f.journal.admission=async(...args)=>{const result=await admit(...args);
+  // The next admission after receipt selection is the post-read authority
+  // check. Change the same subject's row after that read commits, before the
+  // invocation's final independent admission. No external provider is used.
+  if(seen&&!scheduled){scheduled=true;f.faults.afterCommit=async()=>{delete f.faults.afterCommit;
+   const retired=stable({protocol:'lovelies-operation-retired-v1',status:'retired'});
+   await f.h.db.transaction(()=>f.h.db.run("UPDATE operations SET payload_json='null',response_json=? WHERE actor_id=? AND source='store' AND operation_key=?",retired,f.owner.accountId,key));changed=true;};}
+  return result;};
+ t.after(()=>{f.db.one=one;});f.trace.length=0;r=await f.purchase(key);
+ await assertPrivateFailure(r,'store_operation_receipt_unavailable',f.signed);assert(seen&&scheduled&&changed);
+ assertNoPreparedCheckpoint(f.trace.slice());assert.equal((await f.row(key)).payload_json,'null');assert.equal(f.calls,1);
+});
+
+for(const mode of ['replay','entitlement'])test(`session expiry during read-only ${mode} never releases the response or prepares a plan`,{timeout:30000},async t=>{
+ const f=await setup(t),key=randomUUID();let r=await f.purchase(key);assert.equal(r.status,200);await r.body?.cancel();
+ const one=f.db.one;let reads=0,expired=false;
+ f.db.one=async function(sql,...bindings){const row=await one.call(this,sql,...bindings);
+  if(mode==='replay'&&sameSubjectStoreRead(sql,bindings,f,key)&&++reads===2){expired=true;f.expire();}
+  if(mode==='entitlement'&&sql.startsWith('SELECT id,provider,product_id,starts_at,expires_at,version FROM store_subscriptions')&&!expired){expired=true;f.expire();}
+  return row;};
+ t.after(()=>{f.db.one=one;});f.trace.length=0;r=mode==='replay'?await f.purchase(key):await f.request('/me/entitlements');
+ assert(expired);assert.equal(r.status,401);const text=await r.text();assert.equal(JSON.parse(text).error.code,'session_invalid');
+ assert(!text.includes(f.signed));assert(!text.includes('synthetic-transaction'));assertNoPreparedCheckpoint(f.trace.slice());assert.equal(f.calls,1);
+});
+
+test('an unmatched pending journal plan fences known, unknown and entitlement reads without a new prepare',{timeout:30000},async t=>{
+ const f=await setup(t),known=randomUUID(),pendingKey=randomUUID(),pendingID=await f.id(pendingKey);
+ let r=await f.purchase(known);assert.equal(r.status,200);await r.body?.cancel();
+ const prepare=f.journal.prepare.bind(f.journal);let changed=false;
+ f.journal.prepare=async input=>{const saved=await prepare(input);if(input.operation_id===pendingID&&!changed){changed=true;f.expire();}return saved;};
+ r=await f.purchase(pendingKey);await assertUnresolved(r);assert(changed);f.restoreClock();
+ const pending=await f.journal.lookup(pendingID);assert.equal(pending.status,'pending');assert.equal(await f.row(pendingKey),null);
+ const calls=f.calls;
+ for(const invoke of [()=>f.purchase(known),()=>f.lookup(randomUUID()),()=>f.request('/me/entitlements'),()=>f.purchase(pendingKey)]){
+  f.trace.length=0;r=await invoke();assert.equal(r.status,503);await r.body?.cancel();const trace=f.trace.slice();
+  assert(trace.some(item=>item.kind==='journal_denied'&&item.path==='/v1/admission'));
+  assert(!trace.some(item=>item.kind==='journal'&&item.path==='/v1/operations/prepare'));
+  assert(!trace.some(item=>item.kind==='sql'&&item.sql.startsWith('UPDATE restore_control SET')));
+  assert.equal(f.calls,calls);assert.deepEqual(await f.journal.lookup(pendingID),pending);
+ }
+ assert.equal((await f.journal.control()).state,'pending');assert.equal(await f.row(pendingKey),null);
+});
+
+test('a read reconciles only the exact committed pending marker, without preparing another plan',{timeout:30000},async t=>{
+ const f=await setup(t),key=randomUUID(),id=await f.id(key),prepare=f.journal.prepare.bind(f.journal);let armed=true;
+ f.journal.prepare=async input=>{const saved=await prepare(input);if(armed&&input.operation_id===id){armed=false;f.faults.commitReply=true;}return saved;};
+ let r=await f.purchase(key);await assertUnresolved(r);const row=await f.row(key),pending=await f.journal.lookup(id);
+ assert(row);assert.equal(pending.status,'pending');f.trace.length=0;r=await f.purchase(key);
+ assert.equal(r.status,200);assert.deepEqual(await r.json(),JSON.parse(row.response_json));const trace=f.trace.slice();
+ assertNoPreparedCheckpoint(trace,{allowAcknowledgement:true});
+ assert.equal(trace.filter(item=>item.kind==='journal'&&item.path==='/v1/operations/'+id+'/acknowledge').length,1);
+ const after=await f.journal.lookup(id);assert.equal(after.status,'committed');assert.deepEqual(after.plan,pending.plan);
+ assert.deepEqual(await f.row(key),row);assert.equal(f.calls,1);
+});
+
+test('read-only replay keeps genuine conflict and conservatively handles retired receipts',{timeout:30000},async t=>{
+ const f=await setup(t),key=randomUUID(),other='synthetic-other.payload.signature';let r=await f.purchase(key);
+ assert.equal(r.status,200);await r.body?.cancel();
+ const different=()=>f.request('/subscriptions/apple/transactions',{body:{operation_key:key,product_id:vars.APPLE_SUBSCRIPTION_PRODUCT_ID,signed_transaction:other}});
+ f.trace.length=0;r=await different();assert.equal(r.status,409);assert.equal((await r.json()).error.code,'operation_key_conflict');assertNoPreparedCheckpoint(f.trace.slice());
+ const retired=stable({protocol:'lovelies-operation-retired-v1',status:'retired'});
+ await f.h.db.transaction(()=>f.h.db.run("UPDATE operations SET payload_json='null',response_json=? WHERE actor_id=? AND source='store' AND operation_key=?",retired,f.owner.accountId,key));
+ f.trace.length=0;r=await f.purchase(key);assert.equal(r.status,410);assert.equal((await r.json()).error.code,'operation_receipt_retired');assertNoPreparedCheckpoint(f.trace.slice());
+ f.trace.length=0;r=await different();await assertPrivateFailure(r,'store_operation_receipt_unavailable',other);assertNoPreparedCheckpoint(f.trace.slice());assert.equal(f.calls,1);
+});
+
+test('a same-subject legacy commit during fake verification replays inside the later write transaction',{timeout:30000},async t=>{
+ const f=await setup(t),key=randomUUID(),input={operation_key:key,product_id:vars.APPLE_SUBSCRIPTION_PRODUCT_ID,signed_transaction:f.signed};
+ const legacy=await prepareOperation('store.apple',input,'store');
+ const flat={active:true,provider:'apple_app_store',product_id:input.product_id,transaction_id:'synthetic-race-transaction',
+  original_transaction_id:'synthetic-race-original',expires_at:new Date(f.now()+60000).toISOString(),billing_environment:'production',financial_eligible:true,stale:true};
+ const fake=f.h.env.STORE_VERIFIER.fetch,prepare=f.journal.prepare.bind(f.journal),requested=[];let inserted=false;
+ f.journal.prepare=async input=>{requested.push(input.operation_id);return prepare(input);};
+ f.h.env.STORE_VERIFIER.fetch=async(...args)=>{const response=await fake(...args);if(!inserted){inserted=true;
+  // A separate fenced same-subject commit is interleaved after the initial
+  // absent read and before the purchase enters its later transaction.
+  await executeOperation(f.context,f.actor,legacy,()=>flat);
+ }return response;};
+ f.trace.length=0;const r=await f.purchase(key);assert(inserted);assert.equal(r.status,200);assert.deepEqual(await r.json(),flat);
+ const id=await f.id(key),row=await f.row(key),plan=await f.journal.lookup(id);assert.equal(plan.status,'committed');
+ assert.equal(row.payload_hash,legacy.hash);assert.equal(row.payload_json,legacy.payloadJson);assert.equal(requested.filter(value=>value===id).length,1);
+ // The later existing write transaction still prepares its generic checkpoint;
+ // it does not re-run or re-prepare the logical store operation.
+ assert.equal(requested.length,2);assert.equal(f.calls,1);assert.equal((await f.subscriptions()).length,0);
+});
+
+test('Google committed purchase replay stays read-only and does not acknowledge again',{timeout:30000},async t=>{
+ const f=await setup(t),key=randomUUID();let r=await f.googlePurchase(key);assert.equal(r.status,200);const original=await r.json();
+ const before=await f.journal.control();f.trace.length=0;r=await f.googlePurchase(key);assert.equal(r.status,200);
+ assert.deepEqual(await r.json(),original);assertNoPreparedCheckpoint(f.trace.slice());
+ assert.deepEqual((await f.journal.control()).marker,before.marker);assert.equal(f.googleCalls,1);assert.equal(f.googleAcks,1);assert.equal(f.calls,0);
+});
+
+test('session expiry after the post-read entitlement admission suppresses the response without a checkpoint',{timeout:30000},async t=>{
+ const f=await setup(t),key=randomUUID();let r=await f.purchase(key);assert.equal(r.status,200);await r.body?.cancel();
+ const one=f.db.one,admit=f.journal.admission.bind(f.journal);let selected=false,scheduled=false,expired=false;
+ f.db.one=async function(sql,...bindings){const row=await one.call(this,sql,...bindings);
+  if(sql.startsWith('SELECT id,provider,product_id,starts_at,expires_at,version FROM store_subscriptions'))selected=true;return row;};
+ f.journal.admission=async(...args)=>{const result=await admit(...args);if(selected&&!scheduled){scheduled=true;
+  f.faults.afterCommit=async()=>{delete f.faults.afterCommit;expired=true;f.expire();};}return result;};
+ t.after(()=>{f.db.one=one;});f.trace.length=0;r=await f.request('/me/entitlements');assert(selected&&scheduled&&expired);
+ assert.equal(r.status,401);const text=await r.text();assert.equal(JSON.parse(text).error.code,'session_invalid');assert(!text.includes('synthetic-transaction'));
+ assertNoPreparedCheckpoint(f.trace.slice());assert.equal(f.calls,1);
+});
+
+test('a damaged non-retired action returns unavailable for lookup and replay without losing the receipt',{timeout:30000},async t=>{
+ const f=await setup(t),key=randomUUID();let r=await f.purchase(key);assert.equal(r.status,200);await r.body?.cancel();
+ const original=await f.row(key);await f.h.db.transaction(()=>f.h.db.run("UPDATE operations SET action='store.damaged' WHERE actor_id=? AND source='store' AND operation_key=?",f.owner.accountId,key));
+ const damaged=await f.row(key);assert.equal(damaged.action,'store.damaged');assert.equal(damaged.payload_hash,original.payload_hash);
+ const different=()=>f.request('/subscriptions/apple/transactions',{body:{operation_key:key,product_id:vars.APPLE_SUBSCRIPTION_PRODUCT_ID,signed_transaction:'synthetic-other.payload.signature'}});
+ for(const invoke of [()=>f.lookup(key),()=>f.purchase(key),different]){
+  f.trace.length=0;r=await invoke();await assertPrivateFailure(r,'store_operation_receipt_unavailable',f.signed);
+  assertNoPreparedCheckpoint(f.trace.slice());assert.deepEqual(await f.row(key),damaged);assert.equal(f.calls,1);
+ }
+});
+
+test('retired or partial same-subject receipts release 410 only for a matching intact original request',{timeout:30000},async t=>{
+ const f=await setup(t),key=randomUUID();let r=await f.purchase(key);assert.equal(r.status,200);await r.body?.cancel();
+ const original=await f.row(key),retired=stable({protocol:'lovelies-operation-retired-v1',status:'retired'});
+ const update=(sql,...values)=>f.h.db.transaction(()=>f.h.db.run(sql,...values));
+ await update("UPDATE operations SET payload_json='null',response_json=? WHERE actor_id=? AND source='store' AND operation_key=?",retired,f.owner.accountId,key);
+ const different=()=>f.request('/subscriptions/apple/transactions',{body:{operation_key:key,product_id:vars.APPLE_SUBSCRIPTION_PRODUCT_ID,signed_transaction:'synthetic-other.payload.signature'}});
+ f.trace.length=0;r=await f.purchase(key);assert.equal(r.status,410);assert.equal((await r.json()).error.code,'operation_receipt_retired');assertNoPreparedCheckpoint(f.trace.slice());
+ for(const invoke of [()=>f.lookup(key),different]){f.trace.length=0;r=await invoke();await assertPrivateFailure(r,'store_operation_receipt_unavailable',f.signed);assertNoPreparedCheckpoint(f.trace.slice());}
+ await update("UPDATE operations SET action='store.damaged' WHERE actor_id=? AND source='store' AND operation_key=?",f.owner.accountId,key);
+ for(const invoke of [()=>f.purchase(key),()=>f.lookup(key)]){f.trace.length=0;r=await invoke();await assertPrivateFailure(r,'store_operation_receipt_unavailable',f.signed);assertNoPreparedCheckpoint(f.trace.slice());}
+ await update("UPDATE operations SET action=?,payload_hash=? WHERE actor_id=? AND source='store' AND operation_key=?",original.action,'0'.repeat(64),f.owner.accountId,key);
+ f.trace.length=0;r=await f.purchase(key);await assertPrivateFailure(r,'store_operation_receipt_unavailable',f.signed);assertNoPreparedCheckpoint(f.trace.slice());
+ await update("UPDATE operations SET payload_hash=?,response_json=? WHERE actor_id=? AND source='store' AND operation_key=?",original.payload_hash,original.response_json,f.owner.accountId,key);
+ f.trace.length=0;r=await f.purchase(key);await assertPrivateFailure(r,'operation_receipt_unavailable',f.signed);assertNoPreparedCheckpoint(f.trace.slice());
+ f.trace.length=0;r=await f.lookup(key);await assertPrivateFailure(r,'store_operation_receipt_unavailable',f.signed);assertNoPreparedCheckpoint(f.trace.slice());assert.equal(f.calls,1);
+});
+
+test('a lost fake Google acknowledgement reply remains unresolved without preparing or dispatching a second attempt',{timeout:30000},async t=>{
+ const f=await setup(t),key=randomUUID(),id=await f.id(key),fake=f.h.env.STORE_VERIFIER.fetch;let lost=false;
+ f.h.env.STORE_VERIFIER.fetch=async(input,init)=>{const path=new URL(input instanceof Request?input.url:String(input)).pathname;
+  const response=await fake(input,init);if(path==='/google/acknowledge'){lost=true;await response.body?.cancel();throw Error('synthetic_acknowledgement_reply_lost');}return response;};
+ f.trace.length=0;const r=await f.googlePurchase(key);await assertUnresolved(r,[f.googleToken,'synthetic-google-order']);
+ assert(lost);assert.equal(f.googleCalls,1);assert.equal(f.googleAcks,1);assertNoPreparedCheckpoint(f.trace.slice());
+ assert.equal(await f.row(key),null);assert.equal((await f.subscriptions()).length,0);assert.equal(await f.journal.lookup(id),null);
+});
+
+test('a late same-key conflict after fake Google acknowledgement remains unresolved',{timeout:30000},async t=>{
+ const f=await setup(t),key=randomUUID(),other='synthetic-other-google-token-'+randomUUID();
+ const input={operation_key:key,product_id:vars.GOOGLE_PLAY_SUBSCRIPTION_PRODUCT_ID,purchase_token:other};
+ const legacy=await prepareOperation('store.google',input,'store');
+ const flat={active:true,provider:'google_play',product_id:input.product_id,transaction_id:'synthetic-race-google-order',
+  original_transaction_id:'synthetic-race-google-original',expires_at:new Date(f.now()+60000).toISOString(),billing_environment:'production',financial_eligible:true,stale:true};
+ const fake=f.h.env.STORE_VERIFIER.fetch;let inserted=false;
+ f.h.env.STORE_VERIFIER.fetch=async(input,init)=>{const path=new URL(input instanceof Request?input.url:String(input)).pathname;
+  const response=await fake(input,init);if(path==='/google/acknowledge'&&!inserted){inserted=true;await executeOperation(f.context,f.actor,legacy,()=>flat);}return response;};
+ const r=await f.googlePurchase(key);await assertUnresolved(r,[f.googleToken,other,'synthetic-google-order']);assert(inserted);
+ assert.equal(f.googleCalls,1);assert.equal(f.googleAcks,1);assert.equal(f.calls,0);
+ const row=await f.row(key),record=await f.journal.lookup(await f.id(key));assert(row);assert.equal(row.payload_hash,legacy.hash);
+ assert.equal(record.status,'committed');assert.equal(record.plan.input_hash,legacy.hash);assert.equal((await f.subscriptions()).length,0);
+});
+
+test('expiry after fake Google verification prevents acknowledgement and prepares no plan',{timeout:30000},async t=>{
+ const f=await setup(t),key=randomUUID(),id=await f.id(key),fake=f.h.env.STORE_VERIFIER.fetch;let expired=false;
+ f.h.env.STORE_VERIFIER.fetch=async(input,init)=>{const path=new URL(input instanceof Request?input.url:String(input)).pathname;
+  const response=await fake(input,init);if(path==='/google/subscription'){expired=true;f.expire();}return response;};
+ f.trace.length=0;const r=await f.googlePurchase(key);assert(expired);assert.equal(r.status,401);
+ const text=await r.text();assert.equal(JSON.parse(text).error.code,'session_invalid');assert(!text.includes(f.googleToken));
+ assert.equal(f.googleCalls,1);assert.equal(f.googleAcks,0);assertNoPreparedCheckpoint(f.trace.slice());
+ assert.equal(await f.row(key),null);assert.equal((await f.subscriptions()).length,0);assert.equal(await f.journal.lookup(id),null);
+});
+
+test('a conflicting store response is withheld if its exact row changes before final admission',{timeout:30000},async t=>{
+ const f=await setup(t),key=randomUUID();let r=await f.purchase(key);assert.equal(r.status,200);await r.body?.cancel();
+ const one=f.db.one;let reads=0;
+ f.db.one=async function(sql,...bindings){const row=await one.call(this,sql,...bindings);
+  if(sameSubjectStoreRead(sql,bindings,f,key)&&++reads===2)return {...row,payload_hash:'0'.repeat(64)};return row;};
+ t.after(()=>{f.db.one=one;});f.trace.length=0;
+ r=await f.request('/subscriptions/apple/transactions',{body:{operation_key:key,product_id:vars.APPLE_SUBSCRIPTION_PRODUCT_ID,signed_transaction:'synthetic-other.payload.signature'}});
+ await assertPrivateFailure(r,'store_operation_receipt_unavailable',f.signed);assert.equal(reads,2);assert.equal(f.calls,1);assertNoPreparedCheckpoint(f.trace.slice());
+});
+
+test('a retired store response is withheld if its exact row changes before final admission',{timeout:30000},async t=>{
+ const f=await setup(t),key=randomUUID();let r=await f.purchase(key);assert.equal(r.status,200);await r.body?.cancel();
+ const retired=stable({protocol:'lovelies-operation-retired-v1',status:'retired'});
+ await f.h.db.transaction(()=>f.h.db.run("UPDATE operations SET payload_json='null',response_json=? WHERE actor_id=? AND source='store' AND operation_key=?",retired,f.owner.accountId,key));
+ const one=f.db.one;let reads=0;
+ f.db.one=async function(sql,...bindings){const row=await one.call(this,sql,...bindings);
+  if(sameSubjectStoreRead(sql,bindings,f,key)&&++reads===2)return null;return row;};
+ t.after(()=>{f.db.one=one;});f.trace.length=0;r=await f.purchase(key);
+ await assertPrivateFailure(r,'store_operation_receipt_unavailable',f.signed);assert.equal(reads,2);assert.equal(f.calls,1);assertNoPreparedCheckpoint(f.trace.slice());
+});
+
+test('a typed historical receipt is withheld if its exact row changes before final admission',{timeout:30000},async t=>{
+ const f=await setup(t),key=randomUUID();let r=await f.purchase(key);assert.equal(r.status,200);await r.body?.cancel();
+ const one=f.db.one;let reads=0;
+ f.db.one=async function(sql,...bindings){const row=await one.call(this,sql,...bindings);
+  if(sameSubjectStoreRead(sql,bindings,f,key)&&++reads===2)return {...row,response_json:'{}'};return row;};
+ t.after(()=>{f.db.one=one;});f.trace.length=0;r=await f.lookup(key);
+ await assertPrivateFailure(r,'store_operation_receipt_unavailable',f.signed);assert.equal(reads,2);assert.equal(f.calls,1);assertNoPreparedCheckpoint(f.trace.slice());
 });

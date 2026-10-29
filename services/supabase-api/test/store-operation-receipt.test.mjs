@@ -92,7 +92,7 @@ localTest('corrupt and retired receipts fail closed without reflecting sensitive
  await update("UPDATE operations SET response_json=?,payload_hash=? WHERE actor_id=? AND source='store' AND operation_key=?",stable(value),'0'.repeat(64),f.owner.accountId,key);
  r=await f.lookup(key);assert.equal(r.status,503);assert(!await r.text().then(text=>text.includes(f.signed)));
  await update("UPDATE operations SET payload_json='null',response_json=? WHERE actor_id=? AND source='store' AND operation_key=?",stable({protocol:'lovelies-operation-retired-v1',status:'retired'}),f.owner.accountId,key);
- r=await f.lookup(key);assert.equal(r.status,410);assert.equal((await r.json()).error.code,'operation_receipt_retired');
+ r=await f.lookup(key);assert.equal(r.status,503);assert.equal((await r.json()).error.code,'store_operation_receipt_unavailable');
 });
 
 localTest('a retired operation cannot be replayed into a new provider call',{timeout:30000},async t=>{

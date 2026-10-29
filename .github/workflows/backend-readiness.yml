@@ -63,8 +63,8 @@ jobs:
             test/notification-device-removal-race.test.mjs \
             test/notification-logout-delivery-race.test.mjs \
             test/storage-status-cleanup-runtime.test.mjs | tee "$report_file"
-          grep -qx '# tests 104' "$report_file"
-          grep -qx '# pass 104' "$report_file"
+          grep -qx '# tests 126' "$report_file"
+          grep -qx '# pass 126' "$report_file"
           grep -qx '# fail 0' "$report_file"
           grep -qx '# skipped 0' "$report_file"
       - name: Run PGlite-only privacy grant recovery regressions

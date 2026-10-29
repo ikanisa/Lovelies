@@ -204,7 +204,7 @@ test('malformed JSON from a narrowly mocked same-subject row fails closed withou
   r=await call();assert.equal(r.status,503);const text=await r.text();assert(!text.includes(f.old));
   assert.equal(JSON.parse(text).error.code,'store_operation_receipt_unavailable');
  }
- assert.equal(hits,2);assert.equal(f.calls,1);intercept=false;assert.deepEqual(await f.row(key),before);
+ assert.equal(hits,4);assert.equal(f.calls,1);intercept=false;assert.deepEqual(await f.row(key),before);
 });
 
 test('an early same-subject legacy raw commit is selected inside the replay transaction',{timeout:30000},async t=>{
@@ -213,12 +213,19 @@ test('an early same-subject legacy raw commit is selected inside the replay tran
  const legacy=await prepareOperation('store.apple',input,'store');
  const flat={active:true,provider:'apple_app_store',product_id:input.product_id,transaction_id:'synthetic-newer',
   original_transaction_id:'synthetic-original',expires_at:new Date(Date.now()+60000).toISOString(),billing_environment:'production',financial_eligible:true,stale:true};
- const original=f.h.db.transaction;let armed=true,inserted=false;
- f.h.db.transaction=async function(callback,intent){
-  if(armed){armed=false;await executeOperation(f.h.app,actor,legacy,()=>flat);inserted=true;}
-  return original.call(this,callback,intent);
+ const payload={protocol:'lovelies-store-operation-input-v1',operation_key:key,
+  product_id:input.product_id,credential_sha256:await digest(f.old)};
+ const target=stable({action:'store.apple',source:'store',payload});
+ const descriptor=Object.getOwnPropertyDescriptor(crypto.subtle,'digest'),original=crypto.subtle.digest.bind(crypto.subtle);
+ let inserted=false;
+ crypto.subtle.digest=async(algorithm,data)=>{
+  const result=await original(algorithm,data);
+  // A same-subject legacy commit occurs after the current redacted request
+  // was hashed and before the initial admitted replay reads its row.
+  if(!inserted&&new TextDecoder().decode(data)===target){inserted=true;await executeOperation(f.h.app,actor,legacy,()=>flat);}
+  return result;
  };
- t.after(()=>{f.h.db.transaction=original;});
+ t.after(()=>{if(descriptor)Object.defineProperty(crypto.subtle,'digest',descriptor);else delete crypto.subtle.digest;});
  const r=await f.purchase('apple',key,f.old);assert(inserted);assert.equal(r.status,200);assert.deepEqual(await r.json(),flat);
  assert.equal(f.calls,0);const stored=await f.row(key);assert.equal(stored.payload_hash,legacy.hash);assert.equal(stored.payload_json,legacy.payloadJson);
  const receipt=await f.lookup(key);assert.equal(receipt.status,200);assert.deepEqual((await receipt.json()).result,flat);
@@ -246,14 +253,28 @@ test('corrupt stored input is unavailable before classifying a genuine different
  assert.deepEqual(await f.row(key),original);assert.equal(f.calls,1);
 });
 
-test('retired receipts preserve matching retirement and different-input conflict semantics',{timeout:30000},async t=>{
+test('retired receipts retain matching retirement and treat unverifiable mismatch as unresolved',{timeout:30000},async t=>{
  const f=await setup(t),key=randomUUID();let r=await f.purchase('apple',key,f.old);assert.equal(r.status,200);await r.body?.cancel();
  const original=await f.row(key),retired=stable({protocol:'lovelies-operation-retired-v1',status:'retired'});
  await f.h.db.transaction(()=>f.h.db.run("UPDATE operations SET payload_json='null',response_json=? WHERE actor_id=? AND source='store' AND operation_key=?",retired,f.owner.accountId,key));
- r=await f.lookup(key);assert.equal(r.status,410);assert.equal((await r.json()).error.code,'operation_receipt_retired');
+ r=await f.lookup(key);assert.equal(r.status,503);assert.equal((await r.json()).error.code,'store_operation_receipt_unavailable');
  r=await f.purchase('apple',key,f.old);assert.equal(r.status,410);assert.equal((await r.json()).error.code,'operation_receipt_retired');
- r=await f.purchase('apple',key,f.newer);assert.equal(r.status,409);assert.equal((await r.json()).error.code,'operation_key_conflict');
+ r=await f.purchase('apple',key,f.newer);assert.equal(r.status,503);assert.equal((await r.json()).error.code,'store_operation_receipt_unavailable');
  await f.h.db.transaction(()=>f.h.db.run("UPDATE operations SET response_json=? WHERE actor_id=? AND source='store' AND operation_key=?",original.response_json,f.owner.accountId,key));
  r=await f.purchase('apple',key,f.old);assert.equal(r.status,503);assert.equal((await r.json()).error.code,'operation_receipt_unavailable');
- r=await f.purchase('apple',key,f.newer);assert.equal(r.status,409);assert.equal((await r.json()).error.code,'operation_key_conflict');assert.equal(f.calls,1);
+ r=await f.purchase('apple',key,f.newer);assert.equal(r.status,503);assert.equal((await r.json()).error.code,'store_operation_receipt_unavailable');assert.equal(f.calls,1);
+});
+
+test('a matching legacy raw tombstone remains retired while lookup and a different input remain unresolved',{timeout:30000},async t=>{
+ const f=await setup(t),key=randomUUID(),actor=await f.h.app.authenticate(new Request('https://api.invalid/me',{headers:{authorization:'Bearer '+f.owner.token}}));
+ const input={operation_key:key,product_id:vars.APPLE_SUBSCRIPTION_PRODUCT_ID,signed_transaction:f.old};
+ const legacy=await prepareOperation('store.apple',input,'store');
+ const flat={active:true,provider:'apple_app_store',product_id:input.product_id,transaction_id:'synthetic-legacy',
+  original_transaction_id:'synthetic-original',expires_at:new Date(Date.now()+60000).toISOString(),billing_environment:'production',financial_eligible:true,stale:false};
+ await executeOperation(f.h.app,actor,legacy,()=>flat);
+ await f.h.db.transaction(()=>f.h.db.run("UPDATE operations SET payload_json='null',response_json=? WHERE actor_id=? AND source='store' AND operation_key=?",
+  stable({protocol:'lovelies-operation-retired-v1',status:'retired'}),f.owner.accountId,key));
+ let r=await f.purchase('apple',key,f.old);assert.equal(r.status,410);assert.equal((await r.json()).error.code,'operation_receipt_retired');
+ r=await f.purchase('apple',key,f.newer);assert.equal(r.status,503);assert.equal((await r.json()).error.code,'store_operation_receipt_unavailable');
+ r=await f.lookup(key);assert.equal(r.status,503);assert.equal((await r.json()).error.code,'store_operation_receipt_unavailable');assert.equal(f.calls,0);
 });

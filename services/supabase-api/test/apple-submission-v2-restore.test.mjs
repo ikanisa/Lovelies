@@ -104,11 +104,12 @@ test('fenced Apple v2 mutation and retry preserve the original logical plan and 
  assertReadOnlyReceiptTrace(f);assert.equal(known.status,'committed');assert.deepEqual(known.result,stale);
  assert.equal(known.payload_hash,stalePlan.plan.input_hash);assert.equal(known.credential_sha256,await digest(f.old));
  f.trace.length=0;r=await f.lookup(randomUUID());assert.equal(r.status,200);assert.equal((await r.json()).status,'unknown');assertReadOnlyReceiptTrace(f);
- r=await f.purchase(staleKey,f.old);assert.equal(r.status,200);assert.deepEqual(await r.json(),stale);assert.equal(f.calls,2);
+ f.trace.length=0;r=await f.purchase(staleKey,f.old);assert.equal(r.status,200);assert.deepEqual(await r.json(),stale);assert.equal(f.calls,2);
+ assertReadOnlyReceiptTrace(f);
  assert.deepEqual(await f.snapshot(),snapshot);assert.deepEqual(await f.row(staleKey),staleRow);
  assert.deepEqual(await plan(f,staleKey,f.old,'committed'),stalePlan);
- // The existing replay helper may prepare a generic transaction; it must not
- // register or rerun the original domain operation.
+ // Both the initial replay and final admission remain read-only; neither a
+ // generic checkpoint nor a second logical store operation is prepared.
  assert.equal(requested.filter(id=>id===stalePlan.plan.operation_id).length,1);
 });
 

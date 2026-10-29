@@ -239,15 +239,22 @@ export async function originalDownloadAccess(ctx: AppContext, actor: Actor, asse
     return { asset: access.asset, subscription, authority: access.authority };
 }
 type StoreOperationRow = {action:string;payload_hash:string;payload_json:string;response_json:string};
+type StoreReplay = {result:Record<string,unknown>;row:StoreOperationRow};
+type StoreRouteGuard = {check:()=>Promise<void>;fresh:()=>void;remember:(key:string,row:StoreOperationRow)=>void;
+    markExternalEffect:()=>void;unresolved:(error:unknown)=>never};
 type ValidatedStoreOperation = {action:string;payload_hash:string;result:Record<string,unknown>;input_scheme:string;credential_sha256:string};
 function storeReceiptUnavailable(): never { throw new ApiError(503, 'store_operation_receipt_unavailable'); }
 /** The lookup and every direct committed replay validate exactly the same
  * historical row. The caller controls session and transaction authority. */
 async function validateStoreOperation(operation: StoreOperationRow, key: string): Promise<ValidatedStoreOperation> {
-    assertOperationReceiptAvailable(operation);
+    // The lookup supplies only a key and cannot bind a retired input/hash to
+    // the original request. Do not convert an unverifiable tombstone into a
+    // definitive noncommit response. Direct replay checks its own input below.
+    if (operation.payload_json === retiredOperationInput || operation.response_json === retiredOperationResponse)
+        return storeReceiptUnavailable();
     const apple = operation.action === 'store.apple', google = operation.action === 'store.google';
-    if (!apple && !google) throw new ApiError(409, 'store_operation_scope_changed');
     const unavailable = storeReceiptUnavailable;
+    if (!apple && !google) return unavailable();
     if (typeof operation.payload_hash !== 'string' || !/^[0-9a-f]{64}$/.test(operation.payload_hash) ||
         typeof operation.payload_json !== 'string' || new TextEncoder().encode(operation.payload_json).byteLength > 40000 ||
         typeof operation.response_json !== 'string' || new TextEncoder().encode(operation.response_json).byteLength > 4096) unavailable();
@@ -309,6 +316,10 @@ async function storedStoreOperation(ctx: AppContext, actor: Actor, key: string):
     return await ctx.db.one<StoreOperationRow>(
         "SELECT action,payload_hash,payload_json,response_json FROM operations WHERE actor_id=? AND source='store' AND operation_key=?", actor.accountId, key);
 }
+function assertSameStoreOperation(row: StoreOperationRow | null, expected: StoreOperationRow): void {
+    if (!row || row.action !== expected.action || row.payload_hash !== expected.payload_hash ||
+        row.payload_json !== expected.payload_json || row.response_json !== expected.response_json) storeReceiptUnavailable();
+}
 function safeStoreResult(result: Record<string, unknown>, token: string): Record<string, unknown> {
     if (stable(result).includes(token)) return storeReceiptUnavailable();
     return result;
@@ -317,11 +328,12 @@ function safeStoreResult(result: Record<string, unknown>, token: string): Record
  * only then can a different incoming request be called a key conflict. */
 async function checkedStoreOperation(ctx: AppContext, actor: Actor, raw: PreparedOperation, redacted: PreparedOperation, token: string, row: StoreOperationRow): Promise<{result:Record<string,unknown>;intent:PreparedOperation}> {
     try {
-        // Retired receipts intentionally no longer retain their original input.
-        // Preserve the operation engine's action/hash ordering for these rows.
+        // The retained action/hash can identify a matching original request,
+        // but a mismatch is indistinguishable from tombstone corruption.
         if (row.payload_json === retiredOperationInput || row.response_json === retiredOperationResponse) {
-            const expected = row.action === raw.action && row.payload_hash === raw.hash ? raw : redacted;
-            if (row.action !== expected.action || row.payload_hash !== expected.hash) throw new ApiError(409, 'operation_key_conflict');
+            const rawMatch = row.action === raw.action && row.payload_hash === raw.hash;
+            const digestMatch = row.action === redacted.action && row.payload_hash === redacted.hash;
+            if (!rawMatch && !digestMatch) return storeReceiptUnavailable();
             assertOperationReceiptAvailable(row);
             return storeReceiptUnavailable();
         }
@@ -338,17 +350,19 @@ async function checkedStoreOperation(ctx: AppContext, actor: Actor, raw: Prepare
     }
 }
 /** Read the row and select raw versus digest input within this transaction. */
-async function replayStoreOperation(ctx: AppContext, actor: Actor, raw: PreparedOperation, redacted: PreparedOperation, token: string): Promise<Record<string, unknown> | null> {
+async function replayStoreOperation(ctx: AppContext, actor: Actor, raw: PreparedOperation, redacted: PreparedOperation, token: string, guard: StoreRouteGuard): Promise<StoreReplay | null> {
     await assertRegisteredActor(ctx, actor);
     try {
         const row = await storedStoreOperation(ctx, actor, raw.key);
         if (!row) { await assertRegisteredActor(ctx, actor); return null; }
+        // Bind even a row classified as conflict or retired to final admission.
+        guard.remember(raw.key, row);
         const checked = await checkedStoreOperation(ctx, actor, raw, redacted, token, row);
-        const replayed = await executeOperation(ctx, actor, checked.intent, () => { throw new ApiError(500, 'unreachable_replay'); });
-        // If the row changed between checks, release neither version.
-        if (stable(replayed) !== row.response_json) return storeReceiptUnavailable();
+        // Re-read all receipt fields under the same admitted transaction. The
+        // helper also runs inside the later write transaction after a race.
+        assertSameStoreOperation(await storedStoreOperation(ctx, actor, raw.key), row);
         await assertRegisteredActor(ctx, actor);
-        return checked.result;
+        return {result:checked.result, row};
     } catch (error) {
         await assertRegisteredActor(ctx, actor);
         throw error;
@@ -356,7 +370,7 @@ async function replayStoreOperation(ctx: AppContext, actor: Actor, raw: Prepared
 }
 /** A historical operation receipt is not a current store entitlement. The
  * caller can bind it to the original request without receiving the JWS/token. */
-async function storeOperationReceipt(request: Request, ctx: AppContext, actor: Actor): Promise<Response> {
+async function storeOperationReceipt(request: Request, ctx: AppContext, actor: Actor, guard: StoreRouteGuard): Promise<Response> {
     if (request.method !== 'POST') throw new ApiError(405, 'method_not_allowed');
     if (new URL(request.url).search) throw new ApiError(400, 'invalid_store_input');
     const input = await jsonBody(request, 1024);
@@ -371,6 +385,7 @@ async function storeOperationReceipt(request: Request, ctx: AppContext, actor: A
                 "SELECT action,payload_hash,payload_json,response_json FROM operations WHERE actor_id=? AND source='store' AND operation_key=?", actor.accountId, key);
             await assertRegisteredActor(ctx, actor);
             if (!operation) return {protocol, actor_id: actor.accountId, operation_key: key, status: 'unknown'};
+            guard.remember(key, operation);
             const validated = await validateStoreOperation(operation, key);
             await assertRegisteredActor(ctx, actor);
             return {protocol, actor_id: actor.accountId, operation_key: key, status: 'committed',
@@ -382,7 +397,19 @@ async function storeOperationReceipt(request: Request, ctx: AppContext, actor: A
         }
     }));
 }
-async function verifyTransaction(request: Request, ctx: AppContext, actor: Actor, provider: 'apple' | 'google'): Promise<Response> {
+// Keep the authority checks previously surrounding the write transaction,
+// but admit both checks as read-only and never create a new journal plan.
+async function guardedStoreRead<T>(ctx: AppContext, guard: StoreRouteGuard, callback:()=>Promise<T>): Promise<T> {
+    const value = await ctx.db.read(async () => {
+        const result = await callback();
+        await guard.check(); guard.fresh();
+        return result;
+    });
+    await ctx.db.read(guard.check);
+    guard.fresh();
+    return value;
+}
+async function verifyTransaction(request: Request, ctx: AppContext, actor: Actor, provider: 'apple' | 'google', guard: StoreRouteGuard): Promise<Response> {
     const body = await jsonBody(request, 98304);
     exact(body, provider === 'apple' ? ['product_id', 'signed_transaction', 'operation_key'] : ['product_id', 'purchase_token', 'operation_key']);
     const product = provider === 'apple' ? appleConfigured(ctx).productId : (googleVerifier(ctx), ctx.env.GOOGLE_PLAY_SUBSCRIPTION_PRODUCT_ID);
@@ -394,58 +421,68 @@ async function verifyTransaction(request: Request, ctx: AppContext, actor: Actor
     const redacted = await prepareOperation(intent.action, {protocol:'lovelies-store-operation-input-v1',
         operation_key:intent.key, product_id:body.product_id, credential_sha256:await digest(token)}, 'store');
     await assertRegisteredActor(ctx, actor);
-    // Select a validated legacy raw or digest receipt from the row while holding
-    // the replay transaction, so a concurrently committed legacy row is seen.
-    const previous = await ctx.db.transaction(() => replayStoreOperation(ctx, actor, intent, redacted, token));
+    // The initial replay is read-only, including for an absent row. Select the
+    // legacy/raw or digest intent from the row under independent admission.
+    const previous = await guardedStoreRead(ctx, guard, async () => {
+        return await replayStoreOperation(ctx, actor, intent, redacted, token, guard);
+    });
     if (previous)
-        return ok(previous);
+        return ok(previous.result);
     if (intent.key.includes(token)) throw new ApiError(400, 'store_credential_in_operation_key');
-    let purchase: VerifiedPurchase;
-    if (provider === 'apple') {
-        purchase = await applePurchase(ctx, await appleDecode(ctx, 'transaction', token), await digest(token), actor.accountId);
-    }
-    else {
-        const verifier = googleVerifier(ctx), observed = ctx.now(), raw = await verifier.getSubscription({ packageName: ctx.env.GOOGLE_PLAY_PACKAGE_NAME!, purchaseToken: token });
-        (await assertRegisteredActor(ctx, actor));
-        purchase = await googlePurchase(ctx, raw, token, actor.accountId, observed);
-        if (purchase.active && !purchase.acknowledged) {
-            await verifier.acknowledge({ packageName: ctx.env.GOOGLE_PLAY_PACKAGE_NAME!, productId: purchase.product, purchaseToken: token, obfuscatedAccountId: await digest(actor.accountId) });
-            purchase.acknowledged = true;
+    try {
+        let purchase: VerifiedPurchase;
+        if (provider === 'apple') {
+            purchase = await applePurchase(ctx, await appleDecode(ctx, 'transaction', token), await digest(token), actor.accountId);
         }
-    }
-    return ok((await ctx.db.transaction(async () => {
-        await assertRegisteredActor(ctx, actor);
-        try {
-            const row = await storedStoreOperation(ctx, actor, intent.key);
-            if (row) {
-                const replayed = await replayStoreOperation(ctx, actor, intent, redacted, token);
-                if (!replayed) return storeReceiptUnavailable();
-                return replayed;
+        else {
+            const verifier = googleVerifier(ctx), observed = ctx.now(), raw = await verifier.getSubscription({ packageName: ctx.env.GOOGLE_PLAY_PACKAGE_NAME!, purchaseToken: token });
+            (await assertRegisteredActor(ctx, actor));
+            purchase = await googlePurchase(ctx, raw, token, actor.accountId, observed);
+            if (purchase.active && !purchase.acknowledged) {
+                const accountHash = await digest(actor.accountId);
+                await ctx.db.read(guard.check); guard.fresh();
+                // The provider may accept acknowledgement even if its reply or a
+                // later local write is lost. Record ambiguity before dispatch.
+                guard.markExternalEffect();
+                await verifier.acknowledge({ packageName: ctx.env.GOOGLE_PLAY_PACKAGE_NAME!, productId: purchase.product, purchaseToken: token, obfuscatedAccountId: accountHash });
+                purchase.acknowledged = true;
             }
-            const result = await executeOperation(ctx, actor, redacted, async () => {
-                const current = await persistVerifiedPurchase(ctx, purchase);
-                // The current entitlement can refer to a newer transaction. Bind
-                // the exact verified submission independently, and persist it in
-                // the same atomic operation receipt without retaining the JWS.
-                const accepted = safeStoreResult(provider === 'apple' ? { ...current, verified_submission: {
-                    protocol: 'lovelies-apple-submission-v2', product_id: purchase.product,
-                    transaction_id: purchase.transaction, original_transaction_id: purchase.original,
-                    billing_environment: purchase.environment, credential_sha256: purchase.hash,
-                } } : current, token);
-                (await enqueueNotification(ctx, actor.accountId, 'payment', purchase.provider + ':' + purchase.transaction, 'Your subscription status was updated'));
-                return accepted;
-            });
-            const stored = await storedStoreOperation(ctx, actor, intent.key);
-            if (!stored) return storeReceiptUnavailable();
-            const checked = await checkedStoreOperation(ctx, actor, intent, redacted, token, stored);
-            if (stable(result) !== stored.response_json) return storeReceiptUnavailable();
-            await assertRegisteredActor(ctx, actor);
-            return checked.result;
-        } catch (error) {
-            await assertRegisteredActor(ctx, actor);
-            throw error;
         }
-    })));
+        return ok((await ctx.db.transaction(async () => {
+            await assertRegisteredActor(ctx, actor);
+            try {
+                const row = await storedStoreOperation(ctx, actor, intent.key);
+                if (row) {
+                    const replayed = await replayStoreOperation(ctx, actor, intent, redacted, token, guard);
+                    if (!replayed) return storeReceiptUnavailable();
+                    return replayed.result;
+                }
+                const result = await executeOperation(ctx, actor, redacted, async () => {
+                    const current = await persistVerifiedPurchase(ctx, purchase);
+                    // The current entitlement can refer to a newer transaction. Bind
+                    // the exact verified submission independently, and persist it in
+                    // the same atomic operation receipt without retaining the JWS.
+                    const accepted = safeStoreResult(provider === 'apple' ? { ...current, verified_submission: {
+                        protocol: 'lovelies-apple-submission-v2', product_id: purchase.product,
+                        transaction_id: purchase.transaction, original_transaction_id: purchase.original,
+                        billing_environment: purchase.environment, credential_sha256: purchase.hash,
+                    } } : current, token);
+                    (await enqueueNotification(ctx, actor.accountId, 'payment', purchase.provider + ':' + purchase.transaction, 'Your subscription status was updated'));
+                    return accepted;
+                });
+                const stored = await storedStoreOperation(ctx, actor, intent.key);
+                if (!stored) return storeReceiptUnavailable();
+                const checked = await checkedStoreOperation(ctx, actor, intent, redacted, token, stored);
+                if (stable(result) !== stored.response_json) return storeReceiptUnavailable();
+                await assertRegisteredActor(ctx, actor);
+                guard.remember(intent.key, stored);
+                return checked.result;
+            } catch (error) {
+                await assertRegisteredActor(ctx, actor);
+                throw error;
+            }
+        })));
+    } catch (error) { return guard.unresolved(error); }
 }
 async function storeNotification(request: Request, ctx: AppContext, provider: 'apple' | 'google'): Promise<Response> {
     const body = await jsonBody(request, 131072), payloadHash = await digest(stable(body));
@@ -590,24 +627,48 @@ export async function handleEntitlements(request: Request, ctx: AppContext): Pro
     }
     const actor = await ctx.authenticate(request);
     (await assertRegisteredActor(ctx, actor));
+    let guard: StoreRouteGuard | undefined;
     if (store || path === '/me/store-operations' || path === '/me/entitlements') {
-        // Snapshot exactly the authenticated actor. The database invocation
-        // checks it after independent prepare and at final response admission.
+        // Snapshot the authenticated actor and any validated replay. Every
+        // independent admission before release rechecks the exact saved row.
         const bound = { ...actor, roles: [...actor.roles] };
         let deadlines: StoreAuthorityDeadlines | undefined;
-        ctx.db.bindInvocationAuthority(async () => { deadlines = await storeAuthorityDeadlines(ctx, bound); }, () => {
-            if (!deadlines) throw new ApiError(503, 'store_authority_unavailable');
-            assertStoreAuthorityFresh(deadlines, ctx.now());
-        });
+        let receipt: {key:string;row:StoreOperationRow} | undefined;
+        let externalEffectDispatched = false;
+        const unresolved = (error:unknown):never => {
+            if (externalEffectDispatched) throw new ApiError(503, 'store_operation_outcome_unresolved');
+            throw error;
+        };
+        guard = {
+            check: async () => {
+                try {
+                    deadlines = await storeAuthorityDeadlines(ctx, bound);
+                    if (receipt) assertSameStoreOperation(await storedStoreOperation(ctx, bound, receipt.key), receipt.row);
+                } catch (error) { unresolved(error); }
+            },
+            fresh: () => {
+                try {
+                    if (!deadlines) throw new ApiError(503, 'store_authority_unavailable');
+                    assertStoreAuthorityFresh(deadlines, ctx.now());
+                } catch (error) { unresolved(error); }
+            },
+            remember: (key, row) => {
+                if (receipt) throw new ApiError(500, 'store_receipt_guard_invalid');
+                receipt = {key, row:{...row}};
+            },
+            markExternalEffect: () => { externalEffectDispatched = true; },
+            unresolved,
+        };
+        ctx.db.bindInvocationAuthority(guard.check, guard.fresh);
     }
     if (path === '/me/store-operations')
-        return await storeOperationReceipt(request, ctx, actor);
+        return await storeOperationReceipt(request, ctx, actor, guard!);
     if (store)
-        return (await verifyTransaction(request, ctx, actor, store[1] as 'apple' | 'google'));
+        return (await verifyTransaction(request, ctx, actor, store[1] as 'apple' | 'google', guard!));
     if (path === '/me/entitlements') {
         if (request.method !== 'GET')
             throw new ApiError(405, 'method_not_allowed');
-        return ok((await ctx.db.transaction(async () => (await entitlementSummary(ctx, actor)))));
+        return ok((await guardedStoreRead(ctx, guard!, async () => (await entitlementSummary(ctx, actor)))));
     }
     if (request.method !== 'POST')
         throw new ApiError(405, 'method_not_allowed');
