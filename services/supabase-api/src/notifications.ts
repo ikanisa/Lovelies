@@ -282,7 +282,10 @@ export async function processNotificationJob(payload: unknown, ctx: AppContext):
             continue;
         try {
             const readReceipt = async (response: Response): Promise<Record<string, any>> => {
-                if(response.redirected||response.status>=300&&response.status<400)throw new ApiError(503,'push_provider_redirect_denied');
+                if(response.redirected||response.status>=300&&response.status<400){
+                    try { void response.body?.cancel().catch(()=>{}); } catch { /* Preserve the redirect denial. */ }
+                    throw new ApiError(503,'push_provider_redirect_denied');
+                }
                 // A pinned gateway can return a durable not_dispatched/ambiguous
                 // disposition with HTTP 503. Parse its bound receipt before
                 // deciding whether another network send is safe.
