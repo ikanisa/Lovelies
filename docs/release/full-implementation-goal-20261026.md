@@ -502,6 +502,11 @@ reconciliation. Evidence:
 `/Volumes/PRO-G40/Projects/Lovelies/verification/backup-sandbox-exec-diagnostic-20261029-agent-01/root-run-01/result.json`,
 `/Volumes/PRO-G40/Projects/Lovelies/verification/backup-exec-regex-six-expanded-20261029-agent-01/root-run-01/result.json`,
 and `/Volumes/PRO-G40/Projects/Lovelies/verification/backup-exec-regex-six-expanded-postflight-20261029-independent-01/result.json`.
+A separate source review found that the version probe can also block on an
+uncooperative child before the catalog lock is held. A proposed coordinator,
+durable lease and unknown-outcome reconciliation design is not yet implemented
+or tested. Evidence:
+`/Users/jeanbosco/Library/Application Support/LoveliesVerification/backup-child-termination-design-20261029-agent-01/DESIGN.md`.
 The integrated files also ran through the Node command expanded from the
 `backup:test` glob with default test concurrency. Node reported 39 passes and
 one optional native-tool skip. The enclosing harness recorded failure because
@@ -1010,6 +1015,12 @@ and retirement race, StoreKit purchase-sheet/recovery behavior and real provider
 verification remain open. Evidence:
 `/Volumes/PRO-G40/Projects/Lovelies/verification/ios-store-entitlement-publication-independent-review-20261029-agent-01/REVIEW.md`
 and `/Volumes/PRO-G40/Projects/Lovelies/verification/ios-store-entitlement-order-recovery-20261029-agent-02/README.md`.
+An independently reviewed fence successor remains held: an older audience
+denial can clear a newer eligible presentation, and an eligible revision change
+can clear an entitlement without triggering a fresh read. A later isolated draft
+documents the remaining race; no build or test has qualified it. Evidence:
+`/Users/jeanbosco/Library/Application Support/LoveliesVerification/ios-entitlement-fence-independent-review-20261029-01/REVIEW.md`
+and `/Users/jeanbosco/Library/Application Support/LoveliesVerification/ios-entitlement-audience-revision-20261029-agent-01/DESIGN.md`.
 The deferred callback and Google acknowledgement design identifies two private
 tables, encrypted input custody, provider-aware replay, deletion and restore
 behavior. It requires an independently recoverable inbox and a qualified
@@ -2095,6 +2106,15 @@ readiness tests need requalification for the candidate's new tables. These are
 review findings, not hosted observations. A pending hold cannot be represented
 as proof that an already claimed deletion has stopped. Evidence:
 `/Volumes/PRO-G40/Projects/Lovelies/verification/storage-delete-uncertainty-20261027/attempt-01/REVIEW.md`.
+
+Source review found that automatic raw-retention retirement is not yet recorded
+in the independent journal. An isolated candidate and successor remain held:
+they need the administrator scheduling journey, fair progress past held or
+already-scheduled work, exact-key overlap handling and durable reconciliation
+of uncertain DELETEs. The reviewed successor's synthetic tests have not run.
+These findings do not establish hosted behavior or completed recovery. Evidence:
+`/Users/jeanbosco/Library/Application Support/LoveliesVerification/restore-retention-raw-successor-20261029-agent-01/README.md`
+and `/Users/jeanbosco/Library/Application Support/LoveliesVerification/restore-retention-raw-successor-independent-review-20261029-01/REVIEW.md`.
 
 The Storage status adapter previously treated arbitrary native HTTP 404s as
 object absence and could accept a 404 DELETE. Six isolated regressions reproduced
