@@ -23,6 +23,29 @@ This is an execution goal under the owner's standing authorization. It does not 
 
 The 25 October application checkpoint is `aacd19f8fa9707d09f3b1775a537b8481eafdeca`; the ML owner's subsequent source checkpoint is `5e7cb856acae018f3fdac8bcaf0db1254ea5c269`. Verify subsequent deltas rather than treating HEAD alone as proof. Supabase CLI access/linking, initial three application secrets, baseline v7/v8 migration-history reconciliation, schema8/63-table private baseline and bucket provisioning are completed within their receipts. Existing store identities/products, Apple agreements/capabilities/profile, Android upload signing key and Firebase Lovelies registration in existing `easymoai` are retained inputs, not setup tasks to repeat.
 
+The 29 October read-only Supabase connector returned an active, healthy project,
+seven recorded migrations, schema13, 69 private forced-RLS tables, no client
+table privileges for `anon` or `authenticated`, zero Edge Functions and an
+empty restore-control table. The
+security advisor returned no items. These are current metadata observations,
+not app deployment, backup or restore proof. In response to Supabase's
+[PostgreSQL 17.11 notice](https://supabase.com/changelog/postgres-15-19-17-11-breaking-changes),
+catalog checks found no ltree indexes, float GiST indexes or non-extension
+custom-estimator operators. `pgcrypto` is installed; the bounded local source
+search found no PGP-cipher calls, but unknown/test stored data was not inspected.
+Evidence:
+`/Users/jeanbosco/Library/Application Support/LoveliesVerification/supabase-live-readback-20261029-root-02/result.json`
+and `/Users/jeanbosco/Library/Application Support/LoveliesVerification/supabase-live-readback-20261029-root-02/postgres-17-11-metadata.json`.
+
+On 29 October, [Google Play's target API requirements](https://support.google.com/googleplay/android-developer/answer/11926878?hl=en)
+specified API 36 for phone app updates; the current Android source configures
+target 36. [Apple's current SDK requirement](https://developer.apple.com/news/upcoming-requirements/?id=04282026a)
+requires Xcode 26 and an iOS 26 SDK or later; the locally selected Xcode for the
+narrow share typecheck was 27.1 with iPhoneOS SDK 27.1. These source and local
+tool observations do not establish the contents, acceptance or signing of the
+final store artifacts. Refresh the requirements and inspect those artifacts
+before submission.
+
 Retain successful local API, Swift/Kotlin/operator, backup, native model and bounded device/UI results within their exact source/toolchain/environment scopes. The iOS round8 photo-action fixes and maximum filtered-search coordinate-touch test are completed. Other raw warnings/failures remain recorded and require specific diagnosis or evidence-based disposition, not automatic waiver or repeated full matrices.
 
 A saved largest-text Simulator screenshot shows a truncated search prompt in
@@ -62,6 +85,132 @@ lock. Subsequent delivery inserts, cancelled rows masking older uncertainty,
 provider terminality, actual device delivery and safe restore remain open. The
 source and fixtures were committed as `018a983`. Evidence:
 `/Users/jeanbosco/Library/Application Support/LoveliesVerification/notification-terminal-race-20261029/root-integrated-01/result.json`.
+The next isolated cancellation-state candidate passed 43 local checks, but a
+further four-case review reproduced later work starving behind 61 unresolved
+jobs and showed that the unchanged outbox can erase an ambiguous job state.
+It also found that a local accepted row lacks a complete immutable history of
+earlier attempts. The candidate remains unintegrated: a preservation-safe,
+durable fair-scan contract and independently bound receipt reconciliation are
+still required. These are one-subject PGlite observations, not provider results.
+Evidence:
+`/Users/jeanbosco/Library/Application Support/LoveliesVerification/notification-cancellation-state-20261029/fairness-evidence-01/README.md`.
+An isolated successor adds a tentative schema-14 numeric scan order and a
+separate bounded high-water cursor without copying account or notification IDs
+into it. Its local checks covered 61 older unresolved jobs, scan wrap, a
+simulated interruption, cancellation and the maintenance response; 42 selected
+cases and TypeScript checking passed. PGlite serialized the workers and
+substituted the advisory lock. The candidate also carries the unresolved
+receipt-aggregation problem, so it is not integrated or applied. Native
+multi-session locking, old-writer drainage, independent restore admission,
+same-database queue binding and a version-14 migration/load review remain open.
+Evidence:
+`/Users/jeanbosco/Library/Application Support/LoveliesVerification/notification-durable-scan-20261029/attempt-01/README.md`
+and `/Users/jeanbosco/Library/Application Support/LoveliesVerification/notification-durable-scan-20261029/self-08/result.json`.
+An isolated receipt successor checks one exact attempt against the actual
+gateway and ledger interfaces while preserving v1 rows. Earlier local controls
+found device and audience revisions could change during lookup; the revised
+candidate checks both snapshots. Fifty-one selected local app, gateway and
+ledger checks plus TypeScript passed; this does not prove uninterrupted
+authority. Its roster gate
+deliberately blocks ordinary push work, so it is not integrated. A complete
+independent attempt roster, old-writer fencing, durable evidence, credential
+scope and restore/retention handling remain prerequisites; the new observation
+endpoint is also unintegrated. Evidence:
+`/Users/jeanbosco/Library/Application Support/LoveliesVerification/notification-receipt-binding-20261029/attempt-03/README.md`.
+An isolated ledger successor adds bounded immutable attempt plans, explicit
+empty plans and exact retries under a versioned control. Sixty-five local
+ledger/gateway/app checks and TypeScript passed. A preserved negative control
+shows an old binary can still write after a synthetic rollback of only the
+control binding. Plan provenance, old-writer/credential fencing, cross-store
+pins, deletion and restore remain open; neither the primitive nor its separate
+gateway observation route is integrated. Evidence:
+`/Users/jeanbosco/Library/Application Support/LoveliesVerification/notification-roster-primitive-20261029/attempt-02/README.md`.
+The current v1 push-receipt reader now attempts nonblocking body cancellation
+before returning its existing redirect denial. The first candidate did not
+preserve the denial if cancellation threw synchronously; that failed case is
+retained, and the integrated successor catches both synchronous and asynchronous
+cancellation errors. Twenty-seven focused and affected local cases, TypeScript
+and the cached Edge check passed. The eight PGlite-only cases also correctly
+skipped for a defined-empty external database URL. A locked stream may remain
+open, and this does not establish provider delivery or terminal reconciliation.
+The source and fixture were committed as `8b4bf0e`. Evidence:
+`/Users/jeanbosco/Library/Application Support/LoveliesVerification/notification-redirect-cancel-20261029/attempt-02/README.md`,
+`/Users/jeanbosco/Library/Application Support/LoveliesVerification/notification-redirect-integrated-20261029-final-vAdGZR/fixed/result.json`
+`/Users/jeanbosco/Library/Application Support/LoveliesVerification/notification-redirect-integrated-20261029-root-dqWqqj/edge-01/result.json`
+and `/Users/jeanbosco/Library/Application Support/LoveliesVerification/notification-redirect-integrated-20261029-final-vAdGZR/fixed/integration-postflight.json`.
+The shared private-service adapter also now preserves its original redirect,
+size or timeout error when response/request cleanup throws or rejects, and
+cleans late replies without an unhandled rejection. Error-path cleanup is
+best-effort and nonblocking; explicit caller cancellation retains its prior
+awaited behavior. Forty-three local adapter/notification checks, three selected
+model-service checks, TypeScript and the cached Edge check passed. The two new
+PGlite push-consumer checks skipped correctly with a defined-empty database URL.
+The change and fixtures were committed as `ff14a76`; the workflow step now
+includes 13 PGlite cases, all passing in a local parsed-step run. No provider
+delivery or GitHub CI pass follows. Evidence:
+`/Users/jeanbosco/Library/Application Support/LoveliesVerification/authenticated-service-disposal-20261029/attempt-01/REVIEW.md`,
+`/Users/jeanbosco/Library/Application Support/LoveliesVerification/authenticated-service-integrated-20261029-root-KB8atv/fixed/result.json`,
+`/Users/jeanbosco/Library/Application Support/LoveliesVerification/authenticated-service-integrated-20261029-root-KB8atv/edge-01/result.json`
+`/Users/jeanbosco/Library/Application Support/LoveliesVerification/backend-ci-pglite-20261029-thirteen-3kuxAZ/result.json`
+and `/Users/jeanbosco/Library/Application Support/LoveliesVerification/authenticated-service-integrated-20261029-root-KB8atv/fixed/integration-postflight.json`.
+An additional local regression found that the adapter could return buffered
+bytes after a timeout or caller abort. Its successor errors the wrapped stream
+on an active abort, rejects already-cancelled dispatch and checks again after
+headers. Fifty-four transport/push checks, three selected model checks,
+TypeScript and the cached Edge check passed. Independent review then found a
+competing fetch rejection could mask an already-observed caller abort. The
+revised catch gives an observed abort priority and otherwise preserves the
+provider error; 58 transport/push checks, three selected model checks,
+TypeScript and the cached Edge check passed. The final change was committed as
+`a730cc0`. Bytes already consumed and remote effects cannot be recalled. Evidence:
+`/Volumes/PRO-G40/Projects/Lovelies/verification/service-fetcher-buffered-abort-20261029-attempt-01/HANDOFF.md`,
+`/Users/jeanbosco/Library/Application Support/LoveliesVerification/abort-error-precedence-20261029-root-sKkaqP/baseline/result.json`,
+`/Users/jeanbosco/Library/Application Support/LoveliesVerification/buffered-abort-integrated-20261029-final-NT7EIU/fixed/result.json`
+`/Users/jeanbosco/Library/Application Support/LoveliesVerification/buffered-abort-integrated-20261029-final-NT7EIU/edge-01/result.json`
+and `/Users/jeanbosco/Library/Application Support/LoveliesVerification/buffered-abort-integrated-20261029-final-NT7EIU/fixed/integration-postflight.json`.
+
+Retention maintenance now increments its verified count only after the final
+database transaction returns; the change and regression fixture were committed
+as `f77131d`. Local regressions previously counted one job as
+both verified and failed when its final transaction rolled back or its reply
+was hidden; the corrected source passed those two cases and the acknowledged
+control, plus 28 affected retention/maintenance cases and TypeScript checking.
+The cached Supabase Edge entrypoint also passed a local Deno typecheck with
+network and shared writes denied.
+The fixture uses PGlite with a substituted advisory lock and synthetic storage;
+its lost-reply injection is a local wrapper, not a real PostgreSQL or provider
+fault. One existing maintenance fixture includes a separate synthetic reviewer.
+An unknown commit remains an operational reconciliation issue. Evidence:
+`/Users/jeanbosco/Library/Application Support/LoveliesVerification/retention-finalization-20261029-root-ObnTA2/baseline/result.json`
+`/Users/jeanbosco/Library/Application Support/LoveliesVerification/retention-finalization-20261029-root-ObnTA2/fixed/result.json`
+`/Users/jeanbosco/Library/Application Support/LoveliesVerification/retention-finalization-20261029-root-ObnTA2/edge-01/result.json`
+and `/Users/jeanbosco/Library/Application Support/LoveliesVerification/retention-finalization-20261029-root-ObnTA2/fixed/integration-postflight.json`.
+The backend workflow initially added a separate PGlite-only step for the three
+retention and eight redirect regressions, with the PostgreSQL URL removed and
+an external fetch guard, committed as `74bd304`. A locally parsed execution
+passed all 11 cases under an OS
+network/write sandbox; a configured-database negative control was rejected.
+The first local execution failed because macOS `mktemp` selected a path outside
+the sandbox; the corrected step uses the explicit temporary directory. These
+are local workflow-step results, not a GitHub CI pass. Evidence:
+`/Users/jeanbosco/Library/Application Support/LoveliesVerification/backend-ci-pglite-20261029-root-eKOyXO/result.json`
+and `/Users/jeanbosco/Library/Application Support/LoveliesVerification/backend-ci-pglite-20261029-final-4cw3Vw/result.json`.
+Subsequent static review found five local-only fixture files that would otherwise
+fail during the preceding PostgreSQL wildcard: their 44 cases now skip when a
+database URL is defined, as committed in `64663bc`. The 27 queue/notification cases and three one-subject
+storage cases are included in the expanded 43-case PGlite step, which passed
+locally with no skips. Empty and nonempty database settings separately produced
+the expected fixture skips. Fourteen preview/export cases are not included in
+that restricted step; their fixture includes reviewer and cross-account paths.
+Other database-guarded files also sit outside this selected step, and the
+PostgreSQL wildcard itself has not been run or qualified. Evidence:
+`/Users/jeanbosco/Library/Application Support/LoveliesVerification/backend-ci-pglite-20261029-fortythree-TT2Vln/result.json`
+`/Users/jeanbosco/Library/Application Support/LoveliesVerification/ci-local-fixture-scope-20261029-root-O1zhMb/fixed/result.json`
+`/Users/jeanbosco/Library/Application Support/LoveliesVerification/backend-ci-pglite-20261029-fortythree-TT2Vln/integration-postflight.json`
+and the final affected-consumer run `/Users/jeanbosco/Library/Application Support/LoveliesVerification/backend-ci-pglite-20261029-verified43-OuarWp/result.json`.
+Two task-created Node compiler caches were later removed after identity and
+visible-handle checks; their result receipts remained hash-unchanged. Evidence:
+`/Users/jeanbosco/Library/Application Support/LoveliesVerification/local-node-cache-cleanup-20261029-root-FsYpeH/result.json`.
 
 ### Execution checkpoint, 26–28 October 2026
 
@@ -355,6 +504,49 @@ integrated: native intent storage, trusted time, independent consumption/restore
 replay, receipt retention and compatible schema rollout remain open. It does not
 recover a lost download body. Evidence:
 `/Volumes/PRO-G40/Projects/Lovelies/verification/privacy-export-issuance-retry-20261029/attempt-02/REVIEW.md`.
+A same-subject current-handler counterexample then showed that a hypothetical
+v2-only marker on the old compatible schema does not stop the legacy GET from
+consuming that publication. An already constructed in-process response also
+remained readable after local logout. This is not a deployed v2 or network-send
+result. A real delivery and acknowledgment path still needs versioned object
+identity, old-writer fencing, independently durable dispatch/consumption replay
+and a qualified client stage; the issuing prototype does not supply them. Evidence:
+`/Volumes/PRO-G40/Projects/Lovelies/verification/privacy-export-delivery-boundary-20261029/attempt-01/REVIEW.md`.
+Two further same-subject actual-source checks showed that both existing v1
+journal validators reject a new grant-fence event, and a lost SQL commit reply
+can leave a grant consumed while its current independent plan has no grant
+restriction event. No object read was dispatched in that fixture. The journal
+also has no recovery-complete route. Versioned event/consumer compatibility and
+a real recovery executor remain prerequisites; the proposed nonsecret binding
+is not integrated. Evidence:
+`/Users/jeanbosco/Library/Application Support/LoveliesVerification/privacy-grant-restore-20261029/attempt-01/REVIEW.md`.
+An isolated deny-only component now validates a versioned nonsecret binding of
+the exact grant, account, session, publication and original expiries. A
+matching local projection denies; missing or inconsistent evidence returns
+unavailable and never authorizes a grant. One local PGlite test and TypeScript
+checking passed. The unchanged v1 handler still ignores the test-only marker:
+authenticated journal events, complete replay, old-writer fencing and recovery
+clearance remain prerequisites. The component is unexposed and unintegrated.
+Evidence:
+`/Users/jeanbosco/Library/Application Support/LoveliesVerification/privacy-grant-suppression-20261029/attempt-01/REVIEW.md`.
+An isolated, authenticated journal experiment separately appends one such fact
+and atomically moves an f3 control to a distinct v5 quarantine. Nineteen local
+journal/decoder cases, syntax and type checks passed, including preserved v1
+history and exact lost-reply readback. The experiment blocks normal serving,
+has no replay or clearance and rejects the separate f4 lineage. A negative
+control showed an old f3 binary admitting after a synthetic control-only
+rollback. It is neither interoperable nor activated; old-binary credential
+fencing and independently current custody remain required. Evidence:
+`/Users/jeanbosco/Library/Application Support/LoveliesVerification/privacy-grant-journal-v2-20261029/attempt-03/REVIEW.md`.
+An isolated successor reads that authenticated experimental journal and replays
+its exact fact into a deny-only, locally quarantined PGlite projection. Twelve
+tests and strict typechecking passed, covering rollback, lost replies,
+tampered or missing evidence, expired facts and session retirement. Its local
+pin and memory-backed journal are not independent recovery authority; the
+unchanged v1 GET still ignores the projection. The f4 incompatibility,
+one-fact limit, old-writer fencing, durable custody, complete coverage and
+serving clearance remain open. No replay component was integrated. Evidence:
+`/Users/jeanbosco/Library/Application Support/LoveliesVerification/privacy-grant-replay-20261029/attempt-01/REVIEW.md`.
 An isolated v2 model passed 17 same-subject checks for a pre-saved identity,
 same-session retries, fixed expiry and acknowledgement of an exact dispatch.
 It permits retransmission within one logical delivery, which differs from v1's
@@ -412,6 +604,17 @@ task-created compiler cache was removed. Its preserved fixture symlink and
 embedded paths still refer to the original temporary directory. Evidence:
 `/Users/jeanbosco/Library/Application Support/LoveliesVerification/ios-share-memory-successor-preserved-20261029/snapshot/HANDOFF.md`
 and `/Users/jeanbosco/Library/Application Support/LoveliesVerification/ios-share-memory-successor-preserved-20261029/result.json`.
+The exact candidate payload and share-wrapper excerpts also typechecked against
+the installed iPhoneOS 27.1 SDK with Swift 5 mode and the project's iOS 17
+minimum. The four candidate base inputs still matched the shared iOS source;
+the narrow check stubs only the app error type and does not compile the store,
+run UIKit or establish recipient behavior. Its task-created 49 MiB module
+cache was removed after a visible-handle check and an inventory; the source,
+compiler output and input/result receipts remained hash-unchanged. The candidate
+remains unintegrated. Evidence:
+`/Volumes/PRO-G40/Projects/Lovelies/verification/ios-share-sdk-typecheck-20261029-root-3Oa4mO/result.json`
+`/Volumes/PRO-G40/Projects/Lovelies/verification/ios-share-sdk-typecheck-20261029-root-3Oa4mO/base-postflight.json`
+and `/Volumes/PRO-G40/Projects/Lovelies/verification/ios-share-sdk-typecheck-20261029-root-3Oa4mO/cleanup-result.json`.
 Android has a related selection race after a Save permission prompt and during
 original-photo download. A preservation-first isolated candidate captures the
 selection for Save, Share and purchase recovery; 30 synthetic host checks passed.
@@ -419,6 +622,12 @@ It is not integrated: the app has not been built or exercised on a device, and
 Compose scheduling, the MediaStore handoff and ownership-safe cleanup of a stale
 private share remain unverified. Evidence:
 `/Volumes/PRO-G40/Projects/Lovelies/verification/android-photo-action-fence-20261029/successor-02/README.md`.
+The candidate's actual pure selection fence also passed five isolated JUnit
+tests using the project's Kotlin 2.2.20 and JUnit 4.13.2, with a source- and
+tool-bound result. This does not compile the changed Compose, controller or
+media code. The current resource/classpath closure and device behavior remain
+unqualified, so the Android patch is still not integrated. Evidence:
+`/Users/jeanbosco/Library/Application Support/LoveliesVerification/android-photo-junit-20261029-NMOXda3v/HANDOFF.md`.
 The shared iOS preview now sweeps expired in-memory entries on every exit,
 including delayed errors and cancellation, without clearing a newer valid
 entry. The baseline counterexamples, 21 focused checks and 35 existing
@@ -676,6 +885,43 @@ The next integration dependency is a format-aware, independently pinned
 serving consumer and transition that preserves v1/v3 behavior; a per-route v1
 fallback would mix authority generations. Evidence:
 `/Volumes/PRO-G40/Projects/Lovelies/verification/restore-serving-integration-assessment-20261029/assessment-01/ASSESSMENT.md`.
+Three source-bound, single-subject counterexamples confirmed that the v4
+candidate rejects an ordinary no-intent transaction accepted by v1 and rejects
+historical D2 resource and L2 link plans that the journal can still read. The
+structured non-control history and original plan hashes were preserved in the
+local transition fixture; this is not a deployed-store byte comparison or
+PostgreSQL concurrency proof. Evidence:
+`/Users/jeanbosco/Library/Application Support/LoveliesVerification/restore-boundv4-compat-20261029-attempt-01/ASSESSMENT.md`.
+Two further checks exercised the current direct-upload producer and collector
+with a synthetic database port and bucket: an unclassified media-intent
+transaction reached a fake Storage write, while a test-only rejection stopped
+it before that write. An absent explicit intent therefore cannot establish an
+empty external-effect manifest. No hosted Storage or SQL transaction was
+exercised. Evidence:
+`/Users/jeanbosco/Library/Application Support/LoveliesVerification/restore-boundv4-producer-counterexample-20261029-attempt-01/HANDOFF.md`.
+A separate direct-source proposal now stages an exact D2 descriptor and original
+write identity in a transaction-scoped collector without issuing a Storage
+permit. Nine single-subject host checks and TypeScript checking passed against
+synthetic ports; the actual v1 collector rejects this unexposed helper. Current
+producers are not wired, and SQL/journal generation pins, independent acceptance,
+current authority, durable retry and an enforceable egress fence remain open.
+Evidence:
+`/Users/jeanbosco/Library/Application Support/LoveliesVerification/restore-bound-media-stage-20261029-attempt-04/BOUNDARY.md`.
+Its next isolated successor checks the current adult account, session, device,
+profile, consent, audience, asset and owned-byte inputs, and reserves the
+original logical key in a synthetic SQL schema. Eighteen PGlite checks and
+TypeScript passed; the helper still returns unavailable without independent
+acceptance and never dispatches Storage. The fixture schema is not a migration.
+Native concurrency, phantom inserts, authenticated journal acceptance, egress
+and the approved minor/guardian authority remain open. Evidence:
+`/Users/jeanbosco/Library/Application Support/LoveliesVerification/restore-bound-media-authority-20261029-attempt-03/REVIEW.md`.
+An owned local PostgreSQL 17 attempt stopped at its pre-DDL server-identity
+check, before any native locking or rollback test. The server, port, data and
+password were independently confirmed absent afterward. A corrected identity
+diagnostic passed 13 offline guard/cleanup checks but was not run against a new
+cluster because internal free space fluctuated around its launch threshold.
+Evidence:
+`/Volumes/PRO-G40/Projects/Lovelies/verification/native-media-pg17-20261029-attempt-02/HANDOFF.md`.
 Five current-source, single-subject checks then confirmed the v1 path, its
 fail-closed response to synthetic v3 control, strict v1 response shape, the
 absence of SQL mode/binding/generation pins and absence of a v4 route. These
@@ -1882,8 +2128,24 @@ task-owned write/read succeeded, but the cause and overall filesystem health
 are unconfirmed. The next diagnostic runner is unsealed and has not run; avoid
 new T7-dependent execution until its state is independently reconciled. No
 remount or repair was attempted. The task-owned probe was retained at
-`/Volumes/T7/Lovelies-TLS-20261028-3bc64da245/http-plan-03/io-probe-01.txt`;
-its current presence and file hash have not been rechecked.
+`/Volumes/T7/Lovelies-TLS-20261028-3bc64da245/http-plan-03/io-probe-01.txt`.
+Its later readback is recorded at
+`/Users/jeanbosco/Library/Application Support/LoveliesVerification/t7-io-qualification-20261029-root-01/io-probe-readback-01.json`.
+On the later read-only follow-up, the expected T7 volume UUID remained mounted,
+and 28 named prior test artifacts matched their recorded hashes. A new,
+task-owned 64 MiB write reached `fsync` but the test stopped on a changed
+creation-to-reopen inode; its bytes subsequently matched on readback. A
+separate 1 MiB diagnostic reproduced a provisional inode changing at `fsync`
+and then remaining stable through reopen and read. This is a local observation,
+not proof of the earlier stall cause or whole-volume health. Both synthetic
+data files were removed after exact hash and ownership checks. Their AppleDouble
+sidecars disappeared automatically with the data-file unlinks, so raw copies
+were preserved and independently hash-checked first. The empty test directory
+and its parent-level sidecar remain in place because the sidecar's pre-creation
+absence was not established. Evidence:
+`/Users/jeanbosco/Library/Application Support/LoveliesVerification/t7-io-qualification-20261029-root-01/artifact-readback-result.json`,
+`/Users/jeanbosco/Library/Application Support/LoveliesVerification/t7-io-qualification-20261029-root-01/identity-stdout.log`,
+and `/Users/jeanbosco/Library/Application Support/LoveliesVerification/t7-io-qualification-20261029-root-01/cleanup-01/independent-postflight.json`.
 Qualify actual final signed clients and the same app transport against the future
 suite set, including a no-shared-suite failure, without recording credentials
 or payloads. See the
@@ -1969,6 +2231,12 @@ PostgreSQL run's formerly retained temporary directory is also now absent;
 its logs and receipts remain, but the cause and any other copy are unknown. No
 eligible non-evidence scratch or safe space recovery was identified. Evidence:
 `/Volumes/PRO-G40/Projects/Lovelies/verification/simulator-link-pg-scratch-audit-20261029/root-01/OBSERVATIONS.md`.
+Separately, the current global developer selection is Command Line Tools, so a
+bare `xcrun --find simctl` exits 72. Supplying the installed Xcode developer
+directory for that command resolves the tool without changing global selection;
+this lookup did not exercise a simulator or repair the device-set alias.
+Evidence:
+`/Volumes/PRO-G40/Projects/Lovelies/verification/ios-share-sdk-typecheck-20261029-root-3Oa4mO/xcode-path-readback.json`.
 
 ## Work packages and acceptance criteria
 
