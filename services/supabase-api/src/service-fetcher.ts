@@ -31,8 +31,9 @@ export class AuthenticatedService implements ServiceFetcher {
     const timer=setTimeout(()=>controller.abort(new ApiError(503,'private_service_timeout')),this.timeoutMs);
     source.signal.addEventListener('abort',forwardAbort,{once:true});
     if(source.signal.aborted)forwardAbort();
+    const abortReason=()=>controller.signal.reason??new ApiError(503,'private_service_aborted');
     const aborted=new Promise<never>((_,reject)=>{
-      const stop=()=>reject(controller.signal.reason??new ApiError(503,'private_service_aborted'));
+      const stop=()=>reject(abortReason());
       controller.signal.addEventListener('abort',stop,{once:true});if(controller.signal.aborted)stop();
     });
     // Validation can stop before the fetch race is attached. Cancellation must
@@ -40,6 +41,8 @@ export class AuthenticatedService implements ServiceFetcher {
     void aborted.catch(()=>{});
     const finish=()=>{clearTimeout(timer);source.signal.removeEventListener('abort',forwardAbort);};
     try{
+      // A caller that is already cancelled must not dispatch an external call.
+      if(controller.signal.aborted)throw abortReason();
       const claimed=source.headers.get('content-length');
       if(claimed&&/^\d+$/.test(claimed)&&Number(claimed)>this.limits.requestBytes)throw new ApiError(413,'private_service_request_too_large');
       let requestBytes=0;
@@ -49,19 +52,44 @@ export class AuthenticatedService implements ServiceFetcher {
       const forwarded=new Request(destination,{method:source.method,headers,redirect:'manual',signal:controller.signal,
         ...(limited?{body:limited,duplex:'half'}:{})} as RequestInit);
       const pending=this.fetcher(forwarded);
-      void pending.then(late=>{if(controller.signal.aborted)discard(()=>late.body?.cancel());},()=>{});
+      let replyDiscarded=false;
+      const discardReply=(reply:Response)=>{if(!replyDiscarded){replyDiscarded=true;discard(()=>reply.body?.cancel());}};
+      void pending.then(late=>{if(controller.signal.aborted)discardReply(late);},()=>{});
       const response=await Promise.race([pending,aborted]);
-      if(response.redirected||response.status>=300&&response.status<400){discard(()=>response.body?.cancel());throw new ApiError(503,'private_service_redirect_denied');}
+      // Both promises may already be settled when the race is registered.
+      if(controller.signal.aborted){discardReply(response);throw abortReason();}
+      if(response.redirected||response.status>=300&&response.status<400){discardReply(response);throw new ApiError(503,'private_service_redirect_denied');}
       const replyLength=response.headers.get('content-length');
-      if(replyLength&&/^\d+$/.test(replyLength)&&Number(replyLength)>this.limits.responseBytes){discard(()=>response.body?.cancel());throw new ApiError(503,'private_service_response_too_large');}
+      if(replyLength&&/^\d+$/.test(replyLength)&&Number(replyLength)>this.limits.responseBytes){discardReply(response);throw new ApiError(503,'private_service_response_too_large');}
       if(!response.body){finish();return response;}
-      const reader=response.body.getReader();let responseBytes=0;
+      const reader=response.body.getReader();let responseBytes=0,terminal=false;
+      let abortBody:()=>void;
+      const finishBody=()=>{controller.signal.removeEventListener('abort',abortBody);finish();};
       // Keep the same deadline through response consumption, not only headers.
       const body=new ReadableStream<Uint8Array>({
-        pull:async output=>{try{const next=await Promise.race([reader.read(),aborted]);if(next.done){finish();output.close();}else{responseBytes+=next.value.byteLength;if(responseBytes>this.limits.responseBytes)throw new ApiError(503,'private_service_response_too_large');output.enqueue(next.value);}}catch(error){finish();controller.abort(error);discard(()=>reader.cancel(error));output.error(error);}},
-        cancel:async reason=>{controller.abort(reason);try{await reader.cancel(reason);}finally{finish();}},
+        start:output=>{
+          // Erroring the wrapper also discards bytes it had already buffered.
+          abortBody=()=>{if(terminal)return;terminal=true;const error=abortReason();finishBody();discard(()=>reader.cancel(error));output.error(error);};
+          controller.signal.addEventListener('abort',abortBody,{once:true});
+          if(controller.signal.aborted)abortBody();
+        },
+        pull:async output=>{
+          try{
+            const next=await Promise.race([reader.read(),aborted]);
+            if(terminal)return;
+            if(controller.signal.aborted)throw abortReason();
+            if(next.done){terminal=true;finishBody();output.close();}
+            else{responseBytes+=next.value.byteLength;if(responseBytes>this.limits.responseBytes)throw new ApiError(503,'private_service_response_too_large');output.enqueue(next.value);}
+          }catch(error){if(terminal)return;terminal=true;finishBody();controller.abort(error);discard(()=>reader.cancel(error));output.error(error);}
+        },
+        cancel:async reason=>{terminal=true;controller.signal.removeEventListener('abort',abortBody);controller.abort(reason);try{await reader.cancel(reason);}finally{finish();}},
       });
       return new Response(body,{status:response.status,statusText:response.statusText,headers:response.headers});
-    }catch(error){finish();controller.abort(error);discard(()=>{if(source.body&&!source.body.locked)return source.body.cancel(error);});throw error;}
+    }catch(error){
+      // If cancellation was already observed, preserve it even when a
+      // simultaneously settled fetch rejection wins the promise race.
+      const finalError=controller.signal.aborted?abortReason():error;
+      finish();controller.abort(finalError);discard(()=>{if(source.body&&!source.body.locked)return source.body.cancel(finalError);});throw finalError;
+    }
   }
 }
