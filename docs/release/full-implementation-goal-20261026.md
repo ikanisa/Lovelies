@@ -1004,20 +1004,22 @@ deletion recovery, store completion and hosted operation remain open. Evidence:
 and `/Volumes/PRO-G40/Projects/Lovelies/verification/backup-catalog-health-20261028/attempt-03/execution-cc10d6825a38f11e/store-receipts.json`
 and `/Volumes/PRO-G40/Projects/Lovelies/verification/ios-store-operation-recovery-20261028/root-01/result.json`
 and `/Volumes/PRO-G40/Projects/Lovelies/verification/ios-store-operation-recovery-20261028/root-02/result.json`.
-An isolated Apple receipt successor records the submitted transaction separately
-from the current subscription. Its 22 same-subject PGlite cases passed, including
-synthetic journal response loss and legacy replay. It remains unintegrated: an
-independent review found that a direct POST retry can return a malformed stored
-v2 result that the receipt lookup rejects. The run used installed dependencies
-without a before-and-after dependency hash; it did not exercise a real store,
-native multi-connection database, deployed API or complete restore path. Evidence:
-`/Users/jeanbosco/Library/Application Support/LoveliesVerification/store-apple-v2-pglite-20261029-root-01/result.json`.
-An unrun replay revision shares validation between the two paths. Its independent
-review found an impossible invalid-JSON database fixture, an early legacy-replay
-race, and a false definitive conflict for corrupt stored inputs; those need
-correction before integration. The review also found an inherited session-expiry
-window during independent journal preparation, acknowledgement and final
-admission. That shared transaction and response-release boundary remains open.
+The Apple server receipt now records the submitted transaction separately from
+the current subscription, without storing the signed transaction in new
+receipts. Direct retries and historical lookups validate the same receipt;
+legacy flat receipts and Google responses retain their existing shape. The
+reviewed successor corrected an early legacy-replay race and distinguishes a
+corrupt receipt from a genuine key conflict. It passed 28 isolated one-subject
+cases, six affected consumer cases, TypeScript and the cached Edge check. The
+updated local PGlite workflow step passed 84/84; configured-database controls
+confirmed its 68 selected PGlite-only cases skip in the PostgreSQL lane. These
+are local checks, not GitHub CI, native multi-connection, real store or hosted
+proof. An inherited session-expiry window during independent journal preparation,
+acknowledgement and final admission remains open. Evidence:
+`/Users/jeanbosco/Library/Application Support/LoveliesVerification/store-apple-consistency-pglite-20261029-root-01/result.json`,
+`/Users/jeanbosco/Library/Application Support/LoveliesVerification/store-apple-consistency-consumers-20261029-root-01/result.json`,
+`/Users/jeanbosco/Library/Application Support/LoveliesVerification/backend-ci-pglite-20261029-eightyfour-root-01/result.json`
+and `/Users/jeanbosco/Library/Application Support/LoveliesVerification/store-apple-consistency-edge-20261029-root-01/edge-01/result.json`.
 An isolated iOS purchase-recovery implementation passed 21 synthetic
 same-subject actor and extracted-coordinator checks after correcting two local
 ordering issues. It remains unintegrated: its eight retained journal records
