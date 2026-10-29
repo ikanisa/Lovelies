@@ -36,12 +36,21 @@ receipt: `/Volumes/PRO-G40/Projects/Lovelies/verification/hosted-v13-20261027/re
 | Existing Android/iOS ID | `com.lovelies.memories` |
 | Apple app/team | `6786056510` / `63STJ5N27W` |
 | Candidate versions | Android 2.0.0/code18/minAPI24; iOS 1.1.0/build18 |
-| Inspected uploaded maxima | Play 16 / Apple 14; refresh immediately before upload |
+| Inspected uploaded maxima | Play 16 (read back 29 October) / Apple 14 (earlier observation); refresh both immediately before upload |
 | Play upload key | Existing matching key is held privately in `.release-secrets/android/`; certificate/highest-code build guards exist |
 | Subscription product | Both stores verified `com.lovelies.memories.pro.monthly`: Google active auto-renewing monthlypro/175 regions; Apple approved one-month product6799678587/group22297275, available41/175 regions |
 | Firebase client | Existing `easymoai`, app`1:423260854848:android:05e378657a0a819135dda5`, sender423260854848; registered/read back, client config prepared locally; private sender auth/device delivery remain |
 | Public mailbox | `info@ikanisa.com` observed in current Play listing; actual operation/delivery remains untested |
 | Current Apple callbacks | Earlier `https://lovelies.api.ikanisa.com/subscriptions/apple/notifications`; cutover must preserve and qualify callbacks |
+
+The 29 October Play Console readback showed `com.lovelies.memories` version
+1.0.5/code14 in production at 100% and code16 as an inactive internal draft.
+The production release page reported availability to three users; the dashboard
+also showed a small install base. These aggregate indicators do not identify
+whether the installations are tests or real customers, and do not establish
+that customer photos or subscriptions exist. Preserve installed state and perform
+the planned in-place upgrade checks. The App Store Connect session in Chrome
+returned to its login page, so the Apple upload maximum was not refreshed.
 
 ## Server configuration
 
