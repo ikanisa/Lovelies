@@ -113,6 +113,42 @@ open; no provider delivery or hosted deployment was tested. Evidence:
 `/Users/jeanbosco/Library/Application Support/LoveliesVerification/notification-outbox-ambiguity-20261029-root-x3RA1t/edge-01/result.json`,
 `/Users/jeanbosco/Library/Application Support/LoveliesVerification/backend-ci-pglite-20261029-fortyseven-GDlJvO/result.json`
 and `/Users/jeanbosco/Library/Application Support/LoveliesVerification/backend-ci-pglite-20261029-fortyseven-GDlJvO/committed-input-postflight.json`.
+An additional one-subject revocation fixture reproduced eight cases where an
+opt-out erased an ambiguous or concurrently accepted job; two never-attempted
+controls passed. A candidate preserved that evidence and passed 13 focused
+cases, including a synthetic accepted response before opt-out. It is held and
+was reversed from shared source: an independent review and a 26-notification
+fixture then demonstrated that 25 older unresolved opt-outs can prevent a
+later eligible notification from being dispatched. A separate durable bounded
+cursor and explicit unresolved-work visibility are required; the existing
+handoff timestamp must not be relabelled as a scan timestamp. No provider,
+hosted or multi-subject result is implied. Evidence:
+`/Users/jeanbosco/Library/Application Support/LoveliesVerification/notification-revocation-baseline-20261029-mkln3fgg/result.json`,
+`/Users/jeanbosco/Library/Application Support/LoveliesVerification/notification-revocation-candidate2-20261029-ayzjp3eu/result.json`,
+`/Volumes/PRO-G40/Projects/Lovelies/verification/notification-revocation-starvation-20261029-kv_okwq8/result.json`
+and `/Users/jeanbosco/Library/Application Support/LoveliesVerification/notification-revocation-hold-20261029-myp5ez8n/result.json`.
+For the current account's device removal, the local handler now cancels only
+untouched queued deliveries. Attempted, leased or receipt-bearing records stay
+intact; a worker holding a stale device enumeration cannot cancel them in its
+claim, or turn a non-pristine queued record into a fresh POST. A worker also
+reports reconciliation required when another
+local delivery is still unresolved, so the queue does not mark that work
+complete. Twelve focused one-subject cases passed after the baseline reproduced
+ten failures; nine existing disposition cases passed. The local workflow step
+then passed 59/59 PGlite cases, plus TypeScript and cached Edge checks. Its first
+59-case run failed one redirect fixture which had represented an already
+attempted row as a new queued delivery; the corrected fixture still exercises
+both POST and operation-status GET redirect paths. These checks do not establish
+native multi-session or real-provider behavior. Opt-out cancellation, logout and
+token-reassignment writers, the check-to-provider-send interval, receipt capture
+after removal, independent roster and restore fencing remain open. Evidence:
+`/Volumes/PRO-G40/Projects/Lovelies/verification/notification-device-retirement-20261029-root-01/baseline-expanded/result.json`,
+`/Volumes/PRO-G40/Projects/Lovelies/verification/notification-device-retirement-20261029-root-01/candidate/result.json`,
+`/Volumes/PRO-G40/Projects/Lovelies/verification/notification-device-retirement-20261029-root-01/dispositions/result.json`,
+`/Volumes/PRO-G40/Projects/Lovelies/verification/backend-ci-pglite-20261029-fiftynine-root-01/result.json`,
+`/Volumes/PRO-G40/Projects/Lovelies/verification/backend-ci-pglite-20261029-fiftynine-root-02/result.json`,
+`/Volumes/PRO-G40/Projects/Lovelies/verification/notification-device-retirement-20261029-root-01/typecheck-01/result.json`
+and `/Volumes/PRO-G40/Projects/Lovelies/verification/notification-device-retirement-20261029-root-01/edge-01/result.json`.
 An isolated queue review reproduced six cases across the real photo, privacy
 and notification outboxes where a completed or failed stable-ID queue row
 was treated as successful handoff despite active work. A queue-only candidate
@@ -326,6 +362,10 @@ version 1.1.0 build 18. This does not identify its source, installation or signi
 lineage, inspect app data, or prove an in-place update. No app was launched or
 modified. Evidence:
 `/Volumes/PRO-G40/Projects/Lovelies/verification/physical-device-readback-20261029/result.json`.
+A later read-only inventory at 02:55 UTC showed that iPhone 12 Pro disconnected,
+and an iPhone 13 Pro unavailable with developer mode disabled. No physical
+test was performed in that follow-up. Evidence:
+`/Volumes/PRO-G40/Projects/Lovelies/verification/physical-device-readback-20261029/root-02.json`.
 The selected Supabase project's security advisor returned no lints on 28 October.
 This is a point-in-time advisor result, not a complete security audit. Evidence:
 `/Volumes/PRO-G40/Projects/Lovelies/verification/supabase-security-advisors-20261028/attempt-01/result.json`.
@@ -514,6 +554,16 @@ the old unlink. The instrumentation is test-only. A source design records the
 unimplemented writer-exclusion, partial-write and handoff requirements. Evidence:
 `/Volumes/PRO-G40/Projects/Lovelies/verification/ios-share-durability-boundary-20261028/root-01/result.json`
 and `/Volumes/PRO-G40/Projects/Lovelies/verification/ios-share-durability-boundary-20261028/attempt-01/DESIGN.md`.
+A later Darwin host investigation confirmed that quarantine plus a pathname
+unlink can still delete a replacement written after validation, and a rollback
+collision can leave an unknown file displaced. It also found that the current
+atomic Foundation write can replace an existing destination; UUID-shaped names
+alone do not establish exclusive creation. Eight synthetic observations and a
+source-bound design describe the remaining writer-exclusion, durable journal,
+partial-write and exact-handoff requirements. No production patch, iOS device,
+Keychain, power-loss or real share-sheet result is claimed. Evidence:
+`/Volumes/PRO-G40/Projects/Lovelies/verification/ios-share-capability-cleanup-20261029-agent-01/result.json`
+and `/Volumes/PRO-G40/Projects/Lovelies/verification/ios-share-capability-cleanup-20261029-agent-01/DESIGN.md`.
 The current share sheet serves both original photos and one-time JSON exports.
 A typed in-memory item provider is a possible way to avoid new app-owned share
 files, but filename/recipient compatibility and background byte lifetime are

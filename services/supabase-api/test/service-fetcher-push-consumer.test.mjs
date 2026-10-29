@@ -14,7 +14,7 @@ for(const state of ['queued','ambiguous'])localTest(`actual push consumer keeps 
  await h.db.run("INSERT INTO notification_jobs(notification_id,account_id,auth_epoch,status,created_at) VALUES(?,?,1,?,?)",note,account,state,now);
  await h.db.run("INSERT INTO auth_devices(id,account_id,public_jwk,revision,status,created_at) VALUES(?,?,?,'synthetic','active',?)",auth,account,'{}',now);
  await h.db.run("INSERT INTO push_devices(id,account_id,auth_device_id,platform,token_hash,token_value,active,created_at,updated_at) VALUES(?,?,?,'android',?,'synthetic-token-0001',1,?,?)",device,account,auth,'a'.repeat(64),now,now);
- await h.db.run('INSERT INTO notification_deliveries(id,notification_id,device_id,operation_key,status,token_hash,attempts,created_at,updated_at) VALUES(?,?,?,?,?,?,1,?,?)',delivery,note,device,'notification:'+note+':'+device,state,'a'.repeat(64),now,now);
+ await h.db.run('INSERT INTO notification_deliveries(id,notification_id,device_id,operation_key,status,token_hash,attempts,created_at,updated_at) VALUES(?,?,?,?,?,?,?,?,?)',delivery,note,device,'notification:'+note+':'+device,state,'a'.repeat(64),state==='queued'?0:1,now,now);
  let calls=0,cancels=0,method;
  h.env.PUSH_SERVICE=new AuthenticatedService('https://private.invalid','synthetic-private-service-secret-32-characters',async request=>{
   calls++;method=request.method;assert.equal(request.redirect,'manual');const body=new ReadableStream({});

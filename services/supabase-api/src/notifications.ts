@@ -20,6 +20,9 @@ async function permitted(ctx: AppContext, account: string, kind: string, epoch?:
     if (kind !== 'support' && !await audienceContext(ctx, account, kind === 'match' ? 'photo_matching' : 'face_authentication')) return false;
     return !!row && row.identity_state === 'registered_face' && row.disabled_at === null && (epoch == null || row.auth_epoch === epoch) && (await settings(ctx, account))[kind + '_alerts'] === true;
 }
+function pristineQueuedDelivery(row: {status: string; attempts: number; provider_receipt: unknown; lease_token: unknown; lease_until: unknown}): boolean {
+    return row.status === 'queued' && row.attempts === 0 && row.provider_receipt === null && row.lease_token === null && row.lease_until === null;
+}
 /** Internal producer only. Titles contain no photos, tokens, counterpart names
  * or links; opening the entity still requires the usual current authority. */
 export async function enqueueNotification(ctx: AppContext, account: string, kind: 'match' | 'payment' | 'support', entity: string, title: string): Promise<string | null> {
@@ -172,7 +175,9 @@ export async function handleNotifications(request: Request, ctx: AppContext): Pr
             if (!(await ctx.db.one('SELECT id FROM push_devices WHERE id=? AND account_id=?', id, actor.accountId)))
                 throw new ApiError(404, 'push_device_unavailable');
             (await ctx.db.run("UPDATE push_devices SET active=0,token_value='',updated_at=? WHERE id=?", ctx.now(), id));
-            await ctx.db.run("UPDATE notification_deliveries SET status='cancelled',updated_at=? WHERE device_id=? AND status<>'accepted'",ctx.now(),id);
+            // Retiring this device prevents future dispatch; it does not settle
+            // an already attempted or otherwise uncertain provider operation.
+            await ctx.db.run("UPDATE notification_deliveries SET status='cancelled',updated_at=? WHERE device_id=? AND status='queued' AND attempts=0 AND provider_receipt IS NULL AND lease_token IS NULL AND lease_until IS NULL",ctx.now(),id);
             return { id, active: false };
         }
         const current = (await ctx.db.one<{
@@ -270,7 +275,13 @@ export async function processNotificationJob(payload: unknown, ctx: AppContext):
             const row = (await ctx.db.one<any>('SELECT * FROM notification_deliveries WHERE operation_key=?', operation))!;
             if (['accepted', 'cancelled'].includes(row.status))
                 return null;
+            // A queued row carrying prior-attempt evidence cannot authorize a
+            // new POST after a device is re-registered.
+            if (row.status === 'queued' && !pristineQueuedDelivery(row))
+                throw new ApiError(503, 'push_reconciliation_required');
             if (!await activeDevice(device)) {
+                if (!pristineQueuedDelivery(row))
+                    throw new ApiError(503, 'push_reconciliation_required');
                 await ctx.db.run("UPDATE notification_deliveries SET status='cancelled',lease_token=NULL,lease_until=NULL,updated_at=? WHERE id=?",ctx.now(),row.id);
                 return null;
             }
@@ -348,13 +359,16 @@ export async function processNotificationJob(payload: unknown, ctx: AppContext):
             throw error;
         }
     }
-    await ctx.db.transaction(async()=>{
+    const unconfirmed = await ctx.db.transaction(async()=>{
         if(!await permitted(ctx,job.account_id,job.kind,job.auth_epoch)){
-            await ctx.db.run("UPDATE notification_jobs SET status='cancelled' WHERE notification_id=?",id);return;
+            await ctx.db.run("UPDATE notification_jobs SET status='cancelled' WHERE notification_id=?",id);return false;
         }
         const rows=await ctx.db.all<{status:string}>('SELECT status FROM notification_deliveries WHERE notification_id=?',id);
-        if(rows.every(row=>['accepted','cancelled'].includes(row.status)))await ctx.db.run('UPDATE notification_jobs SET status=? WHERE notification_id=?',rows.some(row=>row.status==='accepted')?'accepted':'inbox_only',id);
+        if(!rows.every(row=>['accepted','cancelled'].includes(row.status)))return true;
+        await ctx.db.run('UPDATE notification_jobs SET status=? WHERE notification_id=?',rows.some(row=>row.status==='accepted')?'accepted':'inbox_only',id);
+        return false;
     });
+    if (unconfirmed) throw new ApiError(503, 'push_reconciliation_required');
     // No push device is an actual inbox-only state, never a delivery receipt.
 }
 export async function notificationPrivacyRows(ctx: AppContext, subject: string): Promise<Record<string, unknown>> {

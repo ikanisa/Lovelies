@@ -57,9 +57,10 @@ jobs:
             test/job-stale-completion.test.mjs \
             test/notification-terminal-race.test.mjs \
             test/notification-unconfirmed-delivery.test.mjs \
+            test/notification-device-removal-race.test.mjs \
             test/storage-status-cleanup-runtime.test.mjs | tee "$report_file"
-          grep -qx '# tests 47' "$report_file"
-          grep -qx '# pass 47' "$report_file"
+          grep -qx '# tests 59' "$report_file"
+          grep -qx '# pass 59' "$report_file"
           grep -qx '# fail 0' "$report_file"
           grep -qx '# skipped 0' "$report_file"
       - run: pnpm backend:client:test
