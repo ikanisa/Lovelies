@@ -507,6 +507,13 @@ uncooperative child before the catalog lock is held. A proposed coordinator,
 durable lease and unknown-outcome reconciliation design is not yet implemented
 or tested. Evidence:
 `/Users/jeanbosco/Library/Application Support/LoveliesVerification/backup-child-termination-design-20261029-agent-01/DESIGN.md`.
+An isolated hold primitive passed 56 local filesystem cases after review of
+identity and error handling. It has no release path and is not integrated; a
+qualified coordinator, terminal evidence, recovery gate and operator
+reconciliation are still required. The tests do not prove crash durability,
+child termination or production backup operation. Evidence:
+`/Users/jeanbosco/Library/LoveliesBackupTest/backup-durable-lease-runner-20261029-agent-01/root-run-01/result.json`
+and `/Users/jeanbosco/Library/LoveliesBackupTest/backup-durable-lease-postflight-20261029-independent-01/result.json`.
 The integrated files also ran through the Node command expanded from the
 `backup:test` glob with default test concurrency. Node reported 39 passes and
 one optional native-tool skip. The enclosing harness recorded failure because
