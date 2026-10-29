@@ -3,6 +3,12 @@ import {INFERENCE_LIMITS,INFERENCE_REPLY_BYTES} from './inference-contract.ts';
 
 interface BodyLimits {requestBytes:number;responseBytes:number;}
 
+// Error and late-reply teardown is best effort. A synchronous throw, rejected
+// promise or never-settling cancel must not replace the existing decision.
+function discard(cancel:()=>unknown):void {
+  try{void Promise.resolve(cancel()).catch(()=>{});}catch{}
+}
+
 /** Pins private destinations to deployment configuration; callers can provide
  * paths and bodies but cannot redirect the adapter to arbitrary hosts. */
 export class AuthenticatedService implements ServiceFetcher {
@@ -43,19 +49,19 @@ export class AuthenticatedService implements ServiceFetcher {
       const forwarded=new Request(destination,{method:source.method,headers,redirect:'manual',signal:controller.signal,
         ...(limited?{body:limited,duplex:'half'}:{})} as RequestInit);
       const pending=this.fetcher(forwarded);
-      void pending.then(late=>{if(controller.signal.aborted)void late.body?.cancel().catch(()=>{});},()=>{});
+      void pending.then(late=>{if(controller.signal.aborted)discard(()=>late.body?.cancel());},()=>{});
       const response=await Promise.race([pending,aborted]);
-      if(response.redirected||response.status>=300&&response.status<400){void response.body?.cancel().catch(()=>{});throw new ApiError(503,'private_service_redirect_denied');}
+      if(response.redirected||response.status>=300&&response.status<400){discard(()=>response.body?.cancel());throw new ApiError(503,'private_service_redirect_denied');}
       const replyLength=response.headers.get('content-length');
-      if(replyLength&&/^\d+$/.test(replyLength)&&Number(replyLength)>this.limits.responseBytes){void response.body?.cancel().catch(()=>{});throw new ApiError(503,'private_service_response_too_large');}
+      if(replyLength&&/^\d+$/.test(replyLength)&&Number(replyLength)>this.limits.responseBytes){discard(()=>response.body?.cancel());throw new ApiError(503,'private_service_response_too_large');}
       if(!response.body){finish();return response;}
       const reader=response.body.getReader();let responseBytes=0;
       // Keep the same deadline through response consumption, not only headers.
       const body=new ReadableStream<Uint8Array>({
-        pull:async output=>{try{const next=await Promise.race([reader.read(),aborted]);if(next.done){finish();output.close();}else{responseBytes+=next.value.byteLength;if(responseBytes>this.limits.responseBytes)throw new ApiError(503,'private_service_response_too_large');output.enqueue(next.value);}}catch(error){finish();controller.abort(error);void reader.cancel(error).catch(()=>{});output.error(error);}},
+        pull:async output=>{try{const next=await Promise.race([reader.read(),aborted]);if(next.done){finish();output.close();}else{responseBytes+=next.value.byteLength;if(responseBytes>this.limits.responseBytes)throw new ApiError(503,'private_service_response_too_large');output.enqueue(next.value);}}catch(error){finish();controller.abort(error);discard(()=>reader.cancel(error));output.error(error);}},
         cancel:async reason=>{controller.abort(reason);try{await reader.cancel(reason);}finally{finish();}},
       });
       return new Response(body,{status:response.status,statusText:response.statusText,headers:response.headers});
-    }catch(error){finish();controller.abort(error);if(source.body&&!source.body.locked)void source.body.cancel(error).catch(()=>{});throw error;}
+    }catch(error){finish();controller.abort(error);discard(()=>{if(source.body&&!source.body.locked)return source.body.cancel(error);});throw error;}
   }
 }
