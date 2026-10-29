@@ -139,7 +139,7 @@ then passed 59/59 PGlite cases, plus TypeScript and cached Edge checks. Its firs
 59-case run failed one redirect fixture which had represented an already
 attempted row as a new queued delivery; the corrected fixture still exercises
 both POST and operation-status GET redirect paths. These checks do not establish
-native multi-session or real-provider behavior. Opt-out cancellation, logout and
+native multi-session or real-provider behavior. Opt-out cancellation, other retirement and
 token-reassignment writers, the check-to-provider-send interval, receipt capture
 after removal, independent roster and restore fencing remain open. Evidence:
 `/Volumes/PRO-G40/Projects/Lovelies/verification/notification-device-retirement-20261029-root-01/baseline-expanded/result.json`,
@@ -149,6 +149,44 @@ after removal, independent roster and restore fencing remain open. Evidence:
 `/Volumes/PRO-G40/Projects/Lovelies/verification/backend-ci-pglite-20261029-fiftynine-root-02/result.json`,
 `/Volumes/PRO-G40/Projects/Lovelies/verification/notification-device-retirement-20261029-root-01/typecheck-01/result.json`
 and `/Volumes/PRO-G40/Projects/Lovelies/verification/notification-device-retirement-20261029-root-01/edge-01/result.json`.
+Session retirement now applies the same pristine-only cancellation rule. A
+one-subject fixture reproduced six failures, including an in-flight send whose
+second worker incorrectly reported inbox-only after logout; the corrected handler
+passed eight focused cases and nine existing disposition cases. The updated local
+workflow step passed 67/67 PGlite cases, and TypeScript and cached Edge checks
+passed. This does not prove real provider delivery, native concurrency, old
+writers or independent reconciliation. Evidence:
+`/Volumes/PRO-G40/Projects/Lovelies/verification/notification-logout-race-20261029-root-01/baseline/result.json`,
+`/Volumes/PRO-G40/Projects/Lovelies/verification/notification-logout-race-20261029-root-01/candidate/result.json`,
+`/Volumes/PRO-G40/Projects/Lovelies/verification/notification-logout-race-20261029-root-01/dispositions/result.json`,
+`/Volumes/PRO-G40/Projects/Lovelies/verification/backend-ci-pglite-20261029-sixtyseven-root-01/result.json`,
+`/Volumes/PRO-G40/Projects/Lovelies/verification/notification-logout-race-20261029-root-01/typecheck-01/result.json`
+and `/Volumes/PRO-G40/Projects/Lovelies/verification/notification-logout-race-20261029-root-01/edge-01/result.json`.
+An isolated native PostgreSQL 17 fixture was prepared to observe the actual
+advisory-lock ordering for the same notification removal cases. It remains
+unrun: independent review found that an unreadable postmaster identity could
+leave a server unmonitored, and a process-listing error could be mistaken for
+absence during postflight. A corrected supervisor and postflight, and a fresh
+source seal after the session-retirement change, are required before starting
+a cluster. Evidence:
+`/Volumes/PRO-G40/Projects/Lovelies/verification/native-notification-pg17-20261029-attempt-01/README.md`
+and `/Volumes/PRO-G40/Projects/Lovelies/verification/native-notification-pg17-independent-review-20261029-01/REVIEW.md`.
+An isolated late-acceptance candidate would retain a receipt after the same
+device is removed. It remains unrun and unintegrated: independent review found
+that the gateway lookup returns an operation key but not its stored request
+digest, so it cannot bind the receipt to the original token and payload after a
+restore or inconsistent history. A test-only v2 draft proposes immutable local
+binding and a digest-bearing gateway receipt; its migration and 31 cases have
+not run. Review also found that an already accepted delivery can block another
+same-subject device after re-registration changes the current generation, and
+that legacy terminal states can bypass v2 admission. Its logout counterexample
+predates the narrow shared fix above; the v2 successor must be rebased and
+separately qualified.
+Old writers, independent roster/custody, restore fencing and mixed-version
+cutover remain open. Evidence:
+`/Volumes/PRO-G40/Projects/Lovelies/verification/notification-late-acceptance-20261029-agent-01/README.md`,
+`/Volumes/PRO-G40/Projects/Lovelies/verification/notification-request-binding-design-20261029-agent-01/DESIGN.md`
+and `/Volumes/PRO-G40/Projects/Lovelies/verification/notification-request-binding-v2-20261029-agent-01/README.md`.
 An isolated queue review reproduced six cases across the real photo, privacy
 and notification outboxes where a completed or failed stable-ID queue row
 was treated as successful handoff despite active work. A queue-only candidate
@@ -773,6 +811,29 @@ stale, and can leave its in-progress status visible after cancellation. Those
 are candidate defects; the shared app was not changed by the review. A separate
 fix and affected checks are required before integration. Evidence:
 `/Users/jeanbosco/Library/Application Support/LoveliesVerification/android-photo-action-independent-review-20261029/REVIEW.md`.
+A later isolated successor separates transient read invalidation from session
+replacement and displays a retry after a verified refresh without replaying the
+original action. Its first guarded host start stopped at a process-identity
+exit race; that failed result is retained. A reviewed launcher successor then
+passed source-extracted one-subject checks: 53 core, 17 lifecycle, 25 refresh,
+eight media-error, two deletion-handler and five direct JUnit controls. The
+predecessor's silent refresh interruption was reproduced. Independent postflight
+verified the input/log/JAR hashes and sampled no remaining recorded process
+groups. The fixture stubs the refresh journal, transport and Android/provider
+effects. The candidate remains unintegrated: actual Gradle compilation and an
+owned cleanup path for a private share created immediately before authority or
+selection changes are still required. Physical permission/Billing, MediaStore
+publication and provider behavior also remain open. Evidence:
+`/Volumes/PRO-G40/Projects/Lovelies/verification/android-photo-action-fence-20261029/root-attempt05-01/result.json`,
+`/Volumes/PRO-G40/Projects/Lovelies/verification/android-photo-action-fence-20261029/root-attempt05-02/result.json`
+and `/Volumes/PRO-G40/Projects/Lovelies/verification/android-photo-attempt05-independent-postflight-20261029-01/REVIEW.md`.
+An isolated follow-up prepared four controller and two temporary-file controls
+for the stale-share cleanup gap. They have not run. The existing UUID-shaped
+sweep is not proof of ownership and its pathname check and unlink are not
+atomic against replacement; simply scheduling that sweep cannot establish safe
+cleanup. An owned namespace/writer contract or another qualified handoff is
+still needed. Evidence:
+`/Volumes/PRO-G40/Projects/Lovelies/verification/android-share-cleanup-gap-20261029-attempt-01/README.md`.
 The shared iOS preview now sweeps expired in-memory entries on every exit,
 including delayed errors and cancellation, without clearing a newer valid
 entry. The baseline counterexamples, 21 focused checks and 35 existing
@@ -1132,7 +1193,25 @@ the other failed-run caches and all run evidence remain. Original-path Xcode
 archive restoration remains documented but untested. Evidence:
 `/Volumes/PRO-G40/Projects/Lovelies/verification/ios-sdk-cache-recovery-20261029-agent-01/combined-postflight.json`
 and `/Volumes/PRO-G40/Projects/Lovelies/verification/android-failed-gradle-cache-cleanup-20261029-agent-02/combined-postflight.json`.
-Five current-source, single-subject checks then confirmed the v1 path, its
+Nine completed Android host-fixture JARs and two completed iOS host-test
+binaries were subsequently preserved in compressed archives, independently
+restored and metadata-checked before their exact originals were removed. Four
+additional iOS host binaries were handled the same way; the compressed archive,
+restore helpers, source, logs and receipts remain. The task-created verification
+copies were removed after their checks. Original-path restoration remains
+untested; the final pathname check and unlink are not atomic against a
+simultaneous replacement. Measured free-space gains include concurrent system
+activity and do not reserve capacity for a build. Evidence:
+`/Volumes/PRO-G40/Projects/Lovelies/verification/android-photo-authority-jar-preservation-20261029-agent-01/combined-postflight.json`,
+`/Volumes/PRO-G40/Projects/Lovelies/verification/ios-export-host-binary-preservation-20261029-agent-01/combined-postflight.json`
+and `/Volumes/PRO-G40/Projects/Lovelies/verification/ios-share-host-binary-preservation-20261029-attempt-01/cleanup-result.json`.
+The previously retained fifth Xcode module cache was also archived and
+independently restored before its exact original and task-owned verification
+copy were removed. All 26 app-product hashes and the build receipt still
+matched. The archive is on the same PRO-G40 volume and original-path restoration
+has not been tested. Capacity remains volatile. Evidence:
+`/Volumes/PRO-G40/Projects/Lovelies/verification/ios-sdk-cache-fifth-preservation-20261029-01/completed-release-attempt1/postflight.json`.
+Five separate current-source, single-subject checks confirmed the v1 path, its
 fail-closed response to synthetic v3 control, strict v1 response shape, the
 absence of SQL mode/binding/generation pins and absence of a v4 route. These
 ran with PGlite and an in-process journal under an outer network-denied sandbox;

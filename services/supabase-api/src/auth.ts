@@ -270,7 +270,9 @@ export async function revokeSessionAuthority(sessionId: string, accountId: strin
     if (options.cancelDeviceLifecycle !== false) await cancelDeviceLifecycle(accountId, device, ctx);
     if (options.clearDevicePush !== false) {
         await ctx.db.run("UPDATE push_devices SET active=0,token_value='',updated_at=? WHERE account_id=? AND auth_device_id=?",ctx.now(),accountId,device);
-        await ctx.db.run("UPDATE notification_deliveries SET status='cancelled',updated_at=? WHERE device_id IN(SELECT id FROM push_devices WHERE account_id=? AND auth_device_id=?) AND status<>'accepted'",ctx.now(),accountId,device);
+        // Session retirement stops new dispatch, but cannot settle an already
+        // attempted or uncertain provider operation on that device.
+        await ctx.db.run("UPDATE notification_deliveries SET status='cancelled',updated_at=? WHERE device_id IN(SELECT id FROM push_devices WHERE account_id=? AND auth_device_id=?) AND status='queued' AND attempts=0 AND provider_receipt IS NULL AND lease_token IS NULL AND lease_until IS NULL",ctx.now(),accountId,device);
     }
     await ctx.db.run('UPDATE sessions SET revoked_at=coalesce(revoked_at,?),refresh_consumed_at=coalesce(refresh_consumed_at,?) WHERE id=? AND account_id=?',ctx.now(),ctx.now(),sessionId,accountId);
     if (options.cancelSessionChallenges !== false) await ctx.db.run("UPDATE auth_challenges SET status='cancelled',used_at=? WHERE account_id=? AND session_id=? AND used_at IS NULL",ctx.now(),accountId,sessionId);
