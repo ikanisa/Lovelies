@@ -890,15 +890,23 @@ A separate inactive in-memory capability prototype and 14 tests are prepared.
 The first runner stopped before compilation when it could not bind the Python
 framework process identity. A corrected runner passed its sandbox control and
 compiled the prototype, but did not launch JUnit because the next launch had
-insufficient internal disk headroom. Both failures remain preserved; the tests
-are still unrun. The prototype has no Android provider or app integration and does not resolve
+insufficient internal disk headroom. Both failures remain preserved. A separate
+guarded execution of the sealed compiled JAR then passed 14 host JUnit tests;
+independent postflight rechecked the inputs, logs and recorded process absence.
+The runner confirms the overall count but does not report individual executed
+names or assumption counts; source and JAR review identified the 10 registry and
+four adapter methods.
+The prototype has no Android provider or app integration and does not resolve
 seekable-recipient compatibility, legacy file disposition, lifecycle, memory
 limits or actual device behavior. Ordinary verified credential refresh also
 changes the session identity and may revoke a pending share; a refresh lineage
 alone is not proof of current authority. Evidence:
 `/Volumes/PRO-G40/Projects/Lovelies/verification/android-share-memory-capability-20261029-attempt-01/README.md`,
-`/Volumes/PRO-G40/Projects/Lovelies/verification/android-share-memory-capability-20261029-attempt-01/root-run-01/result.json`
-and `/Volumes/PRO-G40/Projects/Lovelies/verification/android-share-memory-capability-20261029-attempt-01/root-run-02/result.json`.
+`/Volumes/PRO-G40/Projects/Lovelies/verification/android-share-memory-capability-20261029-attempt-01/root-run-01/result.json`,
+`/Volumes/PRO-G40/Projects/Lovelies/verification/android-share-memory-capability-20261029-attempt-01/root-run-02/result.json`,
+`/Volumes/PRO-G40/Projects/Lovelies/verification/android-share-memory-capability-20261029-attempt-01/root-junit-01/result.json`,
+`/Volumes/PRO-G40/Projects/Lovelies/verification/android-share-memory-capability-20261029-attempt-01/root-junit-01/log-postflight.json`
+and `/Volumes/PRO-G40/Projects/Lovelies/verification/android-share-memory-capability-20261029-attempt-01/root-junit-01-independent-postflight.json`.
 The shared iOS preview now sweeps expired in-memory entries on every exit,
 including delayed errors and cancellation, without clearing a newer valid
 entry. The baseline counterexamples, 21 focused checks and 35 existing
