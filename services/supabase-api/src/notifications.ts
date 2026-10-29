@@ -241,7 +241,18 @@ export async function processNotificationJob(payload: unknown, ctx: AppContext):
     }
     const devices = (await ctx.db.all<any>("SELECT p.* FROM push_devices p JOIN auth_devices d ON d.id=p.auth_device_id AND d.account_id=p.account_id AND d.status='active' WHERE p.account_id=? AND p.active=1 ORDER BY p.id LIMIT 10", job.account_id));
     if (!devices.length) {
-        (await ctx.db.run("UPDATE notification_jobs SET status='inbox_only' WHERE notification_id=?", id));
+        // No active device does not resolve an earlier push attempt. Keep any
+        // existing delivery evidence intact and let the queue retry/reconcile.
+        const unconfirmed=await ctx.db.transaction(async()=>{
+            const current=await ctx.db.one<{status:string}>('SELECT status FROM notification_jobs WHERE notification_id=?',id);
+            if(!current||['accepted','cancelled','inbox_only'].includes(current.status))return false;
+            if(current.status==='ambiguous'||current.status!==job.status)return true;
+            const retained=await ctx.db.one<{id:string}>("SELECT id FROM notification_deliveries WHERE notification_id=? AND status<>'cancelled' LIMIT 1",id);
+            if(retained)return true;
+            const updated=await ctx.db.one<{status:string}>("UPDATE notification_jobs SET status='inbox_only' WHERE notification_id=? AND status=? RETURNING status",id,job.status);
+            return !updated;
+        });
+        if(unconfirmed)throw new ApiError(503,'push_reconciliation_required');
         return;
     }
     if (!ctx.env.PUSH_SERVICE)
