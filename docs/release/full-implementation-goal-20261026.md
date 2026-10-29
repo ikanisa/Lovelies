@@ -94,6 +94,25 @@ durable fair-scan contract and independently bound receipt reconciliation are
 still required. These are one-subject PGlite observations, not provider results.
 Evidence:
 `/Users/jeanbosco/Library/Application Support/LoveliesVerification/notification-cancellation-state-20261029/fairness-evidence-01/README.md`.
+The outbox now preserves an ambiguous job state when a queue request returns,
+including when the state changes while the request is in progress; it also
+preserves a concurrently accepted state. The baseline reproduced two state
+overwrites, and all four focused cases passed after the correction. The exact
+local CI-selected PGlite suite passed 47 cases, and TypeScript and cached Edge
+checks passed. A postflight binds the committed inputs to that run, with only an
+explanatory comment changed afterward. The source, tests and workflow count were
+committed as `71be96237d5cc5ef9de9197b73ebdfe0509db8e8`. PGlite substitutes the
+advisory lock and uses one synthetic subject. Permission-denied cancellation can
+still overwrite prior or concurrent terminal evidence, and a stable queue ID
+can prevent a new job from being inserted while the outbox timestamp advances.
+These, provider reconciliation, fair scanning and native concurrency remain
+open; no provider delivery or hosted deployment was tested. Evidence:
+`/Users/jeanbosco/Library/Application Support/LoveliesVerification/notification-outbox-ambiguity-20261029-root-x3RA1t/baseline/result.json`,
+`/Users/jeanbosco/Library/Application Support/LoveliesVerification/notification-outbox-ambiguity-20261029-root-x3RA1t/fixed/result.json`,
+`/Users/jeanbosco/Library/Application Support/LoveliesVerification/notification-outbox-ambiguity-20261029-root-x3RA1t/typecheck-01/result.json`,
+`/Users/jeanbosco/Library/Application Support/LoveliesVerification/notification-outbox-ambiguity-20261029-root-x3RA1t/edge-01/result.json`,
+`/Users/jeanbosco/Library/Application Support/LoveliesVerification/backend-ci-pglite-20261029-fortyseven-GDlJvO/result.json`
+and `/Users/jeanbosco/Library/Application Support/LoveliesVerification/backend-ci-pglite-20261029-fortyseven-GDlJvO/committed-input-postflight.json`.
 An isolated successor adds a tentative schema-14 numeric scan order and a
 separate bounded high-water cursor without copying account or notification IDs
 into it. Its local checks covered 61 older unresolved jobs, scan wrap, a
@@ -125,6 +144,17 @@ control binding. Plan provenance, old-writer/credential fencing, cross-store
 pins, deletion and restore remain open; neither the primitive nor its separate
 gateway observation route is integrated. Evidence:
 `/Users/jeanbosco/Library/Application Support/LoveliesVerification/notification-roster-primitive-20261029/attempt-02/README.md`.
+An isolated producer successor stages server-derived notification plan intents
+in the actual copied enqueue transaction and binds a plan and SQL-intent hash
+through the copied outbox and ledger. Thirteen app/SQL cases, 25 ledger and
+gateway cases, four legacy controls and TypeScript checking passed locally.
+The recorded binding remains unverified, normal push processing is deliberately
+blocked, and provisional migrations were not applied. Trusted provenance,
+old-writer fencing, independent restore custody, retention/deletion and native
+concurrency remain open. This does not prove provider delivery or settlement.
+Evidence:
+`/Users/jeanbosco/Library/Application Support/LoveliesVerification/notification-plan-producer-20261029/attempt-01/README.md`
+and `/Users/jeanbosco/Library/Application Support/LoveliesVerification/notification-plan-producer-20261029/self-06/result.json`.
 The current v1 push-receipt reader now attempts nonblocking body cancellation
 before returning its existing redirect denial. The first candidate did not
 preserve the denial if cancellation threw synchronously; that failed case is
@@ -547,6 +577,19 @@ unchanged v1 GET still ignores the projection. The f4 incompatibility,
 one-fact limit, old-writer fencing, durable custody, complete coverage and
 serving clearance remain open. No replay component was integrated. Evidence:
 `/Users/jeanbosco/Library/Application Support/LoveliesVerification/privacy-grant-replay-20261029/attempt-01/REVIEW.md`.
+An isolated v6 successor now preserves the actual bound-f4 decision lineage
+and its earlier histories while appending a hash-linked, multi-fact grant
+stream. Five journal checks, one authenticated Worker-to-PGlite replay
+scenario, 22 preserved f4 checks and strict consumer typechecking passed. The
+replay includes an SQL reply loss retried from an earlier cut after a later
+append; the unchanged v1 GET still ignores the new projection. The initial
+fixture expectation failure is preserved. This is a one-subject, local,
+single-connection quarantine experiment: it freezes normal f4 serving, caps
+the stream at 64 facts and has no real consumption producer, complete replay,
+independent custody, old-writer fence or clearance. It is not integrated or
+production-ready. Evidence:
+`/Users/jeanbosco/Library/Application Support/LoveliesVerification/bound-v4-grant-stream-20261029/attempt-01/REVIEW.md`
+and `/Users/jeanbosco/Library/Application Support/LoveliesVerification/bound-v4-grant-stream-20261029/attempt-01/handoff-result.json`.
 An isolated v2 model passed 17 same-subject checks for a pre-saved identity,
 same-session retries, fixed expiry and acknowledgement of an exact dispatch.
 It permits retransmission within one logical delivery, which differs from v1's
@@ -922,6 +965,27 @@ diagnostic passed 13 offline guard/cleanup checks but was not run against a new
 cluster because internal free space fluctuated around its launch threshold.
 Evidence:
 `/Volumes/PRO-G40/Projects/Lovelies/verification/native-media-pg17-20261029-attempt-02/HANDOFF.md`.
+Eight task-created Node compiler caches were subsequently copied to PRO-G40,
+checked for content and metadata preservation, and removed from their exact
+original paths. Independent postflight confirmed the copies and test receipts
+and recorded 10,878,976 allocated bytes removed. At that sample, internal free
+space remained 17,637,376 bytes below the successor's launch threshold; no
+native pass follows from the cleanup. Evidence:
+`/Volumes/PRO-G40/Projects/Lovelies/verification/native-cache-cleanup-20261029-attempt-01/cache-postflight.json`.
+Four explicitly synthetic 20 MiB export-stage ciphertext files were then
+copied and restore-checked on PRO-G40 before removal from the original scratch
+paths. Their bytes, relevant metadata and creation times matched; test sources,
+binaries, logs, receipts and unknown fixtures remain. An initial creation-time
+copy discrepancy and its correction are retained. Fresh capacity checks then
+allowed the corrected isolated PostgreSQL 17 fixture to run: four native cases
+passed, including observed advisory and row locks, SQL rollback and a lost
+commit reply. The server, port and owned data/password paths were independently
+confirmed absent after the run. This tests the isolated `f77131d` candidate
+with one synthetic subject, a collector seam and a fake journal fence; it does
+not establish current deployed behavior or safe restore. Evidence:
+`/Volumes/PRO-G40/Projects/Lovelies/verification/native-cache-cleanup-20261029-attempt-01/export-stage-preservation-02/postflight.json`,
+`/Volumes/PRO-G40/Projects/Lovelies/verification/native-media-pg17-20261029-attempt-03/native-run-01/result.json`
+and `/Volumes/PRO-G40/Projects/Lovelies/verification/native-media-pg17-20261029-attempt-03/native-run-01/postflight.json`.
 Five current-source, single-subject checks then confirmed the v1 path, its
 fail-closed response to synthetic v3 control, strict v1 response shape, the
 absence of SQL mode/binding/generation pins and absence of a v4 route. These
