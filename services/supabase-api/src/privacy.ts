@@ -1,8 +1,10 @@
 import { audiencePrivacyRows, eraseAudienceSubject, prepareDeletionAudienceRetirement, revokeAudienceAuthority } from './audience.ts';
 import { nextCleanupIntents } from './cleanup-scan.ts';
 import { ApiError, digest, jsonBody, ok, record, stable, uuid, type Actor, type AppContext } from './types.ts';
-import { assertOperationReceiptAvailable, assertRegisteredActor, executeOperation, executeAccountDeletionOperation, executeRestrictedOperation, prepareOperation, settleMediaWrite } from './operations.ts';
-import { assertPrivacyActor } from './auth.ts';
+import { assertOperationReceiptAvailable, assertRegisteredActor, executeOperation, executeAccountDeletionOperation, executeRestrictedOperation, prepareOperation, retiredOperationInput, retiredOperationResponse, settleMediaWrite } from './operations.ts';
+import { assertPrivacyActor, base64url } from './auth.ts';
+import { bindPrivacyGrantAuthority, type PrivacyGrantGuard } from './privacy-authority.ts';
+import { EXPORT_GRANT_PROTOCOL, EXPORT_GRANT_INPUT_PROTOCOL, grantUnavailable, grantExpired, grantReceiptExpired, exportGrantKey, grantAAD, verifiedGrantReceipt, type GrantReceipt, type GrantOperationRow } from './privacy-export-grant.ts';
 import { entitlementPrivacyRows, eraseEntitlementSubject } from './entitlements.ts';
 import { operatorPrivacyRows, eraseOperatorSubject } from './operators.ts';
 import { notificationPrivacyRows, eraseNotificationSubject } from './notifications.ts';
@@ -777,25 +779,224 @@ async function createVerifiedExport(ctx: AppContext, actor: ExecutionAuthority, 
         bytes.fill(0);
     }
 }
-async function exportGrant(ctx: AppContext, actor: Actor, id: string): Promise<Record<string, unknown>> {
-    (await assertPrivacyActor(actor, ctx));
-    const token = crypto.randomUUID() + crypto.randomUUID(), tokenHash = await digest(token);
-    return (await ctx.db.transaction(async () => {
-        (await assertPrivacyActor(actor, ctx));
-        const request = (await currentRequest(ctx, id));
-        if (request.subject_id !== actor.accountId || request.request_type !== 'export' || request.status !== 'completed' || !request.export_key || !request.export_expires_at || request.export_expires_at <= ctx.now())
-            throw new ApiError(404, 'privacy_export_unavailable');
-        const grantId = crypto.randomUUID(), expires = Math.min(ctx.now() + 300000, request.export_expires_at);
-        (await ctx.db.run('DELETE FROM privacy_export_grants WHERE subject_id=? AND (expires_at<=? OR consumed_at IS NOT NULL)', actor.accountId, ctx.now()));
-        const open = (await ctx.db.one<{
-            n: number;
-        }>('SELECT count(*) n FROM privacy_export_grants WHERE subject_id=?', actor.accountId))!.n;
-        if (open >= 10)
-            throw new ApiError(429, 'privacy_export_grant_limit');
-        (await ctx.db.run('INSERT INTO privacy_export_grants(id,request_id,subject_id,session_id,token_hash,expires_at,created_at) VALUES(?,?,?,?,?,?,?)', grantId, id, actor.accountId, actor.sessionId, tokenHash, expires, ctx.now()));
-        const path = `/privacy-exports/retrieve?grant=${encodeURIComponent(token)}`;
-        return { request_id: id, grant_path: path, expires_at: new Date(expires).toISOString() };
-    }));
+const grantEncoder = new TextEncoder();
+async function eligibleExport(ctx: AppContext, actor: Actor, id: string): Promise<PrivacyRequest> {
+    await assertPrivacyActor(actor, ctx);
+    const request = await currentRequest(ctx, id);
+    if (request.subject_id !== actor.accountId || request.request_type !== 'export' || request.status !== 'completed' ||
+        !request.export_key || !request.export_expires_at || request.export_expires_at <= ctx.now())
+        throw new ApiError(404, 'privacy_export_unavailable');
+    return request;
+}
+/** Without an authenticated linkage marker, an absent or damaged receipt
+ * cannot prove that an expired grant row is unlinked. Retain these rows until
+ * explicit account erasure or a separately verified bounded cleanup policy. */
+async function allocateExportGrant(ctx: AppContext, actor: Actor, id: string, tokenHash: string): Promise<{id:string;created_at:number;expires_at:number}> {
+    const request = await eligibleExport(ctx, actor, id), now = ctx.now();
+    const grantId = crypto.randomUUID(), expires = Math.min(now + 300000, request.export_expires_at!);
+    if (expires <= now) throw new ApiError(404, 'privacy_export_unavailable');
+    const open = (await ctx.db.one<{n:number}>('SELECT count(*) n FROM privacy_export_grants WHERE subject_id=? AND consumed_at IS NULL AND expires_at>?', actor.accountId, now))!.n;
+    if (open >= 10) throw new ApiError(429, 'privacy_export_grant_limit');
+    await ctx.db.run('INSERT INTO privacy_export_grants(id,request_id,subject_id,session_id,token_hash,expires_at,created_at) VALUES(?,?,?,?,?,?,?)', grantId, id, actor.accountId, actor.sessionId, tokenHash, expires, now);
+    return {id:grantId, created_at:now, expires_at:expires};
+}
+type ExportPublication={id:string;request_id:string;subject_id:string;object_key:string;sha256:string;bytes:number;expires_at:number;status:string;created_at:number};
+async function matchingPublication(ctx:AppContext,request:PrivacyRequest):Promise<ExportPublication|null> {
+    if(!request.export_key)return null;
+    const publication=await ctx.db.one<ExportPublication>('SELECT * FROM privacy_exports WHERE object_key=?',request.export_key);
+    if(!publication||publication.request_id!==request.id||publication.subject_id!==request.subject_id||publication.object_key!==request.export_key||
+        publication.sha256!==request.export_sha256||publication.bytes!==request.export_bytes||!Number.isSafeInteger(publication.expires_at))return grantUnavailable();
+    return publication;
+}
+async function exportGrantCurrent(ctx: AppContext, actor: Actor, value: GrantReceipt, recordState?:(snapshot:string)=>void): Promise<void> {
+    await assertPrivacyActor(actor, ctx);
+    const now=ctx.now();
+    const grant = await ctx.db.one<{id:string;request_id:string;subject_id:string;session_id:string;token_hash:string;expires_at:number;consumed_at:number|null;created_at:number}>(
+        'SELECT * FROM privacy_export_grants WHERE id=?', value.grant_id);
+    if (!grant) return grantUnavailable();
+    if (grant.id !== value.grant_id || grant.request_id !== value.request_id || grant.subject_id !== actor.accountId ||
+        grant.session_id !== value.session_id || grant.token_hash !== value.token_hash || grant.created_at !== value.created_at || grant.expires_at !== value.expires_at)
+        return grantUnavailable();
+    if (grant.consumed_at !== null && (!Number.isSafeInteger(grant.consumed_at) || grant.consumed_at < value.created_at || grant.consumed_at > now)) return grantUnavailable();
+    const request = await ctx.db.one<PrivacyRequest>('SELECT * FROM privacy_requests WHERE id=?', value.request_id);
+    if (!request || request.subject_id !== actor.accountId || request.request_type !== 'export') return grantUnavailable();
+    const publication=await matchingPublication(ctx,request);
+    recordState?.(stable({grant,request,publication}));
+    // A different live session never gets a bearer or an early-consumption fact.
+    if (value.expires_at > now && value.session_id !== actor.sessionId) throw new ApiError(409, 'privacy_export_grant_session_changed');
+    if (request.status !== 'completed' || !request.export_key || !request.export_expires_at) return grantExpired();
+    if(!publication||value.expires_at>publication.expires_at)return grantUnavailable();
+    if(grant.consumed_at===null && publication.status!=='published')return grantExpired();
+    if(grant.consumed_at!==null && !['published','retired'].includes(publication.status))return grantUnavailable();
+    // Retrieval deliberately shortens export_expires_at after consumption. Only
+    // the authenticated grant deadline can prove expiry in that case.
+    if (grant.consumed_at === null && value.expires_at > request.export_expires_at) return grantUnavailable();
+    if (value.expires_at <= now) return grantReceiptExpired();
+    if (grant.consumed_at !== null || request.export_expires_at <= now) return grantExpired();
+    await assertPrivacyActor(actor, ctx);
+}
+const expiredGrantProtocol='lovelies-privacy-export-grant-expired-v1';
+const grantOutcomeCodes=new Set(['operation_key_conflict','privacy_export_grant_session_changed','privacy_export_grant_unavailable','privacy_export_grant_expired']);
+const operationQuery="SELECT action,payload_hash,payload_json,response_json FROM operations WHERE actor_id=? AND source='privacy' AND operation_key=?";
+/** Bind a validated grant disposition to the exact operation and re-read the
+ * grant/request state at final admission. Changed evidence is unresolved. */
+function protectGrantOutcome(ctx:AppContext,actor:Actor,key:string,row:GrantOperationRow,expectedRequest:string|undefined,
+    outcome:string,guard:PrivacyGrantGuard,liveDeadline?:number,expectedState?:string,expiredFloor?:number):void {
+    const snapshot=stable(row);
+    guard.protect(async()=>{
+        await assertPrivacyActor(actor,ctx);
+        const current=await ctx.db.one<GrantOperationRow>(operationQuery,actor.accountId,key);
+        if(!current||stable(current)!==snapshot)return grantUnavailable();
+        const {receipt}=await verifiedGrantReceipt(ctx,actor.accountId,key,current);
+        let observed='live',state:string|undefined;
+        try {
+            if(expectedRequest!==undefined&&receipt.request_id!==expectedRequest)throw new ApiError(409,'operation_key_conflict');
+            await exportGrantCurrent(ctx,actor,receipt,value=>{state=value;});
+        } catch(error) {
+            if(!(error instanceof ApiError)||!grantOutcomeCodes.has(error.code))throw error;
+            observed=error.code;
+        }
+        if(observed!==outcome||state!==expectedState)return grantUnavailable();
+    },outcome==='live'?liveDeadline:undefined,outcome==='privacy_export_grant_expired'?expiredFloor:undefined);
+}
+/** Decode a historical operation only while its exact one-use grant and current
+ * privacy session still authorize delivery. Stored JSON contains no bearer. */
+async function recoverExportGrant(ctx: AppContext, actor: Actor, key: string, row: GrantOperationRow,
+    expectedRequest?: string, guard?:PrivacyGrantGuard): Promise<Record<string,unknown>> {
+    try {
+        await assertPrivacyActor(actor,ctx);
+        // A key-only tombstone does not contain enough information to verify
+        // its surviving hash, even when its action appears to be a grant.
+        if(row.payload_json===retiredOperationInput || row.response_json===retiredOperationResponse)return grantUnavailable();
+        const {receipt,token}=await verifiedGrantReceipt(ctx,actor.accountId,key,row);
+        let state:string|undefined;
+        try {
+            if(expectedRequest!==undefined&&receipt.request_id!==expectedRequest)throw new ApiError(409,'operation_key_conflict');
+            await exportGrantCurrent(ctx,actor,receipt,value=>{state=value;});
+        } catch(error) {
+            if(guard && error instanceof ApiError && grantOutcomeCodes.has(error.code))
+                protectGrantOutcome(ctx,actor,key,row,expectedRequest,error.code,guard,undefined,state,receipt.expires_at);
+            if(error instanceof ApiError && error.code==='privacy_export_grant_expired') {
+                // Only key-only lookup exposes the verified terminal tuple. A
+                // direct retry has no such client disposition contract.
+                if(expectedRequest!==undefined)return grantUnavailable();
+                return {protocol:expiredGrantProtocol,status:'expired',account_id:receipt.account_id,
+                    operation_key:key,request_id:receipt.request_id,session_id:receipt.session_id,
+                    expires_at:new Date(receipt.expires_at).toISOString()};
+            }
+            throw error;
+        }
+        if(guard)protectGrantOutcome(ctx,actor,key,row,expectedRequest,'live',guard,receipt.expires_at,state);
+        return {request_id:receipt.request_id,grant_path:`/privacy-exports/retrieve?grant=${encodeURIComponent(token)}`,
+            expires_at:new Date(receipt.expires_at).toISOString()};
+    } catch(error) {
+        await assertPrivacyActor(actor,ctx);
+        throw error;
+    }
+}
+async function protectLegacyGrant(ctx:AppContext,actor:Actor,id:string,grant:{id:string;created_at:number;expires_at:number},tokenHash:string):Promise<string> {
+    await assertPrivacyActor(actor,ctx);
+    const current=await ctx.db.one<{id:string;request_id:string;subject_id:string;session_id:string;token_hash:string;created_at:number;expires_at:number;consumed_at:number|null}>(
+        'SELECT * FROM privacy_export_grants WHERE id=?',grant.id);
+    if(!current||current.id!==grant.id||current.request_id!==id||current.subject_id!==actor.accountId||current.session_id!==actor.sessionId||
+        current.token_hash!==tokenHash||current.created_at!==grant.created_at||current.expires_at!==grant.expires_at||
+        current.consumed_at!==null||current.expires_at<=ctx.now())return grantUnavailable();
+    const request=await ctx.db.one<PrivacyRequest>('SELECT * FROM privacy_requests WHERE id=?',id);
+    if(!request||request.subject_id!==actor.accountId||request.request_type!=='export'||request.status!=='completed'||!request.export_key||
+        !request.export_expires_at||request.export_expires_at<grant.expires_at||request.export_expires_at<=ctx.now())return grantUnavailable();
+    const publication=await matchingPublication(ctx,request);
+    if(!publication||publication.status!=='published'||publication.expires_at<grant.expires_at)return grantUnavailable();
+    await assertPrivacyActor(actor,ctx);
+    return stable({grant:current,request,publication});
+}
+/** Existing privacy request/review receipts may share the operation namespace.
+ * A changed action must not turn an encrypted grant into a false conflict. */
+async function verifyOtherPrivacyReceipt(key:string,row:GrantOperationRow):Promise<void> {
+    if (!['privacy.request.export','privacy.request.delete','privacy.review.approve','privacy.review.reject'].includes(row.action) ||
+        typeof row.payload_hash!=='string' || !/^[0-9a-f]{64}$/.test(row.payload_hash) ||
+        typeof row.payload_json!=='string' || row.payload_json.length>1900000 ||
+        typeof row.response_json!=='string' || row.response_json.length>1900000 ||
+        row.payload_json===retiredOperationInput || row.response_json===retiredOperationResponse) return grantUnavailable();
+    let input:unknown,result:unknown;
+    try { input=JSON.parse(row.payload_json);result=JSON.parse(row.response_json); } catch { return grantUnavailable(); }
+    if (!input || typeof input!=='object' || Array.isArray(input) || !result || typeof result!=='object' || Array.isArray(result)) return grantUnavailable();
+    const data=input as Record<string,unknown>,response=result as Record<string,unknown>;
+    if (data.operation_key!==key || data.protocol===EXPORT_GRANT_INPUT_PROTOCOL || response.protocol===EXPORT_GRANT_PROTOCOL ||
+        stable(data)!==row.payload_json || stable(response)!==row.response_json ||
+        await digest(stable({action:row.action,source:'privacy',payload:data}))!==row.payload_hash) return grantUnavailable();
+}
+async function exportGrant(ctx: AppContext, actor: Actor, id: string, body: Record<string,unknown>, guard:PrivacyGrantGuard): Promise<Record<string, unknown>> {
+    await assertPrivacyActor(actor, ctx);
+    if (!Object.hasOwn(body,'operation_key')) {
+        // Existing Android clients send an empty JSON object and retain their
+        // historical non-idempotent grant behavior.
+        const token = crypto.randomUUID() + crypto.randomUUID(), tokenHash = await digest(token);
+        return await ctx.db.transaction(async () => {
+            const grant = await allocateExportGrant(ctx, actor, id, tokenHash);
+            const snapshot=await protectLegacyGrant(ctx,actor,id,grant,tokenHash);
+            guard.protect(async()=>{if(await protectLegacyGrant(ctx,actor,id,grant,tokenHash)!==snapshot)return grantUnavailable();},grant.expires_at);
+            return {request_id:id, grant_path:`/privacy-exports/retrieve?grant=${encodeURIComponent(token)}`,
+                expires_at:new Date(grant.expires_at).toISOString()};
+        });
+    }
+    exact(body,['operation_key']);
+    const input = {protocol:EXPORT_GRANT_INPUT_PROTOCOL,operation_key:body.operation_key,request_id:id,session_id:actor.sessionId};
+    const intent = await prepareOperation('privacy.export.grant',input,'privacy'), encryptionKey = await exportGrantKey(ctx);
+    const receipt = await ctx.db.transaction(async () => {
+        await assertPrivacyActor(actor,ctx);
+        const previous=await ctx.db.one<GrantOperationRow>("SELECT action,payload_hash,payload_json,response_json FROM operations WHERE actor_id=? AND source='privacy' AND operation_key=?",actor.accountId,intent.key);
+        // A tombstone retains no input. A direct retry can prove only the
+        // exact original action and hash; every other classification is unknown.
+        if (previous?.action === 'privacy.export.grant') {
+            const inputRetired=previous.payload_json===retiredOperationInput;
+            const responseRetired=previous.response_json===retiredOperationResponse;
+            if(inputRetired||responseRetired){
+                if(!inputRetired||!responseRetired||previous.payload_hash!==intent.hash)return grantUnavailable();
+                const snapshot=stable(previous);
+                guard.protect(async()=>{
+                    const current=await ctx.db.one<GrantOperationRow>(operationQuery,actor.accountId,intent.key);
+                    if(!current||stable(current)!==snapshot||current.action!=='privacy.export.grant'||current.payload_hash!==intent.hash)return grantUnavailable();
+                });
+                assertOperationReceiptAvailable(previous);
+            }
+            await recoverExportGrant(ctx,actor,intent.key,previous,id,guard);
+        } else if (previous) {
+            // Unkeyed hashes cannot prove that a different action was not a
+            // coherently replaced grant receipt. Never classify it as conflict.
+            return grantUnavailable();
+        }
+        const result = await executeRestrictedOperation(ctx,actor,intent,async () => {
+            const tokenBytes = crypto.getRandomValues(new Uint8Array(32));
+            const token = base64url(tokenBytes); tokenBytes.fill(0);
+            const tokenHash = await digest(token), grant = await allocateExportGrant(ctx,actor,id,tokenHash);
+            const binding = {protocol:EXPORT_GRANT_PROTOCOL,operation_key:intent.key,account_id:actor.accountId,session_id:actor.sessionId,
+                request_id:id,grant_id:grant.id,token_hash:tokenHash,created_at:grant.created_at,expires_at:grant.expires_at};
+            const iv = crypto.getRandomValues(new Uint8Array(12)), plain = grantEncoder.encode(token);
+            let ciphertext: string;
+            try { ciphertext=base64url(new Uint8Array(await crypto.subtle.encrypt({name:'AES-GCM',iv,
+                additionalData:grantAAD(binding)},encryptionKey,plain))); }
+            finally { plain.fill(0); }
+            await assertPrivacyActor(actor,ctx);
+            return {...binding,iv:base64url(iv),ciphertext};
+        });
+        const saved=await ctx.db.one<GrantOperationRow>(operationQuery,actor.accountId,intent.key);
+        if(!saved||stable(result)!==saved.response_json)return grantUnavailable();
+        // Install the exact evidence before the database's post-prepare guard.
+        await recoverExportGrant(ctx,actor,intent.key,saved,id,guard);
+        return result;
+    });
+    try {
+        return await ctx.db.read(async () => {
+            await assertPrivacyActor(actor,ctx);
+            const row=await ctx.db.one<GrantOperationRow>("SELECT action,payload_hash,payload_json,response_json FROM operations WHERE actor_id=? AND source='privacy' AND operation_key=?",actor.accountId,intent.key);
+            if (!row || stable(receipt)!==row.response_json) return grantUnavailable();
+            return await recoverExportGrant(ctx,actor,intent.key,row,id,guard);
+        });
+    } catch {
+        // The transaction has returned successfully, so any later failure is
+        // ambiguous to the caller even if its cause is a transient session loss.
+        throw new ApiError(503,'privacy_export_grant_outcome_unresolved');
+    }
 }
 /** Called only by the durable PostgreSQL job consumer. The payload cannot create an
  * approval or choose its subject, role, storage key or result. */
@@ -927,12 +1128,24 @@ export async function handlePrivacy(request: Request, ctx: AppContext): Promise<
     const operationReceipt = /^\/privacy\/operations\/([A-Za-z0-9._:-]{16,128})$/.exec(path);
     if (operationReceipt) {
         if (request.method !== 'GET') throw new ApiError(405,'method_not_allowed');
-        const actor = await ctx.authenticate(request);
-        return ctx.db.transaction(async()=>{
+        const actor = await ctx.authenticate(request), guard=bindPrivacyGrantAuthority(ctx,actor), key=operationReceipt[1];
+        return ctx.db.read(async()=>{
             await assertPrivacyActor(actor,ctx);
-            const receipt = await ctx.db.one<{payload_json:string;response_json:string}>("SELECT payload_json,response_json FROM operations WHERE actor_id=? AND source='privacy' AND operation_key=? AND action IN('privacy.request.export','privacy.request.delete')",actor.accountId,operationReceipt[1]);
-            if (receipt) assertOperationReceiptAvailable(receipt);
-            return ok(receipt ? JSON.parse(receipt.response_json) : {status:'unknown'});
+            const receipt = await ctx.db.one<GrantOperationRow>(operationQuery,actor.accountId,key);
+            if (!receipt) {
+                guard.protect(async()=>{if(await ctx.db.one(operationQuery,actor.accountId,key))return grantUnavailable();});
+                return ok({status:'unknown'});
+            }
+            if (receipt.action === 'privacy.export.grant') return ok(await recoverExportGrant(ctx,actor,key,receipt,undefined,guard));
+            await verifyOtherPrivacyReceipt(key,receipt);
+            const snapshot=stable(receipt);
+            guard.protect(async()=>{
+                const current=await ctx.db.one<GrantOperationRow>(operationQuery,actor.accountId,key);
+                if(!current||stable(current)!==snapshot)return grantUnavailable();
+                await verifyOtherPrivacyReceipt(key,current);
+            });
+            if (!['privacy.request.export','privacy.request.delete'].includes(receipt.action)) return ok({status:'unknown'});
+            return ok(JSON.parse(receipt.response_json));
         });
     }
     if (path === '/privacy/account-deletion/status') {
@@ -955,8 +1168,11 @@ export async function handlePrivacy(request: Request, ctx: AppContext): Promise<
     if (createKind || review || grant) {
         if (request.method !== 'POST')
             throw new ApiError(405, 'method_not_allowed');
-        if (grant)
-            return ok(await exportGrant(ctx, actor, uuid(grant[1])));
+        if (grant) {
+            const body = request.body === null ? {} : await jsonBody(request, 16384);
+            const guard=bindPrivacyGrantAuthority(ctx,actor);
+            return ok(await exportGrant(ctx, actor, uuid(grant[1]), body,guard));
+        }
         if (review?.[2] === 'process')
             return ok(await processPrivacyRequest(ctx, actor, uuid(review[1])));
         const body = await jsonBody(request, 16384);

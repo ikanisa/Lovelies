@@ -1,6 +1,6 @@
 import postgres from 'postgres';
 import { AsyncLocalStorage } from 'node:async_hooks';
-import { ApiError, type Binding, type Database } from './types.ts';
+import { ApiError, type Binding, type Database, type InvocationAuthorityOutcomeCode } from './types.ts';
 import { RestoreTransactionCollector, type RestoreTransactionScope } from './restore-transaction.ts';
 
 /** Only bound values cross this translator. SQL is static application source.
@@ -50,7 +50,7 @@ export interface DatabaseFence {
 }
 export type DatabaseLineage=Readonly<{database_id:string;incarnation_id:string}>;
 type TransactionFrame={connection:SqlConnection;readOnly:boolean;restore:RestoreTransactionScope};
-type InvocationAuthority={check:()=>Promise<void>;fresh:()=>void};
+type InvocationAuthority={check:()=>Promise<void>;fresh:()=>void;outcomeCode:InvocationAuthorityOutcomeCode};
 type InvocationFrame={lineage?:DatabaseLineage;closed:boolean;failed:boolean;failureCode?:string;
   authority?:InvocationAuthority;mayHaveCommitted?:boolean};
 const lineageID=/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
@@ -71,7 +71,7 @@ export class PostgresDatabase implements Database {
   private authorityError(frame:InvocationFrame,error:unknown):never {
     // Once a guarded write may have reached an independent prepare or SQL
     // COMMIT, expired authority cannot prove that the operation did not run.
-    if(frame.mayHaveCommitted){frame.failureCode='store_operation_outcome_unresolved';return this.unavailable(frame);}
+    if(frame.mayHaveCommitted){frame.failureCode=frame.authority?.outcomeCode??'store_operation_outcome_unresolved';return this.unavailable(frame);}
     throw error;
   }
   private async checkBoundAuthority(frame:InvocationFrame):Promise<void> {
@@ -86,11 +86,12 @@ export class PostgresDatabase implements Database {
   }
   /** Only the selected request installs this; terminal/self-revocation and
    * anonymous routes retain their existing invocation semantics. */
-  bindInvocationAuthority(check:()=>Promise<void>,fresh:()=>void):void {
+  bindInvocationAuthority(check:()=>Promise<void>,fresh:()=>void,outcomeCode:InvocationAuthorityOutcomeCode='store_operation_outcome_unresolved'):void {
     const frame=this.assertInvocation();
-    if(!frame||frame.authority||this.transactions.getStore()||typeof check!=='function'||typeof fresh!=='function')
+    if(!frame||frame.authority||this.transactions.getStore()||typeof check!=='function'||typeof fresh!=='function'||
+      !['store_operation_outcome_unresolved','privacy_export_grant_outcome_unresolved'].includes(outcomeCode))
       throw new ApiError(500,'invocation_authority_invalid');
-    frame.authority=Object.freeze({check,fresh});
+    frame.authority=Object.freeze({check,fresh,outcomeCode});
   }
   private assertInvocation():InvocationFrame|undefined {
     const frame=this.invocations.getStore();
@@ -124,6 +125,14 @@ export class PostgresDatabase implements Database {
         // Repeat its synchronous deadline check after that transaction closes.
         if(frame.lineage||frame.authority)await this.read(()=>this.checkBoundAuthority(frame));
         this.assertInvocation();this.checkBoundFreshness(frame);return value;
+      }catch(error){
+        // A privacy grant may have committed even when a subsequent handler read
+        // raises session_invalid. Do not send a definitive failure that permits
+        // the client to discard its exact recovery key.
+        if(frame.mayHaveCommitted&&frame.authority?.outcomeCode==='privacy_export_grant_outcome_unresolved'){
+          frame.failureCode=frame.authority.outcomeCode;return this.unavailable(frame);
+        }
+        throw error;
       }finally{frame.closed=true;}
     });
   }
@@ -207,7 +216,7 @@ export class PostgresDatabase implements Database {
       // Once the callback has returned for COMMIT, a lost reply cannot prove
       // that SQL rolled back. Preserve any accepted independent plan.
       if(commitDispatched&&invocation?.authority){
-        invocation.failureCode='store_operation_outcome_unresolved';return this.unavailable(invocation);
+        invocation.failureCode=invocation.authority.outcomeCode;return this.unavailable(invocation);
       }
       throw error;
     }

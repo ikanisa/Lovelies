@@ -397,8 +397,13 @@ export async function handleSharing(request: Request, ctx: AppContext): Promise<
                 action: string;
                 payload_json: string;
                 response_json: string;
-                source: MediaSource;
+                source: string;
             }>('SELECT action,payload_json,response_json,source FROM operations WHERE actor_id=? AND operation_key=?', actor.accountId, payload.operation_key));
+            // A store receipt needs its typed, input-bound recovery contract.
+            // Do not release an unvalidated row or a definitive retired/conflict
+            // result through this generic route, including mixed-source keys.
+            if (rows.some(row => row.source === 'store' || row.action === 'store.apple' || row.action === 'store.google'))
+                throw new ApiError(503, 'store_operation_receipt_unavailable');
             if (rows.length > 1)
                 throw new ApiError(409, 'operation_source_ambiguous');
             if (!rows.length)

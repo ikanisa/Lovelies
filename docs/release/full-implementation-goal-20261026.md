@@ -1036,6 +1036,77 @@ Evidence:
 `/Users/jeanbosco/Library/Application Support/LoveliesVerification/store-authority-offline-20261029-agent-01/result.json`,
 `/Users/jeanbosco/Library/Application Support/LoveliesVerification/backend-ci-pglite-20261029-onehundredfour-root-01/result.json`
 and `/Users/jeanbosco/Library/Application Support/LoveliesVerification/store-authority-edge-20261029-root-01/edge-01/result.json`.
+An isolated read-only replay successor was tested to avoid preparing a new
+checkpoint for a store read. Its first run passed 32 of 33 authority cases,
+28 receipt-consumer cases and TypeScript. The failing Google acknowledgement
+case returned 401 after authority loss where the outcome was uncertain; the
+candidate is held for correction. Review also found that an unsupported damaged
+stored action can look like a definitive conflict to clients. Both failures
+need conservative recovery classification and regression checks before
+integration. Evidence:
+`/Users/jeanbosco/Library/Application Support/LoveliesVerification/store-readonly-offline-20261029-agent-01/result.json`.
+A corrected isolated successor passed 38 authority cases, 29 receipt-consumer
+cases and TypeScript. Independent review confirmed the tested bytes and found
+that the current mobile clients can still recover through the generic
+operation route rather than the typed store receipt. A separate generic-route
+guard passed five single-subject cases and TypeScript against the updated
+privacy runtime; it has been independently reviewed and integrated locally.
+An absent receipt still does not prove that a Google
+acknowledgement did not occur. Evidence:
+`/Users/jeanbosco/Library/Application Support/LoveliesVerification/store-readonly-successor-offline-20261029-agent-01/result.json`,
+`/Users/jeanbosco/Library/Application Support/LoveliesVerification/generic-store-recovery-fence-20261029-root-01/local-run-01/result.json`
+and `/Users/jeanbosco/Library/Application Support/LoveliesVerification/generic-store-recovery-ci-20261029-agent-01/local-run-01/result.json`.
+A further isolated store draft binds definitive errors and typed receipts to
+the exact row at final admission. Three targeted local cases and TypeScript
+passed against the combined runtime; the full affected store suites and
+updated workflow count still need verification before integration. Evidence:
+`/Users/jeanbosco/Library/Application Support/LoveliesVerification/store-replay-final-error-rebound-20261029-root-02/local-run-01/result.json`.
+An isolated Android typed store-recovery candidate compiled and passed 44
+focused host unit tests, including 13 new recovery cases, without provider
+calls. A vault-write ambiguity successor then compiled and passed 48 focused
+tests, including 17 recovery cases. Independent review found that completed
+deletion can erase unresolved purchase evidence and that an unrelated vault
+write can overwrite the saved purchase marker before dispatch. The candidate
+remains unintegrated while those cases are corrected. An unknown store receipt
+does not prove whether a Google acknowledgement occurred. Evidence:
+`/Users/jeanbosco/Documents/LoveliesVerification/android-store-recovery-20261029/RESULTS-1.json`
+and `/Users/jeanbosco/Documents/LoveliesVerification/android-store-recovery-20261029-v2/RESULTS-1.json`.
+An isolated keyed privacy-grant successor passed 27 single-subject cases and
+TypeScript. Independent review found that final grant/publication changes,
+some retired-receipt classifications and corrupted row linkage require further
+work, so that candidate remains unintegrated. The one-use retrieval path and
+periodic cleanup of expired grant records remain separate operating gates.
+Evidence:
+`/Users/jeanbosco/Library/Application Support/LoveliesVerification/privacy-export-idempotency-expiry-20261029-agent-01/local-run-rebound-02/result.json`
+and `/Users/jeanbosco/Library/Application Support/LoveliesVerification/privacy-grant-independent-review-20261029-agent-01/REVIEW.md`.
+A later privacy admission candidate passed its first 30 selected local cases
+and TypeScript, then failed a final expired-status timing case; three remaining
+cases did not run. A structured expiry result is also needed to bind the
+client's original request and session. This attempt is preserved and is not a
+pass for the candidate. Evidence:
+`/Users/jeanbosco/Library/Application Support/LoveliesVerification/privacy-export-idempotency-admission-20261029-agent-01/local-run-rebound-01/result.json`.
+A structured-disposition successor passed 35 selected single-subject cases and
+TypeScript, including the previously failing interleaving. Its final check
+establishes the result at the admitted database snapshot; it cannot guarantee
+that state remains unchanged until network delivery. It has been independently
+reviewed and integrated locally. The affected store
+regression suite was rerun as 104 separate local cases, all passing; both
+configured-database controls reported 144 expected skips. This split run does
+not establish an aggregate workflow or GitHub CI pass. The cached Deno Edge
+typecheck also passed on the combined local sources. A first combined workflow
+attempt stopped after three test outputs when its supervisor encountered a
+process-control permission error. The later exact generic workflow step also
+stopped before its cases because Bash could not create a sandboxed here-document
+file. A workflow-only successor without the here-documents then passed the
+actual 35-case privacy and five-case generic steps locally, plus validator and
+database-variable controls. It has been independently reviewed and integrated
+locally. Both
+failures are preserved. The API has not been deployed. Evidence:
+`/Users/jeanbosco/Library/Application Support/LoveliesVerification/privacy-export-idempotency-disposition-20261029-agent-01/local-run-rebound-01/result.json`,
+`/Users/jeanbosco/Library/Application Support/LoveliesVerification/privacy-generic-edge-check-20261029-root-01/edge-01/result.json`,
+`/Users/jeanbosco/Library/Application Support/LoveliesVerification/backend-ci-privacy-combined-20261029-root-01/result.json`,
+`/Users/jeanbosco/Library/Application Support/LoveliesVerification/backend-ci-privacy-per-case-20261029-agent-01/result-backend-combined-01/result.json`
+and `/Users/jeanbosco/Library/Application Support/LoveliesVerification/backend-workflow-no-heredoc-20261029-agent-01/result-workflow-successor-01/result.json`.
 An isolated iOS purchase-recovery successor passed 55 synthetic same-subject
 actor and extracted-coordinator assertions, including journal compaction and
 deletion cases. It remains unintegrated: independent review found the purchase
@@ -1046,6 +1117,45 @@ recovery path. Uncertain post-deletion outcomes, legacy migration, actual
 Keychain and StoreKit behavior, and the server grant contract remain
 unqualified. Evidence:
 `/Users/jeanbosco/Library/Application Support/LoveliesVerification/ios-store-disposition-20261029-agent-01/README.md`.
+A later isolated iOS successor adds a pre-sheet purchase reservation and retains
+the original privacy-grant intent through download and temporary-file preparation.
+Its network-denied macOS host run passed 72 synthetic same-subject checks. A
+separate unsigned Release build of the reconstructed candidate using the iOS
+SDK passed with 263 copied iOS inputs unchanged. Neither run exercised StoreKit,
+Keychain or a device.
+Independent review found that retaining the grant in the generic pending list
+blocks unrelated editing and requests even after a successful export. A usable
+fresh-export path also needs exact presentation and cleanup exclusion plus a
+durable delivery-unknown disposition. The successor remains unintegrated while
+those issues, uncertain purchase completion and deletion disposition are fixed.
+Evidence:
+`/Users/jeanbosco/Library/Application Support/LoveliesVerification/ios-store-reservation-export-20261029-agent-01/README.md`,
+`/Users/jeanbosco/Library/Application Support/LoveliesVerification/ios-store-reservation-export-20261029-agent-01/result-02/result.json`
+and `/Users/jeanbosco/Library/Application Support/LoveliesVerification/ios-store-sdk-preflight-20261029-root-01/build-result.json`.
+The subsequent iOS host test attempt stopped after 58 assertions when its
+sandbox denied a synthetic protected atomic-file write. A fresh host run with
+an injected scratch writer passed 107 checks. A separate macOS probe of the
+actual atomic, protected writer passed with network denied and without the
+strict filesystem-write sandbox. The probe does not establish iOS device or
+Keychain behavior, and the revised client still needs an iOS SDK build.
+Independent review subsequently identified unvalidated new
+export-request responses and possible loss of legacy grant evidence during
+session or deletion cleanup; the client remains held for correction. Both
+attempts remain preserved. Evidence:
+`/Users/jeanbosco/Library/Application Support/LoveliesVerification/ios-privacy-handoff-20261029-agent-01/result-01/result.json`,
+`/Users/jeanbosco/Library/Application Support/LoveliesVerification/ios-privacy-handoff-20261029-agent-01/result-02/result.json`
+and `/Users/jeanbosco/Library/Application Support/LoveliesVerification/ios-privacy-handoff-independent-review-20261029-agent-01/REVIEW.md`.
+A further isolated successor preserves the older grant and export-request
+evidence. Its first host compile stopped on two missed callers; the corrected
+run passed 168 main, 14 guest-deletion and eight face-retirement checks. An
+unsigned iOS Release SDK build of the reconstructed successor also passed with
+263 inputs unchanged. These tests use synthetic services and extracted
+consumers. Independent review found a remaining same-account race that can
+overwrite an unrelated pending intent, so the client remains unintegrated.
+Evidence:
+`/Users/jeanbosco/Library/Application Support/LoveliesVerification/ios-privacy-receipt-cleanup-20261029-agent-01/result-01/result.json`,
+`/Users/jeanbosco/Library/Application Support/LoveliesVerification/ios-privacy-receipt-sdk-20261029-root-01/build-result.json`
+and `/Users/jeanbosco/Library/Application Support/LoveliesVerification/ios-privacy-receipt-cleanup-independent-review-20261029-agent-01/REVIEW.md`.
 An independent source review additionally found that the purchase sheet can be
 opened before the recovery slot is available. Direct store commits use the
 existing audience check that blocks outstanding deletion requests; ordering and
@@ -2170,6 +2280,16 @@ These findings do not establish hosted behavior or completed recovery. Evidence:
 `/Users/jeanbosco/Library/Application Support/LoveliesVerification/restore-retention-raw-successor-20261029-agent-01/README.md`
 and `/Users/jeanbosco/Library/Application Support/LoveliesVerification/restore-retention-raw-successor-independent-review-20261029-01/REVIEW.md`
 and `/Users/jeanbosco/Library/Application Support/LoveliesVerification/restore-retention-inventory-pglite-runner-successor-20261029-agent-01/result-01/result.json`.
+An isolated draft now combines that inventory candidate with the later store
+authority changes in the database adapter. Six synthetic in-process adapter
+checks passed, including validator ordering, expired authority and uncertain
+rollback/commit handling. The merged source, the actual PostgreSQL rollback
+contract and the per-case retention runner still require independent review
+and rebinding to the final source. No retention candidate suite, migration,
+provider deletion or restore rehearsal was completed by those six checks.
+Evidence:
+`/Users/jeanbosco/Library/Application Support/LoveliesVerification/restore-retention-semantic-merge-20261029-root-01/README.md`
+and `/Users/jeanbosco/Library/Application Support/LoveliesVerification/restore-retention-semantic-merge-20261029-root-01/adapter-test-01/result.json`.
 
 The Storage status adapter previously treated arbitrary native HTTP 404s as
 object absence and could accept a 404 DELETE. Six isolated regressions reproduced

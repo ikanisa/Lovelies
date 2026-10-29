@@ -1,11 +1,12 @@
 import type { RestoreTransactionScope } from './restore-transaction.ts';
 
 export type Binding = string | number | null | ArrayBuffer;
+export type InvocationAuthorityOutcomeCode = 'store_operation_outcome_unresolved' | 'privacy_export_grant_outcome_unresolved';
 export interface Database {
     invocation<T>(callback: () => T | Promise<T>): Promise<T>;
     /** Opt-in authority for one active invocation; the caller retains ownership
      * of its exact actor and a synchronous expiry check. */
-    bindInvocationAuthority(check: () => Promise<void>, fresh: () => void): void;
+    bindInvocationAuthority(check: () => Promise<void>, fresh: () => void, outcomeCode?: InvocationAuthorityOutcomeCode): void;
     all<T = Record<string, unknown>>(sql: string, ...bindings: Binding[]): Promise<T[]>;
     one<T = Record<string, unknown>>(sql: string, ...bindings: Binding[]): Promise<T | null>;
     run(sql: string, ...bindings: Binding[]): Promise<void>;

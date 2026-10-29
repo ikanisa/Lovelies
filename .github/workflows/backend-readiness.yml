@@ -67,6 +67,106 @@ jobs:
           grep -qx '# pass 104' "$report_file"
           grep -qx '# fail 0' "$report_file"
           grep -qx '# skipped 0' "$report_file"
+      - name: Run PGlite-only privacy grant recovery regressions
+        working-directory: services/supabase-api
+        shell: bash
+        run: |
+          set -euo pipefail
+          report_file="$(mktemp "${TMPDIR:-/tmp}/lovelies-privacy-grant.XXXXXXXX")"
+          trap 'rm -f "$report_file"' EXIT
+          cases=(
+            'keyed grant and privacy lookup replay the same one-use result without plaintext persistence'
+            'a lost committed grant reply is recovered by original key without another grant'
+            'changed request and same-account session reject the old key without creating another grant'
+            'expired grants cannot be recovered or replayed as live'
+            'consumed grants cannot be recovered and survive legacy cleanup until expiry'
+            'missing, altered or corrupted stored grant data fails closed and never creates a replacement'
+            'legacy no-key grants remain usable and do not create a keyed operation'
+            'privacy request operation receipt coexists while a reused key remains unresolved'
+            'expired grant receipt retention honors holds and verifies encrypted receipt binding'
+            'unknown privacy operation remains unknown without issuing a grant'
+            'lost fenced COMMIT reply reconciles the exact grant without redispatch'
+            'lost independent prepare reply fences retries without issuing an additional grant'
+            'partial grant tombstones fail before conflicts while intact retirement and genuine conflicts remain distinct'
+            'a damaged prior action remains unresolved, including a recomputed unkeyed hash'
+            'renewed session learns only a verified expired grant status and can issue a fresh key'
+            'privacy expiry after journal prepare leaves the accepted plan pending and no SQL grant'
+            'privacy session revocation after journal prepare rolls back SQL and leaves a pending plan'
+            'privacy expiry during SQL commit returns unresolved with a committed journal receipt'
+            'privacy revocation after journal acknowledgement suppresses the committed grant'
+            'privacy expiry during final admitted response suppresses an already committed grant'
+            'a read-only grant receipt suppresses final session expiry without claiming a write'
+            'own privacy grant authority does not require active face consent or audience capability'
+            'logout remains terminal without installing privacy grant authority'
+            'anonymous own account deletion remains available without the grant postguard'
+            'postcommit session failure remains unresolved even if authority returns before final release'
+            'consumption is not expiry until the exact authenticated grant deadline has passed'
+            'missing or corrupted expired grant rows and revoked request evidence do not assert exact expiry'
+            'damaged retired action or hash cannot produce a definitive grant outcome'
+            'damaged or missing receipt grant identifiers cannot cause expired row cleanup'
+            'final grant lookup admission detects consumption and suppresses the prior bearer'
+            'final expired-status admission detects a changed exact grant row'
+            'keyed grant consumption after acknowledgement suppresses its committed response'
+            'legacy no-key grant keeps its shape and becomes unresolved on postcommit session expiry'
+            'final grant admission detects publication retirement before releasing a bearer'
+            'malformed bound expiry fields never produce a terminal disposition'
+          )
+          node --input-type=module -e '
+          import assert from "node:assert/strict";
+          import fs from "node:fs";
+          const source = fs.readFileSync("test/privacy-export-grant-idempotency.test.mjs", "utf8");
+          const declared = [...source.matchAll(/^test\(\x27([^\x27]+)\x27/gm)].map(match => match[1]);
+          assert.deepEqual(declared, process.argv.slice(1), "offline privacy case list changed");
+          ' "${cases[@]}"
+          for test_case in "${cases[@]}"; do
+            selector="$(node -e 'process.stdout.write("^" + process.argv[1].replace(/[.*+?^${}()|[\]\\]/g, "\\$&") + "$")' "$test_case")"
+            env -u TEST_DATABASE_URL node --experimental-transform-types \
+              --import ./test/offline-regression-guard.mjs --test --test-isolation=none \
+              --test-reporter=tap --test-concurrency=1 --test-timeout=30000 \
+              --test-name-pattern="$selector" test/privacy-export-grant-idempotency.test.mjs | tee "$report_file"
+            [[ "$(grep -c '^ok [0-9][0-9]* - ' "$report_file")" == 1 ]]
+            ! grep -q '^not ok ' "$report_file"
+            grep -Fqx "ok 1 - $test_case" "$report_file"
+            for summary in 'tests 1' 'pass 1' 'fail 0' 'cancelled 0' 'skipped 0' 'todo 0'; do
+              [[ "$(grep -c "^# ${summary%% *} " "$report_file")" == 1 ]]
+              grep -Fxq "# $summary" "$report_file"
+            done
+          done
+      - name: Run PGlite-only generic store recovery regressions
+        working-directory: services/supabase-api
+        shell: bash
+        run: |
+          set -euo pipefail
+          report_file="$(mktemp "${TMPDIR:-/tmp}/lovelies-generic-store.XXXXXXXX")"
+          trap 'rm -f "$report_file"' EXIT
+          cases=(
+            'generic lookup does not release an intact store receipt'
+            'generic lookup does not classify a retired store receipt as definitive'
+            'generic lookup does not emit a mixed-source conflict when a store row exists'
+            'a store action with a damaged source is withheld by the generic lookup'
+            'generic personal and absent operation behavior remains available'
+          )
+          node --input-type=module -e '
+          import assert from "node:assert/strict";
+          import fs from "node:fs";
+          const source = fs.readFileSync("test/generic-store-operation.test.mjs", "utf8");
+          const declared = [...source.matchAll(/^test\(\x27([^\x27]+)\x27/gm)].map(match => match[1]);
+          assert.deepEqual(declared, process.argv.slice(1), "offline generic store case list changed");
+          ' "${cases[@]}"
+          for test_case in "${cases[@]}"; do
+            selector="$(node -e 'process.stdout.write("^" + process.argv[1].replace(/[.*+?^${}()|[\]\\]/g, "\\$&") + "$")' "$test_case")"
+            env -u TEST_DATABASE_URL node --experimental-transform-types \
+              --import ./test/offline-regression-guard.mjs --test --test-isolation=none \
+              --test-reporter=tap --test-concurrency=1 --test-timeout=30000 \
+              --test-name-pattern="$selector" test/generic-store-operation.test.mjs | tee "$report_file"
+            [[ "$(grep -c '^ok [0-9][0-9]* - ' "$report_file")" == 1 ]]
+            ! grep -q '^not ok ' "$report_file"
+            grep -Fqx "ok 1 - $test_case" "$report_file"
+            for summary in 'tests 1' 'pass 1' 'fail 0' 'cancelled 0' 'skipped 0' 'todo 0'; do
+              [[ "$(grep -c "^# ${summary%% *} " "$report_file")" == 1 ]]
+              grep -Fxq "# $summary" "$report_file"
+            done
+          done
       - run: pnpm backend:client:test
       - run: node --test services/link-association-worker/test/worker.test.mjs
       - run: pnpm backup:test

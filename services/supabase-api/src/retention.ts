@@ -1,4 +1,5 @@
 import { asyncSome } from './async-collections.ts';
+import { verifiedGrantReceipt } from './privacy-export-grant.ts';
 import { ApiError, digest, jsonBody, ok, stable, uuid, type AppContext, type Binding, type Database } from './types.ts';
 import { executeOperation, prepareOperation, retiredOperationInput, retiredOperationResponse } from './operations.ts';
 import { hasConsent } from './gallery.ts';
@@ -609,7 +610,16 @@ async function adultReceiptGeneration(ctx: AppContext, id: string): Promise<stri
     const audience = await ctx.db.one<{ version: number }>('SELECT version FROM account_audience WHERE account_id=?', review.account_id);
     return digest(stable({ review, audience_version: audience?.version ?? null }));
 }
-function privacyOperation(row: StoredOperation, input: Record<string, unknown>, result: Record<string, any>, request: any): boolean {
+async function privacyOperation(ctx: AppContext, row: StoredOperation, input: Record<string, unknown>, result: Record<string, any>, request: any): Promise<boolean> {
+    if (row.action === 'privacy.export.grant') {
+        if (request.request_type !== 'export' || row.actor_id !== request.subject_id || input.request_id !== request.id) return false;
+        // Do not minimize an unknown or damaged encrypted delivery record.
+        // The original key may need to remain available across key rotation.
+        try {
+            const {receipt}=await verifiedGrantReceipt(ctx,row.actor_id,row.operation_key,row);
+            return receipt.request_id === request.id && receipt.account_id === request.subject_id;
+        } catch { return false; }
+    }
     if (!object(result.privacy_request) || result.privacy_request.id !== request.id || result.privacy_request.request_type !== request.request_type) return false;
     const saved = result.privacy_request;
     if (row.action === 'privacy.request.' + request.request_type) {
@@ -805,7 +815,7 @@ async function pruneTerminalOperationCopies(ctx: AppContext, maximum: number): P
             entity: request.id, subjects: [request.subject_id],
             sql: "o.source='privacy' AND (json_extract(o.payload_json,'$.request_id')=? OR json_extract(CASE WHEN json_valid(json_extract(o.response_json,'$.privacy_request')) THEN json_extract(o.response_json,'$.privacy_request') ELSE '{}' END,'$.id')=?)",
             bindings: [request.id, request.id],
-            valid: (row, input, result) => privacyOperation(row, input, result, request),
+            valid: (row, input, result) => privacyOperation(ctx, row, input, result, request),
         }, budget);
     }
 }
