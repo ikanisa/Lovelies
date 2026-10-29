@@ -1086,8 +1086,8 @@ the two controls, dependency closure and recorded process absence. The aggregate
 workflow and GitHub CI remain open. Root also rechecked all 67 TAP logs against
 a closed-world classifier. A cached Deno Edge typecheck also passed against the
 isolated candidate with network denied and inputs unchanged. The six source,
-test and workflow files are now integrated locally and match the sealed tested
-bytes. Provider acknowledgement, Android/iOS recovery, hosted and store gates
+test and workflow files were committed and pushed as `24b11d1`; they match the
+sealed tested bytes. Provider acknowledgement, Android/iOS recovery, hosted and store gates
 remain open. Evidence:
 `/Users/jeanbosco/Library/Application Support/LoveliesVerification/store-replay-final-error-complement-20261029-root-03/complement-run-01/result.json`
 and `/Users/jeanbosco/Library/Application Support/LoveliesVerification/store-replay-final-error-complement-20261029-root-03/root-tap-postflight-01.json`
@@ -1117,6 +1117,42 @@ write can therefore be mistaken for empty storage. File-backed recovery and
 ambiguous auxiliary-file handling need correction and device qualification.
 This does not establish device, Play provider or hosted behavior. Evidence:
 `/Users/jeanbosco/Documents/LoveliesVerification/android-store-recovery-20261029-v3/RESULTS-1.json`.
+The v4 Android successor ran 89 local tests: 88 passed and one backup-only
+file-recovery test failed a byte-equality assertion after bootstrap. Structural
+recovery had already passed; source review indicates bootstrap deliberately
+re-saves the map, so a separately sealed successor will test byte-exact backup
+promotion before that save and verify the save's values and count afterward.
+The failure and all 279 input hashes remain preserved. Physical Android
+AtomicFile and secure-storage behavior remain unqualified. Evidence:
+`/Users/jeanbosco/Documents/LoveliesVerification/android-store-recovery-20261029-v4/RESULTS-1.json`
+and `/Users/jeanbosco/Documents/LoveliesVerification/android-store-recovery-20261029-v4/FAILURES-1.json`.
+A v6 successor is prepared with 62 explicitly selected methods and 27
+multi-actor or multi-recipient exclusions recorded as unverified. It also
+adds failure-safe supervisor cleanup and separately scoped local process
+probes. It has not been run and needs independent review; Gradle offline mode
+is not an operating-system network sandbox. Evidence:
+`/Users/jeanbosco/Documents/LoveliesVerification/android-store-recovery-20261029-v6/HANDOFF-SHA256.json`.
+The reviewed v7 supervisor also remains held: its probe harness could leave a
+detached child after interruption, and a daemon-log PID alone cannot safely
+authorize signalling a live process. A separately sealed correction is being
+prepared; no v7 probes or Android tests ran. Evidence:
+`/Users/jeanbosco/Documents/LoveliesVerification/android-store-recovery-20261029-v7/HANDOFF-SHA256.json`.
+An unexecuted v8 successor adds interruption-safe probe cleanup and removes
+logfile-only authority to signal a daemon. It retains the 62 selected methods
+and 27 explicit exclusions. Its source, process probes and test plan remain
+under independent review:
+`/Users/jeanbosco/Documents/LoveliesVerification/android-store-recovery-20261029-v8/HANDOFF-SHA256.json`.
+The v8 custom supervisor remains held after review. A separately reviewed,
+root-owned direct Gradle session on a fresh copy exited normally and passed
+the exact 62 selected Android host methods, with no unexpected or skipped
+methods and unchanged inputs. Independent postflight matched all six XML files,
+the source and command seals, and found the observed wrapper/daemon and
+Gradle/aapt2 processes absent. The 27 excluded methods, OS network isolation, total memory bound,
+real Android AtomicFile/Keystore, Play and device behavior remain unqualified.
+The ten Android source and test files are now integrated locally and match the
+reviewed, tested bytes. Evidence:
+`/Users/jeanbosco/Documents/LoveliesVerification/android-store-recovery-direct-20261029-root-01/direct-result.json`
+and `/Users/jeanbosco/Documents/LoveliesVerification/android-direct-independent-postflight-20261029-reviewer-01/REPORT.md`.
 An isolated keyed privacy-grant successor passed 27 single-subject cases and
 TypeScript. Independent review found that final grant/publication changes,
 some retired-receipt classifications and corrupted row linkage require further
@@ -1153,6 +1189,35 @@ failures are preserved. The API has not been deployed. Evidence:
 `/Users/jeanbosco/Library/Application Support/LoveliesVerification/backend-ci-privacy-combined-20261029-root-01/result.json`,
 `/Users/jeanbosco/Library/Application Support/LoveliesVerification/backend-ci-privacy-per-case-20261029-agent-01/result-backend-combined-01/result.json`
 and `/Users/jeanbosco/Library/Application Support/LoveliesVerification/backend-workflow-no-heredoc-20261029-agent-01/result-workflow-successor-01/result.json`.
+The one-use export capability is currently sent in the retrieval URL. Supabase
+documents a gateway `request.url` log field and shows it containing a query
+string in its [log-field reference](https://supabase.com/docs/guides/observability/log-field-reference)
+and [error-log guidance](https://supabase.com/kb/troubleshooting/discovering-and-interpreting-api-errors-in-the-logs-7xREI9).
+This creates a concrete capability-exposure risk; the exact hosted logging
+configuration has not been tested. Replace or safely control that transport in
+coordination with both clients before release. Do not inspect or expose real
+capabilities in logs while investigating. Supabase's [function logging guide](https://supabase.com/docs/guides/functions/logging)
+also describes invocation views that can include headers and bodies; moving the
+token alone does not establish that its new location is unlogged.
+A separate delivery-fence candidate passed 46 individually selected local
+cases and TypeScript. It binds the final response to current session, original
+deadlines and exact consumed/retired records after cleanup; a late failure
+returns an unresolved outcome. Root's strict log postflight recorded one exact
+expected error diagnostic from the lost-grant-reply test. Independent review
+found that publication changes during Storage I/O are not bound to the original
+snapshot and failure cleanup can overwrite changed or verified evidence. Those
+findings, affected consumer checks and a dedicated CI lane require work. It does not
+recover bytes after a lost response, prove Storage DELETE terminality or remove
+the URL token. The candidate is unintegrated. Evidence:
+`/Users/jeanbosco/Library/Application Support/LoveliesVerification/privacy-export-delivery-fence-20261029-agent-01/local-run-01/result.json`
+and `/Users/jeanbosco/Library/Application Support/LoveliesVerification/privacy-export-delivery-fence-20261029-agent-01/root-tap-postflight-01.json`.
+A cached, network-denied Deno Edge typecheck also passed on the same isolated
+runtime, with its inputs unchanged:
+`/Users/jeanbosco/Library/Application Support/LoveliesVerification/privacy-export-delivery-edge-20261029-root-01/result.json`.
+An unexecuted successor adds original-publication and cleanup-preimage checks,
+13 new same-subject cases and a separate offline CI lane. It is under independent
+review; the previous pass does not qualify these new inputs. Evidence:
+`/Users/jeanbosco/Library/Application Support/LoveliesVerification/privacy-export-delivery-evidence-20261029-agent-02/README.md`.
 An isolated iOS purchase-recovery successor passed 55 synthetic same-subject
 actor and extracted-coordinator assertions, including journal compaction and
 deletion cases. It remains unintegrated: independent review found the purchase
@@ -1219,6 +1284,74 @@ handling need separate proof. Neither host test establishes real
 Keychain, device, StoreKit, provider or release behavior. Evidence:
 `/Users/jeanbosco/Library/Application Support/LoveliesVerification/ios-privacy-session-fence-20261029-agent-01/result-01/result.json`
 and `/Users/jeanbosco/Library/Application Support/LoveliesVerification/ios-privacy-session-fence-fixed-20261029-agent-01/result-01/result.json`.
+The next isolated successor passed 206 main, 17 guest and 10 face host checks
+with network denied and its inputs unchanged. It adds conservative mutation
+outcome holds, privacy publication fencing and exact credential-slot protection.
+Independent review found that stale session retirement can still overwrite a
+newer same-account upload journal or clear its upload stages, despite preserving
+the newer credential; face/deletion journals and device state have similar
+risks. Displayed privacy data also needs invalidation on later session retirement
+or expiry, and delayed deletion-status consumers need receipt-specific publication
+fences. These require correction before integration. An unsigned iOS SDK build
+remains pending. A StoreKit pending reservation without a transaction digest
+remains held because a later update alone cannot safely identify it. Real Keychain, device and provider
+behavior are not established. Evidence:
+`/Users/jeanbosco/Library/Application Support/LoveliesVerification/ios-review-holds-20261029-agent-01/result-01/result.json`.
+A further retirement/presentation candidate failed to compile before its host
+tests because two new throwing guards omitted `try`. A separately sealed
+successor corrects those calls and keeps completed deletion receipts held when
+upload evidence survives. The successor compiled, but its main host suite then
+failed a pending-purchase/renewal assertion after 58 reported passes; the guest
+and face suites did not run. The cause needs diagnosis and correction. Both
+failed results are preserved:
+`/Users/jeanbosco/Library/Application Support/LoveliesVerification/ios-retirement-presentation-20261029-agent-01/result-01/result.json`
+and `/Users/jeanbosco/Library/Application Support/LoveliesVerification/ios-retirement-presentation-fixed-20261029-agent-01/result-01/result.json`.
+A diagnostic run of the same production candidate passed the previously failing
+main assertion after instrumentation and passed 219 main and 18 guest checks,
+but the face consumer exited with `sessionChanged` before a named pass. The
+timing-dependent main assertion and the face failure both need diagnosis; the
+diagnostic run is not a complete candidate pass. Evidence:
+`/Users/jeanbosco/Library/Application Support/LoveliesVerification/ios-retirement-presentation-diagnostic-20261029-agent-01/result-01/result.json`.
+A subsequent controlled interleaving demonstrated that the pending-purchase
+assertion observed an in-flight scan; it passed after that scan completed. Its
+main and guest checks passed, but the face consumer still returned
+`sessionChanged` during a later two-repository same-account scenario. That
+failure remains unresolved. Evidence:
+`/Users/jeanbosco/Library/Application Support/LoveliesVerification/ios-retirement-interleaving-20261029-agent-01/result-01/result.json`.
+A further isolated cancellation successor passed 220 main, 18 guest and 12 face
+host checks, including separate stale-face and serialized cancellation cases.
+Independent source review found a possible lock-order deadlock between logout
+and mutation/intent persistence, including credential adoption and other
+retirement paths. It also found stale face-status/challenge responses that can
+overwrite a newer cancellation journal. Correct ordering and deterministic
+concurrent regressions are required before integration or an unsigned SDK build; the precise
+throw in the earlier uninstrumented face failure was not established.
+Evidence:
+`/Users/jeanbosco/Library/Application Support/LoveliesVerification/ios-retirement-cancellation-20261029-agent-01/result-01/result.json`.
+The subsequent shared-fence/promotion successor compiled but failed its main
+host run after 166 named checks: an already-retired session reached share-file
+preparation before the final proof rejected it. Guest and face suites did not
+run. A separate successor is being prepared to check authority before file
+creation while retaining the retirement-during-write and exact-cleanup checks.
+The failure remains at
+`/Users/jeanbosco/Library/Application Support/LoveliesVerification/ios-fence-promotion-20261029-agent-01/result-01/result.json`.
+A corrected successor passed 236 main host checks, including the earlier
+share-file preflight and controlled lock cases. Its guest consumer then exited
+with `sessionChanged` before its first named check; the face suite did not run.
+The source and failure remain isolated for diagnosis:
+`/Users/jeanbosco/Library/Application Support/LoveliesVerification/ios-fence-promotion-preflight-20261029-agent-01/result-01/result.json`.
+The guest diagnostic found that a retired synthetic session with no live local
+proof still dispatched a deletion request. Its receipt and credential remained
+retained. An isolated successor now checks shared generation and exact receipt
+ownership before dispatch; it awaits testing and review. Evidence:
+`/Users/jeanbosco/Library/Application Support/LoveliesVerification/ios-guest-authority-diagnostic-20261029-agent-01/guest-result-01/result.json`.
+Apple documents that a successful pending purchase arrives through
+[transaction updates](https://developer.apple.com/documentation/storekit/product/purchaseresult/pending),
+which can also contain [other transaction events](https://developer.apple.com/documentation/storekit/transaction/updates).
+Its [app-account token](https://developer.apple.com/documentation/storekit/transaction/appaccounttoken)
+is returned in the completed transaction. A per-attempt mapping would require a
+coordinated server contract and provider qualification; the documentation does
+not establish that the current account-scoped token identifies a pending attempt.
 An independent source review additionally found that the purchase sheet can be
 opened before the recovery slot is available. Direct store commits use the
 existing audience check that blocks outstanding deletion requests; ordering and
@@ -2370,6 +2503,38 @@ the runner rejected the observed names/order. No retention candidate case ran.
 All recorded child PIDs were absent afterward. The harness needs correction and
 independent review before a new attempt. Evidence:
 `/Users/jeanbosco/Library/Application Support/LoveliesVerification/restore-retention-inventory-pglite-runner-ci-b44e7b3-20261029-agent-01/result-01/result.json`.
+The corrected runner was rebound to `24b11d1`, independently reviewed and
+started with eight additional same-subject store interactions. It passed its
+skip controls, but three candidate preview-conflict cases failed: a hold fixture
+violated a NOT NULL constraint, a pending-writer case failed its progress
+assertion, and a late preview-change case returned reconciliation required. It
+then stopped when a deliberately exercised API error was mixed into an otherwise
+passing TAP report. The interrupted case is not counted as passed by that
+harness, and later cases did not run. The candidate failures, stdout/stderr
+handling and a source-bound continuation need correction and review. Recorded
+child PIDs were absent afterward. Evidence:
+`/Users/jeanbosco/Library/Application Support/LoveliesVerification/restore-retention-inventory-pglite-runner-ci-24b11d1-20261029-agent-01/result-01/result.json`.
+The independently reviewed strict continuation passed all three previously
+failing cases, but stopped at a later case whose passing TAP output was
+accompanied by an intentionally injected error diagnostic not yet listed for
+that exact case. Its 46 preceding recorded steps passed; it is not a complete
+continuation pass. Source-bound diagnostic rules and the remaining cases need
+another reviewed continuation. All recorded child PIDs were absent. Evidence:
+`/Users/jeanbosco/Library/Application Support/LoveliesVerification/restore-retention-inventory-pglite-runner-continuation-strict-24b11d1-20261029-agent-01/result-01/result.json`.
+The next reviewed 90-case continuation confirmed the intended injected fault in
+the previously withheld operator case. It then stopped at the database-clock
+case: its TAP assertion passed, but the previously unobserved lowercase
+PostgreSQL error diagnostic was not yet authorized for that exact case. The
+29 preceding recorded steps passed, all owned child PIDs were absent afterward,
+and the remaining cases did not run. The result is preserved:
+`/Users/jeanbosco/Library/Application Support/LoveliesVerification/restore-retention-inventory-pglite-runner-continuation-injection-24b11d1-20261029-agent-01/result-01/result.json`.
+The following reviewed clock continuation ran all 90 selected local cases: 89
+passed and `candidate-request-holds-case-020` failed its before-mutation hold
+assertion. Five process/control/typecheck steps passed, and recorded child PIDs
+were absent afterward. The candidate remains held until the failure is diagnosed,
+corrected and the affected evidence is rerun. This is not a native PostgreSQL,
+provider or CI pass. Evidence:
+`/Users/jeanbosco/Library/Application Support/LoveliesVerification/restore-retention-inventory-pglite-runner-continuation-clock-24b11d1-20261029-agent-01/result-01/result.json`.
 
 The Storage status adapter previously treated arbitrary native HTTP 404s as
 object absence and could accept a 404 DELETE. Six isolated regressions reproduced

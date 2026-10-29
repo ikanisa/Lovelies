@@ -92,7 +92,7 @@ data class GuestDeletionRecord(
             assertOriginalAnonymous(NativeProtocol.id(original["account_id"]),original["auth_method"] as? String)
             staged["credentials"]=original
         }
-        return staged
+        return StoreRecoveryRetention.keep(previous,staged)
     }
     fun restartStorage(previous: WireObject): WireObject {
         assertRestartAllowed()
@@ -114,7 +114,7 @@ data class GuestDeletionRecord(
             val retained=NativeProtocol.rows(rows,16).filter { NativeProtocol.id(it["account"])!=account }
             if(retained.isNotEmpty())staged["retired_account_recoveries"]=retained
         }
-        return staged
+        return StoreRecoveryRetention.keep(previous,staged)
     }
     companion object {
         fun create(origin: String,account: String): GuestDeletionRecord {

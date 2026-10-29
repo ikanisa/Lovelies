@@ -30,7 +30,7 @@ class SessionFence {
 class SecureSession(context: Context,endpoint: String) {
     private val store=KeyStore.getInstance("AndroidKeyStore").apply { load(null) }
     private val alias="lovelies.session.aes.v2"
-    private val file=AtomicFile(File(context.noBackupFilesDir,"lovelies-session-v2-${NativeProtocol.sha256(endpoint.toByteArray()).take(16)}.bin"))
+    private val file=SessionAtomicStorage(PlatformSessionAtomicFile(File(context.noBackupFilesDir,"lovelies-session-v2-${NativeProtocol.sha256(endpoint.toByteArray()).take(16)}.bin")))
     private val aad="${context.packageName}:$endpoint:v2".toByteArray(Charsets.UTF_8)
     private val deviceScope=NativeProtocol.sha256("$endpoint:${context.noBackupFilesDir.absolutePath}".toByteArray()).take(16)
     private val uploadDirectory=File(context.noBackupFilesDir,"photo-uploads-$deviceScope")
@@ -66,8 +66,9 @@ class SecureSession(context: Context,endpoint: String) {
     fun hasUnreferencedEnrollmentKeys(known: Set<String>)=store.aliases().asSequence().any {
         it.startsWith("lovelies.device.") && it.contains(".$deviceScope.") && it !in known
     }
-    private fun secret(): SecretKey {
+    private fun secret(create: Boolean=true): SecretKey {
         (store.getKey(alias,null) as? SecretKey)?.let { return it }
+        if(!create)throw LiveFailure("secure_storage_reset")
         return KeyGenerator.getInstance(KeyProperties.KEY_ALGORITHM_AES,"AndroidKeyStore").apply {
             init(KeyGenParameterSpec.Builder(alias,KeyProperties.PURPOSE_ENCRYPT or KeyProperties.PURPOSE_DECRYPT)
                 .setBlockModes(KeyProperties.BLOCK_MODE_GCM).setEncryptionPaddings(KeyProperties.ENCRYPTION_PADDING_NONE)
@@ -75,28 +76,27 @@ class SecureSession(context: Context,endpoint: String) {
         }.generateKey()
     }
     @Synchronized fun load(): WireObject {
-        if(!file.baseFile.exists())return emptyMap()
-        val encrypted=file.readFully()
+        val encrypted=file.read() ?: return emptyMap()
         try {
             if(encrypted.size !in 30..2097152 || encrypted[0].toInt()!=2)throw LiveFailure("secure_storage_invalid")
             val cipher=Cipher.getInstance("AES/GCM/NoPadding")
-            cipher.init(Cipher.DECRYPT_MODE,secret(),GCMParameterSpec(128,encrypted.copyOfRange(1,13)));cipher.updateAAD(aad)
+            cipher.init(Cipher.DECRYPT_MODE,secret(create=false),GCMParameterSpec(128,encrypted.copyOfRange(1,13)));cipher.updateAAD(aad)
             val plain=cipher.doFinal(encrypted.copyOfRange(13,encrypted.size))
             try { return jsonMap(JSONObject(plain.toString(Charsets.UTF_8))) } finally { plain.fill(0) }
-        } catch(error: Exception) { throw LiveFailure("secure_storage_reset") } finally { encrypted.fill(0) }
+        } catch(error: Exception) { file.hold();throw LiveFailure("secure_storage_reset") } finally { encrypted.fill(0) }
     }
     @Synchronized fun save(value: WireObject) {
+        // Validate any recovered ciphertext before replacement; decryption never generates a missing key.
+        load()
         val plain=NativeProtocol.canonical(value).toByteArray(Charsets.UTF_8)
         if(plain.size>1572864)throw LiveFailure("secure_storage_full")
         try {
             val cipher=Cipher.getInstance("AES/GCM/NoPadding");cipher.init(Cipher.ENCRYPT_MODE,secret());cipher.updateAAD(aad)
             val data=byteArrayOf(2)+cipher.iv+cipher.doFinal(plain)
-            val stream=file.startWrite()
-            try { stream.write(data);file.finishWrite(stream) } catch(error: Exception) { file.failWrite(stream);throw error }
-            finally { data.fill(0) }
+            try { file.write(data) } finally { data.fill(0) }
         } finally { plain.fill(0) }
     }
-    @Synchronized fun clear() { file.delete() }
+    @Synchronized fun clear() { file.clear() }
     fun createDevice(alias: String): WireObject {
         if(!store.containsAlias(alias))KeyPairGenerator.getInstance(KeyProperties.KEY_ALGORITHM_EC,"AndroidKeyStore").apply {
             initialize(KeyGenParameterSpec.Builder(alias,KeyProperties.PURPOSE_SIGN or KeyProperties.PURPOSE_VERIFY)

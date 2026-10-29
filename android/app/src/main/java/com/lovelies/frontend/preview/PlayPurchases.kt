@@ -15,8 +15,10 @@ class PlayPurchases(context: Context,private val repository: CloudflareRepositor
     private val context=context.applicationContext
     private val scope=CoroutineScope(SupervisorJob()+Dispatchers.Main.immediate)
     private val verification=Mutex()
+    private var sheetInFlight=false
     private val client=BillingClient.newBuilder(context.applicationContext)
         .setListener { result,purchases ->
+            sheetInFlight=false
             when(result.responseCode) {
                 BillingClient.BillingResponseCode.OK -> scope.launch { verify(purchases.orEmpty()) }
                 BillingClient.BillingResponseCode.USER_CANCELED -> status=context.getString(R.string.controller_bb1d294c8d56)
@@ -66,20 +68,36 @@ class PlayPurchases(context: Context,private val repository: CloudflareRepositor
         }
     }
     fun purchase(activity: Activity,token: String) {
-        if(busy)return
+        if(busy || sheetInFlight)return
         val account=repository.credentials?.takeIf { it.method=="registered_face" }?.account ?: return
         owner=account;busy=true
         scope.launch {
             try {
+                // Reconcile the original store operation before opening another provider sheet.
+                if(repository.recoverGooglePurchase()!=null)verified()
+                if(repository.credentials?.account!=account || owner!=account)throw LiveFailure("session_changed")
+                if(!connection())throw LiveFailure("store_unavailable")
+                val existing=existingPurchases().filter { BuildConfig.PLAY_SUBSCRIPTION_PRODUCT in it.products }
+                if(repository.credentials?.account!=account || owner!=account)throw LiveFailure("session_changed")
+                if(existing.isNotEmpty()) { verify(existing);return@launch }
                 val product=product() ?: throw LiveFailure("store_product_unavailable")
                 if(repository.credentials?.account!=account || owner!=account)throw LiveFailure("session_changed")
                 if(product.subscriptionOfferDetails.orEmpty().none { it.offerToken==token })throw LiveFailure("store_offer_changed")
                 val flow=BillingFlowParams.newBuilder().setProductDetailsParamsList(listOf(BillingFlowParams.ProductDetailsParams.newBuilder()
                     .setProductDetails(product).setOfferToken(token).build())).setObfuscatedAccountId(NativeProtocol.sha256(account.toByteArray())).build()
                 val result=client.launchBillingFlow(activity,flow)
+                sheetInFlight=result.responseCode==BillingClient.BillingResponseCode.OK
                 status=if(result.responseCode==BillingClient.BillingResponseCode.OK)context.getString(R.string.controller_0d9613931369) else billingMessage(result.responseCode,context)
             } catch(problem: LiveFailure) { status=readableError(problem.code,context) }
             finally { busy=false }
+        }
+    }
+    private suspend fun existingPurchases(): List<Purchase> = suspendCancellableCoroutine { continuation->
+        client.queryPurchasesAsync(QueryPurchasesParams.newBuilder().setProductType(BillingClient.ProductType.SUBS).build()) { result,rows ->
+            if(continuation.isActive) {
+                if(result.responseCode==BillingClient.BillingResponseCode.OK)continuation.resume(rows)
+                else continuation.resumeWithException(LiveFailure("store_unavailable"))
+            }
         }
     }
     fun restore() {
@@ -88,10 +106,11 @@ class PlayPurchases(context: Context,private val repository: CloudflareRepositor
         owner=account;busy=true;status=context.getString(R.string.controller_ca350dda4dc7)
         scope.launch {
             try {
+                val recovered=repository.recoverGooglePurchase()
+                if(account!=repository.credentials?.account || owner!=account)throw LiveFailure("session_changed")
+                if(recovered!=null)verified()
                 if(!connection())throw LiveFailure("store_unavailable")
-                val purchases=suspendCancellableCoroutine<List<Purchase>> { continuation->client.queryPurchasesAsync(QueryPurchasesParams.newBuilder().setProductType(BillingClient.ProductType.SUBS).build()) { result,rows ->
-                    if(continuation.isActive) { if(result.responseCode==BillingClient.BillingResponseCode.OK)continuation.resume(rows) else continuation.resumeWithException(LiveFailure("store_unavailable")) }
-                } }
+                val purchases=existingPurchases()
                 if(account!=repository.credentials?.account || owner!=account)throw LiveFailure("session_changed")
                 if(purchases.isEmpty()) { verified();status=context.getString(R.string.controller_7bc8522e0cb4) }
                 else verify(purchases)
@@ -109,15 +128,15 @@ class PlayPurchases(context: Context,private val repository: CloudflareRepositor
             if(purchase.accountIdentifiers?.obfuscatedAccountId!=NativeProtocol.sha256(account.toByteArray())) { status=context.getString(R.string.controller_04cb36080a3e);continue }
             status=context.getString(R.string.controller_e5581cbfef39)
             try {
-                val result=repository.mutate("store.google",mapOf("product_id" to BuildConfig.PLAY_SUBSCRIPTION_PRODUCT,"purchase_token" to purchase.purchaseToken),"store",path="/subscriptions/google/transactions")
+                val result=repository.verifyGooglePurchase(BuildConfig.PLAY_SUBSCRIPTION_PRODUCT,purchase.purchaseToken)
                 if(repository.credentials?.account!=account)throw LiveFailure("session_changed")
                 verified()
                 status=if(result["billing_environment"]=="sandbox")context.getString(R.string.controller_7baa8299b4a7) else context.getString(R.string.controller_846e2c78f9fc)
             } catch(problem: LiveFailure) { status=readableError(problem.code,context)+context.getString(R.string.controller_d5bc59f2366c) }
         }
     }
-    fun clearAccount() { owner=null;plans.clear();status="" }
-    fun dispose() { owner=null;scope.cancel();client.endConnection() }
+    fun clearAccount() { sheetInFlight=false;owner=null;plans.clear();status="" }
+    fun dispose() { sheetInFlight=false;owner=null;scope.cancel();client.endConnection() }
 }
 internal fun billingMessage(code: Int,context: Context)=when(code) {
     BillingClient.BillingResponseCode.USER_CANCELED->context.getString(R.string.controller_acc527e9244f)

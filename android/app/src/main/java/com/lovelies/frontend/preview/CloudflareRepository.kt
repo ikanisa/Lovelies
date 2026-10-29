@@ -178,11 +178,14 @@ class CloudflareTransport(private val endpoint: String,private val fence: Sessio
     }
 }
 
-class CloudflareRepository(private val context: Context,endpoint: String = BuildConfig.API_BASE_URL) {
+class CloudflareRepository private constructor(private val suppliedContext: Context?,endpoint: String,private val boundary: RepositoryBoundary?) {
+    constructor(context: Context,endpoint: String=BuildConfig.API_BASE_URL):this(context,endpoint,null)
+    internal constructor(endpoint: String,boundary: RepositoryBoundary):this(null,endpoint,boundary)
+    private val context: Context get()=suppliedContext ?: throw LiveFailure("android_context_unavailable")
     val baseUrl=if(endpoint.isBlank())"" else NativeProtocol.baseUrl(endpoint,BuildConfig.DEBUG)
     val fence=SessionFence()
     private val transport=CloudflareTransport(baseUrl,fence)
-    private val vault=SecureSession(context,baseUrl)
+    private val vault: RepositoryVault=boundary?.vault ?: AndroidRepositoryVault(context,baseUrl)
     private val mutex=Mutex()
     private val photoUploadMutex=Mutex()
     private val storage = ConcurrentHashMap<String,Any?>()
@@ -204,10 +207,22 @@ class CloudflareRepository(private val context: Context,endpoint: String = Build
     private var signingAlias: String?=null
     private var pendingDevice: DeviceIdentity?=null
     private val captures=mutableListOf<WireObject>()
+    init {
+        boundary?.let { injected ->
+            storage.putAll(injected.initialStorage);credentials=injected.initialSession;pending=injected.initialPending
+            injected.initialPending?.let { storage["pending"]=it.wire() }
+            fence.switch(injected.initialSession?.account)
+        }
+    }
     fun currentScope()=fence.scope()
-    private fun save() = vault.save(storage)
-    fun saved(key: String): Any? = synchronized(storage) { storage[key] }
-    fun remember(key: String,value: Any?) { synchronized(storage) { if(value==null)storage.remove(key) else storage[key]=value;save() } }
+    // One reentrant monitor owns authority AND storage: snapshot -> durable write -> publication.
+    // No path may acquire a separate map monitor and later acquire fence in the opposite order.
+    private fun save() = synchronized(fence) { vault.save(storage.toMap()) }
+    fun saved(key: String): Any? = synchronized(fence) { storage[key] }
+    fun remember(key: String,value: Any?) = synchronized(fence) {
+        val candidate=storage.toMap().filterKeys { it!=key }+(value?.let { mapOf(key to it) } ?: emptyMap())
+        vault.save(candidate);storage.clear();storage.putAll(candidate)
+    }
     private fun cameraLogin(): CameraLoginJournal?=storage["camera_login"]?.let { CameraLoginJournal.restore(it,baseUrl) }
     val cameraLoginHeld get()=storage.containsKey("camera_login")
     private fun cameraLoginOwner(record: CameraLoginJournal): CameraLoginOwner {
@@ -225,7 +240,7 @@ class CloudflareRepository(private val context: Context,endpoint: String = Build
     private fun saveCameraLogin(value: CameraLoginJournal?,scope: SessionScope)=synchronized(fence) {
         fence.assert(scope)
         val candidate=storage.toMap().filterKeys { it!="camera_login" }+(value?.let { mapOf("camera_login" to it.wire()) } ?: emptyMap())
-        synchronized(storage) { vault.save(candidate);storage.clear();storage.putAll(candidate) }
+        synchronized(fence) { vault.save(candidate);storage.clear();storage.putAll(candidate) }
     }
     private fun clearPrivateScope() {
         transport.cancel();challenge=null;captures.clear()
@@ -241,8 +256,8 @@ class CloudflareRepository(private val context: Context,endpoint: String = Build
         scope
     }
     fun authenticationLost() = synchronized(fence) { clearPrivateScope();credentials=null;if(enrollment==null && accountRecovery==null && faceLifecycle==null && !hasPendingRefresh())storage.remove("credentials");fence.switch(null);save() }
-    fun abandonReadReview() {
-        if(pending?.action in listOf("sharing.snapshot","sharing.preview")) { pending=null;storage.remove("pending");save() }
+    fun abandonReadReview() = synchronized(fence) {
+        if(pending?.action in listOf("sharing.snapshot","sharing.preview") && !StoreRecoveryRetention.isStore(pending?.wire()) && !StoreRecoveryRetention.isStore(storage["pending"])) { pending=null;storage.remove("pending");save() }
     }
     private fun parseCredentials(value: WireObject,expected: String? = null): LiveCredentials {
         val token=NativeProtocol.text(value["access_token"],8192);val parts=token.split('.')
@@ -310,7 +325,7 @@ class CloudflareRepository(private val context: Context,endpoint: String = Build
                         ?: throw LiveFailure("refresh_delivery_scope_changed")
                     if(restored==null) { journal.assertOriginal(actor.refresh);journal.assertOriginal(saved.refresh) }
                     else if(saved.token!=restored.token || saved.refresh!=restored.refresh)throw LiveFailure("refresh_delivery_scope_changed")
-                    synchronized(storage) {
+                    synchronized(fence) {
                         val candidate=storage.toMap()+mapOf("refresh_delivery" to journal.wire())
                         vault.save(candidate);storage.clear();storage.putAll(candidate)
                     }
@@ -328,7 +343,7 @@ class CloudflareRepository(private val context: Context,endpoint: String = Build
                     val saved=storage["credentials"]?.let { parseCredentials(NativeProtocol.obj(it),next.account) }
                         ?: throw LiveFailure("refresh_delivery_storage_unavailable")
                     if(saved.token!=next.token || saved.refresh!=next.refresh)throw LiveFailure("refresh_delivery_scope_changed")
-                    synchronized(storage) {
+                    synchronized(fence) {
                         val candidate=storage.toMap()-"refresh_delivery"
                         vault.save(candidate);storage.clear();storage.putAll(candidate)
                     }
@@ -345,7 +360,7 @@ class CloudflareRepository(private val context: Context,endpoint: String = Build
             val body=NativeProtocol.canonical(journal.cancellationBody()).toByteArray()
             val response=try { CloudflareTransport(baseUrl,localFence).request("/auth/session/refresh/cancel",scope,null,"POST",body) } finally { body.fill(0) }
             val next=try { journal.cancelled(jsonMap(JSONObject(response.toString(Charsets.UTF_8)))) } finally { response.fill(0) }
-            synchronized(fence) { synchronized(storage) {
+            synchronized(fence) { synchronized(fence) {
                 val held=retiredRefreshes();val current=held.firstOrNull { it.rotationKey==journal.rotationKey } ?: return@runCatching
                 journal.assertIntent(current)
                 val candidate=storage.toMap()+mapOf("retired_refresh_deliveries" to held.map { if(it.rotationKey==journal.rotationKey)next.wire() else it.wire() })
@@ -362,6 +377,7 @@ class CloudflareRepository(private val context: Context,endpoint: String = Build
         storage.clear();storage.putAll(candidate);scope
     }
     private fun json(path: String,scope: SessionScope=currentScope(),token: String?=credentials?.token,method: String="GET",body: WireObject?=null,expectedStatus: Int?=null): WireObject {
+        boundary?.let { injected -> fence.assert(scope);return injected.json(path,scope,token,method,body,expectedStatus).also { fence.assert(scope) } }
         val bytes=body?.let { NativeProtocol.canonical(it).toByteArray(Charsets.UTF_8) }
         val response=try { transport.request(path,scope,token,method,bytes,expectedStatus=expectedStatus) } finally { bytes?.fill(0) }
         try { fence.assert(scope);return jsonMap(JSONObject(response.toString(Charsets.UTF_8))) }
@@ -380,10 +396,10 @@ class CloudflareRepository(private val context: Context,endpoint: String = Build
     }
     suspend fun bootstrap(): WireObject = withContext(Dispatchers.IO) { mutex.withLock {
         val restoreScope=currentScope()
-        val loaded=try { vault.load() } catch(problem: Exception) { storageBlocked=true;throw problem }
-        if(loaded.isEmpty() && vault.hasEnrollmentKeys()) { storageBlocked=true;throw LiveFailure("enrollment_storage_unavailable") }
         synchronized(fence) {
         fence.assert(restoreScope)
+        val loaded=try { vault.load() } catch(problem: Exception) { storageBlocked=true;throw problem }
+        if(loaded.isEmpty() && vault.hasEnrollmentKeys()) { storageBlocked=true;throw LiveFailure("enrollment_storage_unavailable") }
         storageBlocked=false;storage.clear();storage.putAll(loaded.filterValues { it!=null })
         faceLifecycle=try { storage["face_lifecycle"]?.let { FaceLifecycleJournal.restore(it,baseUrl) } } catch(problem: Exception) { storageBlocked=true;throw problem }
         accountRecovery=try { storage["account_recovery"]?.let { AccountRecoveryJournal.restore(it,baseUrl) } } catch(problem: Exception) { storageBlocked=true;throw problem }
@@ -394,16 +410,12 @@ class CloudflareRepository(private val context: Context,endpoint: String = Build
         cameraLogin()?.let { held->
             cameraLoginOwner(held)
         }
-        pending=(storage["pending"] as? Map<*, *>)?.let { NativeProtocol.obj(it) }?.let {
-            val action=NativeProtocol.text(it["action"])
-            val payload=NativeProtocol.obj(it["payload"]);NativeProtocol.validateActionPayload(action,payload)
-            PendingIntent(NativeProtocol.id(it["account"]),NativeProtocol.operationSource(action,it["source"]),action,NativeProtocol.text(it["key"]),payload,it["path"] as? String,it["method"] as? String ?: "POST")
-        }
+        pending=StoreRecoveryRetention.restorePending(storage["pending"])
         (storage["credentials"] as? Map<*, *>)?.let { credentials=parseCredentials(NativeProtocol.obj(it));fence.switch(credentials!!.account) }
         refreshJournal()?.let { if(it.state!="pending")throw LiveFailure("refresh_delivery_storage_unavailable") }
         retiredRefreshes().forEach { if(it.state=="pending")throw LiveFailure("refresh_delivery_storage_unavailable") }
         guestDeletion=storage["guest_deletion"]?.let { GuestDeletionRecord.restore(it,baseUrl,credentials?.account,credentials?.method) }
-        accountDeletion=storage["registered_deletion"]?.let { GuestDeletionRecord.restore(it,baseUrl,null,null) }
+        accountDeletion=StoreRecoveryRetention.registeredDeletion(storage.toMap(),baseUrl)
         if(accountDeletion!=null) {
             if(credentials!=null && credentials?.account!=accountDeletion!!.account)throw LiveFailure("deletion_account_changed")
             return@withLock emptyMap()
@@ -435,7 +447,8 @@ class CloudflareRepository(private val context: Context,endpoint: String = Build
         if(cameraLoginHeld)return@withLock emptyMap()
         if(credentials!=null) {
             try { ensureFresh();return@withLock json("/me") }
-            catch(error: LiveFailure) { if(error.status !in listOf(401,403) || error.code in AudienceProtocol.gateErrors || hasPendingRefresh())throw error;credentials=null;if(faceLifecycle==null)storage.remove("credentials");storage.remove("pending");pending=null;fence.switch(null);save() }
+            catch(error: LiveFailure) { if(error.status !in listOf(401,403) || error.code in AudienceProtocol.gateErrors || hasPendingRefresh())throw error;synchronized(fence) { credentials=null;if(faceLifecycle==null)storage.remove("credentials");if(!StoreRecoveryRetention.isStore(storage["pending"]) && !StoreRecoveryRetention.isStore(pending?.wire())) { storage.remove("pending");pending=null }
+                else pending=StoreRecoveryRetention.heldPending(storage.toMap(),pending);fence.switch(null);save() } }
         }
         if(faceLifecycle!=null || identity!=null)return@withLock emptyMap()
         if(hasPendingRefresh())throw LiveFailure("refresh_delivery_requires_status")
@@ -451,10 +464,12 @@ class CloudflareRepository(private val context: Context,endpoint: String = Build
         persistGuestDeletionState(retained,vault::save) { saved ->
             afterDurableWrite()
             storage.clear();storage.putAll(saved.filterValues { it!=null })
+            // Publish the exact durable slot with the same transition, even when cleanup retired private state.
+            pending=StoreRecoveryRetention.restorePending(saved["pending"])
             guestDeletion=record
         }
     }
-    private fun saveGuestDeletion(record: GuestDeletionRecord) = synchronized(storage) {
+    private fun saveGuestDeletion(record: GuestDeletionRecord) = synchronized(fence) {
         publishGuestStorage(storage.toMap()+mapOf("guest_deletion" to record.wire()),record)
     }
     private fun assertGuestDeletion(record: GuestDeletionRecord,scope: SessionScope) {
@@ -467,7 +482,7 @@ class CloudflareRepository(private val context: Context,endpoint: String = Build
         withGuestDeletionPhase(fence,phase.scope,record,{guestDeletion}) {
         assertGuestDeletion(record,phase.scope)
         val next=record.copy(receipt=GuestDeletionReceipt.parse(response,record),statusUnavailable=false)
-        synchronized(storage) {
+        synchronized(fence) {
             val retiredForAccount=if(next.receipt?.completed==true)retiredAliases().filter { it["account"]==record.account } else emptyList()
             val retiredRecoveries=if(next.receipt?.completed==true)archivedRecoveries().filter { it.account==record.account } else emptyList()
             val previous=storage.toMap()+(identity?.wire()?.let { mapOf("device" to it) } ?: emptyMap())
@@ -480,7 +495,7 @@ class CloudflareRepository(private val context: Context,endpoint: String = Build
                 retiredRecoveries.forEach { vault.deleteDevice(it.alias) }
                 if(next.receipt?.completed==true && enrollment?.account==record.account) { vault.deleteDevice(enrollment?.alias);enrollment=null }
                 if(next.receipt?.completed==true && accountRecovery?.account==record.account) { vault.deleteDevice(accountRecovery?.alias);accountRecovery=null }
-                credentials=null;pending=null;phase.scope=fence.switch(null)
+                credentials=null;pending=StoreRecoveryRetention.pending(pending);phase.scope=fence.switch(null)
             }
             recoveryKeyIntent=storage["recovery_key_intent"]?.let { RecoveryKeyIntent.restore(it,baseUrl) }
         }
@@ -501,7 +516,7 @@ class CloudflareRepository(private val context: Context,endpoint: String = Build
                 withGuestDeletionPhase(fence,refreshScope,record,{guestDeletion}) {
                     assertGuestDeletion(record,refreshScope)
                     record.assertOriginalAnonymous(refreshed.account,refreshed.method)
-                    synchronized(storage) {
+                    synchronized(fence) {
                         publishGuestStorage(storage.toMap()+mapOf("credentials" to result),guestDeletion) {
                             clearPrivateScope();credentials=refreshed;phase.scope=fence.switch(refreshed.account)
                         }
@@ -560,7 +575,7 @@ class CloudflareRepository(private val context: Context,endpoint: String = Build
                 // Expired/revoked credentials cannot recreate the old account or redirect this receipt.
                 return withGuestDeletionPhase(fence,phase.scope,unavailable,{guestDeletion}) {
                     assertGuestDeletion(unavailable,phase.scope)
-                    synchronized(storage) {
+                    synchronized(fence) {
                         publishGuestStorage(storage.toMap().filterKeys { it!="credentials" },unavailable) {
                             clearPrivateScope();credentials=null;phase.scope=fence.switch(null)
                         }
@@ -606,9 +621,19 @@ class CloudflareRepository(private val context: Context,endpoint: String = Build
     private fun saveAccountDeletion(record: GuestDeletionRecord) = synchronized(fence) {
         record.assertOrigin(baseUrl)
         val candidate=storage.toMap()+mapOf("registered_deletion" to record.wire())
-        vault.save(candidate);storage.clear();storage.putAll(candidate);accountDeletion=record
+        try { vault.save(candidate) }
+        catch(problem: Exception) {
+            val existing=StoreRecoveryRetention.registeredDeletion(storage.toMap(),baseUrl)
+            if(existing!=null)record.assertSameIntent(existing)
+            val retained=if(existing?.receipt?.completed==true)existing else record
+            storage["registered_deletion_write_uncertainty"]=retained.wire()
+            if(problem is kotlinx.coroutines.CancellationException)throw problem
+            throw LiveFailure("deletion_storage_unavailable")
+        }
+        storage.clear();storage.putAll(candidate);accountDeletion=record
     }
     suspend fun requestAccountDeletion(): GuestDeletionRecord=withContext(Dispatchers.IO) { mutex.withLock {
+        synchronized(fence) { StoreRecoveryRetention.registeredDeletion(storage.toMap(),baseUrl)?.let { accountDeletion=it } }
         if(accountDeletion!=null)return@withLock checkAccountDeletionLocked()
         ownRegistered()
         val record=GuestDeletionRecord.create(baseUrl,credentials!!.account)
@@ -618,7 +643,7 @@ class CloudflareRepository(private val context: Context,endpoint: String = Build
         val next=record.copy(receipt=GuestDeletionReceipt.parse(response,record));saveAccountDeletion(next);next
     } }
     private fun checkAccountDeletionLocked(): GuestDeletionRecord {
-        val record=accountDeletion ?: throw LiveFailure("deletion_requires_status")
+        val record=synchronized(fence) { StoreRecoveryRetention.registeredDeletion(storage.toMap(),baseUrl) ?: accountDeletion } ?: throw LiveFailure("deletion_requires_status")
         val scope=currentScope()
         val response=try { json("/privacy/account-deletion/status",scope,null,"POST",mapOf("status_token" to record.statusToken)) }
         catch(problem: LiveFailure) {
@@ -628,15 +653,16 @@ class CloudflareRepository(private val context: Context,endpoint: String = Build
         }
         val next=record.copy(receipt=GuestDeletionReceipt.parse(response,record),statusUnavailable=false)
         saveAccountDeletion(next)
-        if(next.receipt?.completed==true) {
+        if(next.receipt?.completed==true)synchronized(fence) {
+            fence.assert(scope)
             val keys=listOfNotNull(identity?.takeIf { it.account==record.account }?.alias,enrollment?.takeIf { it.account==record.account }?.alias,
                 accountRecovery?.takeIf { it.account==record.account }?.alias,faceLifecycle?.takeIf { it.account==record.account }?.alias)+
                 retiredAliases().filter { it["account"]==record.account }.map { NativeProtocol.text(it["alias"]) }+
                 archivedRecoveries().filter { it.account==record.account }.map { it.alias }+retiredLifecycles().filter { it.account==record.account }.map { it.alias }
             stagedExport()?.get("file")?.let { vault.removeStagedPhoto(NativeProtocol.id(it)) }
             photoUploads()?.takeIf { it.account==record.account }?.files?.forEach { vault.removeStagedPhoto(it.localId) }
-            val candidate=retireRefreshCandidate(next.restartStorage(storage.toMap())+mapOf("registered_deletion" to next.wire()))
-            vault.save(candidate);clearPrivateScope();credentials=null;identity=null;enrollment=null;accountRecovery=null;faceLifecycle=null;recoveryKeyIntent=null;pending=null
+            val candidate=retireRefreshCandidate(StoreRecoveryRetention.completedRegistered(next,storage.toMap(),keepActive=true)).filterKeys { it!="registered_deletion_write_uncertainty" }
+            vault.save(candidate);clearPrivateScope();credentials=null;identity=null;enrollment=null;accountRecovery=null;faceLifecycle=null;recoveryKeyIntent=null;pending=StoreRecoveryRetention.heldPending(candidate,pending)
             storage.clear();storage.putAll(candidate);fence.switch(null);keys.distinct().forEach(vault::deleteDevice)
         }
         return next
@@ -644,12 +670,17 @@ class CloudflareRepository(private val context: Context,endpoint: String = Build
     suspend fun checkAccountDeletion(): GuestDeletionRecord=withContext(Dispatchers.IO) { mutex.withLock { checkAccountDeletionLocked() } }
     suspend fun resumeAfterAccountDeletion(): WireObject=withContext(Dispatchers.IO) { mutex.withLock {
         val record=checkAccountDeletionLocked();record.assertResumeAllowed()
-        val candidate=storage.toMap()-"registered_deletion";vault.save(candidate);storage.clear();storage.putAll(candidate);accountDeletion=null
+        synchronized(fence) {
+            val candidate=storage.toMap()-"registered_deletion";vault.save(candidate);storage.clear();storage.putAll(candidate);accountDeletion=null
+        }
         if(credentials!=null) { ensureFresh();json("/me") } else emptyMap()
     } }
     suspend fun restartAfterAccountDeletion()=withContext(Dispatchers.IO) { mutex.withLock {
         val record=checkAccountDeletionLocked();record.assertRestartAllowed()
-        val candidate=retireRefreshCandidate(record.restartStorage(storage.toMap()));vault.save(candidate);storage.clear();storage.putAll(candidate);accountDeletion=null
+        synchronized(fence) {
+            val candidate=retireRefreshCandidate(StoreRecoveryRetention.completedRegistered(record,storage.toMap(),keepActive=false))
+            vault.save(candidate);storage.clear();storage.putAll(candidate);accountDeletion=null;pending=StoreRecoveryRetention.heldPending(candidate,pending)
+        }
     } }
     suspend fun requestGuestDeletion(): GuestDeletionRecord=withContext(Dispatchers.IO) { mutex.withLock {
         if(guestDeletion!=null)return@withLock checkGuestDeletionLocked().record
@@ -689,7 +720,7 @@ class CloudflareRepository(private val context: Context,endpoint: String = Build
             withGuestDeletionPhase(fence,scope,record,{guestDeletion}) {
                 assertGuestDeletion(record,scope)
                 record.assertResumedAccount(me)
-                synchronized(storage) {
+                synchronized(fence) {
                     publishGuestStorage(storage.toMap().filterKeys { it!="guest_deletion" },null)
                 }
             }
@@ -702,9 +733,9 @@ class CloudflareRepository(private val context: Context,endpoint: String = Build
         withGuestDeletionPhase(fence,scope,record,{guestDeletion}) {
             record.assertOrigin(baseUrl);record.assertRestartAllowed()
             credentials?.let { record.assertOriginalAnonymous(it.account,it.method) }
-            synchronized(storage) {
+            synchronized(fence) {
                 publishGuestStorage(record.restartStorage(storage.toMap()),null) {
-                    clearPrivateScope();credentials=null;pending=null;fence.switch(null)
+                    clearPrivateScope();credentials=null;pending=StoreRecoveryRetention.heldPending(storage.toMap(),pending);fence.switch(null)
                 }
             }
         }
@@ -759,7 +790,7 @@ class CloudflareRepository(private val context: Context,endpoint: String = Build
     private fun savePrivacyExport(intent: PendingIntent?,scope: SessionScope,adoptLegacy: Boolean=false) = synchronized(fence) {
         fence.assert(scope)
         val candidate=storage.toMap().filterKeys { it!="privacy_export_operation" && !(adoptLegacy && it=="pending") }+(intent?.let { mapOf("privacy_export_operation" to (it.wire()+mapOf("origin" to baseUrl))) } ?: emptyMap())
-        synchronized(storage) { vault.save(candidate);storage.clear();storage.putAll(candidate);if(adoptLegacy)pending=null }
+        synchronized(fence) { vault.save(candidate);storage.clear();storage.putAll(candidate);if(adoptLegacy)pending=null }
     }
     suspend fun requestPrivacyExport(): WireObject=withContext(Dispatchers.IO) { mutex.withLock {
         ownRegistered();val actor=credentials ?: throw LiveFailure("authentication_required");val scope=currentScope()
@@ -788,7 +819,7 @@ class CloudflareRepository(private val context: Context,endpoint: String = Build
         fence.assert(scope)
         val reference=OwnAccountControls.guardianReference(baseUrl,account,request.id)
         val candidate=storage.toMap()+mapOf("guardian_request_reference" to reference)
-        synchronized(storage) { vault.save(candidate);storage.clear();storage.putAll(candidate) }
+        synchronized(fence) { vault.save(candidate);storage.clear();storage.putAll(candidate) }
     }
     val audienceOperationPending get()=saved("audience_operation")!=null
     suspend fun audienceStatus(): AudienceState=withContext(Dispatchers.IO) {
@@ -839,7 +870,7 @@ class CloudflareRepository(private val context: Context,endpoint: String = Build
         fence.assert(scope)
         if(journal !in setOf("audience_operation","guardian_withdrawal_operation"))throw LiveFailure("audience_operation_scope_changed")
         val candidate=storage.toMap().filterKeys { it!=journal }+(value?.let { mapOf(journal to it) } ?: emptyMap())+(guardian?.let { mapOf("guardian_request_reference" to it) } ?: emptyMap())
-        synchronized(storage) { vault.save(candidate);storage.clear();storage.putAll(candidate) }
+        synchronized(fence) { vault.save(candidate);storage.clear();storage.putAll(candidate) }
     }
     private fun audienceMutationLocked(action: String?,path: String?,method: String?,payload: WireObject?,previous: WireObject?,journal: String="audience_operation"): AudienceChange {
         ensureFresh();val actor=credentials ?: throw LiveFailure("authentication_required");val scope=currentScope()
@@ -893,7 +924,7 @@ class CloudflareRepository(private val context: Context,endpoint: String = Build
         val previous=enrollment ?: throw LiveFailure("enrollment_requires_recovery")
         withEnrollmentPhase(fence,phase.scope,previous,{enrollment}) {
             assertEnrollment(previous,phase.scope,allowGuest)
-            synchronized(storage) {
+            synchronized(fence) {
                 persistEnrollmentState(credentialCandidate(storage.toMap()+extra+mapOf("enrollment" to record.wire())),vault::save) { saved ->
                     afterWrite();storage.clear();storage.putAll(saved.filterValues { it!=null });enrollment=record
                 }
@@ -998,7 +1029,7 @@ class CloudflareRepository(private val context: Context,endpoint: String = Build
             assertEnrollment(promoting,scope)
             if(me["user_id"]!=record.account || me["authenticated"]!=true || me["auth_method"]!="registered_face" ||
                 me["profile_id"]!=record.profile?.get("id") || me["profile_revision"]!=record.profile?.get("revision"))throw LiveFailure("enrollment_response_changed")
-            synchronized(storage) {
+            synchronized(fence) {
                 persistEnrollmentState(storage.toMap().filterKeys { it!="enrollment" },vault::save) { saved ->
                     storage.clear();storage.putAll(saved.filterValues { it!=null });enrollment=null
                 }
@@ -1113,7 +1144,7 @@ class CloudflareRepository(private val context: Context,endpoint: String = Build
             fence.assert(before);if(credentials?.account!=actor.account || guestDeletion!=null || enrollment!=null)throw LiveFailure("enrollment_scope_changed")
             val alias=vault.enrollmentAlias(actor.account);val jwk=vault.createDevice(alias)
             val record=EnrollmentJournal.create(baseUrl,actor.account,alias,jwk,NativeProtocol.text(policy["policy_version"]))
-            synchronized(storage) {
+            synchronized(fence) {
                 try {
                     persistEnrollmentState(storage.toMap()+mapOf("enrollment" to record.wire()),vault::save) { candidate ->
                         storage.clear();storage.putAll(candidate.filterValues { it!=null });enrollment=record
@@ -1247,10 +1278,10 @@ class CloudflareRepository(private val context: Context,endpoint: String = Build
             var candidate=storage.toMap()+extra+mapOf("face_lifecycle" to record.wire())
             if(record.metadata.version!=previous.metadata.version || retire)candidate=candidate.filterKeys { it !in setOf("review","last_outcome","pending") }
             if(retire)candidate=candidate.filterKeys { it !in setOf("credentials","picked_uris","upload_ids","upload_batch","upload_records","favorites") }
-            candidate=if(retire)retireRefreshCandidate(candidate) else credentialCandidate(candidate)
-            synchronized(storage) { persistLifecycle(candidate,vault::save) { saved->
-                if(record.metadata.version!=previous.metadata.version)pending=null
-                if(retire) { clearPrivateScope();credentials=null;pending=null;phase.scope=fence.switch(null) }
+            candidate=StoreRecoveryRetention.keep(storage.toMap(),if(retire)retireRefreshCandidate(candidate) else credentialCandidate(candidate))
+            synchronized(fence) { persistLifecycle(candidate,vault::save) { saved->
+                if(record.metadata.version!=previous.metadata.version)pending=StoreRecoveryRetention.heldPending(saved,pending)
+                if(retire) { clearPrivateScope();credentials=null;pending=StoreRecoveryRetention.heldPending(saved,pending);phase.scope=fence.switch(null) }
                 after();storage.clear();storage.putAll(saved.filterValues { it!=null });faceLifecycle=record
             } }
         }
@@ -1294,7 +1325,7 @@ class CloudflareRepository(private val context: Context,endpoint: String = Build
         val record=FaceLifecycleJournal.create(baseUrl,device,jwk,metadata)
         synchronized(fence) {
             fence.assert(scope);if(faceLifecycle!=null || guestDeletion!=null || identity!=device)throw LiveFailure("face_profile_scope_changed")
-            synchronized(storage) { persistLifecycle(storage.toMap()+mapOf("face_lifecycle" to record.wire()),vault::save) { saved->
+            synchronized(fence) { persistLifecycle(storage.toMap()+mapOf("face_lifecycle" to record.wire()),vault::save) { saved->
                 storage.clear();storage.putAll(saved.filterValues { it!=null });faceLifecycle=record
             } }
         }
@@ -1555,7 +1586,7 @@ class CloudflareRepository(private val context: Context,endpoint: String = Build
         .filter { it["alias"]!=record.alias }.distinctBy { it["alias"] }.also { if(it.size>100)throw LiveFailure("secure_storage_full") }
     private fun publishRecoveryKey(intent: RecoveryKeyIntent?,scope: SessionScope) = synchronized(fence) {
         fence.assert(scope)
-        synchronized(storage) {
+        synchronized(fence) {
             val candidate=storage.toMap().filterKeys { it!="recovery_key_intent" }+(intent?.let { mapOf("recovery_key_intent" to it.wire()) } ?: emptyMap())
             persistAccountRecovery(candidate,vault::save) { saved -> storage.clear();storage.putAll(saved.filterValues { it!=null });recoveryKeyIntent=intent }
         }
@@ -1607,7 +1638,7 @@ class CloudflareRepository(private val context: Context,endpoint: String = Build
         val previous=accountRecovery ?: throw LiveFailure("account_recovery_requires_status")
         withAccountRecoveryPhase(fence,phase.scope,previous,{accountRecovery}) {
             assertAccountRecovery(previous,phase.scope)
-            synchronized(storage) { persistAccountRecovery(credentialCandidate(storage.toMap()+extra+mapOf("account_recovery" to record.wire())),vault::save) { saved ->
+            synchronized(fence) { persistAccountRecovery(credentialCandidate(storage.toMap()+extra+mapOf("account_recovery" to record.wire())),vault::save) { saved ->
                 after();storage.clear();storage.putAll(saved.filterValues { it!=null });accountRecovery=record
             } }
         }
@@ -1674,8 +1705,8 @@ class CloudflareRepository(private val context: Context,endpoint: String = Build
             val candidate=mapOf("credentials" to credentials!!.wire,"device" to device.wire(),"retired_device_aliases" to aliases,
                 "retired_account_recoveries" to archivedRecoveries().map(AccountRecoveryJournal::wire),"retired_face_lifecycles" to retired.map(FaceLifecycleJournal::wire),
                 "retired_refresh_deliveries" to retiredRefreshes().map(RefreshDeliveryJournal::wire))
-            synchronized(storage) { persistAccountRecovery(candidate,vault::save) { saved ->
-                storage.clear();storage.putAll(saved.filterValues { it!=null });accountRecovery=null;enrollment=null;pending=null;recoveryKeyIntent=null
+            synchronized(fence) { persistAccountRecovery(StoreRecoveryRetention.keep(storage.toMap(),candidate),vault::save) { saved ->
+                storage.clear();storage.putAll(saved.filterValues { it!=null });accountRecovery=null;enrollment=null;pending=StoreRecoveryRetention.heldPending(saved,pending);recoveryKeyIntent=null
                 if(oldLifecycle!=null)faceLifecycle=null
             } }
             result
@@ -1739,7 +1770,7 @@ class CloudflareRepository(private val context: Context,endpoint: String = Build
         val replacementScope=withAccountRecoveryPhase(fence,scope,old,{accountRecovery}) {
             assertAccountRecovery(old,scope)
             val candidate=archiveRecoveryCandidate(storage.toMap(),old,baseUrl)
-            synchronized(storage) { persistAccountRecovery(candidate,vault::save) { saved ->
+            synchronized(fence) { persistAccountRecovery(candidate,vault::save) { saved ->
                 clearPrivateScope();storage.clear();storage.putAll(saved.filterValues { it!=null });accountRecovery=null;fence.switch(credentials?.account)
             } }
         }
@@ -1753,7 +1784,7 @@ class CloudflareRepository(private val context: Context,endpoint: String = Build
             assertRecoveryTarget(backup,identity?.account,enrollment?.account)
             val alias=vault.recoveryAlias();val jwk=vault.createDevice(alias)
             val record=AccountRecoveryJournal.create(baseUrl,backup,alias,jwk,NativeProtocol.text(policy["policy_version"]),credentials?.account)
-            synchronized(storage) {
+            synchronized(fence) {
                 try { persistAccountRecovery(storage.toMap()+mapOf("account_recovery" to record.wire()),vault::save) { candidate ->
                     clearPrivateScope();storage.clear();storage.putAll(candidate.filterValues { it!=null });accountRecovery=record
                 } } catch(problem: Exception) { storageBlocked=true;throw problem }
@@ -1793,8 +1824,100 @@ class CloudflareRepository(private val context: Context,endpoint: String = Build
         if(action=="inbox")NativeProtocol.rows(response["items"]).forEach { NativeProtocol.mediaSource(it["source"]) }
         response
     }
+    private fun googleStoreJournal(): StorePurchaseJournal?=StorePurchasePersistence.retained(
+        saved("google_store_operation")?.let { StorePurchaseJournal.restore(it,baseUrl) },
+        saved("google_store_write_uncertainty")?.let { StorePurchaseJournal.restore(it,baseUrl) })
+    private fun googleStoreHistory(): List<StorePurchaseJournal> =NativeProtocol.rows(saved("google_store_history") ?: emptyList<WireObject>(),64).map { StorePurchaseJournal.restore(it,baseUrl) }
+    private fun saveGoogleStoreJournal(record: StorePurchaseJournal,scope: SessionScope,history: List<StorePurchaseJournal>?=null,receiptAdmitted: Boolean=false) = synchronized(fence) {
+        fence.assert(scope)
+        if(credentials?.account!=record.account || credentials?.method!="registered_face")throw LiveFailure("store_operation_account_changed",403,true)
+        if(receiptAdmitted && record.receipt==null)throw LiveFailure("store_operation_receipt_invalid",503,true)
+        val previous=storage.toMap().filterKeys { !receiptAdmitted || it!="google_store_write_uncertainty" }
+        val candidate=previous+mapOf("google_store_operation" to record.wire())+(history?.let { mapOf("google_store_history" to it.map(StorePurchaseJournal::wire)) } ?: emptyMap())
+        // Publish authority only after durable acceptance. On an ambiguous write keep a separate non-authoritative copy:
+        // another account edit may save this same vault before a process restart reloads AtomicFile's actual state.
+        try { vault.save(candidate) }
+        catch(problem: Exception) {
+            val existing=(storage["google_store_write_uncertainty"] ?: storage["google_store_operation"])?.let { StorePurchaseJournal.restore(it,baseUrl) }
+            storage["google_store_write_uncertainty"]=StorePurchasePersistence.uncertainCopy(existing,record).wire()
+            if(problem is kotlinx.coroutines.CancellationException)throw problem
+            throw LiveFailure("store_operation_storage_requires_status",503,true)
+        }
+        storage.clear();storage.putAll(candidate)
+    }
+    private suspend fun googleStorePurchaseLocked(product: String,token: String,requestedKey: String?=null): WireObject {
+        registered();val actor=credentials ?: throw LiveFailure("authentication_required")
+        val scope=currentScope()
+        val heldPending=StoreRecoveryRetention.heldPending(storage.toMap(),pending)
+        if(heldPending!=null && heldPending.action!="store.google")throw LiveFailure("store_operation_scope_changed",409,true)
+        val legacy=heldPending?.takeIf { it.action=="store.google" }
+        val adopted=legacy?.let { StorePurchaseJournal.legacy(it,baseUrl,actor.account) }
+        val stored=googleStoreJournal()
+        stored?.assertOwner(baseUrl,actor.account)
+        if(adopted!=null && stored!=null && (adopted.key!=stored.key || !adopted.matches(stored.product,stored.token)))throw LiveFailure("store_operation_scope_changed",409,true)
+        var history=googleStoreHistory()
+        var selected=stored ?: adopted
+        var firstDispatch=false
+        if(selected!=null && !selected.matches(product,token)) {
+            if(selected.receipt==null || adopted!=null)throw LiveFailure("store_operation_requires_status",503,true)
+            if(history.none { it.key==selected!!.key }) {
+                if(history.size>=64)throw LiveFailure("store_operation_evidence_full",503,true)
+                history=history+selected
+            }
+            selected=null
+        }
+        if(selected==null)selected=history.firstOrNull { it.account==actor.account && it.matches(product,token) }
+        if(selected==null) {
+            selected=if(requestedKey==null)StorePurchaseJournal.create(baseUrl,actor.account,product,token)
+                else StorePurchaseJournal.create(baseUrl,actor.account,product,token,requestedKey)
+            firstDispatch=true
+        }
+        val original=selected ?: throw LiveFailure("store_operation_requires_status",503,true)
+        original.assertOwner(baseUrl,actor.account)
+        if(!original.matches(product,token) || requestedKey!=null && original.key!=requestedKey)throw LiveFailure("store_operation_scope_changed",409,true)
+        // A legacy intent or any saved marker is potentially dispatched, even when no server receipt is found.
+        saveGoogleStoreJournal(original,scope,history)
+        val result=StorePurchaseRecovery(
+            persist={ next -> saveGoogleStoreJournal(next,scope) },
+            assertCurrent={ fence.assert(scope);if(credentials?.account!=actor.account || credentials?.method!="registered_face")throw LiveFailure("store_operation_account_changed",403,true) },
+            dispatch={ payload -> json("/subscriptions/google/transactions",scope,actor.token,"POST",payload) },
+            lookup={ payload -> json("/me/store-operations",scope,actor.token,"POST",payload) }
+        ).run(original,firstDispatch)
+        // Only this successful typed readback can retire a write-uncertainty marker. A historical receipt remains evidence.
+        saveGoogleStoreJournal(googleStoreJournal() ?: throw LiveFailure("store_operation_requires_status",503,true),scope,receiptAdmitted=true)
+        synchronized(fence) {
+            fence.assert(scope)
+            // Only an independently validated exact historical receipt can retire the legacy generic slot.
+            if(legacy!=null) {
+                if(StoreRecoveryRetention.heldPending(storage.toMap(),pending)?.wire()!=legacy.wire())throw LiveFailure("store_operation_scope_changed",409,true)
+                val candidate=storage.toMap()-"pending";vault.save(candidate);storage.clear();storage.putAll(candidate);pending=null
+            }
+        }
+        return result
+    }
+    suspend fun verifyGooglePurchase(product: String,purchaseToken: String): WireObject=withContext(Dispatchers.IO) { mutex.withLock {
+        googleStorePurchaseLocked(product,purchaseToken)
+    } }
+    suspend fun recoverGooglePurchase(): WireObject?=withContext(Dispatchers.IO) { mutex.withLock {
+        val heldPending=StoreRecoveryRetention.heldPending(storage.toMap(),pending)
+        if(heldPending!=null && heldPending.action!="store.google")throw LiveFailure("store_operation_scope_changed",409,true)
+        val legacy=heldPending?.takeIf { it.action=="store.google" }
+        val held=googleStoreJournal()
+        if(legacy==null && (held==null || held.receipt!=null && saved("google_store_write_uncertainty")==null))return@withLock null
+        registered();val account=credentials!!.account
+        val original=legacy?.let { StorePurchaseJournal.legacy(it,baseUrl,account) } ?: held!!
+        original.assertOwner(baseUrl,account)
+        googleStorePurchaseLocked(original.product,original.token,original.key)
+    } }
     suspend fun mutate(action: String,payload: WireObject,source: String="personal",path: String?=null,method: String="POST",validate: ((WireObject,String)->Unit)?=null,operationKey: String?=null): WireObject=withContext(Dispatchers.IO) { mutex.withLock {
+        val storePending=StoreRecoveryRetention.heldPending(storage.toMap(),pending)
+        if(storePending!=null && (storePending.action!="store.google" || action!="store.google"))throw LiveFailure("store_operation_scope_changed",409,true)
         NativeProtocol.operationSource(action,source);NativeProtocol.validateActionPayload(action,payload)
+        if(action=="store.google") {
+            if(source!="store" || path!="/subscriptions/google/transactions" || method!="POST" || payload.keys!=setOf("product_id","purchase_token"))throw LiveFailure("store_operation_scope_changed",409,true)
+            val result=googleStorePurchaseLocked(NativeProtocol.text(payload["product_id"],160),NativeProtocol.text(payload["purchase_token"],4096),operationKey)
+            validate?.invoke(result,googleStoreJournal()!!.key);return@withLock result
+        }
         registered();val actor=credentials!!.account;val scope=currentScope()
         val existing=pending
         if(existing!=null && (operationKey!=null && existing.key!=operationKey || existing.account!=actor || existing.source!=source || existing.action!=action || existing.path!=path || existing.method!=method || NativeProtocol.canonical(existing.payload.filterKeys { it!="operation_key" })!=NativeProtocol.canonical(payload)))throw LiveFailure("pending_operation_requires_reconciliation")
@@ -1817,8 +1940,14 @@ class CloudflareRepository(private val context: Context,endpoint: String = Build
         }
     } }
     suspend fun reconcile(validate: ((WireObject,String)->Unit)?=null): WireObject=withContext(Dispatchers.IO) { mutex.withLock {
-        val intent=pending ?: throw LiveFailure("no_pending_operation")
+        val intent=pending ?: StoreRecoveryRetention.heldPending(storage.toMap(),null) ?: throw LiveFailure("no_pending_operation")
+        if(StoreRecoveryRetention.isStore(intent.wire()) && intent.action!="store.google")throw LiveFailure("store_operation_scope_changed",409,true)
         NativeProtocol.operationSource(intent.action,intent.source);NativeProtocol.validateActionPayload(intent.action,intent.payload)
+        if(intent.action=="store.google") {
+            val original=StorePurchaseJournal.legacy(intent,baseUrl,intent.account)
+            val result=googleStorePurchaseLocked(original.product,original.token,original.key)
+            validate?.invoke(result,original.key);return@withLock result
+        }
         registered()
         if(intent.account!=credentials!!.account)throw LiveFailure("operation_account_changed")
         val result=performAction("operation",mapOf("operation_key" to intent.key))
@@ -1829,7 +1958,7 @@ class CloudflareRepository(private val context: Context,endpoint: String = Build
         };result
     } }
     suspend fun resumePending(): WireObject {
-        val intent=pending ?: throw LiveFailure("no_pending_operation")
+        val intent=pending ?: StoreRecoveryRetention.heldPending(storage.toMap(),null) ?: throw LiveFailure("no_pending_operation")
         if(intent.action=="sharing.commit")throw LiveFailure("review_recovery_required")
         return mutate(intent.action,intent.payload.filterKeys { it!="operation_key" },intent.source,intent.path,intent.method)
     }
@@ -2122,6 +2251,12 @@ class CloudflareRepository(private val context: Context,endpoint: String = Build
             storage["audience_operation"]?.let { candidate["audience_operation"]=it }
             storage["guardian_withdrawal_operation"]?.let { candidate["guardian_withdrawal_operation"]=it }
             storage["privacy_export_operation"]?.let { candidate["privacy_export_operation"]=it }
+            storage["google_store_operation"]?.let { candidate["google_store_operation"]=it }
+            storage["google_store_history"]?.let { candidate["google_store_history"]=it }
+            storage["completed_registered_deletions"]?.let { candidate["completed_registered_deletions"]=it }
+            storage["registered_deletion_write_uncertainty"]?.let { candidate["registered_deletion_write_uncertainty"]=it }
+            storage["google_store_write_uncertainty"]?.let { candidate["google_store_write_uncertainty"]=it }
+            StoreRecoveryRetention.pending(pending)?.let { candidate["pending"]=it.wire() }
             storage["guardian_request_reference"]?.let { candidate["guardian_request_reference"]=it }
             if(life!=null)candidate["face_lifecycle"]=life.wire()
             if(!revokeIdentity)cameraLogin()?.let { held->candidate["camera_login"]=held.forExplicitLogout().wire() }
@@ -2137,9 +2272,11 @@ class CloudflareRepository(private val context: Context,endpoint: String = Build
             val retainedAliases=retiredAliases().filter { !revokeIdentity || it["account"]!=identity?.account || it["alias"] in listOfNotNull(journal?.alias,recovery?.alias) }
             if(retainedAliases.isNotEmpty())candidate["retired_device_aliases"]=retainedAliases
             if(frozen!=null)candidate["credentials"]=frozen
-            val retired=retireRefreshCandidate(candidate)
+            // The durable safety predicate wins over a stale/null memory slot. Logout is not financial disposition.
+            val retired=retireRefreshCandidate(StoreRecoveryRetention.keep(storage.toMap(),candidate))
+            val retainedPending=StoreRecoveryRetention.restorePending(retired["pending"])
             vault.save(retired)
-            clearPrivateScope();credentials=null;pending=if(!revokeIdentity)pending?.takeIf { it.action.startsWith("photo.upload.") } else null;fence.switch(null)
+            clearPrivateScope();credentials=null;pending=retainedPending;fence.switch(null)
             if(revokeIdentity && identity?.alias!=journal?.alias && identity?.alias!=recovery?.alias && identity?.alias!=life?.alias) {
                 val account=identity?.account
                 retiredAliases().filter { it["account"]==account }.forEach { vault.deleteDevice(NativeProtocol.text(it["alias"])) }
