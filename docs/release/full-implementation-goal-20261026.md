@@ -171,6 +171,12 @@ source seal after the session-retirement change, are required before starting
 a cluster. Evidence:
 `/Volumes/PRO-G40/Projects/Lovelies/verification/native-notification-pg17-20261029-attempt-01/README.md`
 and `/Volumes/PRO-G40/Projects/Lovelies/verification/native-notification-pg17-independent-review-20261029-01/REVIEW.md`.
+A later containment review found that PostgreSQL 17 backends create separate
+sessions, so an empty postmaster process group cannot prove that all database
+children stopped. The successor is held until descendant tracking, controlled
+shutdown and failure-path cleanup are qualified. No cluster has been started.
+Evidence:
+`/Volumes/PRO-G40/Projects/Lovelies/verification/native-notification-pg17-descendant-hold-20261029-01/REVIEW.md`.
 An isolated late-acceptance candidate would retain a receipt after the same
 device is removed. It remains unrun and unintegrated: independent review found
 that the gateway lookup returns an operation key but not its stored request
@@ -187,6 +193,23 @@ cutover remain open. Evidence:
 `/Volumes/PRO-G40/Projects/Lovelies/verification/notification-late-acceptance-20261029-agent-01/README.md`,
 `/Volumes/PRO-G40/Projects/Lovelies/verification/notification-request-binding-design-20261029-agent-01/DESIGN.md`
 and `/Volumes/PRO-G40/Projects/Lovelies/verification/notification-request-binding-v2-20261029-agent-01/README.md`.
+An isolated follow-up drafts a bounded fair cursor and lookup-only reconciliation
+work for opted-out operations, preserving uncertain outcomes and the actual
+stable queue-ID state. Its two predecessor and 64 candidate cases are staged,
+not run, and both migration drafts remain unapplied. Independent ledger custody,
+old-writer and restore fencing, deletion/lookup coordination and operated
+backlog handling remain open. Evidence:
+`/Volumes/PRO-G40/Projects/Lovelies/verification/notification-permission-fair-reconciliation-20261029-agent-01/DESIGN.md`
+and `/Volumes/PRO-G40/Projects/Lovelies/verification/notification-fair-scan-v2-20261029-agent-04/README.md`.
+An independent review of the frozen agent-05 successor found four additional
+gaps: a queue insert can be reported without a confirmed source update; queue
+work can survive or arrive after subject erasure; cascading deletion can lose
+the last local reconciliation identity; and the proposed records are outside
+the current privacy export. Its staged tests remain unrun and the draft is not
+integrated. Queue admission, retirement and late-writer fencing need an exact
+subject-bound contract; a wider backlog count alone cannot establish deletion.
+Evidence:
+`/Volumes/PRO-G40/Projects/Lovelies/verification/notification-fair-scan-v2-independent-review-20261029-01/REVIEW.md`.
 An isolated queue review reproduced six cases across the real photo, privacy
 and notification outboxes where a completed or failed stable-ID queue row
 was treated as successful handoff despite active work. A queue-only candidate
@@ -820,13 +843,20 @@ eight media-error, two deletion-handler and five direct JUnit controls. The
 predecessor's silent refresh interruption was reproduced. Independent postflight
 verified the input/log/JAR hashes and sampled no remaining recorded process
 groups. The fixture stubs the refresh journal, transport and Android/provider
-effects. The candidate remains unintegrated: actual Gradle compilation and an
-owned cleanup path for a private share created immediately before authority or
-selection changes are still required. Physical permission/Billing, MediaStore
-publication and provider behavior also remain open. Evidence:
+effects. A later isolated Gradle debug build compiled this exact candidate and
+passed all 12 named tests with no failures or skips. Three existing nullable-file
+warnings remain in a private-media test. Independent postflight matched the
+source archive, patch, inputs, log and current XML results, with no matching
+Gradle process observed; the XML hashes were captured at postflight rather than
+at test time. The candidate remains unintegrated because an owned cleanup path
+for a private share created immediately before authority or selection changes
+is still required. Physical permission/Billing, MediaStore publication and
+provider behavior also remain open. Evidence:
 `/Volumes/PRO-G40/Projects/Lovelies/verification/android-photo-action-fence-20261029/root-attempt05-01/result.json`,
-`/Volumes/PRO-G40/Projects/Lovelies/verification/android-photo-action-fence-20261029/root-attempt05-02/result.json`
-and `/Volumes/PRO-G40/Projects/Lovelies/verification/android-photo-attempt05-independent-postflight-20261029-01/REVIEW.md`.
+`/Volumes/PRO-G40/Projects/Lovelies/verification/android-photo-action-fence-20261029/root-attempt05-02/result.json`,
+`/Volumes/PRO-G40/Projects/Lovelies/verification/android-photo-attempt05-independent-postflight-20261029-01/REVIEW.md`,
+`/Volumes/PRO-G40/Projects/Lovelies/verification/android-photo-action-current-20261029-root-05/result.json`
+and `/Volumes/PRO-G40/Projects/Lovelies/verification/android-photo-root05-independent-postflight-20261029-01/review.json`.
 An isolated follow-up prepared four controller and two temporary-file controls
 for the stale-share cleanup gap. They have not run. The existing UUID-shaped
 sweep is not proof of ownership and its pathname check and unlink are not
@@ -834,6 +864,13 @@ atomic against replacement; simply scheduling that sweep cannot establish safe
 cleanup. An owned namespace/writer contract or another qualified handoff is
 still needed. Evidence:
 `/Volumes/PRO-G40/Projects/Lovelies/verification/android-share-cleanup-gap-20261029-attempt-01/README.md`.
+A separate inactive in-memory capability prototype and 14 tests are prepared
+but unrun. It has no Android provider or app integration, and does not resolve
+seekable-recipient compatibility, legacy file disposition, lifecycle, memory
+limits or actual device behavior. Ordinary verified credential refresh also
+changes the session identity and may revoke a pending share; a refresh lineage
+alone is not proof of current authority. Evidence:
+`/Volumes/PRO-G40/Projects/Lovelies/verification/android-share-memory-capability-20261029-attempt-01/README.md`.
 The shared iOS preview now sweeps expired in-memory entries on every exit,
 including delayed errors and cancellation, without clearing a newer valid
 entry. The baseline counterexamples, 21 focused checks and 35 existing
@@ -1211,6 +1248,12 @@ copy were removed. All 26 app-product hashes and the build receipt still
 matched. The archive is on the same PRO-G40 volume and original-path restoration
 has not been tested. Capacity remains volatile. Evidence:
 `/Volumes/PRO-G40/Projects/Lovelies/verification/ios-sdk-cache-fifth-preservation-20261029-01/completed-release-attempt1/postflight.json`.
+Two further completed debug-build caches were archived and separately restored
+before exact removal; all 180 retained app-product files in each build still
+matched their inventories. These archives also reside on PRO-G40, and original
+path restoration remains untested. Evidence:
+`/Volumes/PRO-G40/Projects/Lovelies/verification/ios-debug-sdk-cache-preservation-20261029-01/camera-debug/postflight.json`
+and `/Volumes/PRO-G40/Projects/Lovelies/verification/ios-debug-sdk-cache-preservation-20261029-01/local-auth-debug/postflight.json`.
 Five separate current-source, single-subject checks confirmed the v1 path, its
 fail-closed response to synthetic v3 control, strict v1 response shape, the
 absence of SQL mode/binding/generation pins and absence of a v4 route. These
