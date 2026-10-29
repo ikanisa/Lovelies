@@ -482,7 +482,15 @@ async function previewBytes(ctx: AppContext, actor: Actor, assetId: string, expe
         await assertMediaActor(ctx, actor);
         return current;
     };
-    const sourceHead = await ctx.env.QUARANTINE.head(initial.asset.object_key);
+    let sourceHead: Awaited<ReturnType<AppContext['env']['QUARANTINE']['head']>>;
+    try {
+        sourceHead = await ctx.env.QUARANTINE.head(initial.asset.object_key,{metadataBody:'preview-read'});
+    } catch (error) {
+        // An upstream failure can arrive after the original session, consent or
+        // ticket has retired. Current authority takes precedence in that case.
+        await ctx.db.transaction(check);
+        throw error;
+    }
     await ctx.db.transaction(check);
     if (!sourceHead || sourceHead.size !== initial.asset.byte_size || sourceHead.customMetadata?.source_version !== initial.asset.version
         || sourceHead.customMetadata?.source_checksum_sha256 !== initial.asset.checksum_sha256)

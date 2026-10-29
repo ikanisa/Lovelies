@@ -1,9 +1,11 @@
-import { ApiError, type PrivateBucket, type PrivateObject } from './types.ts';
+import { ApiError, jsonBody, type PrivateBucket, type PrivateObject } from './types.ts';
 
 const MAX_STORAGE_ERROR_BYTES=2048;
 const MAX_STORAGE_ERROR_CHUNKS=256;
 const STORAGE_ERROR_TIMEOUT_MS=1000;
 const STORAGE_PUT_CLEANUP_TIMEOUT_MS=1000;
+// Applies only when the caller explicitly identifies a read-only preview.
+const MAX_PREVIEW_INFO_BYTES=8*1024*1024;
 
 /** A rejected read can return without waiting for response-body cleanup. */
 function discardResponseBody(response:Response):void {
@@ -82,9 +84,13 @@ export class SupabasePrivateBucket implements PrivateBucket {
     }
     return response;
   }
-  async head(key:string):Promise<Omit<PrivateObject,'body'|'arrayBuffer'>|null>{
+  async head(key:string,options?:{metadataBody?:'preview-read'}):Promise<Omit<PrivateObject,'body'|'arrayBuffer'>|null>{
     const response=await this.request('/object/info/'+this.path(key));if(response.status===404){void response.body?.cancel().catch(()=>{});return null;}
-    const object=await response.json() as Record<string,any>;
+    let object:Record<string,any>;
+    if(options?.metadataBody==='preview-read'){
+      try{object=await jsonBody(response,MAX_PREVIEW_INFO_BYTES);}
+      catch{discardResponseBody(response);throw new ApiError(503,'private_storage_metadata_invalid');}
+    }else object=await response.json() as Record<string,any>;
     const metadata=object.metadata??{},user=object.user_metadata??object.userMetadata??object.metadata??{};
     const size=Number(object.size??metadata.size),etag=String(object.etag??object.eTag??metadata.eTag??metadata.etag??object.version??'');
     if(!Number.isSafeInteger(size)||size<0||!etag||!user||typeof user!=='object'||Array.isArray(user))throw new ApiError(503,'private_storage_metadata_invalid');

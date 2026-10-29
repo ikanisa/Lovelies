@@ -17,7 +17,9 @@ export interface PrivateObject {
 }
 export interface PrivateBucket {
     get(key:string):Promise<PrivateObject|null>;
-    head(key:string):Promise<Omit<PrivateObject,'body'|'arrayBuffer'>|null>;
+    // The bounded successful-info body is opt-in for a read-only preview;
+    // cleanup/delete verification keeps the legacy waiting behavior.
+    head(key:string,options?:{metadataBody?:'preview-read'}):Promise<Omit<PrivateObject,'body'|'arrayBuffer'>|null>;
     put(key:string,value:ArrayBuffer|Uint8Array,options?:{httpMetadata?:{contentType?:string},customMetadata?:Record<string,string>}):Promise<unknown>;
     delete(key:string|string[]):Promise<void>;
 }

@@ -1290,6 +1290,11 @@ the pathname check and unlink were not atomic; removal used a no-writer lease.
 Evidence:
 `/Volumes/PRO-G40/Projects/Lovelies/verification/internal-test-output-preservation-20261029-01/root-independent-readback.json`
 and `/Volumes/PRO-G40/Projects/Lovelies/verification/internal-test-output-preservation-20261029-01/postflight.json`.
+Six more test outputs were archived and twice restored before exact removal,
+including two JARs from a failed predecessor. All 29 associated evidence files
+and the failed status remained unchanged. The same archive-location,
+original-path restoration and pathname-race limits apply. Evidence:
+`/Volumes/PRO-G40/Projects/Lovelies/verification/internal-test-output-preservation-20261029-02/postflight.json`.
 Five separate current-source, single-subject checks confirmed the v1 path, its
 fail-closed response to synthetic v3 control, strict v1 response shape, the
 absence of SQL mode/binding/generation pins and absence of a v4 route. These
@@ -2065,15 +2070,34 @@ DELETE cancellation/unknown-outcome fencing remain open. Evidence:
 `/Volumes/PRO-G40/Projects/Lovelies/verification/storage-put-bounded-cleanup-20261027/attempt-01/README.md`
 and `/Volumes/PRO-G40/Projects/Lovelies/verification/storage-put-bounded-cleanup-20261027/root-integrated-01/result.json`.
 
-An isolated preview candidate bounds only the successful response body of the
-initial source-metadata read. Its prepared baseline, focused and existing tests
-have not run; it is not integrated. The selected Supabase adapter would require
-JSON content and an 8 MiB body limit for this read, while request-header waits,
-other preview reads and DELETE/cleanup semantics remain unchanged. The
+A local preview fix bounds only the successful response body of the initial
+source-metadata read. A synthetic baseline reproduced the stalled body; six
+adapter cases, one one-subject handler case and 87 existing cases passed, as did
+the isolated TypeScript check. Independent postflight matched the inputs, logs
+and process absence; the integrated files match the tested candidate bytes. The
+selected Supabase adapter requires JSON content and an 8 MiB body limit for
+this read, while request-header waits, other preview reads and DELETE/cleanup
+semantics remain unchanged. An additional correction rechecks current session,
+consent and preview authority when that initial read fails. Six same-subject
+baseline cases reproduced the stale error, and six corrected cases passed for
+direct and ticket previews with unchanged authority, logout and consent
+withdrawal. Six adapter and one route control also passed, as did TypeScript;
+independent postflight and integrated-byte checks matched. An offline cached
+Deno check of the integrated Edge entrypoint passed in manual module mode;
+that differs from the normal auto-mode build. The authority database recheck
+itself has no new timeout. The
 [Supabase Storage v1.68.10 info renderer](https://github.com/supabase/storage/blob/v1.68.10/src/storage/renderer/info.ts)
 sets a JSON content type in source; this does not establish the hosted response
-or size compatibility. Evidence:
-`/Volumes/PRO-G40/Projects/Lovelies/verification/storage-preview-info-bounded-20261029-agent-01/README.md`.
+or size compatibility. The fixture is not native PostgreSQL, provider or
+deployment proof. Evidence:
+`/Volumes/PRO-G40/Projects/Lovelies/verification/storage-preview-info-bounded-20261029-agent-01/root-run-01/result.json`,
+`/Volumes/PRO-G40/Projects/Lovelies/verification/storage-preview-info-bounded-20261029-agent-01/root-run-01-independent-postflight.json`,
+`/Volumes/PRO-G40/Projects/Lovelies/verification/storage-preview-info-bounded-20261029-agent-01/integration-postflight.json`,
+`/Volumes/PRO-G40/Projects/Lovelies/verification/preview-metadata-auth-error-runner-20261029-agent-01/root-run-01/result.json`,
+`/Volumes/PRO-G40/Projects/Lovelies/verification/preview-metadata-auth-error-runner-20261029-agent-01/root-run-01/independent-postflight.json`,
+`/Volumes/PRO-G40/Projects/Lovelies/verification/preview-metadata-auth-error-20261029-agent-01/integration-postflight.json`,
+`/Volumes/PRO-G40/Projects/Lovelies/verification/storage-preview-deno-edge-20261029-agent-01/root-run-01/result.json`
+and `/Volumes/PRO-G40/Projects/Lovelies/verification/storage-preview-deno-edge-20261029-agent-01/root-run-01-independent-postflight.json`.
 
 The second local Edge attempt failed at the missing-auth Storage control before
 starting Edge or its database. Docker stop commands succeeded, but their output
