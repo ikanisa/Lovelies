@@ -224,7 +224,8 @@ export async function flushNotificationOutbox(ctx: AppContext): Promise<void> {
             continue;
         }
         await ctx.env.PHOTO_JOBS.send({ category: 'notification', payload: { notification_id: row.notification_id } });
-        (await ctx.db.run("UPDATE notification_jobs SET status='dispatched',dispatched_at=? WHERE notification_id=? AND status IN('queued','dispatched','ambiguous')", ctx.now(), row.notification_id));
+        // A queue refresh does not settle an earlier uncertain provider send.
+        (await ctx.db.run("UPDATE notification_jobs SET status=CASE WHEN status='ambiguous' THEN 'ambiguous' ELSE 'dispatched' END,dispatched_at=? WHERE notification_id=? AND status IN('queued','dispatched','ambiguous')", ctx.now(), row.notification_id));
     }
 }
 export async function processNotificationJob(payload: unknown, ctx: AppContext): Promise<void> {

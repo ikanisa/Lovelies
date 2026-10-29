@@ -52,3 +52,25 @@ pgliteTest('a newly ambiguous state is not overwritten by a paused no-device wor
  await f.h.db.run("UPDATE notification_jobs SET status='ambiguous' WHERE notification_id=?",notification);
  const prior=await f.job();released.resolve();await assert.rejects(old,e=>e?.status===503&&e.code==='push_reconciliation_required');assert.deepEqual(await f.job(),prior);
 });
+
+pgliteTest('outbox refresh preserves an already ambiguous job',{timeout:30000},async t=>{
+ const f=await setup(t);await f.h.db.run("UPDATE notification_jobs SET status='ambiguous' WHERE notification_id=?",notification);
+ await flushNotificationOutbox(createApp(f.h.db,f.h.env,()=>now));
+ assert.deepEqual(await f.job(),{status:'ambiguous',dispatched_at:now});
+ assert.equal((await f.h.db.one("SELECT count(*) n FROM job_queue WHERE category='notification'")).n,1);
+});
+
+for(const concurrent of ['ambiguous','accepted'])pgliteTest(`outbox refresh preserves a ${concurrent} state recorded during enqueue`,{timeout:30000},async t=>{
+ const f=await setup(t),queue=f.h.env.PHOTO_JOBS,send=queue.send.bind(queue);
+ queue.send=async message=>{await send(message);await f.h.db.run('UPDATE notification_jobs SET status=? WHERE notification_id=?',concurrent,notification);};
+ await flushNotificationOutbox(createApp(f.h.db,f.h.env,()=>now));
+ const row=await f.job();assert.equal(row.status,concurrent);
+ assert.equal(row.dispatched_at,concurrent==='ambiguous'?now:null);
+ assert.equal((await f.h.db.one("SELECT count(*) n FROM job_queue WHERE category='notification'")).n,1);
+});
+
+pgliteTest('outbox refresh still dispatches an ordinary queued job',{timeout:30000},async t=>{
+ const f=await setup(t);await flushNotificationOutbox(createApp(f.h.db,f.h.env,()=>now));
+ assert.deepEqual(await f.job(),{status:'dispatched',dispatched_at:now});
+ assert.equal((await f.h.db.one("SELECT count(*) n FROM job_queue WHERE category='notification'")).n,1);
+});
