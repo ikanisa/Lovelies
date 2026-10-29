@@ -1012,6 +1012,19 @@ v2 result that the receipt lookup rejects. The run used installed dependencies
 without a before-and-after dependency hash; it did not exercise a real store,
 native multi-connection database, deployed API or complete restore path. Evidence:
 `/Users/jeanbosco/Library/Application Support/LoveliesVerification/store-apple-v2-pglite-20261029-root-01/result.json`.
+An unrun replay revision shares validation between the two paths. Its independent
+review found an impossible invalid-JSON database fixture, an early legacy-replay
+race, and a false definitive conflict for corrupt stored inputs; those need
+correction before integration. The review also found an inherited session-expiry
+window during independent journal preparation, acknowledgement and final
+admission. That shared transaction and response-release boundary remains open.
+An isolated iOS purchase-recovery implementation passed 21 synthetic
+same-subject actor and extracted-coordinator checks after correcting two local
+ordering issues. It remains unintegrated: its eight retained journal records
+can eventually block renewals, and account deletion does not yet dispose of the
+dedicated slot. Legacy migration, actual Keychain and StoreKit behavior, and
+the backend contract remain unqualified. Evidence:
+`/Users/jeanbosco/Library/Application Support/LoveliesVerification/ios-store-durable-operation-implementation-20261029-agent-01/README.md`.
 An independent source review additionally found that the purchase sheet can be
 opened before the recovery slot is available. Direct store commits use the
 existing audience check that blocks outstanding deletion requests; ordering and
@@ -2126,10 +2139,16 @@ Source review found that automatic raw-retention retirement is not yet recorded
 in the independent journal. An isolated candidate and successor remain held:
 they need the administrator scheduling journey, fair progress past held or
 already-scheduled work, exact-key overlap handling and durable reconciliation
-of uncertain DELETEs. The reviewed successor's synthetic tests have not run.
+of uncertain DELETEs. A later inventory successor was source-reviewed for a
+bounded local test. Its sandbox controls passed and its baseline counterexample
+reproduced, but the test runner stopped in a subsequent baseline suite after its
+process exceeded the 1,300,000 KiB memory guard. The candidate suites did not
+run. The stopped result is retained while the cases are split across fresh
+processes; it is not a candidate or release pass.
 These findings do not establish hosted behavior or completed recovery. Evidence:
 `/Users/jeanbosco/Library/Application Support/LoveliesVerification/restore-retention-raw-successor-20261029-agent-01/README.md`
-and `/Users/jeanbosco/Library/Application Support/LoveliesVerification/restore-retention-raw-successor-independent-review-20261029-01/REVIEW.md`.
+and `/Users/jeanbosco/Library/Application Support/LoveliesVerification/restore-retention-raw-successor-independent-review-20261029-01/REVIEW.md`
+and `/Users/jeanbosco/Library/Application Support/LoveliesVerification/restore-retention-inventory-pglite-runner-successor-20261029-agent-01/result-01/result.json`.
 
 The Storage status adapter previously treated arbitrary native HTTP 404s as
 object absence and could accept a 404 DELETE. Six isolated regressions reproduced
