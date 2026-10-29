@@ -42,6 +42,21 @@ jobs:
       - run: pnpm install --frozen-lockfile --ignore-scripts
       - run: pnpm backend:build
       - run: pnpm backend:test
+      - name: Run PGlite-only recovery regressions
+        working-directory: services/supabase-api
+        shell: bash
+        run: |
+          set -euo pipefail
+          report_file="$(mktemp "${TMPDIR:-/tmp}/lovelies-pglite.XXXXXXXX")"
+          trap 'rm -f "$report_file"' EXIT
+          env -u TEST_DATABASE_URL node --experimental-transform-types \
+            --import ./test/offline-regression-guard.mjs --test --test-reporter=tap \
+            --test-concurrency=1 test/retention-finalization-count.test.mjs \
+            test/notification-redirect-cancel.test.mjs | tee "$report_file"
+          grep -qx '# tests 11' "$report_file"
+          grep -qx '# pass 11' "$report_file"
+          grep -qx '# fail 0' "$report_file"
+          grep -qx '# skipped 0' "$report_file"
       - run: pnpm backend:client:test
       - run: node --test services/link-association-worker/test/worker.test.mjs
       - run: pnpm backup:test
