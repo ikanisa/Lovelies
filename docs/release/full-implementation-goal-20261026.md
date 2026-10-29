@@ -476,6 +476,21 @@ establish production scheduling, source provenance, off-site custody,
 Storage-object backups, physical expiry or safe restore. Evidence:
 `/Volumes/PRO-G40/Projects/Lovelies/verification/backup-catalog-health-20261028/attempt-02/root-integrated-native-test.log`
 and `/Volumes/PRO-G40/Projects/Lovelies/verification/backup-catalog-health-20261028/attempt-03/execution-cc10d6825a38f11e/result.json`.
+An isolated correction for backup children that exit successfully after a
+timeout or oversized listing remains unintegrated. Its first synthetic test
+attempt stopped during the process-safety control: the supervisor rejected a
+valid signed system user ID in the process inventory. Root stopped the owned
+runner after checking its identity; a later process inventory and group probes
+confirmed absence. No backup case passed in that attempt, whose scratch is
+retained. A corrected runner passed its signed-user-ID parser controls and live
+inventory preflight, then failed its executable-sandbox control before the
+backup cases; its owned process group exited and the run is retained for
+diagnosis. A single-control diagnostic then showed Node itself could execute,
+but the supposedly allowed synthetic restore tool received `EPERM`. No backup
+case ran in either attempt. Evidence:
+`/Volumes/PRO-G40/Projects/Lovelies/verification/backup-runner-intervention-20261029-root-01/result.json`,
+`/Volumes/PRO-G40/Projects/Lovelies/verification/backup-inspection-signed-ruid-runner-20261029-agent-01/root-run-01/result.json`,
+and `/Volumes/PRO-G40/Projects/Lovelies/verification/backup-sandbox-exec-diagnostic-20261029-agent-01/root-run-01/result.json`.
 Supabase documents a 1 GB average Storage quota shared across a Free-plan
 organization, plus separate database and egress quotas. Capacity for the
 10,000-asset target and actual retention/traffic must be measured against
@@ -1314,11 +1329,13 @@ One additional 78-file iOS SDK module cache was archived and restored on a
 separate volume before the exact original was removed. Independent postflight
 matched the retained archive, restored files, build evidence and removal
 receipt. The measured internal free-space increase during removal was about
-63 MiB. The archive shares the internal volume with the original; the restored
-copy was retained at postflight, and original-path restoration and independent
-custody are not claimed. Evidence:
-`/Volumes/PRO-G40/Projects/Lovelies/verification/internal-sdk-cache-preservation-20261029-agent-03/run-01/verified.json`
-and `/Volumes/PRO-G40/Projects/Lovelies/verification/internal-sdk-cache-original-cleanup-postflight-20261029-independent-agent-01/POSTFLIGHT.json`.
+63 MiB. The verified temporary restore was subsequently removed, with another
+63 MiB increase observed on PRO-G40. The archive is the remaining copy and
+shares the internal volume with the original; original-path restoration and
+independent custody are not claimed. Evidence:
+`/Volumes/PRO-G40/Projects/Lovelies/verification/internal-sdk-cache-preservation-20261029-agent-03/run-01/verified.json`,
+`/Volumes/PRO-G40/Projects/Lovelies/verification/internal-sdk-cache-original-cleanup-postflight-20261029-independent-agent-01/POSTFLIGHT.json`,
+and `/Volumes/PRO-G40/Projects/Lovelies/verification/internal-sdk-cache-restore-cleanup-postflight-20261029-independent-agent-01/POSTFLIGHT.json`.
 Five separate current-source, single-subject checks confirmed the v1 path, its
 fail-closed response to synthetic v3 control, strict v1 response shape, the
 absence of SQL mode/binding/generation pins and absence of a v4 route. These
