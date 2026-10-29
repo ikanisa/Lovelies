@@ -4,8 +4,9 @@ import {startHarness} from './runtime-harness.mjs';
 import {createApp,createHandler} from '../src/index.ts';
 import {PostgresJobQueue,drainJobs} from '../src/jobs.ts';
 
-if(process.env.TEST_DATABASE_URL!==undefined)throw Error('external_database_forbidden');
-const originalFetch=globalThis.fetch;globalThis.fetch=async()=>{throw Error('network_denied_by_fixture');};after(()=>{globalThis.fetch=originalFetch;});
+const pgliteTest=process.env.TEST_DATABASE_URL===undefined?test:test.skip;
+const originalFetch=globalThis.fetch;
+if(process.env.TEST_DATABASE_URL===undefined){globalThis.fetch=async()=>{throw Error('network_denied_by_fixture');};after(()=>{globalThis.fetch=originalFetch;});}
 const subject='00000000-0000-4000-8000-000000000001',notification='00000000-0000-4000-8000-000000000002';
 const defer=()=>{let resolve;const promise=new Promise(r=>{resolve=r});return {promise,resolve};};
 async function fixture(t,{invalid=false}={}){
@@ -18,13 +19,13 @@ async function fixture(t,{invalid=false}={}){
  return {h,queue,clock:()=>now,advance:()=>{now+=180001;}};
 }
 
-test('ordinary already-cancelled notification job is acknowledged exactly once', {timeout:30000}, async t=>{
+pgliteTest('ordinary already-cancelled notification job is acknowledged exactly once', {timeout:30000}, async t=>{
  const f=await fixture(t),ctx=createApp(f.h.db,f.h.env,f.clock);
  assert.deepEqual(await drainJobs(ctx,1),{processed:1,failed:0});const row=await f.queue();
  assert.equal(row.state,'completed');assert.equal(row.attempts,1);assert.equal(row.lease_token,null);assert.notEqual(row.completed_at,null);
 });
 
-test('a superseded worker cannot report the successor completion as its own', {timeout:30000}, async t=>{
+pgliteTest('a superseded worker cannot report the successor completion as its own', {timeout:30000}, async t=>{
  const f=await fixture(t),entered=defer(),release=defer();t.after(()=>release.resolve());let armed=true;
  const db=new Proxy(f.h.db,{get(target,property){
   if(property==='one')return async(sql,...bindings)=>{
@@ -43,13 +44,13 @@ test('a superseded worker cannot report the successor completion as its own', {t
 });
 
 
-test('a failed handler retains the existing bounded retry semantics', {timeout:30000}, async t=>{
+pgliteTest('a failed handler retains the existing bounded retry semantics', {timeout:30000}, async t=>{
  const f=await fixture(t,{invalid:true}),ctx=createApp(f.h.db,f.h.env,f.clock);
  assert.deepEqual(await drainJobs(ctx,1),{processed:0,failed:1});const saved=await f.queue();
  assert.equal(saved.state,'pending');assert.equal(saved.attempts,1);assert.equal(saved.lease_token,null);assert.equal(saved.error_code,'invalid_id');
 });
 
-test('a changed job state is preserved even if its former token is still present', {timeout:30000}, async t=>{
+pgliteTest('a changed job state is preserved even if its former token is still present', {timeout:30000}, async t=>{
  const f=await fixture(t),entered=defer(),release=defer();t.after(()=>release.resolve());let armed=true;
  const db=new Proxy(f.h.db,{get(target,property){
   if(property==='one')return async(sql,...bindings)=>{
@@ -67,7 +68,7 @@ test('a changed job state is preserved even if its former token is still present
  assert.deepEqual(await old,{processed:0,failed:1});assert.deepEqual(await f.queue(),preserved);
 });
 
-test('a lost completion commit reply is counted unconfirmed without undoing the committed row', {timeout:30000}, async t=>{
+pgliteTest('a lost completion commit reply is counted unconfirmed without undoing the committed row', {timeout:30000}, async t=>{
  const f=await fixture(t);let completion=false,lose=true;
  const db=new Proxy(f.h.db,{get(target,property){
   if(property==='one')return async(sql,...bindings)=>{
@@ -86,7 +87,7 @@ test('a lost completion commit reply is counted unconfirmed without undoing the 
  const saved=await f.queue();assert.equal(saved.state,'completed');assert.equal(saved.attempts,1);assert.equal(saved.lease_token,null);assert.notEqual(saved.completed_at,null);
 });
 
-for(const changedState of ['failed','completed'])test(`handler error cannot overwrite a changed ${changedState} state retaining the old token`,{timeout:30000},async t=>{
+for(const changedState of ['failed','completed'])pgliteTest(`handler error cannot overwrite a changed ${changedState} state retaining the old token`,{timeout:30000},async t=>{
  const f=await fixture(t),entered=defer(),release=defer();t.after(()=>release.resolve());let armed=true;
  const device='00000000-0000-4000-8000-000000000003',push='00000000-0000-4000-8000-000000000004';
  await f.h.db.run("UPDATE accounts SET identity_state='registered_face' WHERE id=?",subject);
@@ -111,7 +112,7 @@ for(const changedState of ['failed','completed'])test(`handler error cannot over
 });
 
 
-test('actual maintenance endpoint returns 503 and existing fields for an unconfirmed stale completion',{timeout:30000},async t=>{
+pgliteTest('actual maintenance endpoint returns 503 and existing fields for an unconfirmed stale completion',{timeout:30000},async t=>{
  const f=await fixture(t),entered=defer(),release=defer();t.after(()=>release.resolve());let armed=true;
  const db=new Proxy(f.h.db,{get(target,property){
   if(property==='one')return async(sql,...bindings)=>{

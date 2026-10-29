@@ -53,9 +53,13 @@ jobs:
             --import ./test/offline-regression-guard.mjs --test --test-reporter=tap \
             --test-concurrency=1 test/retention-finalization-count.test.mjs \
             test/notification-redirect-cancel.test.mjs \
-            test/service-fetcher-push-consumer.test.mjs | tee "$report_file"
-          grep -qx '# tests 13' "$report_file"
-          grep -qx '# pass 13' "$report_file"
+            test/service-fetcher-push-consumer.test.mjs \
+            test/job-stale-completion.test.mjs \
+            test/notification-terminal-race.test.mjs \
+            test/notification-unconfirmed-delivery.test.mjs \
+            test/storage-status-cleanup-runtime.test.mjs | tee "$report_file"
+          grep -qx '# tests 43' "$report_file"
+          grep -qx '# pass 43' "$report_file"
           grep -qx '# fail 0' "$report_file"
           grep -qx '# skipped 0' "$report_file"
       - run: pnpm backend:client:test

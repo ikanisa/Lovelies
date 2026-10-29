@@ -5,6 +5,7 @@ import { SupabasePrivateBucket } from '../src/storage.ts';
 import { flushPrivacyCleanup } from '../src/privacy.ts';
 import { startHarness, closeHarnesses } from './runtime-harness.mjs';
 
+const pgliteTest=process.env.TEST_DATABASE_URL===undefined?test:test.skip;
 after(closeHarnesses);
 const origin = 'http://127.0.0.1:1', secret = 'synthetic-cleanup-fixture', key = 'owned-only/status-fixture';
 const missing = { statusCode: '404', error: 'not_found', message: 'Object not found', code: 'NoSuchKey' };
@@ -42,21 +43,21 @@ async function run(f) {
   assert(result); return result;
 }
 
-test('an unknown DELETE 404 never yields a verified cleanup receipt', { timeout: 60000 }, async t => {
+pgliteTest('an unknown DELETE 404 never yields a verified cleanup receipt', { timeout: 60000 }, async t => {
   const f = await setup(t, () => new Response(null, { status: 404 }), () => Response.json(missing, { status: 400 }));
   const result = await run(f);
   assert.notEqual(result.status, 'verified'); assert.equal(result.verified_at, null);
   assert.deepEqual(f.calls, [{method:'DELETE',path:'/storage/v1/object/lovelies-quarantine',status:404}]);
 });
 
-test('an unknown info 404 after synthetic DELETE 200 never yields a verified cleanup receipt', { timeout: 60000 }, async t => {
+pgliteTest('an unknown info 404 after synthetic DELETE 200 never yields a verified cleanup receipt', { timeout: 60000 }, async t => {
   const f = await setup(t, () => Response.json([], { status: 200 }), () => new Response(null, { status: 404 }));
   const result = await run(f);
   assert.notEqual(result.status, 'verified'); assert.equal(result.verified_at, null);
   assert.deepEqual(f.calls, [{method:'DELETE',path:'/storage/v1/object/lovelies-quarantine',status:200},{method:'GET',path:'/storage/v1/object/info/lovelies-quarantine/'+key,status:404}]);
 });
 
-test('the modeled DELETE 200 and exact observed NoSuchKey response retain the local bookkeeping control', { timeout: 60000 }, async t => {
+pgliteTest('the modeled DELETE 200 and exact observed NoSuchKey response retain the local bookkeeping control', { timeout: 60000 }, async t => {
   const f = await setup(t, () => Response.json([], { status: 200 }), () => Response.json(missing, { status: 400 }));
   const result = await run(f);
   assert.equal(result.status, 'verified'); assert.notEqual(result.verified_at, null);

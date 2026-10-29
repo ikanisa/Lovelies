@@ -3,8 +3,9 @@ import {after,test} from 'node:test';
 import {startHarness} from './runtime-harness.mjs';
 import {createApp} from '../src/index.ts';
 import {processNotificationJob,flushNotificationOutbox} from '../src/notifications.ts';
-if(process.env.TEST_DATABASE_URL!==undefined)throw Error('external_database_forbidden');
-const originalFetch=globalThis.fetch;globalThis.fetch=async()=>{throw Error('network_denied_by_fixture');};after(()=>{globalThis.fetch=originalFetch;});
+const pgliteTest=process.env.TEST_DATABASE_URL===undefined?test:test.skip;
+const originalFetch=globalThis.fetch;
+if(process.env.TEST_DATABASE_URL===undefined){globalThis.fetch=async()=>{throw Error('network_denied_by_fixture');};after(()=>{globalThis.fetch=originalFetch;});}
 const account='00000000-0000-4000-8000-000000000001',notification='00000000-0000-4000-8000-000000000002',now=1700000000000;
 const deferred=()=>{let resolve;const promise=new Promise(r=>{resolve=r});return {promise,resolve};};
 async function setup(t){
@@ -21,12 +22,12 @@ function pausedDb(db,entered,released){let armed=true;return new Proxy(db,{get(t
  const value=Reflect.get(target,key,target);return typeof value==='function'?value.bind(target):value;
  }});}
 
-test('one queued notification with no devices becomes inbox-only',{timeout:30000},async t=>{
+pgliteTest('one queued notification with no devices becomes inbox-only',{timeout:30000},async t=>{
  const f=await setup(t);await processNotificationJob({notification_id:notification},createApp(f.h.db,f.h.env,()=>now));
  assert.equal((await f.job()).status,'inbox_only');
 });
 
-test('a same-subject opt-out cancellation cannot be overwritten by a paused no-device worker',{timeout:30000},async t=>{
+pgliteTest('a same-subject opt-out cancellation cannot be overwritten by a paused no-device worker',{timeout:30000},async t=>{
  const f=await setup(t),entered=deferred(),released=deferred();t.after(()=>released.resolve());
  const old=processNotificationJob({notification_id:notification},createApp(pausedDb(f.h.db,entered,released),f.h.env,()=>now));void old.catch(()=>{});
  await Promise.race([entered.promise,old.then(()=>{throw Error('worker_did_not_pause');})]);
@@ -35,7 +36,7 @@ test('a same-subject opt-out cancellation cannot be overwritten by a paused no-d
  released.resolve();await old;assert.deepEqual(await f.job(),prior);
 });
 
-test('a synthetic accepted terminal state cannot be downgraded by a paused no-device worker',{timeout:30000},async t=>{
+pgliteTest('a synthetic accepted terminal state cannot be downgraded by a paused no-device worker',{timeout:30000},async t=>{
  const f=await setup(t),entered=deferred(),released=deferred();t.after(()=>released.resolve());
  const old=processNotificationJob({notification_id:notification},createApp(pausedDb(f.h.db,entered,released),f.h.env,()=>now));void old.catch(()=>{});
  await Promise.race([entered.promise,old.then(()=>{throw Error('worker_did_not_pause');})]);
@@ -44,7 +45,7 @@ test('a synthetic accepted terminal state cannot be downgraded by a paused no-de
 });
 
 
-test('a newly ambiguous state is not overwritten by a paused no-device worker',{timeout:30000},async t=>{
+pgliteTest('a newly ambiguous state is not overwritten by a paused no-device worker',{timeout:30000},async t=>{
  const f=await setup(t),entered=deferred(),released=deferred();t.after(()=>released.resolve());
  const old=processNotificationJob({notification_id:notification},createApp(pausedDb(f.h.db,entered,released),f.h.env,()=>now));void old.catch(()=>{});
  await Promise.race([entered.promise,old.then(()=>{throw Error('worker_did_not_pause');})]);
