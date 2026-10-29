@@ -149,16 +149,16 @@ class PrivateMediaRetentionTest {
 
     @Test fun symbolicLinkFileAndSymbolicLinkOwnedDirectoryCannotReachOutsideInventory() {
         val cache=cache();val folder=File(cache,"camera").apply { mkdir() }
-        val outside=temporary.newFolder().resolve(cameraName).apply { writeBytes(bytes) }
+        val outsideFolder=temporary.newFolder();val outside=outsideFolder.resolve(cameraName).apply { writeBytes(bytes) }
         val link=File(folder,cameraName).toPath();Files.createSymbolicLink(link,outside.toPath())
         assertTrue(PrivateTemporaryMedia.sweep(cache,PrivateTemporaryMedia.Kind.CAMERA,now,all=true).removed.isEmpty())
         assertTrue(Files.isSymbolicLink(link));assertArrayEquals(bytes,outside.readBytes())
-        Files.delete(link);Files.delete(folder.toPath());Files.createSymbolicLink(folder.toPath(),outside.parentFile.toPath())
+        Files.delete(link);Files.delete(folder.toPath());Files.createSymbolicLink(folder.toPath(),outsideFolder.toPath())
         assertTrue(PrivateTemporaryMedia.sweep(cache,PrivateTemporaryMedia.Kind.CAMERA,now,all=true).removed.isEmpty())
         assertArrayEquals(bytes,outside.readBytes())
         try { write(cache,PrivateTemporaryMedia.Kind.CAMERA,otherCameraName,now);fail("Symlink directory accepted private bytes") }
         catch(_: LiveFailure) { }
-        assertFalse(outside.parentFile.resolve(otherCameraName).exists())
+        assertFalse(outsideFolder.resolve(otherCameraName).exists())
     }
 
     @Test fun nameCollisionAndUnsafeWriteNeverReplaceOrRemoveExistingFile() {
@@ -168,7 +168,7 @@ class PrivateMediaRetentionTest {
         assertArrayEquals(bytes,original.readBytes())
         try { write(cache,PrivateTemporaryMedia.Kind.CAMERA,"../$cameraName",now);fail("Traversal write accepted") }
         catch(_: LiveFailure) { }
-        assertEquals(listOf(cameraName),original.parentFile.list()!!.toList())
+        assertEquals(listOf(cameraName),requireNotNull(original.parentFile).list()!!.toList())
     }
 
     @Test fun failedDeletionRetainsTheFileAndSchedulesRetryWithoutClaimingRemoval() {

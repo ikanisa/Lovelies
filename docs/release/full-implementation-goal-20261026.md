@@ -210,6 +210,18 @@ integrated. Queue admission, retirement and late-writer fencing need an exact
 subject-bound contract; a wider backlog count alone cannot establish deletion.
 Evidence:
 `/Volumes/PRO-G40/Projects/Lovelies/verification/notification-fair-scan-v2-independent-review-20261029-01/REVIEW.md`.
+Further isolated subject-bound queue drafts address local admission and
+retirement. Source review found that the first could still let an unbound queue
+row survive while erasure progressed, and that its enqueue timeout did not
+bound a following database wait. The next draft proposes an early deletion
+hold and a bounded caller response; its cases remain unrun. An underlying
+transaction can still continue, an unknown orphan can block unrelated erasure,
+and the interval between the local dispatch check and provider call remains
+open. Independent custody, old-writer fencing, privacy export and native
+PostgreSQL concurrency are still required. Evidence:
+`/Volumes/PRO-G40/Projects/Lovelies/verification/notification-queue-erasure-contract-20261029-agent-01/DESIGN.md`,
+`/Volumes/PRO-G40/Projects/Lovelies/verification/notification-subject-queue-v3-20261029-agent-01/README.md`
+and `/Volumes/PRO-G40/Projects/Lovelies/verification/notification-subject-queue-v3-20261029-agent-02/README.md`.
 An isolated queue review reproduced six cases across the real photo, privacy
 and notification outboxes where a completed or failed stable-ID queue row
 was treated as successful handoff despite active work. A queue-only candidate
@@ -857,6 +869,16 @@ provider behavior also remain open. Evidence:
 `/Volumes/PRO-G40/Projects/Lovelies/verification/android-photo-attempt05-independent-postflight-20261029-01/REVIEW.md`,
 `/Volumes/PRO-G40/Projects/Lovelies/verification/android-photo-action-current-20261029-root-05/result.json`
 and `/Volumes/PRO-G40/Projects/Lovelies/verification/android-photo-root05-independent-postflight-20261029-01/review.json`.
+The three nullable-parent warnings in the private-media test were corrected
+without changing production code. The exact modified test compiled without
+warning lines using Kotlin 2.2.20 and passed all 14 named host JUnit cases.
+Independent postflight matched the inputs, output and logs and found no recorded
+test process remaining. The check used the currently hash-bound root-05
+attempt-05 candidate app JAR and a selected cached coroutines runtime; its JAR
+was not sealed at the earlier Gradle build. It is not a fresh shared-source
+Gradle build, device, provider or CI result. Evidence:
+`/Volumes/PRO-G40/Projects/Lovelies/verification/android-retention-direct-junit-20261029-01/root-run-01/result.json`
+and `/Volumes/PRO-G40/Projects/Lovelies/verification/android-retention-direct-junit-20261029-01/root-run-01/independent-postflight.json`.
 An isolated follow-up prepared four controller and two temporary-file controls
 for the stale-share cleanup gap. They have not run. The existing UUID-shaped
 sweep is not proof of ownership and its pathname check and unlink are not
@@ -864,13 +886,19 @@ atomic against replacement; simply scheduling that sweep cannot establish safe
 cleanup. An owned namespace/writer contract or another qualified handoff is
 still needed. Evidence:
 `/Volumes/PRO-G40/Projects/Lovelies/verification/android-share-cleanup-gap-20261029-attempt-01/README.md`.
-A separate inactive in-memory capability prototype and 14 tests are prepared
-but unrun. It has no Android provider or app integration, and does not resolve
+A separate inactive in-memory capability prototype and 14 tests are prepared.
+The first runner stopped before compilation when it could not bind the Python
+framework process identity. A corrected runner passed its sandbox control and
+compiled the prototype, but did not launch JUnit because the next launch had
+insufficient internal disk headroom. Both failures remain preserved; the tests
+are still unrun. The prototype has no Android provider or app integration and does not resolve
 seekable-recipient compatibility, legacy file disposition, lifecycle, memory
 limits or actual device behavior. Ordinary verified credential refresh also
 changes the session identity and may revoke a pending share; a refresh lineage
 alone is not proof of current authority. Evidence:
-`/Volumes/PRO-G40/Projects/Lovelies/verification/android-share-memory-capability-20261029-attempt-01/README.md`.
+`/Volumes/PRO-G40/Projects/Lovelies/verification/android-share-memory-capability-20261029-attempt-01/README.md`,
+`/Volumes/PRO-G40/Projects/Lovelies/verification/android-share-memory-capability-20261029-attempt-01/root-run-01/result.json`
+and `/Volumes/PRO-G40/Projects/Lovelies/verification/android-share-memory-capability-20261029-attempt-01/root-run-02/result.json`.
 The shared iOS preview now sweeps expired in-memory entries on every exit,
 including delayed errors and cancellation, without clearing a newer valid
 entry. The baseline counterexamples, 21 focused checks and 35 existing
@@ -1254,6 +1282,14 @@ matched their inventories. These archives also reside on PRO-G40, and original
 path restoration remains untested. Evidence:
 `/Volumes/PRO-G40/Projects/Lovelies/verification/ios-debug-sdk-cache-preservation-20261029-01/camera-debug/postflight.json`
 and `/Volumes/PRO-G40/Projects/Lovelies/verification/ios-debug-sdk-cache-preservation-20261029-01/local-auth-debug/postflight.json`.
+Another 21 completed test outputs were archived and restored twice before the
+exact original files and 42 task-created restore copies were removed. The
+archive and 20 retained source receipts matched the independent postflight.
+The archive is on PRO-G40, original-path restoration was not performed, and
+the pathname check and unlink were not atomic; removal used a no-writer lease.
+Evidence:
+`/Volumes/PRO-G40/Projects/Lovelies/verification/internal-test-output-preservation-20261029-01/root-independent-readback.json`
+and `/Volumes/PRO-G40/Projects/Lovelies/verification/internal-test-output-preservation-20261029-01/postflight.json`.
 Five separate current-source, single-subject checks confirmed the v1 path, its
 fail-closed response to synthetic v3 control, strict v1 response shape, the
 absence of SQL mode/binding/generation pins and absence of a v4 route. These
@@ -2028,6 +2064,16 @@ Repeated retries can accumulate unresolved objects; distributed recovery and
 DELETE cancellation/unknown-outcome fencing remain open. Evidence:
 `/Volumes/PRO-G40/Projects/Lovelies/verification/storage-put-bounded-cleanup-20261027/attempt-01/README.md`
 and `/Volumes/PRO-G40/Projects/Lovelies/verification/storage-put-bounded-cleanup-20261027/root-integrated-01/result.json`.
+
+An isolated preview candidate bounds only the successful response body of the
+initial source-metadata read. Its prepared baseline, focused and existing tests
+have not run; it is not integrated. The selected Supabase adapter would require
+JSON content and an 8 MiB body limit for this read, while request-header waits,
+other preview reads and DELETE/cleanup semantics remain unchanged. The
+[Supabase Storage v1.68.10 info renderer](https://github.com/supabase/storage/blob/v1.68.10/src/storage/renderer/info.ts)
+sets a JSON content type in source; this does not establish the hosted response
+or size compatibility. Evidence:
+`/Volumes/PRO-G40/Projects/Lovelies/verification/storage-preview-info-bounded-20261029-agent-01/README.md`.
 
 The second local Edge attempt failed at the missing-auth Storage control before
 starting Edge or its database. Docker stop commands succeeded, but their output
