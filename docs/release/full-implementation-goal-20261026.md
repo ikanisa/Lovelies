@@ -139,6 +139,15 @@ independent review. Evidence:
 `/Users/jeanbosco/Library/Application Support/LoveliesVerification/queue-outbox-combined-20261029/attempt-04/README.md`,
 `/Users/jeanbosco/Library/Application Support/LoveliesVerification/queue-outbox-combined-20261029/attempt-04/final-run/result.json`
 and `/Users/jeanbosco/Library/Application Support/LoveliesVerification/queue-outbox-independent-review-20261029/attempt-02-review/REVIEW.md`.
+A further one-subject local counterexample shows identical SQL evidence,
+global v1 ledger control and one exact accepted receipt can coexist with an
+additional ambiguous operation for the same notification. Three checks passed
+against the actual copied adapter and ledger handler; no provider or second
+account was used. The v1 lookup has no complete per-notification roster, so
+those facts cannot certify request-specific deletion clearance. No deletion
+handler or approval was bypassed or qualified. Evidence:
+`/Users/jeanbosco/Library/Application Support/LoveliesVerification/deletion-queue-effect-binding-20261029/attempt-01/REVIEW.md`
+and `/Users/jeanbosco/Library/Application Support/LoveliesVerification/deletion-queue-effect-binding-20261029/attempt-01/final-run-02/result.json`.
 An isolated successor adds a tentative schema-14 numeric scan order and a
 separate bounded high-water cursor without copying account or notification IDs
 into it. Its local checks covered 61 older unresolved jobs, scan wrap, a
@@ -693,10 +702,27 @@ private share remain unverified. Evidence:
 `/Volumes/PRO-G40/Projects/Lovelies/verification/android-photo-action-fence-20261029/successor-02/README.md`.
 The candidate's actual pure selection fence also passed five isolated JUnit
 tests using the project's Kotlin 2.2.20 and JUnit 4.13.2, with a source- and
-tool-bound result. This does not compile the changed Compose, controller or
-media code. The current resource/classpath closure and device behavior remain
-unqualified, so the Android patch is still not integrated. Evidence:
+tool-bound result. That earlier check did not compile the changed Compose,
+controller or media code. Evidence:
 `/Users/jeanbosco/Library/Application Support/LoveliesVerification/android-photo-junit-20261029-NMOXda3v/HANDOFF.md`.
+A subsequent isolated Gradle debug run used the current Android tree and the
+candidate patch with private cache snapshots and fresh resources. It compiled
+the changed app and unit-test sources and ran the five named selection-fence
+tests with no failures or skips. Kotlin emitted three nullable-receiver warnings
+in an existing private-media test. This run forced IPv4 for local Gradle
+coordination; its sandbox allowed local-address traffic and wildcard listeners,
+while selected nonlocal outbound controls were denied. It is not independent
+CI, a release package or device/provider qualification. The candidate remains
+unintegrated pending review and its recorded handoff/cleanup gates. Evidence:
+`/Volumes/PRO-G40/Projects/Lovelies/verification/android-photo-action-current-20261029-root-04/result.json`
+`/Volumes/PRO-G40/Projects/Lovelies/verification/android-photo-action-current-20261029-root-04/gradle.log`
+and `/Volumes/PRO-G40/Projects/Lovelies/verification/android-photo-action-current-20261029-root-04-postflight-agent-01.json`.
+An independent source-bound review found that the candidate can suppress a
+current-session authentication or audience error after the photo action becomes
+stale, and can leave its in-progress status visible after cancellation. Those
+are candidate defects; the shared app was not changed by the review. A separate
+fix and affected checks are required before integration. Evidence:
+`/Users/jeanbosco/Library/Application Support/LoveliesVerification/android-photo-action-independent-review-20261029/REVIEW.md`.
 The shared iOS preview now sweeps expired in-memory entries on every exit,
 including delayed errors and cancellation, without clearing a newer valid
 entry. The baseline counterexamples, 21 focused checks and 35 existing
@@ -1046,6 +1072,16 @@ procedures are documented but untested. Historical full-tree relocation
 receipts still describe their earlier state; the current trees omit the
 archived cache directories until restored. Evidence:
 `/Volumes/PRO-G40/Projects/Lovelies/verification/ios-sdk-cache-batch-20261029-01/headroom-postflight.json`.
+Four further named Xcode caches were archived and separately restored/verified
+before removal, preserving their app products and other evidence. Their measured
+individual gains total 131,706,880 bytes; at postflight PRO-G40 had about
+610 MiB above the build floor. A fifth candidate cache was retained. Separately,
+two redundant task-created Gradle cache snapshots from the first failed run
+were removed after their recorded files matched surviving shared references;
+the other failed-run caches and all run evidence remain. Original-path Xcode
+archive restoration remains documented but untested. Evidence:
+`/Volumes/PRO-G40/Projects/Lovelies/verification/ios-sdk-cache-recovery-20261029-agent-01/combined-postflight.json`
+and `/Volumes/PRO-G40/Projects/Lovelies/verification/android-failed-gradle-cache-cleanup-20261029-agent-02/combined-postflight.json`.
 Five current-source, single-subject checks then confirmed the v1 path, its
 fail-closed response to synthetic v3 control, strict v1 response shape, the
 absence of SQL mode/binding/generation pins and absence of a v4 route. These
@@ -2349,13 +2385,27 @@ With approximately 3.51 GiB free internally and 4.29 GiB on PRO-G40 at the
 assessment, safe space for a fresh isolated compile was not established; no
 build, cache clone, shared-cache change or T7 action was performed in that step.
 A subsequent qualification stopped before compilation when PRO-G40 was below
-the 4 GiB free-space floor. The retained application resource artifacts lack a
-string referenced by current source, and the 79 historical dependency jars do
-not prove a current resolved classpath. Fresh resources and a current classpath
-remain necessary before the Android candidate can be qualified. A task-owned
+the 4 GiB free-space floor. Its retained application resource artifacts lacked a
+string referenced by current source, and the 79 historical dependency jars did
+not prove a current resolved classpath. The later isolated Gradle candidate run
+above generated fresh debug resources and resolved its own classpath; release
+and device qualification remain open. A task-owned
 copy of the stopped qualification's source and receipt was content-hash and
 mode checked; the original remains in temporary storage. Evidence:
 `/Users/jeanbosco/Library/Application Support/LoveliesVerification/android-photoqual-preserved-20261029/result.json`.
+After the cache-preservation work provided a larger external margin, three
+isolated Android candidate starts remained unsuccessful before compilation.
+The first sandbox denied `/dev/null`, the second denied Gradle's file-lock
+socket, and the third allowed local-address coordination but the daemon still
+failed its socket bind. Source and dependency-snapshot checks remained intact;
+no Android unit test or app compile ran. The third policy permits wildcard
+listeners during the attempt and does not establish remote-LAN blocking. These
+environment failures are retained for diagnosis, not counted as passes:
+`/Volumes/PRO-G40/Projects/Lovelies/verification/android-photo-action-current-20261029-root-01/result.json`,
+`/Volumes/PRO-G40/Projects/Lovelies/verification/android-photo-action-current-20261029-root-02/result.json`
+and `/Volumes/PRO-G40/Projects/Lovelies/verification/android-photo-action-current-20261029-root-03/result.json`.
+The subsequent IPv4-only retry passed as described in the candidate checkpoint
+above; it did not qualify IPv6, device behavior or a store artifact.
 The default iOS simulator device-set alias currently points through an absent
 temporary link; the recorded durable set remains present. Shared simulator
 services were running, and a current exclusive lease and consistent preservation
