@@ -27,13 +27,13 @@ async function binary(value,name){
   return resolved;
 }
 function producer(binary,args,environment){
-  const child=spawn(binary,args,{env:environment,stdio:['pipe','pipe','pipe']});let stderr=0;
+  const child=spawn(binary,args,{env:environment,stdio:['pipe','pipe','pipe']});let stderr=0,timedOut=false;
   child.stderr.on('data',bytes=>{stderr+=bytes.length;if(stderr>65536)child.kill('SIGTERM');});
   const completed=new Promise((resolve,reject)=>{
     child.once('error',()=>reject(error('backup_process_unavailable')));
-    child.once('close',code=>code===0&&stderr===0?resolve():reject(error('backup_process_failed_or_warned')));
+    child.once('close',code=>timedOut?reject(error('backup_process_timed_out')):code===0&&stderr===0?resolve():reject(error('backup_process_failed_or_warned')));
   });
-  const timeout=setTimeout(()=>child.kill('SIGTERM'),240000);timeout.unref();child.once('close',()=>clearTimeout(timeout));
+  const timeout=setTimeout(()=>{timedOut=true;child.kill('SIGTERM');},240000);timeout.unref();child.once('close',()=>clearTimeout(timeout));
   // Callers attach immediately; never print raw connection/provider diagnostics.
   completed.catch(()=>{});return {child,completed};
 }
@@ -48,10 +48,17 @@ function databaseEnvironment(local){
     ...(!local?{PGSSLROOTCERT:value('PGSSLROOTCERT')}:{}),PGCONNECT_TIMEOUT:'10',PGAPPNAME:'lovelies-encrypted-backup-v1',PGOPTIONS:'-c statement_timeout=180000'};
 }
 async function inspectStream(stream,tool){
-    const task=producer(tool,['--list'],{PATH:process.env.PATH,LC_ALL:'C'});let lines=0,bytes=0;
-    task.child.stdout.on('data',chunk=>{bytes+=chunk.length;lines+=chunk.toString().split('\n').length-1;if(bytes>16*1024*1024)task.child.kill('SIGTERM');});
-    try{await Promise.all([pipeline(stream,task.child.stdin),task.completed]);return {archive_listed:true,toc_lines:lines};}
+    const task=producer(tool,['--list'],{PATH:process.env.PATH,LC_ALL:'C'});let lines=0,bytes=0,outputLimitExceeded=false;
+    task.child.stdout.on('data',chunk=>{
+      bytes+=chunk.length;lines+=chunk.toString().split('\n').length-1;
+      if(bytes>16*1024*1024&&!outputLimitExceeded){outputLimitExceeded=true;task.child.kill('SIGTERM');}
+    });
+    try{await Promise.all([pipeline(stream,task.child.stdin),task.completed]);}
     catch(error){task.child.kill('SIGTERM');await task.completed.catch(()=>{});throw error;}
+    // A child can handle SIGTERM and exit zero; a breached listing bound must
+    // remain a failure even when its process reports success.
+    if(outputLimitExceeded)throw error('backup_inspection_output_limit');
+    return {archive_listed:true,toc_lines:lines};
 }
 async function inspectArchive(config,tool){return withVerifiedBackup(config,stream=>inspectStream(stream,tool));}
 try{

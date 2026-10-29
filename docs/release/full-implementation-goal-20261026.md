@@ -476,9 +476,9 @@ establish production scheduling, source provenance, off-site custody,
 Storage-object backups, physical expiry or safe restore. Evidence:
 `/Volumes/PRO-G40/Projects/Lovelies/verification/backup-catalog-health-20261028/attempt-02/root-integrated-native-test.log`
 and `/Volumes/PRO-G40/Projects/Lovelies/verification/backup-catalog-health-20261028/attempt-03/execution-cc10d6825a38f11e/result.json`.
-An isolated correction for backup children that exit successfully after a
-timeout or oversized listing remains unintegrated. Its first synthetic test
-attempt stopped during the process-safety control: the supervisor rejected a
+The backup CLI now rejects a child that reports success after its timeout or
+after an oversized inspection listing. Its first synthetic test attempt stopped
+during the process-safety control: the supervisor rejected a
 valid signed system user ID in the process inventory. Root stopped the owned
 runner after checking its identity; a later process inventory and group probes
 confirmed absence. No backup case passed in that attempt, whose scratch is
@@ -487,10 +487,30 @@ inventory preflight, then failed its executable-sandbox control before the
 backup cases; its owned process group exited and the run is retained for
 diagnosis. A single-control diagnostic then showed Node itself could execute,
 but the supposedly allowed synthetic restore tool received `EPERM`. No backup
-case ran in either attempt. Evidence:
+case ran in those attempts. A corrected sandbox policy then passed its positive
+and negative execution controls. Forty-seven synthetic cases passed, including
+the baseline counterexamples and candidate checks; one optional native
+`pg_restore` case was skipped. Independent postflight checked the tested inputs,
+logs and process groups, and the integrated files match the tested bytes. The
+fixtures use fake tools and accelerated timeouts: they do not prove real
+four-minute behavior, database backup, provider operation, custody or safe
+restore. A child that never exits after SIGTERM can still hold the operation;
+inspection failure after a successful dump retains the authenticated pair for
+reconciliation. Evidence:
 `/Volumes/PRO-G40/Projects/Lovelies/verification/backup-runner-intervention-20261029-root-01/result.json`,
 `/Volumes/PRO-G40/Projects/Lovelies/verification/backup-inspection-signed-ruid-runner-20261029-agent-01/root-run-01/result.json`,
-and `/Volumes/PRO-G40/Projects/Lovelies/verification/backup-sandbox-exec-diagnostic-20261029-agent-01/root-run-01/result.json`.
+`/Volumes/PRO-G40/Projects/Lovelies/verification/backup-sandbox-exec-diagnostic-20261029-agent-01/root-run-01/result.json`,
+`/Volumes/PRO-G40/Projects/Lovelies/verification/backup-exec-regex-six-expanded-20261029-agent-01/root-run-01/result.json`,
+and `/Volumes/PRO-G40/Projects/Lovelies/verification/backup-exec-regex-six-expanded-postflight-20261029-independent-01/result.json`.
+The integrated files also ran through the Node command expanded from the
+`backup:test` glob with default test concurrency. Node reported 39 passes and
+one optional native-tool skip. The enclosing harness recorded failure because
+it expected TAP while Node emitted its default reporter; a separate readback
+matched all 40 named cases, the zero exit, logs, source hashes and process-group
+absence. The harness failure is retained and this does not establish a pnpm
+wrapper, independent CI or production backup pass. Evidence:
+`/Volumes/PRO-G40/Projects/Lovelies/verification/backup-test-glob-shared-runner-20261029-agent-01/root-run-01/result.json`
+and `/Volumes/PRO-G40/Projects/Lovelies/verification/backup-test-glob-shared-readback-20261029-independent-01/result.json`.
 Supabase documents a 1 GB average Storage quota shared across a Free-plan
 organization, plus separate database and egress quotas. Capacity for the
 10,000-asset target and actual retention/traffic must be measured against
