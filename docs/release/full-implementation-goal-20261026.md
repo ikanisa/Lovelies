@@ -1004,6 +1004,14 @@ deletion recovery, store completion and hosted operation remain open. Evidence:
 and `/Volumes/PRO-G40/Projects/Lovelies/verification/backup-catalog-health-20261028/attempt-03/execution-cc10d6825a38f11e/store-receipts.json`
 and `/Volumes/PRO-G40/Projects/Lovelies/verification/ios-store-operation-recovery-20261028/root-01/result.json`
 and `/Volumes/PRO-G40/Projects/Lovelies/verification/ios-store-operation-recovery-20261028/root-02/result.json`.
+An isolated Apple receipt successor records the submitted transaction separately
+from the current subscription. Its 22 same-subject PGlite cases passed, including
+synthetic journal response loss and legacy replay. It remains unintegrated: an
+independent review found that a direct POST retry can return a malformed stored
+v2 result that the receipt lookup rejects. The run used installed dependencies
+without a before-and-after dependency hash; it did not exercise a real store,
+native multi-connection database, deployed API or complete restore path. Evidence:
+`/Users/jeanbosco/Library/Application Support/LoveliesVerification/store-apple-v2-pglite-20261029-root-01/result.json`.
 An independent source review additionally found that the purchase sheet can be
 opened before the recovery slot is available. Direct store commits use the
 existing audience check that blocks outstanding deletion requests; ordering and
@@ -2759,10 +2767,15 @@ environment failures are retained for diagnosis, not counted as passes:
 and `/Volumes/PRO-G40/Projects/Lovelies/verification/android-photo-action-current-20261029-root-03/result.json`.
 The subsequent IPv4-only retry passed as described in the candidate checkpoint
 above; it did not qualify IPv6, device behavior or a store artifact.
-The default iOS simulator device-set alias currently points through an absent
-temporary link; the recorded durable set remains present. Shared simulator
-services were running, and a current exclusive lease and consistent preservation
-copy were not established, so the link was not changed. A failed native
+The default iOS simulator device-set alias previously pointed through an absent
+temporary link. On 29 October the missing compatibility link was recreated
+without replacing an existing path, after checking the original alias and
+recorded durable destination identities. The chain now resolves, and a
+read-only `simctl` listing reported 12 available devices, all shut down. This
+repairs the path; it is not an app, device or store test. The shared simulator
+service was running. The link receipt is
+`/Users/jeanbosco/Library/Application Support/LoveliesVerification/simulator-compatibility-link-restore-20261029-root-02/result.json`.
+A failed native
 PostgreSQL run's formerly retained temporary directory is also now absent;
 its logs and receipts remain, but the cause and any other copy are unknown. No
 eligible non-evidence scratch or safe space recovery was identified. Evidence:
@@ -2770,7 +2783,7 @@ eligible non-evidence scratch or safe space recovery was identified. Evidence:
 Separately, the current global developer selection is Command Line Tools, so a
 bare `xcrun --find simctl` exits 72. Supplying the installed Xcode developer
 directory for that command resolves the tool without changing global selection;
-this lookup did not exercise a simulator or repair the device-set alias.
+that earlier lookup did not exercise a simulator or repair the device-set alias.
 Evidence:
 `/Volumes/PRO-G40/Projects/Lovelies/verification/ios-share-sdk-typecheck-20261029-root-3Oa4mO/xcode-path-readback.json`.
 
