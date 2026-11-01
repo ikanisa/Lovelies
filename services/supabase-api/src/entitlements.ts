@@ -1,6 +1,7 @@
 import { accountRoles } from './auth.ts';
 import { ApiError, digest, jsonBody, ok, record, stable, uuid, type Actor, type AppContext, type Database } from './types.ts';
-import { assertOperationReceiptAvailable, assertRegisteredActor, executeOperation, prepareOperation, retiredOperationInput, retiredOperationResponse, type PreparedOperation } from './operations.ts';
+import { assertOperationNotRecovered, assertOperationReceiptAvailable, assertRegisteredActor, assertRestoreOperationAvailable, executeOperation, prepareOperation, retiredOperationInput, retiredOperationResponse, type PreparedOperation } from './operations.ts';
+import { restoreOperationID } from './restore-transaction.ts';
 import { parseMediaAuthority, protectedRendition, type Asset, type MediaAuthority } from './gallery.ts';
 import { mediaHeld } from './operators.ts';
 import { enqueueNotification } from './notifications.ts';
@@ -354,7 +355,14 @@ async function replayStoreOperation(ctx: AppContext, actor: Actor, raw: Prepared
     await assertRegisteredActor(ctx, actor);
     try {
         const row = await storedStoreOperation(ctx, actor, raw.key);
-        if (!row) { await assertRegisteredActor(ctx, actor); return null; }
+        if (!row) {
+            // An accepted prepare can have a terminal negative outcome without
+            // a business receipt. Reject its original key inside this admitted,
+            // currently authorized read, before another verifier/ack dispatch.
+            await assertRestoreOperationAvailable(ctx, await restoreOperationID(actor.accountId, redacted.source, redacted.key), redacted.hash);
+            await assertRegisteredActor(ctx, actor);
+            return null;
+        }
         // Bind even a row classified as conflict or retired to final admission.
         guard.remember(raw.key, row);
         const checked = await checkedStoreOperation(ctx, actor, raw, redacted, token, row);
@@ -381,6 +389,7 @@ async function storeOperationReceipt(request: Request, ctx: AppContext, actor: A
     return ok(await ctx.db.read(async () => {
         await assertRegisteredActor(ctx, actor);
         try {
+            await assertOperationNotRecovered(ctx,actor.accountId,'store',key);
             const operation = await ctx.db.one<{action:string;payload_hash:string;payload_json:string;response_json:string}>(
                 "SELECT action,payload_hash,payload_json,response_json FROM operations WHERE actor_id=? AND source='store' AND operation_key=?", actor.accountId, key);
             await assertRegisteredActor(ctx, actor);

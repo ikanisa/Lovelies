@@ -4,7 +4,7 @@
  */
 'use strict';
 
-const VERSION = '20261024-7';
+const VERSION = '20261101-local-supabase-3';
 const CACHE_PREFIX = 'lovelies-admin-shell-';
 const CACHE_NAME = `${CACHE_PREFIX}${VERSION}`;
 const SHELL_PATHS = [
@@ -17,12 +17,18 @@ const SHELL_PATHS = [
   '/admin/app.js',
   '/admin/entry.mjs',
   '/admin/live-app.mjs',
+  '/admin/live-queues.mjs',
+  '/admin/live-collections.mjs',
+  '/admin/review-drafts.mjs',
+  '/admin/draft-store.mjs',
   '/admin/live-workspace.css',
   '/admin/operator-session.mjs',
   '/admin/audience.mjs',
   '/admin/runtime-config.mjs',
   '/clients/backend/face-contracts.mjs',
+  '/clients/backend/audience-contracts.mjs',
   '/clients/backend/contracts.mjs',
+  '/clients/backend/operator-capabilities.mjs',
   '/admin/collection-views.mjs',
   '/admin/detail-views.mjs',
   '/admin/demo-store.mjs',

@@ -5,12 +5,20 @@ import AVFoundation
 typealias NativePhotoSaveOperation = @MainActor (Data, @escaping @MainActor () async throws -> Void) async throws -> Void
 
 @MainActor final class LiveAppStore: ObservableObject {
-    @Published var session: NativeSessionSummary?
+    @Published var session: NativeSessionSummary? { didSet { schedulePrivateContentExpiry() } }
     @Published private(set) var audience: NativeAudienceProjection?
+    @Published private(set) var deviceAudience: NativeAudienceDeviceStatus?
+    @Published private(set) var hasSavedAudienceDevice = false
+    @Published private(set) var deviceAudienceNeeded = false
+    @Published private(set) var audienceRenewalContinuation: String?
+    @Published private(set) var audienceReviewPolicy = ""
+    private var deviceAudienceBinding: NativeAudienceSessionBinding?
     @Published private(set) var audiencePendingMutation = false
     @Published private(set) var guardianClaim: NativeGuardianRequest?
     private var audienceCaptureGeneration = 0
     private var audienceSessionEpoch: Int?
+    private var audienceExpiryTask: Task<Void, Never>?
+    private var audienceDeadline: NativePrivateMediaDeadline?
     @Published private(set) var audienceBinding: NativeAudienceSessionBinding?
     var hasRegisteredPrivacyIdentity: Bool { audienceBinding?.registeredIdentity == true }
     @Published var connected = false
@@ -74,6 +82,7 @@ typealias NativePhotoSaveOperation = @MainActor (Data, @escaping @MainActor () a
     @Published var supportSubject = ""
     @Published var supportDetails = ""
     @Published var sharedFile: NativeShareFile?
+    @Published private(set) var retainedPrivacyExports: Set<String> = []
     private let sharedFiles: NativeAuthorizedShareFiles
     private let privateMediaClock: NativePrivateMediaClock
     private let savePhotoToLibrary: NativePhotoSaveOperation
@@ -98,9 +107,22 @@ typealias NativePhotoSaveOperation = @MainActor (Data, @escaping @MainActor () a
     let camera = NativeCamera()
     private(set) var repository: BackendRepository?
     private var nextCursor: WireValue?
+    private var loadedGalleryQuery: NativeGalleryQuery?
+    private var galleryReadSerial = 0
+    private var galleryReloadQueued = false
+    private var inboxCursor: String?, outgoingCursor: String?, notificationCursor: String?, supportCursor: String?
+    var hasMoreInbox: Bool { inboxCursor != nil }
+    var hasMoreOutgoing: Bool { outgoingCursor != nil }
+    var hasMoreNotifications: Bool { notificationCursor != nil }
+    var hasMoreSupport: Bool { supportCursor != nil }
     private var navigation: DemoStore?
     private var workTask: Task<Void, Never>?
     private var workGeneration = 0
+    private var privateContentExpiryTask: Task<Void, Never>?
+    private struct PrivateReadOwner {
+        let accountID: String?, epoch: Int?, expiresAt: Date?
+        let weakBinding: NativeAudienceSessionBinding?
+    }
     private let localAuthenticator: any NativeLocalAuthenticating
     private var localSigningLease: NativeLocalSigningLease?
     private var localAuthenticationOperation: UUID?
@@ -121,7 +143,7 @@ typealias NativePhotoSaveOperation = @MainActor (Data, @escaping @MainActor () a
         catch { scheduleSharedFileCleanupRetry() }
     }
     var audienceEligible: Bool {
-        guard let audience, audience.accountID == audienceBinding?.accountID, audienceSessionEpoch == audienceBinding?.epoch,
+        guard audienceRenewalContinuation == nil, let audience, audience.accountID == audienceBinding?.accountID, audienceSessionEpoch == audienceBinding?.epoch,
               session == nil || session?.accountID == audience.accountID && session?.epoch == audienceSessionEpoch else { return false }
         return (try? audience.require(.faceAuthentication)) != nil
     }
@@ -133,11 +155,48 @@ typealias NativePhotoSaveOperation = @MainActor (Data, @escaping @MainActor () a
     var subsets: [String: [String]] { Dictionary(grouping: effective, by: \.recipient_id).mapValues { $0.map(\.asset_id).sorted() } }
     var displayedPhotos: [NativePhoto] { photos }
     func attach(_ navigation: DemoStore) { self.navigation = navigation }
-    func perform(_ work: @escaping @MainActor () async throws -> Void) {
-        performGuarded { _ in try await work() }
+    func perform(_ work: @escaping @MainActor (NativeAccountPublicationPermit) async throws -> Void) {
+        let account = session?.accountID ?? audienceBinding?.accountID, epoch = session?.epoch ?? audienceBinding?.epoch
+        performGuarded { [self] fence in
+            let permit = NativeAccountPublicationPermit(generation: fence.generation, accountID: account, sessionEpoch: epoch)
+            try checkPublication(permit)
+            do { try await work(permit) }
+            catch { try checkPublication(permit); throw error }
+        }
     }
-    private func checkPublication(_ fence: NativePublicationFence) throws {
+    private func checkPublication(_ permit: NativeAccountPublicationPermit) throws {
+        guard permit.permits(generation: workGeneration, accountID: session?.accountID ?? audienceBinding?.accountID,
+            sessionEpoch: session?.epoch ?? audienceBinding?.epoch, foreground: isForeground, cancelled: Task.isCancelled) else { throw CancellationError() }
+    }
+    private func publicationPermit() -> NativeAccountPublicationPermit {
+        .init(generation: workGeneration, accountID: session?.accountID ?? audienceBinding?.accountID,
+              sessionEpoch: session?.epoch ?? audienceBinding?.epoch)
+    }
+    func publicationFence() -> NativePublicationFence { NativePublicationFence(generation: workGeneration) }
+    func checkPublication(_ fence: NativePublicationFence) throws {
         guard fence.permits(currentGeneration: workGeneration, cancelled: Task.isCancelled) else { throw CancellationError() }
+    }
+    private func privateReadOwner() -> PrivateReadOwner {
+        .init(accountID: session?.accountID, epoch: session?.epoch, expiresAt: session?.expiresAt, weakBinding: audienceBinding)
+    }
+    private func checkPrivatePublication(_ owner: PrivateReadOwner, fence: NativePublicationFence) throws {
+        try checkPublication(fence)
+        guard owner.accountID == session?.accountID, owner.epoch == session?.epoch, owner.weakBinding == audienceBinding,
+              owner.expiresAt == nil || owner.expiresAt! > Date() else { throw NativeAPIError.sessionChanged }
+    }
+    private func schedulePrivateContentExpiry() {
+        privateContentExpiryTask?.cancel(); privateContentExpiryTask = nil
+        guard let captured = session else { return }
+        privateContentExpiryTask = Task { [weak self] in
+            do {
+                try await Task.sleep(for: .seconds(max(0, captured.expiresAt.timeIntervalSinceNow)))
+                guard !Task.isCancelled, let self, self.session?.accountID == captured.accountID,
+                      self.session?.epoch == captured.epoch, self.session?.expiresAt == captured.expiresAt,
+                      captured.expiresAt <= Date() else { return }
+                self.workTask?.cancel(); self.workGeneration += 1; self.busy = false
+                self.retireAccountPresentation()
+            } catch {}
+        }
     }
     private func performGuarded(localSigning purpose: NativeLocalAuthenticationPurpose? = nil, recoveryBackup: String? = nil,
                                 retainedEnrollmentOnly: Bool = false,
@@ -159,7 +218,7 @@ typealias NativePhotoSaveOperation = @MainActor (Data, @escaping @MainActor () a
                     localAuthenticationPending = false; localAuthenticationOperation = nil; localSigningLease = nil
                 }
                 if let repository { Task { await repository.finishLocalSigning(operationID: operationID) } }
-                if generation == workGeneration { busy = false }
+                if generation == workGeneration { busy = false; dispatchQueuedGalleryReload() }
             }
             do {
                 try checkPublication(fence)
@@ -212,10 +271,23 @@ typealias NativePhotoSaveOperation = @MainActor (Data, @escaping @MainActor () a
                         faceQualityFailure = quality; retireSelfieReview(); stopFaceCameraPresentation()
                         navigation?.go(.faceQualityRetry, replace: true, simulateProgress: false)
                     } else {
+                        if case NativeAPIError.denied(409, "operation_recovered_without_result") = error {
+                            let owner = session?.accountID ?? audienceBinding?.accountID
+                            retireAccountPresentation()
+                            await repository?.retireMedia()
+                            let latest = try? await repository?.protectedJSON("/privacy/center")
+                            guard fence.permits(currentGeneration: workGeneration, cancelled: Task.isCancelled), isForeground,
+                                  owner == (session?.accountID ?? audienceBinding?.accountID) else { return }
+                            if let latest { privacy = latest }
+                        }
                         if Self.isAudienceError(error) {
                             let currentWeakBinding = await repository?.audienceSessionBinding()
                             guard fence.permits(currentGeneration: workGeneration, cancelled: Task.isCancelled) else { return }
-                            audience = nil; stopFaceCameraPresentation(); photoCamera = false; photoCameraContext = nil
+                            audience = nil; deviceAudienceNeeded = true; stopFaceCameraPresentation(); photoCamera = false; photoCameraContext = nil
+                            if case NativeAPIError.denied(409, "audience_operation_recovered_without_result") = error {
+                                deviceAudience = nil; deviceAudienceBinding = nil; audienceReviewPolicy = ""; audienceRenewalContinuation = nil
+                                navigation?.go(.introduction, replace: true, simulateProgress: false)
+                            }
                             retireAccountPresentation(preservingWeakState: canPreserveWeakPresentation(currentWeakBinding))
                         }
                         self.error = error.localizedDescription
@@ -231,7 +303,13 @@ typealias NativePhotoSaveOperation = @MainActor (Data, @escaping @MainActor () a
                 let nextLifecycle = try? await repository.faceLifecycleSummary()
                 let nextOrdinary = try? await repository.ordinaryLoginSummary()
                 let nextAudienceBinding = await repository.audienceSessionBinding()
-                let pendingAudience = (try? await repository.pendingAudienceMutation()) != nil
+                let pendingAudienceMutation = (try? await repository.pendingAudienceMutation()) != nil
+                let pendingDeviceRenewal = (try? await repository.pendingAudienceDeviceRenewal()) == true
+                let pendingAudience = pendingAudienceMutation || pendingDeviceRenewal
+                let savedAudienceDevice = (try? await repository.device()) != nil
+                let currentDeviceBinding: NativeAudienceSessionBinding?
+                if let deviceAudience { currentDeviceBinding = try? await repository.audienceDeviceBinding(deviceAudience) }
+                else { currentDeviceBinding = nil }
                 let retainedCapture = try? await repository.retainedFaceCaptureContext()
                 let finalAudienceBinding = await repository.audienceSessionBinding()
                 guard fence.permits(currentGeneration: workGeneration, cancelled: Task.isCancelled) else { return }
@@ -241,6 +319,8 @@ typealias NativePhotoSaveOperation = @MainActor (Data, @escaping @MainActor () a
                     audience = nil; audienceSessionEpoch = nil; audienceBinding = nil; session = nil
                     return
                 }
+                hasSavedAudienceDevice = savedAudienceDevice
+                if currentDeviceBinding != deviceAudienceBinding { deviceAudience = nil; deviceAudienceBinding = nil; audienceReviewPolicy = "" }
                 let preserveWeakPresentation = canPreserveWeakPresentation(nextAudienceBinding)
                 let weakBindingChanged = audienceBinding != nextAudienceBinding
                 if weakBindingChanged || session != nil && (nextSession == nil || nextSession?.accountID != session?.accountID) {
@@ -304,6 +384,8 @@ typealias NativePhotoSaveOperation = @MainActor (Data, @escaping @MainActor () a
                 let checked = try await repository!.checkRegisteredDeletion()
                 try checkPublication(fence); registeredDeletion = checked; return
             }
+            let savedAudienceDevice = (try await repository!.device()) != nil
+            try checkPublication(fence); hasSavedAudienceDevice = savedAudienceDevice
             _ = try await repository!.bootstrap()
             let restoredGuest = await repository!.guestDeletionSummary()
             let restoredSession = await repository!.summary()
@@ -321,7 +403,9 @@ typealias NativePhotoSaveOperation = @MainActor (Data, @escaping @MainActor () a
             }
             audienceBinding = restoredAudienceBinding
             if restoredAudienceBinding != nil { let currentAudience = try await repository!.audience(); try checkPublication(fence); try await installAudience(currentAudience, fence: fence) }
-            let restoredAudiencePending = (try await repository!.pendingAudienceMutation()) != nil
+            let restoredAudienceMutation = (try await repository!.pendingAudienceMutation()) != nil
+            let restoredDeviceRenewal = try await repository!.pendingAudienceDeviceRenewal()
+            let restoredAudiencePending = restoredAudienceMutation || restoredDeviceRenewal
             try checkPublication(fence); audiencePendingMutation = restoredAudiencePending
             if hasRegisteredPrivacyIdentity {
                 let restoredClaim = try? await repository!.retainedGuardianClaim()
@@ -371,7 +455,10 @@ typealias NativePhotoSaveOperation = @MainActor (Data, @escaping @MainActor () a
         return isWeakPrivacyScreen
     }
     private func retireAccountPresentation(preservingWeakState: Bool = false) {
-        if !preservingWeakState { guardianClaim = nil; preferences = .object([:]); privacy = .object([:]); devices = []; sessions = []; recoveryKey = nil }
+        processingConsent = false
+        galleryReadSerial += 1; galleryReloadQueued = false; loadedGalleryQuery = nil
+        inboxCursor = nil; outgoingCursor = nil; notificationCursor = nil; supportCursor = nil
+        if !preservingWeakState { guardianClaim = nil; preferences = .object([:]); privacy = .object([:]); retainedPrivacyExports = []; devices = []; sessions = []; recoveryKey = nil }
         uploadTask?.cancel(); uploadPresentation += 1; uploadRunning = false; uploadRecovery = nil; uploadCaption = ""; uploadedIDs = []; processingStatuses = [:]
         photoImportContext = nil
         photoCamera = false; photoCameraContext = nil
@@ -395,11 +482,42 @@ typealias NativePhotoSaveOperation = @MainActor (Data, @escaping @MainActor () a
             retireSelfieReview(); retireAccountPresentation(); error = NativeAPIError.authenticationRequired.localizedDescription
         }
         session = next
+        scheduleAudienceExpiry()
         return next?.authenticated == true
     }
-    func loadFacePolicy() { perform { [self] in guard let repository else { return }; policy = try await repository.policy() } }
+    func mediaInstant() -> NativePrivateMediaInstant { privateMediaClock.read() }
+    func mediaDeadline(_ approval: NativeAudienceProjection) throws -> NativePrivateMediaDeadline {
+        guard let session, session.accountID == approval.accountID else { throw NativeAPIError.authenticationRequired }
+        return NativePrivateMediaDeadline(created: privateMediaClock.read(), authorityExpiresAt:
+            try approval.authorityExpiresAt(sessionExpiresAt: session.expiresAt, purpose: .faceAuthentication, now: privateMediaClock.read().wall))
+    }
+    private func scheduleAudienceExpiry() {
+        audienceExpiryTask?.cancel(); audienceExpiryTask = nil; audienceDeadline = nil
+        guard isForeground, let audience, let session, audience.accountID == session.accountID,
+              let deadline = try? mediaDeadline(audience) else { return }
+        audienceDeadline = deadline
+        audienceExpiryTask = Task { [weak self] in
+            do {
+                while !Task.isCancelled, let self, self.audience == audience, self.session?.epoch == session.epoch {
+                    let remaining = deadline.remaining(at: self.privateMediaClock.read())
+                    if remaining <= 0 { self.expireAudienceAuthority(); return }
+                    try await Task.sleep(for: .seconds(min(remaining, 60)))
+                }
+            } catch {}
+        }
+    }
+    func expireAudienceAuthority() {
+        expireSharedFiles()
+        guard audienceDeadline?.remaining(at: privateMediaClock.read()) == 0 else { return }
+        audienceExpiryTask?.cancel(); audienceExpiryTask = nil; audienceDeadline = nil
+        audience = nil; audienceSessionEpoch = nil
+        workTask?.cancel(); workGeneration += 1; busy = false
+        stopFaceCameraPresentation(); retireAccountPresentation(preservingWeakState: isWeakPrivacyScreen)
+        if let repository { Task { await repository.retireMedia() } }
+    }
+    func loadFacePolicy() { performGuarded { [self] fence in guard let repository else { return }; let value = try await repository.policy(); try checkPublication(fence); policy = value } }
     func acceptAuthConsent(_ enabled: Bool) { if !enabled { invalidateLocalAuthentication(); stopFaceCameraPresentation() }; authConsent = enabled; acceptedAuthPolicy = enabled ? policy : "" }
-    func prepareFace() {
+    func prepareFace(renewedAudienceAccount: String? = nil) {
         guard selfieReview == nil else { return }
         if faceLifecycle != nil, accountRecovery == nil { checkFaceProfile(); return }
         if accountRecovery != nil { checkAccountRecovery(); return }
@@ -411,7 +529,7 @@ typealias NativePhotoSaveOperation = @MainActor (Data, @escaping @MainActor () a
             let retained = try await repository.hasEnrollmentIntent()
             let restored = try await repository.enrollmentSummary()
             try checkPublication(fence)
-            guard (authConsent && acceptedAuthPolicy == currentPolicy) || (retained && restored?.policy == currentPolicy) || (session == nil && knownDevice != nil) else {
+            guard (authConsent && acceptedAuthPolicy == currentPolicy) || (retained && restored?.policy == currentPolicy) || (session == nil && knownDevice != nil) || (renewedAudienceAccount != nil && renewedAudienceAccount == knownDevice?.accountID) else {
                 authConsent = false
                 throw NativeAPIError.unsupported(String(localized: "Read and accept the current face-registration policy before capturing."))
             }
@@ -596,26 +714,51 @@ typealias NativePhotoSaveOperation = @MainActor (Data, @escaping @MainActor () a
     }
     func refreshGallery(loadMore: Bool = false) async throws {
         guard let repository, session?.authenticated == true else { throw NativeAPIError.authenticationRequired }
+        let fence = publicationFence(), owner = privateReadOwner()
         try await restoreLibraryState()
-        let account = session?.accountID, source = gallerySource, search = query, category = galleryCategory
-        let value = try await repository.photos(source: source, cursor: loadMore ? nextCursor : nil, query: search, category: category)
-        guard session?.accountID == account, gallerySource == source, query == search, galleryCategory == category else { throw CancellationError() }
-        try Task.checkCancellation()
-        guard let rows = value["items"].array else { throw NativeAPIError.invalidResponse }
-        let loaded = try rows.map { try NativePhoto($0) }
-        if loadMore { var seen = Set(photos.map(\.id)); photos += loaded.filter { seen.insert($0.id).inserted } } else { photos = loaded }
-        nextCursor = value["next_cursor"] == .null ? nil : value["next_cursor"]
-        let current = try await repository.current(); name = current["name"].string ?? ""
-        preferences = try await repository.protectedJSON("/me/photo-preferences")
+        try checkPrivatePublication(owner, fence: fence)
+        let identity = currentGalleryQuery
+        let append = loadMore && loadedGalleryQuery == identity
+        galleryReadSerial += 1; let serial = galleryReadSerial
+        let loaded: [NativePhoto], cursor: WireValue?
+        if let favorites = identity.favorites {
+            let offset = append ? nextCursor?["favorite_offset"].integer ?? 0 : 0
+            guard offset <= favorites.count else { throw NativeAPIError.invalidResponse }
+            let ids = Array(favorites.dropFirst(offset).prefix(100))
+            loaded = try await repository.photosByID(ids, source: identity.source)
+            cursor = offset + ids.count < favorites.count ? .object(["favorite_offset": .integer(offset + ids.count)]) : nil
+        } else {
+            let value = try await repository.photos(source: identity.source, cursor: append ? nextCursor : nil, query: identity.query, category: identity.category)
+            guard let rows = value["items"].array else { throw NativeAPIError.invalidResponse }
+            loaded = try rows.map(NativePhoto.init); cursor = value["next_cursor"] == .null ? nil : value["next_cursor"]
+        }
+        try checkPrivatePublication(owner, fence: fence)
+        guard serial == galleryReadSerial, currentGalleryQuery == identity else { throw CancellationError() }
+        let current = try await repository.current()
+        let nextPreferences = try await repository.protectedJSON("/me/photo-preferences")
+        try checkPrivatePublication(owner, fence: fence)
+        guard serial == galleryReadSerial, currentGalleryQuery == identity else { throw CancellationError() }
+        if append { var seen = Set(photos.map(\.id)); photos += loaded.filter { seen.insert($0.id).inserted } } else { photos = loaded }
+        loadedGalleryQuery = identity; nextCursor = cursor; name = current["name"].string ?? ""; preferences = nextPreferences
     }
-    func reloadPhotos() { perform { [self] in try await refreshGallery() } }
-    func loadMore() { guard nextCursor != nil else { return }; perform { [self] in try await refreshGallery(loadMore: true) } }
-    var hasMorePhotos: Bool { nextCursor != nil }
+    private var currentGalleryQuery: NativeGalleryQuery {
+        .init(source: gallerySource, query: query, category: galleryCategory, favorites: lastLibraryScreen == .favorites ? favoriteIDs.sorted() : nil)
+    }
+    private func dispatchQueuedGalleryReload() {
+        guard galleryReloadQueued, !busy, isForeground, session?.authenticated == true else { return }
+        galleryReloadQueued = false
+        performGuarded { [self] _ in try await refreshGallery() }
+    }
+    func reloadPhotos() { galleryReloadQueued = true; dispatchQueuedGalleryReload() }
+    func loadMore() { guard nextCursor != nil else { return }; performGuarded { [self] fence in try await refreshGallery(loadMore: true) } }
+    var hasMorePhotos: Bool { nextCursor != nil && loadedGalleryQuery == currentGalleryQuery }
     func openPhoto(_ photo: NativePhoto) { galleryAnchor = photo.id; persistLibraryState(); currentPhoto = photo; navigation?.go(.photoViewer, simulateProgress: false) }
     func beginReview(photoIDs: [String]? = nil, source: String = "personal", destination: Screen = .shareSelection) {
-        perform { [self] in
+        performGuarded { [self] fence in
             guard let repository else { throw NativeAPIError.authenticationRequired }
+            let owner = privateReadOwner()
             let value = try await repository.snapshot(assetIDs: photoIDs, source: source)
+            try checkPrivatePublication(owner, fence: fence)
             var revised = NativeShareDraft(snapshot: value); revised.selectedPeople.subtract(blockedPersonIDs)
             if let savedReview, savedReviewAssetIDs == value.photos.map(\.id).sorted() {
                 revised.selectedPhotos.formIntersection(savedReview.selectedPhotos)
@@ -634,15 +777,18 @@ typealias NativePhotoSaveOperation = @MainActor (Data, @escaping @MainActor () a
     func togglePerson(_ id: String) { guard !blockedPersonIDs.contains(id) else { return }; edit { if !$0.selectedPeople.insert(id).inserted { $0.selectedPeople.remove(id) } } }
     func togglePair(photo: String, person: String) { guard !blockedPersonIDs.contains(person) else { return }; let pair = NativePair(asset: photo, recipient: person); edit { if !$0.excludedPairs.insert(pair).inserted { $0.excludedPairs.remove(pair) } } }
     func prepareReview() {
-        perform { [self] in
+        performGuarded { [self] fence in
             guard let repository, let snapshot, let draft else { throw NativeAPIError.selectionEmpty }
-            preview = try await repository.previewShare(snapshot, draft: draft); navigation?.go(.shareReview, simulateProgress: false)
+            let owner = privateReadOwner(), value = try await repository.previewShare(snapshot, draft: draft)
+            try checkPrivatePublication(owner, fence: fence); preview = value; navigation?.go(.shareReview, simulateProgress: false)
         }
     }
     func refreshReview() {
-        perform { [self] in
+        performGuarded { [self] fence in
             guard let repository else { throw NativeAPIError.authenticationRequired }
+            let owner = privateReadOwner()
             let old = draft, current = try await repository.snapshot(assetIDs: snapshot?.photos.map(\.id), source: snapshot?.source ?? "personal"); var revised = NativeShareDraft(snapshot: current)
+            try checkPrivatePublication(owner, fence: fence)
             if let old {
                 revised.selectedPhotos.formIntersection(old.selectedPhotos); revised.selectedPeople.formIntersection(old.selectedPeople)
                 revised.excludedPairs = old.excludedPairs.intersection(current.pairs); revised.version = old.version + 1
@@ -652,18 +798,22 @@ typealias NativePhotoSaveOperation = @MainActor (Data, @escaping @MainActor () a
         }
     }
     func share() {
-        perform { [self] in
+        performGuarded { [self] fence in
             guard let repository, let preview, let snapshot, let draft else { throw NativeAPIError.reviewChanged }
+            let owner = privateReadOwner()
             navigation?.go(.sharingProgress, simulateProgress: false)
-            outcome = try await repository.commit(preview, snapshot: snapshot, draft: draft)
+            let value = try await repository.commit(preview, snapshot: snapshot, draft: draft)
+            try checkPrivatePublication(owner, fence: fence); outcome = value
             if outcome?["status"].string == "changed" { self.preview = nil; throw NativeAPIError.reviewChanged }
             savedReview = nil; savedReviewAssetIDs = []; persistLibraryState(); navigation?.go(.sharedHistory, replace: true, simulateProgress: false); try await loadInbox(); try await loadOutgoing()
         }
     }
     func reconcile(retry: Bool = false) {
-        perform { [self] in
+        performGuarded { [self] fence in
             guard let repository else { throw NativeAPIError.authenticationRequired }
+            let owner = privateReadOwner()
             let value = try await repository.reconcile(retryUnknown: retry)
+            try checkPrivatePublication(owner, fence: fence)
             if value["status"].string == "unknown" { throw NativeAPIError.unsupported(String(localized: "The original request is still unconfirmed. Retry reuses its original key and exact selection.")) }
             if value["status"].string == "ready", value["snapshot"] != .null { let loaded = try NativeSnapshot(value); snapshot = loaded; draft = NativeShareDraft(snapshot: loaded); navigation?.go(.shareSelection, simulateProgress: false) }
             else if value["recipients"] != .null { outcome = value; navigation?.go(.sharedHistory, simulateProgress: false) }
@@ -772,7 +922,9 @@ typealias NativePhotoSaveOperation = @MainActor (Data, @escaping @MainActor () a
         transferText = value.batch.cancellationRequested && value.batch.finished ? String(localized: "Pending uploads cancelled.") : value.batch.received ? String(localized: "Uploads received. Photo matching is separate from sharing.") : String.localizedStringWithFormat(NSLocalizedString("controller_bytes_received", comment: ""), value.batch.acknowledgedBytes, value.batch.totalBytes)
     }
     func restorePhotoUploads() async throws {
+        let permit = publicationPermit()
         guard let repository, let value = try await repository.uploadSummary(), value.batch.accountID == session?.accountID else { return }
+        try checkPublication(permit)
         installPhotoUploads(value)
     }
     func showPhotoUploads() {
@@ -850,45 +1002,60 @@ typealias NativePhotoSaveOperation = @MainActor (Data, @escaping @MainActor () a
     func cancelPhotoUploads() {
         guard let repository, let current = uploadRecovery else { return }
         pausePhotoUploads()
-        perform { [self] in let next = try await repository.cancelPhotoUpload(batchID: current.batch.id); installPhotoUploads(next); transferText = String(localized: "Pending uploads cancelled. Photos already processing remain in your library.") }
+        performGuarded { [self] fence in let owner = privateReadOwner(); let next = try await repository.cancelPhotoUpload(batchID: current.batch.id); try checkPrivatePublication(owner, fence: fence); installPhotoUploads(next); transferText = String(localized: "Pending uploads cancelled. Photos already processing remain in your library.") }
     }
     func checkProcessing() {
-        perform { [self] in
+        performGuarded { [self] fence in
             guard let repository, let value = uploadRecovery else { throw NativeAPIError.authenticationRequired }
-            let current = try await repository.checkPhotoUpload(batchID: value.batch.id); installPhotoUploads(current)
+            let owner = privateReadOwner(), current = try await repository.checkPhotoUpload(batchID: value.batch.id)
+            try checkPrivatePublication(owner, fence: fence); installPhotoUploads(current)
             if current.batch.selectedFiles.allSatisfy({ $0.phase == .ready || $0.phase == .cancelled }) { transferText = String(localized: "Photo processing complete."); try await refreshGallery() }
         }
     }
     func retryUploadPhoto(_ id: String) {
-        perform { [self] in
+        performGuarded { [self] fence in
             guard let repository, let current = uploadRecovery else { throw NativeAPIError.authenticationRequired }
-            let updated = try await repository.retryPhotoProcessing(batchID: current.batch.id, fileID: id); installPhotoUploads(updated)
+            let owner = privateReadOwner(), updated = try await repository.retryPhotoProcessing(batchID: current.batch.id, fileID: id)
+            try checkPrivatePublication(owner, fence: fence); installPhotoUploads(updated)
         }
     }
-    func loadInbox() async throws {
+    func loadInbox(loadMore: Bool = false) async throws {
         guard let repository else { throw NativeAPIError.authenticationRequired }
-        inbox = try await repository.inbox()
+        let fence = publicationFence(), owner = privateReadOwner(), cursor = loadMore ? inboxCursor : nil
+        if loadMore && cursor == nil { return }
+        var payload: [String: WireValue] = ["limit": .integer(25)]; if let cursor { payload["cursor"] = .string(cursor) }
+        let page = try NativeAccountPage(await repository.community("inbox", payload: .object(payload)), personalOnly: true)
+        try checkPrivatePublication(owner, fence: fence)
+        guard !loadMore || inboxCursor == cursor else { throw CancellationError() }
+        inbox = loadMore ? page.appending(to: inbox) : page.items; inboxCursor = page.nextCursor
     }
-    func refreshInbox() { perform { [self] in try await loadInbox() } }
+    func refreshInbox(loadMore: Bool = false) { performGuarded { [self] _ in try await loadInbox(loadMore: loadMore) } }
     func openReceipt(_ id: String) {
-        perform { [self] in
+        performGuarded { [self] fence in
             guard let repository else { throw NativeAPIError.authenticationRequired }
-            receipt = try await repository.community("receipt", payload: .object(["request_id": .string(id)])); pendingReceiptID = id
+            let owner = privateReadOwner()
+            let value = try await repository.community("receipt", payload: .object(["request_id": .string(id)]))
+            try checkPrivatePublication(owner, fence: fence); receipt = value; pendingReceiptID = id
         }
     }
     func decide(_ decision: String) {
-        perform { [self] in
+        performGuarded { [self] fence in
             guard let repository, let pendingReceiptID else { throw NativeAPIError.invalidResponse }
+            let owner = privateReadOwner()
             _ = try await repository.decide(pendingReceiptID, decision: decision)
-            receipt = try await repository.community("receipt", payload: .object(["request_id": .string(pendingReceiptID)]))
+            let value = try await repository.community("receipt", payload: .object(["request_id": .string(pendingReceiptID)]))
+            try checkPrivatePublication(owner, fence: fence)
+            guard self.pendingReceiptID == pendingReceiptID else { throw CancellationError() }; receipt = value
             try await loadInbox(); try await refreshGallery()
         }
     }
     func preference(_ field: String, enabled: Bool) {
-        perform { [self] in
+        performGuarded { [self] fence in
             guard let repository else { throw NativeAPIError.authenticationRequired }
+            let owner = privateReadOwner()
             _ = try await repository.post("/me/photo-preferences", payload: .object([field: .bool(enabled), "policy_version": .string(try preferences.text("policy_version"))]), operation: "photo.preferences")
-            preferences = try await repository.protectedJSON("/me/photo-preferences"); await repository.retireMedia(); mediaRevision += 1
+            let value = try await repository.protectedJSON("/me/photo-preferences"); await repository.retireMedia()
+            try checkPrivatePublication(owner, fence: fence); preferences = value; mediaRevision += 1
         }
     }
     func saveCurrentPhoto() {
@@ -910,14 +1077,20 @@ typealias NativePhotoSaveOperation = @MainActor (Data, @escaping @MainActor () a
     }
     func loadPrivacy() {
         guard (session?.authenticated == true || hasRegisteredPrivacyIdentity), guestDeletion == nil else { return }
-        perform { [self] in guard let repository else { return }; privacy = try await repository.protectedJSON("/privacy/center") }
+        performGuarded { [self] fence in
+            guard let repository else { return }; let owner = privateReadOwner()
+            let value = try await repository.protectedJSON("/privacy/center")
+            let retained = try await repository.retainedPrivacyExportRequests()
+            try checkPrivatePublication(owner, fence: fence); privacy = value; retainedPrivacyExports = retained
+        }
     }
     func reconcilePrivacy(retry: Bool = false) {
         performGuarded { [self] fence in
             guard let repository else { throw NativeAPIError.authenticationRequired }
+            let owner = privateReadOwner()
             let result = try await repository.reconcilePrivacy(retryUnknown: retry)
             let current = try await repository.protectedJSON("/privacy/center")
-            try checkPublication(fence); privacy = current
+            try checkPrivatePublication(owner, fence: fence); privacy = current
             transferText = result["status"].string == "unknown" ? String(localized: "The result is not confirmed. Check the original request before trying again.") : String(localized: "Original request confirmed.")
         }
     }
@@ -952,20 +1125,34 @@ typealias NativePhotoSaveOperation = @MainActor (Data, @escaping @MainActor () a
             navigation?.go(.introduction, replace: true, simulateProgress: false)
         }
     }
-    func loadDevices() { perform { [self] in guard let repository else { return }; devices = try await repository.protectedJSON("/me/devices")["items"].array ?? []; sessions = try await repository.protectedJSON("/me/sessions")["items"].array ?? [] } }
-    func revoke(_ value: WireValue, device: Bool) {
-        invalidateLocalAuthentication()
-        perform { [self] in
-            guard let repository else { return }
-            let result = try await repository.protectedJSON(device ? "/auth/device/revoke" : "/auth/session/revoke", method: "POST", body: .object([device ? "device_id" : "session_id": .string(try value.uuid("id"))]))
-            if result["clear_device_identity"].bool == true { await repository.clearSession(identity: true) }
-            if result["current_session_revoked"].bool == true {
-                photos = []; currentPhoto = nil; snapshot = nil; draft = nil; preview = nil; favoriteIDs = []; session = nil; mediaRevision += 1
-                navigation?.go(.faceEnrollment, replace: true, simulateProgress: false)
-            } else { devices = try await repository.protectedJSON("/me/devices")["items"].array ?? []; sessions = try await repository.protectedJSON("/me/sessions")["items"].array ?? [] }
+    func loadDevices() {
+        performGuarded { [self] fence in
+            guard let repository else { return }; let owner = privateReadOwner()
+            let nextDevices = try await repository.protectedJSON("/me/devices")["items"].array ?? []
+            let nextSessions = try await repository.protectedJSON("/me/sessions")["items"].array ?? []
+            try checkPrivatePublication(owner, fence: fence); devices = nextDevices; sessions = nextSessions
         }
     }
-    func saveProfile() { perform { [self] in guard let repository else { return }; _ = try await repository.post("/me/profile", payload: .object(["name": .string(name)]), operation: "account.profile.update", method: "PATCH") } }
+    func revoke(_ value: WireValue, device: Bool) {
+        invalidateLocalAuthentication()
+        performGuarded { [self] fence in
+            guard let repository else { return }
+            let owner = privateReadOwner()
+            let result = try await repository.protectedJSON(device ? "/auth/device/revoke" : "/auth/session/revoke", method: "POST", body: .object([device ? "device_id" : "session_id": .string(try value.uuid("id"))]))
+            try checkPrivatePublication(owner, fence: fence)
+            if result["clear_device_identity"].bool == true { await repository.clearSession(identity: true) }
+            try checkPrivatePublication(owner, fence: fence)
+            if result["current_session_revoked"].bool == true {
+                retireAccountPresentation(); session = nil; mediaRevision += 1
+                navigation?.go(.faceEnrollment, replace: true, simulateProgress: false)
+            } else {
+                let nextDevices = try await repository.protectedJSON("/me/devices")["items"].array ?? []
+                let nextSessions = try await repository.protectedJSON("/me/sessions")["items"].array ?? []
+                try checkPrivatePublication(owner, fence: fence); devices = nextDevices; sessions = nextSessions
+            }
+        }
+    }
+    func saveProfile() { performGuarded { [self] fence in guard let repository else { return }; _ = try await repository.post("/me/profile", payload: .object(["name": .string(name)]), operation: "account.profile.update", method: "PATCH") } }
     private func installBlockedPeople(_ items: [WireValue]) {
         let previous = blockedPersonIDs
         blockedPeople = items
@@ -974,52 +1161,93 @@ typealias NativePhotoSaveOperation = @MainActor (Data, @escaping @MainActor () a
         }
         if previous != blockedPersonIDs { preview = nil }
     }
-    func loadBlocked() { perform { [self] in guard let repository else { return }; installBlockedPeople(try await repository.protectedJSON("/me/blocks")["items"].array ?? []) } }
+    func loadBlocked() { performGuarded { [self] fence in guard let repository else { return }; let owner = privateReadOwner(); let value = try await repository.protectedJSON("/me/blocks")["items"].array ?? []; try checkPrivatePublication(owner, fence: fence); installBlockedPeople(value) } }
     func block(_ id: String, remove: Bool = false) {
-        perform { [self] in
+        performGuarded { [self] fence in
             guard let repository else { return }
+            let owner = privateReadOwner()
             _ = try await repository.post("/me/blocks/\(id)", payload: .object([:]), operation: remove ? "safety.block.DELETE" : "safety.block.POST", method: remove ? "DELETE" : "POST")
+            try checkPrivatePublication(owner, fence: fence)
             var confirmed = blockedPeople.filter { $0["blocked_id"].string != id }
             if !remove { confirmed.append(.object(["blocked_id": .string(id)])) }
             installBlockedPeople(confirmed); preview = nil
-            await repository.retireMedia(); mediaRevision += 1
-            installBlockedPeople(try await repository.protectedJSON("/me/blocks")["items"].array ?? [])
+            await repository.retireMedia()
+            let value = try await repository.protectedJSON("/me/blocks")["items"].array ?? []
+            try checkPrivatePublication(owner, fence: fence); mediaRevision += 1; installBlockedPeople(value)
         }
     }
     func reportCurrentPair() {
-        perform { [self] in
+        performGuarded { [self] fence in
             guard let repository, let photo = currentPhoto, let person = currentPerson else { throw NativeAPIError.unsupported(String(localized: "Choose a matched photo and person before reporting.")) }
+            let owner = privateReadOwner()
             _ = try await repository.post("/safety/reports", payload: .object(["asset_id": .string(photo.id), "subject_id": .string(person.id), "reason": .string(String(localized: "This photo/person match is incorrect"))]), operation: "safety.report")
+            try checkPrivatePublication(owner, fence: fence)
             if var value = draft { value.excludedPairs.insert(NativePair(asset: photo.id, recipient: person.id)); value.version += 1; draft = value; preview = nil }
             transferText = String(localized: "Report received for review. No access has been granted.")
         }
     }
-    func loadNotificationSettings() { perform { [self] in guard let repository else { return }; notificationSettings = try await repository.protectedJSON("/me/notification-settings") } }
-    func setNotification(_ key: String, enabled: Bool) { perform { [self] in guard let repository else { return }; notificationSettings = try await repository.post("/me/notification-settings", payload: .object([key: .bool(enabled)]), operation: "notification.settings", method: "PATCH") } }
-    func loadNotifications() { perform { [self] in guard let repository else { return }; notifications = try await repository.protectedJSON("/me/notifications")["items"].array ?? [] } }
-    func readNotification(_ id: String) { perform { [self] in guard let repository else { return }; _ = try await repository.post("/me/notifications/\(id)/read", payload: .object([:]), operation: "notification.read"); notifications = try await repository.protectedJSON("/me/notifications")["items"].array ?? [] } }
+    func loadNotificationSettings() { performGuarded { [self] fence in
+        guard let repository else { return }; let owner = privateReadOwner()
+        let value = try await repository.protectedJSON("/me/notification-settings")
+        try checkPrivatePublication(owner, fence: fence); notificationSettings = value
+    } }
+    func setNotification(_ key: String, enabled: Bool) { performGuarded { [self] fence in
+        guard let repository else { return }; let owner = privateReadOwner()
+        let value = try await repository.post("/me/notification-settings", payload: .object([key: .bool(enabled)]), operation: "notification.settings", method: "PATCH")
+        try checkPrivatePublication(owner, fence: fence); notificationSettings = value
+    } }
+    private func refreshNotifications(loadMore: Bool = false) async throws {
+        guard let repository else { throw NativeAPIError.authenticationRequired }
+        let fence = publicationFence(), owner = privateReadOwner(), cursor = loadMore ? notificationCursor : nil
+        if loadMore && cursor == nil { return }
+        let page = try NativeAccountPage(await repository.protectedJSON(NativeAccountPage.path("/me/notifications", cursor: cursor)))
+        try checkPrivatePublication(owner, fence: fence)
+        guard !loadMore || notificationCursor == cursor else { throw CancellationError() }
+        notifications = loadMore ? page.appending(to: notifications) : page.items; notificationCursor = page.nextCursor
+    }
+    func loadNotifications(loadMore: Bool = false) { performGuarded { [self] _ in try await refreshNotifications(loadMore: loadMore) } }
+    func readNotification(_ id: String) { performGuarded { [self] fence in
+        guard UUID(uuidString: id) != nil, let repository else { return }
+        let owner = privateReadOwner()
+        _ = try await repository.post("/me/notifications/\(id)/read", payload: .object([:]), operation: "notification.read")
+        let value = try await repository.protectedJSON("/me/notifications/" + id)["notification"]
+        try checkPrivatePublication(owner, fence: fence)
+        guard value["id"].string == id else { throw NativeAPIError.invalidResponse }
+        if let index = notifications.firstIndex(where: { $0["id"].string == id }) { notifications[index] = value }
+    } }
     func requestPrivacy(_ deletion: Bool) {
-        perform { [self] in
+        performGuarded { [self] fence in
             guard let repository else { throw NativeAPIError.authenticationRequired }
+            let owner = privateReadOwner()
             if deletion {
-                do { registeredDeletion = try await repository.requestRegisteredDeletion(); navigation?.go(.privacy, replace: true, simulateProgress: false) }
-                catch { registeredDeletion = try? await repository.registeredDeletionReceipt(); throw error }
+                do {
+                    let value = try await repository.requestRegisteredDeletion()
+                    try checkPrivatePublication(owner, fence: fence); registeredDeletion = value
+                    navigation?.go(.privacy, replace: true, simulateProgress: false)
+                } catch {
+                    let value = try? await repository.registeredDeletionReceipt()
+                    try checkPrivatePublication(owner, fence: fence); registeredDeletion = value; throw error
+                }
             } else {
                 _ = try await repository.post("/privacy/export", payload: .object([:]), operation: "privacy.request.export")
-                privacy = try await repository.protectedJSON("/privacy/center")
+                let value = try await repository.protectedJSON("/privacy/center")
+                try checkPrivatePublication(owner, fence: fence); privacy = value
             }
         }
     }
     func logout() {
+        repository?.retireSessionAuthority()
         invalidateLocalAuthentication()
         workTask?.cancel(); busy = false
         retireSelfieReview(); stopFaceCameraPresentation()
-        performGuarded(localSigning: .connect) { [self] fence in
+        retireAccountPresentation(); audience = nil; audienceBinding = nil; session = nil
+        NativePush.shared.retireAccountBinding()
+        performGuarded { [self] fence in
             photos = []; currentPhoto = nil; snapshot = nil; draft = nil; preview = nil; inbox = []; receipt = nil; favoriteIDs = []
             retireAccountPresentation()
             challenge = nil; captureReceipts = []; lastSelfie = nil; imports = []; NativeImport.removeAll(); mediaRevision += 1; stopFaceCameraPresentation()
             await NativePush.shared.unregister()
-            try await repository?.logout(); try checkPublication(fence); audience = nil; audienceBinding = nil; guardianClaim = nil; session = nil
+            try await repository?.logout(); try checkPublication(fence); audience = nil; audienceBinding = nil; deviceAudience = nil; deviceAudienceBinding = nil; deviceAudienceNeeded = false; audienceRenewalContinuation = nil; audienceReviewPolicy = ""; guardianClaim = nil; session = nil
             if let repository, try await repository.pendingAudienceMutation() != nil {
                 _ = try await repository.bootstrap()
                 let binding = await repository.audienceSessionBinding()
@@ -1048,7 +1276,21 @@ typealias NativePhotoSaveOperation = @MainActor (Data, @escaping @MainActor () a
         localAuthenticator.invalidate(); localSigningLease?.invalidate(); localSigningLease = nil
         localAuthenticationPending = false; localAuthenticationOperation = nil
     }
-    func background(scheduleRetry: Bool = false) { invalidateLocalAuthentication(); persistLibraryState(); if uploadRunning || scheduleRetry && uploadRecovery?.batch.started == true { pausePhotoUploads(userInitiated: false, scheduleRetry: scheduleRetry) }; isForeground = false; photoCamera = false; photoCameraContext = nil; retireSelfieReview(); camera.setForeground(false); recoveryBackup = nil; recoveryBackupSheet = false; mediaRevision += 1; workTask?.cancel(); workGeneration += 1; busy = false; if let repository { Task { await repository.retireMedia() } } }
+    func background(scheduleRetry: Bool = false) {
+        invalidateLocalAuthentication(); persistLibraryState()
+        if uploadRunning || scheduleRetry && uploadRecovery?.batch.started == true {
+            pausePhotoUploads(userInitiated: false, scheduleRetry: scheduleRetry)
+        }
+        isForeground = false; photoCamera = false; photoCameraContext = nil
+        if deviceAudience != nil { deviceAudienceNeeded = true }; deviceAudience = nil; deviceAudienceBinding = nil; audienceReviewPolicy = ""
+        retireSelfieReview(); camera.setForeground(false)
+        // Retire the temporary presentation copy synchronously. The separate
+        // durable export archive remains available for exact-request recovery.
+        retireSharedFile()
+        recoveryBackup = nil; recoveryBackupSheet = false; mediaRevision += 1
+        workTask?.cancel(); workGeneration += 1; busy = false
+        if let repository { Task { await repository.retireMedia() } }
+    }
     func foreground() {
         expireSharedFiles()
         if let repository { Task { await repository.expirePrivateMedia() } }
@@ -1060,7 +1302,7 @@ typealias NativePhotoSaveOperation = @MainActor (Data, @escaping @MainActor () a
         if session?.authenticated == true, !uploadRunning { Task { await NativeBackgroundUploads.shared.stop(); try? await restorePhotoUploads() } }
         if guestDeletion != nil, !busy { checkGuestDeletion() }
         else if faceLifecycle != nil, !busy { checkFaceProfile() }
-        else if let session, session.expiresAt <= Date(), !busy { perform { [self] in guard let repository else { return }; try await repository.refresh(); self.session = await repository.summary(); mediaRevision += 1 } }
+        else if let session, session.expiresAt <= Date(), !busy { performGuarded { [self] fence in guard let repository else { return }; try await repository.refresh(); let value = await repository.summary(); try checkPublication(fence); self.session = value; mediaRevision += 1 } }
     }
 }
 
@@ -1276,6 +1518,20 @@ extension LiveAppStore {
 }
 
 extension LiveAppStore {
+    func checkRetainedFaceControl() {
+        performGuarded(localSigning: .profileControl) { [self] fence in
+            guard let repository, guestDeletion == nil else { throw NativeAPIError.authenticationRequired }
+            let value = try await repository.checkRetainedFaceControl(); try checkPublication(fence)
+            try await presentFaceLifecycle(value, fence: fence)
+        }
+    }
+    func renewRetainedFaceControl(explicitlyConsented: Bool, retryOriginal: Bool = false) {
+        performGuarded(localSigning: .profileControl) { [self] fence in
+            guard let repository, guestDeletion == nil, retryOriginal || explicitlyConsented else { throw NativeAPIError.authenticationRequired }
+            let value = try await repository.renewRetainedFaceControl(consentPolicy: retryOriginal ? nil : faceLifecycle?.metadata.authPolicy, retryOriginal: retryOriginal)
+            try checkPublication(fence); try await presentFaceLifecycle(value, fence: fence)
+        }
+    }
     func renewFaceManagementControl() {
         performGuarded(localSigning: .profileControl) { [self] fence in
             guard let repository, guestDeletion == nil else { throw NativeAPIError.authenticationRequired }
@@ -1290,7 +1546,9 @@ extension LiveAppStore {
     private func NativePurchasesRetirement() { NativeBackgroundUploads.shared.cancelScheduled(); NotificationCenter.default.post(name: Notification.Name("LoveliesAccountRetired"), object: nil) }
     private func restoreLibraryState() async throws {
         guard let repository, let account = session?.accountID, libraryAccount != account else { return }
+        let fence = publicationFence(), owner = privateReadOwner()
         let value = try await repository.libraryState()
+        try checkPrivatePublication(owner, fence: fence)
         guard session?.accountID == account else { throw NativeAPIError.sessionChanged }
         favoriteIDs = value.favoriteIDs; galleryAnchor = value.anchor; galleryColumns = min(5, max(2, value.columns))
         savedReview = value.review; savedReviewAssetIDs = value.reviewAssetIDs; libraryAccount = account
@@ -1315,51 +1573,73 @@ extension LiveAppStore {
     func toggleFavorite(_ id: String) {
         guard session?.authenticated == true else { return }
         if !favoriteIDs.insert(id).inserted { favoriteIDs.remove(id) }; persistLibraryState()
+        if lastLibraryScreen == .favorites { nextCursor = nil; reloadPhotos() }
     }
     func showLibrary(_ screen: Screen) {
         guard lastLibraryScreen != screen else { return }
-        let previous = lastLibraryScreen; lastLibraryScreen = screen
+        let previous = lastLibraryScreen, oldIdentity = currentGalleryQuery; lastLibraryScreen = screen
         let source = screen == .search || screen == .filters ? gallerySource : screen == .newMatches ? "received" : screen == .home ? "contributions" : "all"
         if screen != .search && screen != .filters { query = "" }
-        if previous == nil || gallerySource != source || screen == .favorites {
-            gallerySource = source; nextCursor = nil; photos = []; reloadPhotos()
+        gallerySource = source
+        if screen == .favorites { galleryCategory = "all" }
+        if previous == nil || currentGalleryQuery != oldIdentity || loadedGalleryQuery != currentGalleryQuery {
+            nextCursor = nil; photos = []; reloadPhotos()
         }
     }
-    func searchLibrary() { query = NativeLibraryState.boundedQuery(query); nextCursor = nil; persistLibraryState(); reloadPhotos() }
-    func loadOutgoing() async throws {
+    func searchLibrary() { query = NativeLibraryState.boundedQuery(query); nextCursor = nil; if loadedGalleryQuery != currentGalleryQuery { photos = [] }; persistLibraryState(); reloadPhotos() }
+    func loadOutgoing(loadMore: Bool = false) async throws {
         guard let repository else { throw NativeAPIError.authenticationRequired }
-        outgoing = try await repository.community("history", payload: .object([:]))["items"].array ?? []
+        let fence = publicationFence(), owner = privateReadOwner(), cursor = loadMore ? outgoingCursor : nil
+        if loadMore && cursor == nil { return }
+        var payload: [String: WireValue] = ["limit": .integer(25)]; if let cursor { payload["cursor"] = .string(cursor) }
+        let page = try NativeAccountPage(await repository.community("history", payload: .object(payload)), personalOnly: true)
+        try checkPrivatePublication(owner, fence: fence)
+        guard !loadMore || outgoingCursor == cursor else { throw CancellationError() }
+        outgoing = loadMore ? page.appending(to: outgoing) : page.items; outgoingCursor = page.nextCursor
     }
-    func refreshOutgoing() { perform { [self] in try await loadOutgoing() } }
-    func loadSupport() {
-        perform { [self] in guard let repository else { throw NativeAPIError.authenticationRequired }; supportRequests = try await repository.protectedJSON("/support/requests")["support_requests"].array ?? [] }
+    func refreshOutgoing(loadMore: Bool = false) { performGuarded { [self] _ in try await loadOutgoing(loadMore: loadMore) } }
+    private func refreshSupport(loadMore: Bool = false) async throws {
+        guard let repository else { throw NativeAPIError.authenticationRequired }
+        let fence = publicationFence(), owner = privateReadOwner(), cursor = loadMore ? supportCursor : nil
+        if loadMore && cursor == nil { return }
+        let page = try NativeAccountPage(await repository.protectedJSON(NativeAccountPage.path("/support/requests", cursor: cursor)), key: "support_requests")
+        try checkPrivatePublication(owner, fence: fence)
+        guard !loadMore || supportCursor == cursor else { throw CancellationError() }
+        supportRequests = loadMore ? page.appending(to: supportRequests) : page.items; supportCursor = page.nextCursor
     }
+    func loadSupport(loadMore: Bool = false) { performGuarded { [self] _ in try await refreshSupport(loadMore: loadMore) } }
     func sendSupport() {
         let subject = supportSubject.trimmingCharacters(in: .whitespacesAndNewlines), details = supportDetails.trimmingCharacters(in: .whitespacesAndNewlines)
         guard (3...160).contains(subject.count), (5...4000).contains(details.count) else { error = String(localized: "Enter a subject of 3–160 characters and details of 5–4,000 characters."); return }
-        perform { [self] in
+        performGuarded { [self] fence in
             guard let repository else { throw NativeAPIError.authenticationRequired }
+            let owner = privateReadOwner()
             _ = try await repository.post("/support/requests", payload: .object(["subject": .string(subject), "details": .string(details)]), operation: "support.create")
+            try checkPrivatePublication(owner, fence: fence)
             supportSubject = ""; supportDetails = ""
-            supportRequests = try await repository.protectedJSON("/support/requests")["support_requests"].array ?? []
+            try await refreshSupport(); try checkPrivatePublication(owner, fence: fence)
             transferText = String(localized: "Support request received. Its current status is shown below.")
         }
     }
     func checkPrivacyRequest(_ id: String) {
-        perform { [self] in
+        performGuarded { [self] fence in
             guard UUID(uuidString: id) != nil, let repository else { throw NativeAPIError.invalidResponse }
+            let owner = privateReadOwner()
             let value = try await repository.protectedJSON("/privacy-requests/\(id)")
+            try checkPrivatePublication(owner, fence: fence)
             guard value["privacy_request"]["id"].string == id else { throw NativeAPIError.invalidResponse }
-            privacy = try await repository.protectedJSON("/privacy/center")
+            let center = try await repository.protectedJSON("/privacy/center")
+            try checkPrivatePublication(owner, fence: fence); privacy = center
         }
     }
     func exportPrivacy(_ id: String) {
         performGuarded { [self] fence in
             guard let repository else { throw NativeAPIError.authenticationRequired }
-            let account = session?.accountID, epoch = session?.epoch, bytes = try await repository.exportBytes(requestID: id)
-            try checkPublication(fence)
+            let owner = privateReadOwner(), account = session?.accountID, epoch = session?.epoch
+            let delivery = try await repository.exportFile(requestID: id)
+            try checkPrivatePublication(owner, fence: fence)
             guard session?.accountID == account, session?.epoch == epoch, isForeground else { throw NativeAPIError.sessionChanged }
-            try presentSharedBytes(bytes, extension: "json")
+            try presentSharedExportFile(delivery.file, authorityExpiresAt: delivery.expiresAt)
         }
     }
     func shareCurrentPhoto() {
@@ -1373,16 +1653,32 @@ extension LiveAppStore {
             guard session?.accountID == account, session?.epoch == epoch, approval == current, isForeground else { throw NativeAPIError.sessionChanged }
             guard photoSelection.permits(selected, current: currentPhoto) else { throw NativeAPIError.unsupported(String(localized: "Return to your library and refresh current access.")) }
             let ext = bytes.starts(with: [0xff, 0xd8]) ? "jpg" : bytes.starts(with: [0x89, 0x50, 0x4e, 0x47]) ? "png" : bytes.starts(with: [0x52, 0x49, 0x46, 0x46]) ? "webp" : "heic"
-            try presentSharedBytes(bytes, extension: ext)
+            try presentSharedBytes(bytes, extension: ext, deadline: mediaDeadline(current))
         }
     }
-    private func presentSharedBytes(_ data: Data, extension ext: String) throws {
+    private func presentSharedBytes(_ data: Data, extension ext: String, authorityExpiresAt: Date? = nil, deadline suppliedDeadline: NativePrivateMediaDeadline? = nil) throws {
         retireSharedFile()
         // A failed older cleanup cannot accumulate another private disk copy.
         try sharedFiles.prune(now: privateMediaClock.read().wall)
-        let deadline = NativePrivateMediaDeadline(created: privateMediaClock.read(), authorityExpiresAt: session?.expiresAt)
+        let expiry = [session?.expiresAt, authorityExpiresAt].compactMap { $0 }.min()
+        let deadline = suppliedDeadline ?? NativePrivateMediaDeadline(created: privateMediaClock.read(), authorityExpiresAt: expiry)
         let url = try sharedFiles.create(data, extension: ext)
+        try installSharedFile(url, deadline: deadline)
+    }
+    private func installSharedFile(_ url: URL, deadline: NativePrivateMediaDeadline) throws {
         guard deadline.remaining(at: privateMediaClock.read()) > 0 else { try? sharedFiles.prune(); throw NativeAPIError.sessionChanged }
+        presentSharedFile(url, deadline: deadline)
+    }
+    private func presentSharedExportFile(_ url: URL, authorityExpiresAt: Date) throws {
+        retireSharedFile(); try sharedFiles.prune(now: privateMediaClock.read().wall)
+        let expiry = min(session?.expiresAt ?? .distantPast, authorityExpiresAt)
+        let deadline = NativePrivateMediaDeadline(created: privateMediaClock.read(), authorityExpiresAt: expiry)
+        guard url.isFileURL, url.pathExtension == "json", deadline.remaining(at: privateMediaClock.read()) > 0 else { throw NativeAPIError.sessionChanged }
+        // The repository owns this protected delivery file and retires it at
+        // logout/expiry. Presentation adds no full-memory or temporary duplicate.
+        presentSharedFile(url, deadline: deadline)
+    }
+    private func presentSharedFile(_ url: URL, deadline: NativePrivateMediaDeadline) {
         let file = NativeShareFile(url: url); sharedFile = file; sharedFileDeadline = deadline
         sharedFileExpiryTask?.cancel()
         sharedFileExpiryTask = Task { [weak self] in
@@ -1399,6 +1695,13 @@ extension LiveAppStore {
         do { try sharedFiles.prune(now: privateMediaClock.read().wall) }
         catch { scheduleSharedFileCleanupRetry() }
     }
+    func completeSharedFile(_ id: UUID, completed: Bool) {
+        guard sharedFile?.id == id else { return }
+        // Export v3 is bound to the current session and expires under repository
+        // ownership. The OS callback retires only this presentation, never a new action.
+        retireSharedFile()
+    }
+
     private func scheduleSharedFileCleanupRetry() {
         sharedFileExpiryTask?.cancel()
         sharedFileExpiryTask = Task { [weak self] in
@@ -1418,9 +1721,11 @@ extension LiveAppStore {
               kind == "payment" || UUID(uuidString: id) != nil else { return }
         if kind == "match" { navigation?.go(.activity, simulateProgress: false); openReceipt(id) }
         else if kind == "support" {
-            perform { [self] in
+            performGuarded { [self] fence in
                 guard let repository else { throw NativeAPIError.authenticationRequired }
+                let owner = privateReadOwner()
                 let response = try await repository.protectedJSON("/support/requests/\(id)")
+                try checkPrivatePublication(owner, fence: fence)
                 guard response["support_request"]["id"].string == id else { throw NativeAPIError.invalidResponse }
                 supportRequests = [response["support_request"]]; navigation?.go(.help, simulateProgress: false)
             }
@@ -1440,22 +1745,28 @@ extension LiveAppStore {
 
 extension LiveAppStore {
     func checkRegisteredDeletion(retry: Bool = false) {
-        perform { [self] in
+        performGuarded { [self] fence in
             guard let repository else { throw NativeAPIError.unavailable("configuration") }
-            registeredDeletion = retry ? try await repository.requestRegisteredDeletion(retry: true) : try await repository.checkRegisteredDeletion()
+            let owner = privateReadOwner(), operation = registeredDeletion?.operationKey
+            let value = retry ? try await repository.requestRegisteredDeletion(retry: true) : try await repository.checkRegisteredDeletion()
+            try checkPrivatePublication(owner, fence: fence)
+            guard registeredDeletion?.operationKey == operation else { throw NativeAPIError.sessionChanged }
+            registeredDeletion = value
             if registeredDeletion?.completed == true { retireAccountPresentation(); session = nil }
         }
     }
     func startAfterRegisteredDeletion() {
-        perform { [self] in
+        performGuarded { [self] fence in
             guard let repository else { throw NativeAPIError.unavailable("configuration") }
-            session = try await repository.finishRegisteredDeletionReceipt(); registeredDeletion = nil; navigation?.go(.introduction, replace: true, simulateProgress: false)
+            let value = try await repository.finishRegisteredDeletionReceipt()
+            try checkPublication(fence); session = value; registeredDeletion = nil; navigation?.go(.introduction, replace: true, simulateProgress: false)
         }
     }
     func continueRegisteredAccount() {
-        perform { [self] in
+        performGuarded { [self] fence in
             guard let repository else { throw NativeAPIError.unavailable("configuration") }
-            try await repository.continueRegisteredAccount(); session = try await repository.bootstrap(); registeredDeletion = nil; connected = true; navigation?.go(session?.authenticated == true ? .home : .faceEnrollment, replace: true, simulateProgress: false)
+            try await repository.continueRegisteredAccount(); let value = try await repository.bootstrap()
+            try checkPublication(fence); session = value; registeredDeletion = nil; connected = true; navigation?.go(session?.authenticated == true ? .home : .faceEnrollment, replace: true, simulateProgress: false)
         }
     }
 }
@@ -1464,19 +1775,22 @@ extension LiveAppStore {
 extension LiveAppStore {
     func handleAudienceFailure(_ error: Error) {
         guard Self.isAudienceError(error) else { return }
-        audience = nil; audienceSessionEpoch = nil; stopFaceCameraPresentation(); retireAccountPresentation(); self.error = error.localizedDescription
+        audience = nil; audienceSessionEpoch = nil; deviceAudienceNeeded = true; stopFaceCameraPresentation(); retireAccountPresentation(); self.error = error.localizedDescription
     }
     private static func isAudienceError(_ error: Error) -> Bool {
         guard case NativeAPIError.denied(_, let code) = error else { return false }
         return code.hasPrefix("audience_") || code.hasPrefix("guardian_") || code == "age_not_supported"
     }
     func audienceGateNeeded(_ screen: Screen) -> Bool {
-        guard session != nil || audienceBinding != nil else { return false }
+        guard session != nil || audienceBinding != nil || deviceAudienceNeeded || deviceAudience != nil else { return false }
         guard connected, guestDeletion == nil, registeredDeletion == nil else { return false }
         guard ![.privacy, .exportData, .security, .faceManagement].contains(screen) else { return false }
-        return audiencePendingMutation || !audienceEligible
+        return deviceAudienceNeeded || deviceAudience != nil || audiencePendingMutation || !audienceEligible
     }
     func refreshAudience(retryOriginal: Bool = false) {
+        if deviceAudience != nil || audienceRenewalContinuation != nil && hasSavedAudienceDevice || audienceBinding == nil && hasSavedAudienceDevice {
+            checkDeviceAudience(retryOriginal: retryOriginal); return
+        }
         performGuarded { [self] fence in
             guard let repository else { throw NativeAPIError.authenticationRequired }
             let value = retryOriginal ? try await repository.retryAudienceMutation() : try await repository.audience()
@@ -1486,20 +1800,89 @@ extension LiveAppStore {
             }
         }
     }
+    func checkDeviceAudience(retryOriginal: Bool = false) {
+        performGuarded(localSigning: .reconciliation) { [self] fence in
+            guard let repository else { throw NativeAPIError.authenticationRequired }
+            let value = retryOriginal ? try await repository.renewDeviceAudience(expectedVersion: 0, consentPolicy: nil, retryOriginal: true) : try await repository.signedAudienceStatus()
+            try checkPublication(fence); try await installDeviceAudience(value, fence: fence)
+        }
+    }
+    private func installDeviceAudience(_ value: NativeAudienceDeviceStatus, fence: NativePublicationFence) async throws {
+        guard let repository else { throw NativeAPIError.authenticationRequired }
+        let binding = try await repository.audienceDeviceBinding(value)
+        let currentPolicy = value.renewalAvailable && value.decision.guardianRequired == false ? try await repository.policy() : ""
+        let finalBinding = try await repository.audienceDeviceBinding(value)
+        try checkPublication(fence)
+        guard binding == finalBinding else { throw NativeAPIError.sessionChanged }
+        stopFaceCameraPresentation(); retireAccountPresentation(); audience = nil; audienceSessionEpoch = nil
+        deviceAudience = value; deviceAudienceBinding = binding; deviceAudienceNeeded = true; audienceReviewPolicy = currentPolicy; audienceRenewalContinuation = nil
+        navigation?.go(.introduction, replace: true, simulateProgress: false)
+    }
+    func renewEligibility(consentPolicy: String, adultConfirmed: Bool, authenticationConsented: Bool) {
+        guard adultConfirmed, authenticationConsented, !consentPolicy.isEmpty, consentPolicy == audienceReviewPolicy else { return }
+        if let held = deviceAudience {
+            guard held.decision.ageBand == .adult, held.renewalAvailable else { return }
+            performGuarded(localSigning: .reconciliation) { [self] fence in
+                guard let repository, deviceAudience == held else { throw NativeAPIError.sessionChanged }
+                let value = try await repository.renewDeviceAudience(expectedVersion: held.decision.version, consentPolicy: consentPolicy)
+                try checkPublication(fence); try await installDeviceAudience(value, fence: fence)
+            }
+        } else if let held = audience, held.ageBand == .adult, held.decision.needsReview() {
+            performGuarded { [self] fence in
+                guard let repository, audience == held else { throw NativeAPIError.sessionChanged }
+                let value = try await repository.renewAudience(expectedVersion: held.version, consentPolicy: consentPolicy)
+                try checkPublication(fence); try await installAudience(value, fence: fence)
+            }
+        }
+    }
+    func renewMinorEligibility(confirmed: Bool) {
+        guard confirmed else { return }
+        if let held = deviceAudience {
+            guard held.decision.ageBand == .teen, held.guardianReviewAvailable else { return }
+            performGuarded(localSigning: .reconciliation) { [self] fence in
+                guard let repository, deviceAudience == held else { throw NativeAPIError.sessionChanged }
+                let value = try await repository.renewDeviceAudience(expectedVersion: held.decision.version, consentPolicy: nil, guardianRequired: true)
+                try checkPublication(fence); try await installDeviceAudience(value, fence: fence)
+            }
+        } else if let held = audience, held.ageBand == .teen, held.decision.needsReview() || held.status == .guardianPending && held.guardianRequest?.state == .approved { declareAge(.teen) }
+    }
+    func continueDeviceAudience() {
+        guard !busy, !audiencePendingMutation, let held = deviceAudience, !held.decision.needsReview(), held.decision.status == .eligible else { return }
+        if held.nextStep == "face_login" {
+            deviceAudience = nil; deviceAudienceBinding = nil; deviceAudienceNeeded = false; prepareFace(renewedAudienceAccount: held.accountID)
+        } else if held.nextStep == "profile_recovery" {
+            if faceLifecycle != nil { deviceAudienceNeeded = false; deviceAudience = nil; deviceAudienceBinding = nil; checkRetainedFaceControl() }
+            else { error = String(localized: "Your saved device cannot restore the retired face reference by itself. Use your existing recovery backup or contact support; keep this account and its saved requests.") }
+        }
+    }
     private func installAudience(_ value: NativeAudienceProjection, fence: NativePublicationFence) async throws {
         guard let repository else { throw NativeAPIError.authenticationRequired }
         let current = try await repository.audiencePresentation(value)
         let productSession = await repository.summary()
+        let currentPolicy = value.ageBand == .adult && value.decision.needsReview() ? try await repository.policy() : ""
         let finalBinding = await repository.audienceSessionBinding()
         try checkPublication(fence)
         guard current == finalBinding, value.accountID == current.accountID, productSession == nil || productSession?.accountID == current.accountID && productSession?.epoch == current.epoch else { throw NativeAPIError.sessionChanged }
         let preserveWeakPresentation = canPreserveWeakPresentation(current)
         if audienceBinding != current { retireSelfieReview(); retireAccountPresentation() }
         session = productSession; audienceBinding = current; audienceSessionEpoch = current.epoch; audience = value
+        if let nextStep = value.renewalNextStep { audienceRenewalContinuation = nextStep }
+        deviceAudience = nil; deviceAudienceBinding = nil; deviceAudienceNeeded = false; audienceReviewPolicy = currentPolicy
+        scheduleAudienceExpiry()
         if !audienceEligible { stopFaceCameraPresentation(); retireAccountPresentation(preservingWeakState: preserveWeakPresentation); photoCamera = false }
     }
+    func continueAudienceRenewal() {
+        guard !busy, audienceRenewalContinuation != nil else { return }
+        if hasSavedAudienceDevice { checkDeviceAudience(); return }
+        if audienceBinding?.registeredIdentity == false {
+            audienceRenewalContinuation = nil; navigation?.go(.introduction, replace: true, simulateProgress: false); return
+        }
+        if faceLifecycle != nil { audienceRenewalContinuation = nil; checkRetainedFaceControl(); return }
+        error = String(localized: "Your retained face reference is unavailable. Use your existing face-profile recovery control or recovery backup. This device cannot create a replacement account.")
+    }
     func declareAge(_ band: NativeAgeBand) {
-        guard let current = audience, current.accountID == audienceBinding?.accountID, current.ageBand == .unknown else { return }
+        guard let current = audience, current.accountID == audienceBinding?.accountID,
+              current.ageBand == .unknown || current.ageBand == .teen && band == .teen && current.decision.needsReview() else { return }
         performGuarded { [self] fence in
             guard let repository else { throw NativeAPIError.authenticationRequired }
             let value = try await repository.declareAudience(band, expectedVersion: current.version)

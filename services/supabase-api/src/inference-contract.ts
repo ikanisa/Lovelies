@@ -7,12 +7,13 @@ export const INFERENCE_MODEL_HASHES = Object.freeze({
   sface: '0ba9fbfa01b5270c96627c4ef784da859931e02f04419c829e83484087c34e79',
 });
 export const INFERENCE_CAPABILITIES = Object.freeze([
-  'face_registration', 'face_comparison', 'face_replacement', 'photo_processing',
+  'face_registration', 'face_comparison', 'face_replacement', 'photo_processing', 'photo_matching_batches',
 ]);
 export const INFERENCE_LIMITS = Object.freeze({
   image_bytes: 20 * 1024 * 1024, image_pixels: 40_000_000, faces: 100,
-  profiles: 1000, face_body_bytes: 12 * 1024 * 1024, photo_body_bytes: 40 * 1024 * 1024,
+  profiles: 1000, photo_batch_profiles: 128, face_body_bytes: 12 * 1024 * 1024, photo_body_bytes: 40 * 1024 * 1024,
 });
+export const INFERENCE_PHOTO_RANKING_PROTOCOL = 'lovelies-photo-ranking-page-v1';
 export const INFERENCE_REPLY_BYTES = 6 * 1024 * 1024;
 export const INFERENCE_READY_BYTES = 64 * 1024;
 export interface InferenceBinding {

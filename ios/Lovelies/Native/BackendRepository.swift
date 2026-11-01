@@ -49,15 +49,33 @@ enum NativeConfiguration {
         #else
         let value = Bundle.main.object(forInfoDictionaryKey: "LoveliesAPIOrigin") as? String ?? ""
         #endif
-        guard let url = URL(string: value), let scheme = url.scheme, url.host != nil, url.user == nil, url.password == nil,
-              url.query == nil, url.fragment == nil, ["", "/", "/functions/v1/lovelies-api"].contains(url.path) else { throw NativeAPIError.unsupported(String(localized: "Configure the Lovelies HTTPS API origin before connecting this app.")) }
         #if DEBUG && targetEnvironment(simulator)
-        guard scheme == "https" || (scheme == "http" && ["localhost", "127.0.0.1"].contains(url.host!)) else { throw NativeAPIError.unsupported(String(localized: "Use HTTPS for this API origin.")) }
+        return try validatedOrigin(value, allowLocalHTTP: true)
         #else
-        guard scheme == "https" else { throw NativeAPIError.unsupported(String(localized: "Use HTTPS for this API origin.")) }
+        return try validatedOrigin(value)
         #endif
-        return url
     }
+    static func validatedOrigin(_ value: String, allowLocalHTTP: Bool = false) throws -> URL {
+        guard value == value.trimmingCharacters(in: .whitespacesAndNewlines),
+              !value.unicodeScalars.contains(where: { $0.value <= 32 }),
+              let components = URLComponents(string: value), let url = components.url,
+              let host = components.host, !host.isEmpty, components.user == nil, components.password == nil,
+              components.query == nil, components.fragment == nil,
+              components.percentEncodedPath == components.path else {
+            throw NativeAPIError.unsupported(String(localized: "Configure the Lovelies HTTPS API origin before connecting this app."))
+        }
+        let localHTTP = allowLocalHTTP && components.scheme == "http" && ["localhost", "127.0.0.1"].contains(host)
+        let path = components.percentEncodedPath
+        guard (components.scheme == "https" && (allowLocalHTTP || components.port == nil || components.port == 443)) || localHTTP,
+              ["/functions/v1/lovelies-api", "/functions/v1/lovelies-api/"].contains(path) || allowLocalHTTP && ["", "/"].contains(path) else {
+            throw NativeAPIError.unsupported(String(localized: "Use HTTPS for this API origin."))
+        }
+        var normalized = components
+        if normalized.percentEncodedPath.hasSuffix("/") { normalized.percentEncodedPath.removeLast() }
+        guard let result = normalized.url else { throw NativeAPIError.invalidResponse }
+        return result
+    }
+
 }
 
 /// App-owned media is bounded by both elapsed process time and wall time. A
@@ -143,6 +161,16 @@ struct NativeAuthorizedShareFiles: Sendable {
         let url = directory.appendingPathComponent(UUID().uuidString.lowercased()).appendingPathExtension(ext)
         try data.write(to: url, options: [.atomic, .completeFileProtection]); return url
     }
+    func create(copying source: URL) throws -> URL {
+        guard source.isFileURL, try verifiedDirectory(create: true),
+              (try? FileManager.default.destinationOfSymbolicLink(atPath: source.path)) == nil else { throw NativeAPIError.invalidResponse }
+        let values = try source.resourceValues(forKeys: [.isRegularFileKey, .isSymbolicLinkKey])
+        guard values.isRegularFile == true, values.isSymbolicLink != true else { throw NativeAPIError.invalidResponse }
+        let destination = directory.appendingPathComponent(UUID().uuidString.lowercased()).appendingPathExtension("json")
+        try FileManager.default.copyItem(at: source, to: destination)
+        try FileManager.default.setAttributes([.protectionKey: FileProtectionType.complete], ofItemAtPath: destination.path)
+        return destination
+    }
     /// Keep only a live, known presentation. Missing timestamps and files dated
     /// in the future fail closed; rewriting a file does not renew its birth time.
     func prune(keeping: URL? = nil, now: Date = Date()) throws {
@@ -161,6 +189,151 @@ struct NativeAuthorizedShareFiles: Sendable {
     }
 }
 
+/// Export delivery uses a separate protected staging directory. A deterministic
+/// file identity is journaled before bytes are written; a crash between the
+/// atomic write and its journal update can rediscover exactly those bytes.
+private enum NativeExportStagingLocks {
+    static let registry = NSLock()
+    nonisolated(unsafe) static var locks: [String: NSRecursiveLock] = [:]
+    static func get(_ path: String) -> NSRecursiveLock {
+        registry.lock(); defer { registry.unlock() }
+        if let held = locks[path] { return held }
+        let held = NSRecursiveLock(); locks[path] = held; return held
+    }
+}
+struct NativeExportStagingFiles: Sendable {
+    let directory: URL
+    init(directory: URL = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
+        .appendingPathComponent("lovelies-export-deliveries", isDirectory: true)) { self.directory = directory.standardizedFileURL }
+    private func file(_ id: String, create: Bool) throws -> URL {
+        guard UUID(uuidString: id) != nil, (try? FileManager.default.destinationOfSymbolicLink(atPath: directory.path)) == nil else { throw NativeAPIError.invalidResponse }
+        if !FileManager.default.fileExists(atPath: directory.path), create {
+            try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true, attributes: [.protectionKey: FileProtectionType.complete])
+            var values = URLResourceValues(); values.isExcludedFromBackup = true
+            var root = directory; try root.setResourceValues(values)
+        }
+        if FileManager.default.fileExists(atPath: directory.path) {
+            let values = try directory.resourceValues(forKeys: [.isDirectoryKey, .isSymbolicLinkKey])
+            guard values.isDirectory == true, values.isSymbolicLink != true else { throw NativeAPIError.invalidResponse }
+        }
+        return directory.appendingPathComponent(id.lowercased()).appendingPathExtension("json")
+    }
+    private var lock: NSRecursiveLock { NativeExportStagingLocks.get(directory.path) }
+    func read(_ id: String, maximum: Int = 20 * 1024 * 1024) throws -> Data? {
+        let lock = lock; lock.lock(); defer { lock.unlock() }
+        let url = try file(id, create: false)
+        guard FileManager.default.fileExists(atPath: url.path) else { return nil }
+        let values = try url.resourceValues(forKeys: [.isRegularFileKey, .isSymbolicLinkKey, .fileSizeKey])
+        guard values.isRegularFile == true, values.isSymbolicLink != true, let count = values.fileSize,
+              maximum > 0, (1...maximum).contains(count) else { throw NativeAPIError.invalidResponse }
+        let data = try Data(contentsOf: url)
+        guard data.count == count else { throw NativeAPIError.invalidResponse }; return data
+    }
+    func stage(_ data: Data, id: String, maximum: Int = 20 * 1024 * 1024) throws {
+        let lock = lock; lock.lock(); defer { lock.unlock() }
+        guard maximum > 0, (1...maximum).contains(data.count) else { throw NativeAPIError.invalidResponse }
+        let url = try file(id, create: true)
+        if let saved = try read(id, maximum: maximum) { guard saved == data else { throw NativeAPIError.invalidResponse } }
+        else { try data.write(to: url, options: [.atomic, .completeFileProtection]) }
+        let handle = try FileHandle(forWritingTo: url)
+        do { try handle.synchronize(); try handle.close() } catch { try? handle.close(); throw error }
+        guard try read(id, maximum: maximum) == data else { throw NativeAPIError.unavailable("export_staging_unconfirmed") }
+    }
+    /// Resume a previous assembly only after checking every existing byte
+    /// against the verified chunks. Unknown or corrupt bytes are never truncated.
+    func assemble(id: String, bytes: Int, hash: String, current: () throws -> Void,
+                  pump: (_ sink: (Data) throws -> Void) throws -> Void) throws -> URL {
+        let lock = lock; lock.lock(); defer { lock.unlock() }
+        guard bytes > 0, NativeExportManifestPage.validHash(hash) else { throw NativeAPIError.invalidResponse }
+        try current()
+        let url = try file(id, create: true)
+        if !FileManager.default.fileExists(atPath: url.path) { try Data().write(to: url, options: [.withoutOverwriting, .completeFileProtection]) }
+        let values = try url.resourceValues(forKeys: [.isRegularFileKey, .isSymbolicLinkKey, .fileSizeKey])
+        guard values.isRegularFile == true, values.isSymbolicLink != true, let existing = values.fileSize,
+              existing >= 0, existing <= bytes else { throw NativeAPIError.invalidResponse }
+        let handle = try FileHandle(forUpdating: url)
+        defer { try? handle.close() }
+        var total = 0, digest = SHA256()
+        do {
+            try pump { data in
+                try current()
+                guard !data.isEmpty, data.count <= NativeExportManifestPage.chunkBytes, total <= bytes - data.count else { throw NativeAPIError.invalidResponse }
+                let overlap = min(data.count, max(0, existing - total))
+                if overlap > 0 {
+                    var prefix = Data()
+                    while prefix.count < overlap {
+                        guard let part = try handle.read(upToCount: overlap - prefix.count), !part.isEmpty else { throw NativeAPIError.invalidResponse }
+                        prefix.append(part)
+                    }
+                    guard prefix == data.prefix(overlap) else { throw NativeAPIError.invalidResponse }
+                }
+                try current()
+                if overlap < data.count { try handle.write(contentsOf: data.dropFirst(overlap)) }
+                digest.update(data: data); total += data.count
+                try current()
+            }
+            guard total == bytes, digest.finalize().map({ String(format: "%02x", $0) }).joined() == hash else { throw NativeAPIError.invalidResponse }
+            try current(); try handle.synchronize(); try handle.close()
+        } catch { try? handle.synchronize(); throw error }
+        return try verifiedURL(id, bytes: bytes, hash: hash, current: current)
+    }
+    func verifiedURL(_ id: String, bytes: Int, hash: String, current: () throws -> Void = {}) throws -> URL {
+        let lock = lock; lock.lock(); defer { lock.unlock() }
+        let url = try file(id, create: false)
+        let values = try url.resourceValues(forKeys: [.isRegularFileKey, .isSymbolicLinkKey, .fileSizeKey])
+        guard values.isRegularFile == true, values.isSymbolicLink != true, values.fileSize == bytes, bytes > 0 else { throw NativeAPIError.invalidResponse }
+        let handle = try FileHandle(forReadingFrom: url); defer { try? handle.close() }
+        var digest = SHA256(), count = 0
+        while let data = try handle.read(upToCount: NativeExportManifestPage.chunkBytes), !data.isEmpty {
+            try current(); guard count <= bytes - data.count else { throw NativeAPIError.invalidResponse }
+            digest.update(data: data); count += data.count
+        }
+        guard count == bytes, digest.finalize().map({ String(format: "%02x", $0) }).joined() == hash else { throw NativeAPIError.invalidResponse }
+        try current(); return url
+    }
+    func removeValidatedPrefix(_ id: String, maximum: Int, pump: (_ sink: (Data) throws -> Void) throws -> Void) throws {
+        let lock = lock; lock.lock(); defer { lock.unlock() }
+        let url = try file(id, create: false)
+        guard FileManager.default.fileExists(atPath: url.path) else { return }
+        let values = try url.resourceValues(forKeys: [.isRegularFileKey, .isSymbolicLinkKey, .fileSizeKey])
+        guard values.isRegularFile == true, values.isSymbolicLink != true, let count = values.fileSize,
+              count >= 0, count <= maximum else { throw NativeAPIError.invalidResponse }
+        let handle = try FileHandle(forReadingFrom: url); defer { try? handle.close() }
+        var checked = 0
+        try pump { data in
+            let overlap = min(data.count, count - checked)
+            if overlap > 0 {
+                var prefix = Data()
+                while prefix.count < overlap {
+                    guard let part = try handle.read(upToCount: overlap - prefix.count), !part.isEmpty else { throw NativeAPIError.invalidResponse }
+                    prefix.append(part)
+                }
+                guard prefix == data.prefix(overlap) else { throw NativeAPIError.invalidResponse }; checked += overlap
+            }
+        }
+        guard checked == count else { throw NativeAPIError.invalidResponse }
+        try handle.close(); try remove(id)
+    }
+    func removeVerifiedComplete(_ id: String, bytes: Int, hash: String) throws -> Bool {
+        let lock = lock; lock.lock(); defer { lock.unlock() }
+        let url = try file(id, create: false)
+        guard FileManager.default.fileExists(atPath: url.path) else { return false }
+        let values = try url.resourceValues(forKeys: [.isRegularFileKey, .isSymbolicLinkKey, .fileSizeKey])
+        guard values.isRegularFile == true, values.isSymbolicLink != true else { throw NativeAPIError.invalidResponse }
+        guard values.fileSize == bytes else { return false }
+        _ = try verifiedURL(id, bytes: bytes, hash: hash)
+        try remove(id); return true
+    }
+    func remove(_ id: String) throws {
+        let lock = lock; lock.lock(); defer { lock.unlock() }
+        let url = try file(id, create: false)
+        guard FileManager.default.fileExists(atPath: url.path) else { return }
+        let values = try url.resourceValues(forKeys: [.isRegularFileKey, .isSymbolicLinkKey])
+        guard values.isRegularFile == true, values.isSymbolicLink != true else { throw NativeAPIError.invalidResponse }
+        try FileManager.default.removeItem(at: url)
+    }
+}
+
 /// Process-local, single-use continuation identity. Receipt and credential
 /// material remain inside the repository; a caller cannot manufacture a ticket.
 struct NativeGuestSetupResumeTicket: Sendable {
@@ -169,8 +342,34 @@ struct NativeGuestSetupResumeTicket: Sendable {
 enum NativeLocalTransitionKind: Sendable { case accountRecoveryStart, profileCancellation }
 struct NativeLocalTransitionTicket: Sendable { fileprivate let id: UUID }
 
+/// Independent of the repository executor and protected-storage locks. Logout
+/// can close publication/admission immediately while durable cleanup is queued.
+final class NativeSessionRetirementFence: @unchecked Sendable {
+    private let lock = NSLock()
+    private let clock: NativeAuthorityClock
+    private var retiring = false
+    init(clock: NativeAuthorityClock = NativeAuthorityClock()) { self.clock = clock }
+    func snapshot() -> (generation: Int, retiring: Bool) {
+        lock.lock(); defer { lock.unlock() }; return (clock.snapshot(), retiring)
+    }
+    @discardableResult func retire() -> Int {
+        lock.lock(); defer { lock.unlock() }
+        let generation = retiring ? clock.snapshot() : clock.advance(); retiring = true; return generation
+    }
+    func complete(_ expected: Int) {
+        lock.lock(); defer { lock.unlock() }; if clock.snapshot() == expected { retiring = false }
+    }
+    func permits(_ expected: Int) -> Bool {
+        let state = snapshot(); return !state.retiring && state.generation == expected
+    }
+}
+
 actor BackendRepository {
     private let origin: URL, transport: any NativeTransport, secrets: any NativeSecretStore, signer: any NativeDeviceSigner
+    private let sessionRetirement: NativeSessionRetirementFence
+    private let authorityLedger: NativeAuthorityLedger
+    private var retiredCredentialDigests: Set<String> = []
+    private var retirementPersistenceError: NativeAPIError?
     private var credentials: NativeCredentials? {
         didSet {
             if !Self.sameCredentials(oldValue, credentials) {
@@ -194,11 +393,18 @@ actor BackendRepository {
     }
     private var preparedLocalTransition: LocalTransitionPreparation?
     private var intents: [NativeOperationIntent] = []
+    private var appleStoreWork: Set<String> = []
+    private var applePurchaseBusy: Set<String> = []
+    private var applePurchaseUncertainRecords: [NativeApplePurchaseRecord] = []
     private var uploads: [NativeUploadRecord] = []
     private var uploadBatches: [NativeResumableUploadBatch] = []
     private var uploadSerial = 0, uploadBusy = false
     private var uploadRetirement: Task<Void, Never>?
+    private var registeredDeletionCleanupBusy = false
     private let uploadFiles: NativeUploadPrivateFiles
+    private let exportFiles: NativeExportStagingFiles
+    private var exportWork: Set<String> = []
+    private var exportExpiryTasks: [String: Task<Void, Never>] = [:]
     private let uploadTransport: any NativeUploadFileTransport
     private var guestDeletion: NativeGuestDeletionRecord?
     private var guestDeletionSerial = 0
@@ -228,8 +434,12 @@ actor BackendRepository {
     private var media = NativePrivateMediaCache()
     private var mediaExpiryTask: Task<Void, Never>?
     private let privateMediaClock: NativePrivateMediaClock
-    init(origin: URL, transport: any NativeTransport = NativeURLTransport(), secrets: any NativeSecretStore = KeychainSecretStore(), signer: any NativeDeviceSigner = KeychainDeviceSigner(), uploadFiles: NativeUploadPrivateFiles = NativeUploadPrivateFiles(), uploadTransport: (any NativeUploadFileTransport)? = nil, privateMediaClock: NativePrivateMediaClock = .live) {
-        self.origin = origin; self.transport = transport; self.secrets = secrets; self.signer = signer; self.uploadFiles = uploadFiles
+    init(origin: URL, transport: any NativeTransport = NativeURLTransport(), secrets: any NativeSecretStore = KeychainSecretStore(), signer: any NativeDeviceSigner = KeychainDeviceSigner(), uploadFiles: NativeUploadPrivateFiles = NativeUploadPrivateFiles(), uploadTransport: (any NativeUploadFileTransport)? = nil, privateMediaClock: NativePrivateMediaClock = .live, exportFiles: NativeExportStagingFiles = NativeExportStagingFiles()) {
+        self.origin = origin; self.transport = transport; self.signer = signer; self.uploadFiles = uploadFiles
+        let ledger = NativeAuthorityLedger(store: secrets, origin: origin)
+        self.authorityLedger = ledger; self.sessionRetirement = NativeSessionRetirementFence(clock: ledger.clock)
+        self.secrets = NativeOwnedSecretStore(base: secrets, ledger: ledger)
+        self.exportFiles = exportFiles
         self.uploadTransport = uploadTransport ?? NativeFileURLUploadTransport.shared
         self.privateMediaClock = privateMediaClock
     }
@@ -239,6 +449,7 @@ actor BackendRepository {
                              recoveryBackup: String? = nil, retainedEnrollmentOnly: Bool = false,
                              guestResume: NativeGuestSetupResumeTicket? = nil,
                              transition: NativeLocalTransitionTicket? = nil) throws -> NativeLocalAuthenticationBinding? {
+        try authorityLedger.restore()
         localSigningLease?.retire(); localSigningLease = nil; localSigningCredentialDigest = nil; preparedLocalSigning = nil
         if let transition {
             guard guestResume == nil, !retainedEnrollmentOnly else { throw NativeLocalAuthenticationIssue.bindingChanged }
@@ -263,6 +474,15 @@ actor BackendRepository {
             preparedLocalSigning = binding; return binding
         }
         guard signer.requiresLocalAuthentication else { return nil }
+        // Receipt recovery does not sign. Inspect its own bounded authority
+        // before unrelated identity slots, which may be stale after deletion.
+        if try registeredDeletionReceipt() != nil { return nil }
+        for (name, maximum) in [("guest-deletion-receipt", 16 * 1024), ("audience-suspended-authority", 32 * 1024)] {
+            if let bytes = try secrets.read(name) {
+                guard bytes.count <= maximum else { throw NativeLocalAuthenticationIssue.bindingChanged }
+                return nil
+            }
+        }
         let slots = try localSigningSlots()
         if retainedEnrollmentOnly {
             guard purpose == .reconciliation, recoveryBackup == nil else { throw NativeLocalAuthenticationIssue.bindingChanged }
@@ -308,7 +528,8 @@ actor BackendRepository {
                       "account-recovery-journal": 32 * 1024, "face-profile-lifecycle": 128 * 1024,
                       "retired-account-recoveries": 512 * 1024, "retired-face-profile-controls": 2 * 1024 * 1024,
                       "refresh-delivery-journal-v1": 128 * 1024, "guest-deletion-receipt": 16 * 1024,
-                      "registered-deletion-receipt": 32 * 1024, "audience-suspended-authority": 32 * 1024]
+                      "registered-deletion-receipt": NativeRegisteredDeletionRecord.maximumEncodedBytes, "audience-suspended-authority": 32 * 1024,
+                      "audience-device-renewals": 256 * 1024]
         for (name, maximum) in limits {
             if let bytes = try secrets.read(name) {
                 guard bytes.count <= maximum else { throw NativeLocalAuthenticationIssue.bindingChanged }
@@ -320,7 +541,8 @@ actor BackendRepository {
     private static func sameCredentials(_ first: NativeCredentials?, _ second: NativeCredentials?) -> Bool {
         first?.account_id == second?.account_id && first?.access_token == second?.access_token &&
         first?.refresh_token == second?.refresh_token && first?.auth_method == second?.auth_method &&
-        first?.expires_in == second?.expires_in && first?.expiresAt == second?.expiresAt && first?.roles == second?.roles
+        first?.expires_in == second?.expires_in && first?.expiresAt == second?.expiresAt && first?.roles == second?.roles &&
+        first?.localAuthorityGeneration == second?.localAuthorityGeneration
     }
     private func localEncodedDigest<T: Encodable>(_ value: T) throws -> String {
         let encoder = JSONEncoder(); encoder.outputFormatting = [.sortedKeys]
@@ -334,6 +556,7 @@ actor BackendRepository {
     private func activateLocalPromotion<T: Encodable>(_ next: NativeCredentials, journal: T) throws {
         if signer.requiresLocalAuthentication,
            Self.sameCredentials(credentials, next), localPromotionActivation == (try localPromotion(journal, credential: next)) { return }
+        guard credentialCurrent(next) else { throw NativeAPIError.sessionChanged }
         credentials = next; epoch += 1; retireMedia()
         if signer.requiresLocalAuthentication { localPromotionActivation = try localPromotion(journal, credential: next) }
     }
@@ -436,6 +659,7 @@ actor BackendRepository {
         // remain installed so staged credentials cannot become a public session.
         faceLifecycle = profile; accountRecovery = recovery; enrollment = setup; ordinaryLogin = login
         lifecycleArchives = oldProfiles; recoveryArchives = oldRecoveries
+        if let held, !credentialCurrent(held) { throw NativeAPIError.sessionChanged }
         if !Self.sameCredentials(credentials, held) { credentials = held; epoch += 1; retireMedia() }
         if let promotion, let old = localPromotionActivation, old.intent != promotion.intent || old.credential != promotion.credential { epoch += 1; retireMedia() }
         if let promotion { localPromotionActivation = LocalPromotionActivation(intent: promotion.intent, credential: promotion.credential, epoch: epoch) }
@@ -513,8 +737,56 @@ actor BackendRepository {
         try requireLocalPromotionBinding()
         return signature
     }
-    struct Scope: Sendable { let epoch: Int, account: String?, token: String? }
+    struct Scope: Sendable { let epoch: Int, account: String?, token: String?, retirementGeneration: Int }
+    nonisolated func retireSessionAuthority() {
+        let generation = sessionRetirement.retire()
+        authorityLedger.persistSoon(generation)
+        transport.cancelPending()
+    }
+    private func credentialCurrent(_ value: NativeCredentials) -> Bool {
+        (value.localAuthorityGeneration ?? 0) == authorityLedger.clock.snapshot() || retainedAnonymousCredential(value)
+    }
+    private func retainedAnonymousCredential(_ value: NativeCredentials) -> Bool {
+        guard value.auth_method == "anonymous" else { return false }
+        return [enrollment?.originalAnonymous, guestDeletion?.status?.completed == true ? nil : guestDeletion?.originalCredentials,
+                audienceSuspension?.credentials].contains { Self.sameCredentials($0, value) }
+    }
+    private func hasAnonymousRecoveryHold(account: String) throws -> Bool {
+        if let bytes = try secrets.read("guest-deletion-receipt") {
+            let held = try JSONDecoder().decode(NativeGuestDeletionRecord.self, from: bytes); try held.validate(origin: origin)
+            if held.accountID == account, held.status?.completed != true, held.originalCredentials != nil { return true }
+        }
+        if let bytes = try secrets.read("face-enrollment-journal") {
+            let held = try JSONDecoder().decode(NativeEnrollmentRecord.self, from: bytes); try held.validate(origin: origin)
+            if held.accountID == account, held.originalAnonymous != nil { return true }
+        }
+        if let bytes = try secrets.read("audience-suspended-authority") {
+            let held = try JSONDecoder().decode(NativeAudienceSuspensionRecord.self, from: bytes); try held.validate(origin: origin)
+            if held.credentials.account_id == account { return true }
+        }
+        return false
+    }
+    /// Restrictive server results close publication before a potentially blocked
+    /// journal write. Their existing receipt/control stays available for retry.
+    private func retireForRestriction(_ original: NativeCredentials? = nil) throws {
+        let retired = original ?? credentials
+        retireSessionAuthority()
+        var generation = sessionRetirement.snapshot().generation
+        credentials = nil; epoch += 1; audienceProjection = nil; audienceProjectionEpoch = nil
+        retireMedia(); intents = []; uploads = []
+        do {
+            generation = try authorityLedger.persistRetirement(generation)
+            try recordCredentialRetirement(retired)
+            _ = try retireCredentialSlot(retired)
+            if let retired, let session = try? sessionID(retired.access_token) { try retireExportFiles(account: retired.account_id, session: session) }
+            sessionRetirement.complete(generation)
+        } catch {
+            retirementPersistenceError = .unavailable("session_retirement_unconfirmed")
+            throw retirementPersistenceError!
+        }
+    }
     func summary() -> NativeSessionSummary? {
+        guard !sessionRetirement.snapshot().retiring, credentials.map({ credentialCurrent($0) && !retiredCredentialDigests.contains(Self.credentialDigest($0)) }) ?? true else { return nil }
         if audienceSuspension != nil { return nil }
         if guestDeletion != nil || ordinaryLogin != nil || faceLifecycle?.activeHold == true || accountRecovery != nil || (enrollment != nil && credentials?.authenticated == true) || enrollment?.state == .registered || enrollment?.state == .promoting || (enrollment?.loginChallengeWire != nil && [.capturePending, .completionPending].contains(enrollment!.state)) { return nil }
         return credentials.map { NativeSessionSummary(accountID: $0.account_id, roles: $0.roles, authenticated: $0.authenticated, expiresAt: $0.expiresAt, epoch: epoch) }
@@ -526,15 +798,55 @@ actor BackendRepository {
         guard let data = try secrets.read("registered-device") ?? secrets.read("pending-face-device") else { return nil }
         return try JSONDecoder().decode(RegisteredDevice.self, from: data)
     }
+    private func retireUnreferencedDeviceKey(alias: String, publicJWK expected: WireValue? = nil) throws {
+        try NativeIdentityCustody.withLock {
+            guard NativeAccountRecoveryRecord.validAlias(alias) else { throw NativeAPIError.invalidResponse }
+            func references(_ value: WireValue) -> Bool {
+                if let fields = value.object {
+                    if fields["keyAlias"]?.string == alias { return true }
+                    if fields["keyAlias"] == nil, fields["faceHandle"]?.string != nil, fields["deviceID"]?.string != nil,
+                       fields["accountID"]?.string != nil, alias == NativeEnrollmentRecord.keyAlias { return true }
+                    return fields.values.contains(where: references)
+                }
+                return value.array?.contains(where: references) ?? false
+            }
+            for name in NativeIdentityCustody.slots where name != "deleted-face-profile-controls" {
+                if let bytes = try secrets.read(name) {
+                    guard bytes.count <= 2 * 1024 * 1024 else { throw NativeAPIError.invalidResponse }
+                    if references(try WireValue.decoded(bytes)) { return }
+                }
+            }
+            guard try signer.hasKey(alias: alias) else { return }
+            let proof = try expected ?? signer.publicJWK(alias: alias, create: false)
+            try signer.removeOwnedKey(alias: alias, publicJWK: proof)
+        }
+    }
+    private func retireDeviceReferences(account: String) throws {
+        try NativeIdentityCustody.withLock {
+            var aliases: Set<String> = []
+            for name in ["registered-device", "pending-face-device"] {
+                guard let bytes = try secrets.read(name) else { continue }
+                let value = try JSONDecoder().decode(RegisteredDevice.self, from: bytes); try validLocalDevice(value)
+                guard value.accountID == account else { continue }
+                guard try secrets.compareAndSwap(name, expected: bytes, replacement: nil) else { throw NativeAPIError.unavailable("device_reference_retirement_unconfirmed") }
+                aliases.insert(value.keyAlias ?? NativeEnrollmentRecord.keyAlias)
+            }
+            for alias in aliases { try retireUnreferencedDeviceKey(alias: alias) }
+        }
+    }
     func pending() -> [NativeOperationIntent] { intents.filter { $0.accountID == credentials?.account_id } }
     private func scope(anonymous: Bool = false, expired: Bool = false) throws -> Scope {
+        let retirement = sessionRetirement.snapshot()
+        guard !retirement.retiring else { throw NativeAPIError.sessionChanged }
         guard anonymous || (audienceSuspension == nil && ordinaryLogin == nil && enrollment == nil && accountRecovery == nil && faceLifecycle?.activeHold != true) else { throw NativeAPIError.authenticationRequired }
         guard let credentials, anonymous || credentials.authenticated else { throw NativeAPIError.authenticationRequired }
+        guard credentialCurrent(credentials), !retiredCredentialDigests.contains(Self.credentialDigest(credentials)) else { throw NativeAPIError.authenticationRequired }
         guard expired || credentials.expiresAt > Date() else { throw NativeAPIError.authenticationRequired }
-        return Scope(epoch: epoch, account: credentials.account_id, token: credentials.access_token)
+        return Scope(epoch: epoch, account: credentials.account_id, token: credentials.access_token, retirementGeneration: retirement.generation)
     }
     private func check(_ scope: Scope) throws {
-        guard scope.epoch == epoch, scope.account == nil || (scope.account == credentials?.account_id && scope.token == credentials?.access_token) else { throw NativeAPIError.sessionChanged }
+        guard sessionRetirement.permits(scope.retirementGeneration), scope.epoch == epoch,
+              scope.account == nil || (scope.account == credentials?.account_id && scope.token == credentials?.access_token) else { throw NativeAPIError.sessionChanged }
     }
     private func readyScope(anonymous: Bool = false) async throws -> Scope {
         let delivery = try readRefreshDelivery()?.record
@@ -552,17 +864,157 @@ actor BackendRepository {
                       let expiry = credentials?.expiresAt, expiry > Date() else { throw NativeAPIError.sessionChanged }
             }
         }
-        return try scope(anonymous: anonymous)
+        let captured = try scope(anonymous: anonymous)
+        intents = try readIntents(secrets.read("operation-intents"))
+        try check(captured)
+        return captured
     }
-    private func saveIntents() throws { try secrets.write("operation-intents", data: JSONEncoder().encode(intents)) }
+    private func readIntents(_ data: Data?) throws -> [NativeOperationIntent] {
+        guard let data else { return [] }
+        guard data.count <= 2 * 1024 * 1024 else { throw NativeAPIError.invalidResponse }
+        let rows = try JSONDecoder().decode([NativeOperationIntent].self, from: data)
+        guard rows.count <= 100, Set(rows.map { $0.accountID + ":" + $0.key }).count == rows.count else { throw NativeAPIError.invalidResponse }
+        return rows
+    }
+    private func replaceOwnedJournal<T: Encodable>(_ name: String, previous: T?, replacement: T?) throws {
+        let generation = authorityLedger.clock.snapshot()
+        let old = try secrets.read(name)
+        let encoder = JSONEncoder(); encoder.outputFormatting = [.sortedKeys]
+        let expected = try previous.map { try WireValue.decoded(encoder.encode($0)).canonical() }
+        let next = try replacement.map { try encoder.encode($0) }
+        let actual = try old.map { try WireValue.decoded($0).canonical() }
+        let desired = try next.map { try WireValue.decoded($0).canonical() }
+        // Permit exact recovery of a lost write acknowledgement. Unknown fields
+        // remain part of the comparison and cannot disappear through decoding.
+        guard actual == expected || actual == desired else { throw NativeAPIError.unavailable("operation_storage_changed") }
+        guard authorityLedger.clock.snapshot() == generation else { throw NativeAPIError.sessionChanged }
+        guard try secrets.compareAndSwap(name, expected: old, replacement: next) else { throw NativeAPIError.unavailable("operation_storage_changed") }
+        guard authorityLedger.clock.snapshot() == generation else { throw NativeAPIError.sessionChanged }
+    }
+    private func persistIntent(_ intent: NativeOperationIntent) throws {
+        for _ in 0..<8 {
+            let previous = try secrets.read("operation-intents")
+            var rows = try readIntents(previous)
+            if let existing = rows.first(where: { $0.key == intent.key && $0.accountID == intent.accountID }) {
+                guard existing == intent else { throw NativeAPIError.sessionChanged }; intents = rows; return
+            }
+            guard rows.count < 100 else { throw NativeAPIError.operationUnconfirmed("operation_evidence_full") }
+            rows.append(intent)
+            if try secrets.compareAndSwap("operation-intents", expected: previous, replacement: JSONEncoder().encode(rows)) { intents = rows; return }
+        }
+        throw NativeAPIError.unavailable("operation_storage_changed")
+    }
+    private func terminalOperations() throws -> ([NativeOperationRetirementRecord], Data?) {
+        guard let bytes = try secrets.read("operation-terminal-evidence") else { return ([], nil) }
+        guard bytes.count <= 512 * 1024 else { throw NativeAPIError.invalidResponse }
+        let rows = try JSONDecoder().decode([NativeOperationRetirementRecord].self, from: bytes)
+        guard rows.count <= 256, Set(rows.map { $0.accountID + ":" + $0.operationKey }).count == rows.count else { throw NativeAPIError.invalidResponse }
+        for row in rows { try row.validate(origin: origin) }
+        return (rows, bytes)
+    }
+    private func retainTerminal(_ record: NativeOperationRetirementRecord) throws {
+        try record.validate(origin: origin)
+        for _ in 0..<8 {
+            var (rows, bytes) = try terminalOperations()
+            if let previous = rows.first(where: { $0.accountID == record.accountID && $0.operationKey == record.operationKey }) {
+                guard previous.action == record.action, previous.path == record.path, previous.method == record.method, previous.inputSHA256 == record.inputSHA256 else { throw NativeAPIError.sessionChanged }
+                return // Keep the first exact server observation, including its original 410/409 code.
+            }
+            guard rows.count < 256 else { throw NativeAPIError.unavailable("operation_evidence_full") }
+            rows.append(record)
+            if try secrets.compareAndSwap("operation-terminal-evidence", expected: bytes, replacement: JSONEncoder().encode(rows)) { return }
+        }
+        throw NativeAPIError.unavailable("operation_storage_changed")
+    }
+    private func retainTerminal(_ intent: NativeOperationIntent, status: Int, code: String) throws {
+        try retainTerminal(NativeOperationRetirementRecord(origin: origin, account: intent.accountID, key: intent.key, action: intent.action,
+            path: intent.path ?? "/community/action", method: intent.method ?? "POST", inputSHA256: NativeApplePurchaseRecord.hash(try intent.payload.canonical()), sourceStatus: status, sourceCode: code))
+    }
+    private func bindExplicitPushReplacement(account: String, key: String) throws {
+        for _ in 0..<8 {
+            var (rows, bytes) = try terminalOperations()
+            for index in rows.indices where rows[index].accountID == account && rows[index].isPush && rows[index].replacementOperationKey == nil { rows[index].replacementOperationKey = key }
+            if try secrets.compareAndSwap("operation-terminal-evidence", expected: bytes, replacement: JSONEncoder().encode(rows)) { return }
+        }
+        throw NativeAPIError.unavailable("operation_storage_changed")
+    }
+    /// A retiring repository may clear only the credential it actually held.
+    /// Another instance's later rotation must survive an old request's 401.
+    @discardableResult private func retireCredentialSlot(_ original: NativeCredentials?) throws -> Bool {
+        guard let original, let bytes = try secrets.read("credentials") else { return false }
+        let saved = try JSONDecoder().decode(NativeCredentials.self, from: bytes)
+        guard Self.sameCredentials(original, saved) else { return false }
+        return try secrets.compareAndSwap("credentials", expected: bytes, replacement: nil)
+    }
+    private static func credentialDigest(_ value: NativeCredentials) -> String {
+        // Length prefixes make this injective even for an unexpected separator
+        // inside an opaque credential; no raw token enters the tombstone slot.
+        let fields = [value.account_id, value.auth_method, value.access_token, value.refresh_token]
+        return NativeAppleStoreJournal.digest(Data(fields.map { String($0.utf8.count) + ":" + $0 }.joined().utf8))
+    }
+    private var credentialRetirementSlot: String { "credential-retirements-" + NativeAppleStoreJournal.digest(Data(origin.absoluteString.utf8)) }
+    private func readCredentialRetirements(_ bytes: Data?) throws -> Set<String> {
+        guard let bytes else { return [] }
+        guard bytes.count <= 600000 else { throw NativeAPIError.invalidResponse }
+        let values = try JSONDecoder().decode([String].self, from: bytes)
+        guard values.count <= 8192, Set(values).count == values.count,
+              values.allSatisfy({ $0.count == 64 && $0.allSatisfy({ $0.isHexDigit && !$0.isUppercase }) }) else { throw NativeAPIError.invalidResponse }
+        return Set(values)
+    }
+    private func recordCredentialRetirement(_ value: NativeCredentials?) throws {
+        // Anonymous recovery credentials stay exclusively in their existing
+        // guest/audience journals; they must still support explicit resolution.
+        if let value, value.authenticated { retiredCredentialDigests.insert(Self.credentialDigest(value)) }
+        guard !retiredCredentialDigests.isEmpty else { return }
+        for _ in 0..<8 {
+            let bytes = try secrets.read(credentialRetirementSlot)
+            var rows = try readCredentialRetirements(bytes)
+            if retiredCredentialDigests.isSubset(of: rows) { retiredCredentialDigests.formUnion(rows); return }
+            rows.formUnion(retiredCredentialDigests)
+            guard rows.count <= 8192 else { throw NativeAPIError.unavailable("session_retirement_storage_full") }
+            if try secrets.compareAndSwap(credentialRetirementSlot, expected: bytes, replacement: JSONEncoder().encode(rows.sorted())) { retiredCredentialDigests.formUnion(rows); return }
+        }
+        throw NativeAPIError.unavailable("session_retirement_unconfirmed")
+    }
+    private func persistCredential(_ next: NativeCredentials) throws {
+        let retirement = sessionRetirement.snapshot()
+        guard !retirement.retiring else { throw NativeAPIError.sessionChanged }
+        retiredCredentialDigests.formUnion(try readCredentialRetirements(secrets.read(credentialRetirementSlot)))
+        guard credentialCurrent(next), !retiredCredentialDigests.contains(Self.credentialDigest(next)) else { throw NativeAPIError.sessionChanged }
+        let previous = try secrets.read("credentials")
+        if let previous {
+            let stored = try JSONDecoder().decode(NativeCredentials.self, from: previous)
+            let expected: [NativeCredentials?] = [credentials, next, enrollment?.originalAnonymous, enrollment?.promotionCredentials,
+                accountRecovery?.promotionCredentials, faceLifecycle?.credentials, faceLifecycle?.promotionCredentials,
+                ordinaryLogin?.promotionCredentials, audienceSuspension?.credentials, guestDeletion?.originalCredentials]
+            guard expected.contains(where: { Self.sameCredentials($0, stored) }) else { throw NativeAPIError.sessionChanged }
+        }
+        guard sessionRetirement.permits(retirement.generation) else { throw NativeAPIError.sessionChanged }
+        let replacement = try JSONEncoder().encode(next)
+        guard try secrets.compareAndSwap("credentials", expected: previous, replacement: replacement) else { throw NativeAPIError.sessionChanged }
+        guard sessionRetirement.permits(retirement.generation) else {
+            // A write may have entered Keychain immediately before retirement.
+            // Remove only that exact write, never another instance's successor,
+            // and retain a nonauthorizing tombstone before reporting uncertainty.
+            do {
+                try recordCredentialRetirement(next)
+                _ = try secrets.compareAndSwap("credentials", expected: replacement, replacement: nil)
+            } catch { retirementPersistenceError = .unavailable("session_retirement_unconfirmed") }
+            throw NativeAPIError.sessionChanged
+        }
+    }
     private func adopt(_ wire: WireValue, expected: String? = nil, method: String? = nil) throws {
         try adoptCredentials(NativeCredentials(wire), expected: expected, method: method)
     }
     private func adoptCredentials(_ next: NativeCredentials, expected: String? = nil, method: String? = nil) throws {
         guard expected == nil || expected == next.account_id, method == nil || method == next.auth_method else { throw NativeAPIError.sessionChanged }
+        let previousCredential = credentials
         if var held = audienceSuspension {
             guard next.account_id == held.operation.accountID, next.auth_method == "anonymous" else { throw NativeAPIError.sessionChanged }
             held.credentials = next; try saveAudienceSuspension(held)
+        } else if var held = guestDeletion {
+            guard next.account_id == held.accountID, next.auth_method == "anonymous", held.status?.completed != true else { throw NativeAPIError.sessionChanged }
+            held.originalCredentials = next; try saveGuestDeletion(held)
         } else if var record = faceLifecycle, accountRecovery == nil {
             guard next.account_id == record.accountID, next.authenticated else { throw NativeAPIError.sessionChanged }
             if record.promotionCredentials != nil { record.promotionCredentials = next } else { record.credentials = next }
@@ -579,7 +1031,10 @@ actor BackendRepository {
             guard next.account_id == record.originalDevice.accountID, next.authenticated else { throw NativeAPIError.sessionChanged }
             record.promotionCredentials = next; try saveOrdinaryLogin(record)
         }
-        try secrets.write("credentials", data: JSONEncoder().encode(next)); epoch += 1; credentials = next; audienceProjection = nil; audienceProjectionEpoch = nil; retireMedia()
+        try persistCredential(next); epoch += 1; credentials = next; audienceProjection = nil; audienceProjectionEpoch = nil; retireMedia()
+        if let previousCredential, (try? sessionID(previousCredential.access_token)) != (try? sessionID(next.access_token)) {
+            try? retireExportFiles(account: previousCredential.account_id, session: sessionID(previousCredential.access_token))
+        }
     }
     func retireMedia() { mediaEpoch += 1; mediaExpiryTask?.cancel(); mediaExpiryTask = nil; media.removeAll() }
     func expirePrivateMedia() {
@@ -602,8 +1057,9 @@ actor BackendRepository {
         guard expectedEpoch == mediaEpoch else { return }; expirePrivateMedia()
     }
     private func request(_ path: String, method: String = "GET", body: WireValue? = nil, raw: Data? = nil,
-                         headers: [String: String] = [:], scope captured: Scope? = nil, binary: Bool = false, preserveRefreshAuthority: Bool = false) async throws -> NativeHTTPReply {
-        let captured = captured ?? Scope(epoch: epoch, account: nil, token: nil); try check(captured)
+                         headers: [String: String] = [:], scope captured: Scope? = nil, binary: Bool = false, preserveRefreshAuthority: Bool = false,
+                         responseLimit: Int? = nil) async throws -> NativeHTTPReply {
+        let captured = captured ?? Scope(epoch: epoch, account: nil, token: nil, retirementGeneration: sessionRetirement.snapshot().generation); try check(captured)
         guard path.hasPrefix("/"), !path.hasPrefix("//"), !path.contains(".."), let url = URL(string: origin.path.trimmingCharacters(in: CharacterSet(charactersIn: "/")).isEmpty ? path : origin.path + path, relativeTo: origin)?.absoluteURL,
               url.scheme == origin.scheme, url.host == origin.host, url.port == origin.port else { throw NativeAPIError.invalidResponse }
         let audienceFence = try await audienceRequestFence(path, method: method, body: body, captured: captured)
@@ -616,24 +1072,69 @@ actor BackendRepository {
         if let body { request.setValue("application/json", forHTTPHeaderField: "Content-Type"); request.httpBody = try body.encoded() }
         else { request.httpBody = raw }
         let response: NativeHTTPReply
-        do { response = try await transport.send(request, limit: binary ? 32 * 1024 * 1024 : 2 * 1024 * 1024) }
+        let limit = responseLimit ?? (binary ? 32 * 1024 * 1024 : 2 * 1024 * 1024)
+        guard limit > 0, limit <= 32 * 1024 * 1024 else { throw NativeAPIError.invalidResponse }
+        do { response = try await transport.send(request, limit: limit) }
         catch { try check(captured); if error is CancellationError { throw error }; throw NativeAPIError.unavailable("network") }
         try check(captured)
+        guard response.data.count <= limit else { throw NativeAPIError.invalidResponse }
         guard (200..<300).contains(response.status) else {
             let problem = try? WireValue.decoded(response.data)
             let code = problem?["error"]["code"].string ?? "http_\(response.status)"
             if !preserveRefreshAuthority, ["registered_face_session_invalid", "face_handle_unavailable", "account_disabled"].contains(code) { clearSession(identity: true) }
             else if !preserveRefreshAuthority, response.status == 401, captured.account != nil, !["face_verification_failed", "device_proof_invalid"].contains(code) { clearSession() }
+            if let retirementPersistenceError { throw retirementPersistenceError }
             throw NativeAPIError.denied(response.status, code)
         }
         if !binary, !(response.headers["content-type"] ?? "").lowercased().hasPrefix("application/json") { throw NativeAPIError.invalidResponse }
-        if let audienceFence { try await recheckAudienceFence(audienceFence, captured: captured) }
+        if let audienceFence {
+            do { try await recheckAudienceFence(audienceFence, captured: captured) }
+            catch {
+                // A server success preceded this local publication check. It
+                // cannot be reclassified as a definitive pre-write 4xx refusal.
+                // Preserve the original mutation identity for status recovery.
+                let readOnlyAction = path == "/community/action" && ["photos", "photos.validate", "photos.lookup", "inbox", "history", "receipt", "operation"].contains(body?["action"].string ?? "")
+                if !["GET", "HEAD"].contains(method), !readOnlyAction {
+                    throw NativeAPIError.operationUnconfirmed(body?["operation_key"].string ?? body?["payload"]["operation_key"].string ?? "committed_publication_unavailable")
+                }
+                throw error
+            }
+        }
         return response
     }
     private func json(_ path: String, method: String = "GET", body: WireValue? = nil, scope: Scope? = nil, preserveRefreshAuthority: Bool = false) async throws -> WireValue {
-        try WireValue.decoded(await request(path, method: method, body: body, scope: scope, preserveRefreshAuthority: preserveRefreshAuthority).data)
+        let captured = scope ?? Scope(epoch: epoch, account: nil, token: nil, retirementGeneration: sessionRetirement.snapshot().generation)
+        let value = try WireValue.decoded(await request(path, method: method, body: body, scope: captured, preserveRefreshAuthority: preserveRefreshAuthority).data)
+        try check(captured)
+        if value["access_token"].string != nil {
+            var retainedRefresh = false
+            if path == "/auth/session/refresh", value["auth_method"].string == "anonymous", let current = credentials, retainedAnonymousCredential(current),
+               let saved = try readRefreshDelivery()?.record, !saved.suspended, saved.rotationKey == body?["rotation_key"].string,
+               saved.original.refresh_token == body?["refresh_token"].string { retainedRefresh = true }
+            guard (authorityLedger.permitsRequest(body) || retainedRefresh), value["_lovelies_local_authority_generation"] == .null,
+                  var fields = value.object else { throw NativeAPIError.sessionChanged }
+            // This field comes exclusively from the fenced native response boundary.
+            // Server JSON cannot choose a local authority generation.
+            fields["_lovelies_local_authority_generation"] = .number(Double(captured.retirementGeneration))
+            return .object(fields)
+        }
+        return value
     }
     func bootstrap() async throws -> NativeSessionSummary? {
+        try authorityLedger.restore()
+        if sessionRetirement.snapshot().retiring { clearSession(); if let retirementPersistenceError { throw retirementPersistenceError } }
+        retiredCredentialDigests = try readCredentialRetirements(secrets.read(credentialRetirementSlot))
+        if let bytes = try secrets.read("credentials") {
+            let saved = try JSONDecoder().decode(NativeCredentials.self, from: bytes)
+            let heldAnonymous = saved.auth_method == "anonymous" && (try hasAnonymousRecoveryHold(account: saved.account_id))
+            if (!credentialCurrent(saved) && !heldAnonymous) || retiredCredentialDigests.contains(Self.credentialDigest(saved)) {
+                guard try secrets.compareAndSwap("credentials", expected: bytes, replacement: nil) else { throw NativeAPIError.sessionChanged }
+            }
+        }
+        try pruneExportDeliveries()
+        // The deletion receipt is the restart authority, including when local
+        // cleanup failed. Never restore a deleted face lifecycle first.
+        if try registeredDeletionReceipt() != nil { return nil }
         try restoreUploadBatches()
         try restoreFaceLifecycle()
         try restoreAccountRecovery()
@@ -644,7 +1145,7 @@ actor BackendRepository {
         if let data = try secrets.read("guest-deletion-receipt") {
             guard data.count <= 16 * 1024 else { throw NativeAPIError.invalidResponse }
             var restored = try JSONDecoder().decode(NativeGuestDeletionRecord.self, from: data)
-            try restored.validate(origin: origin)
+            try restored.validate(origin: origin); guestDeletion = restored
             if let saved = try secrets.read("credentials") {
                 guard saved.count <= 16 * 1024 else { throw NativeAPIError.invalidResponse }
                 let previous = try JSONDecoder().decode(NativeCredentials.self, from: saved)
@@ -661,7 +1162,7 @@ actor BackendRepository {
                 }
                 // Completed receipts never import credentials. Unresolved
                 // rotations are now durable in the receipt before slot removal.
-                try secrets.write("credentials", data: nil)
+                try retireCredentialSlot(previous)
             }
             guestDeletion = restored; credentials = nil
             if restored.status?.completed == true { try clearGuestDeviceReferences(account: restored.accountID, completed: true) }
@@ -701,6 +1202,7 @@ actor BackendRepository {
             return summary()
         }
         if let data = try secrets.read("operation-intents") { intents = try JSONDecoder().decode([NativeOperationIntent].self, from: data); guard intents.count <= 100 else { throw NativeAPIError.invalidResponse } }
+        try migrateLegacyApplePurchases()
         if let data = try secrets.read("upload-stages") { uploads = try JSONDecoder().decode([NativeUploadRecord].self, from: data); guard uploads.count <= 100 else { throw NativeAPIError.invalidResponse } }
         if ordinaryLogin != nil {
             credentials = ordinaryLogin?.promotionCredentials; retireMedia()
@@ -716,7 +1218,7 @@ actor BackendRepository {
         if try device() != nil { return nil } // Fresh verification, never a new anonymous account, recovers this retained handle.
         if !recoveryArchives.isEmpty || !lifecycleArchives.isEmpty { return nil } // Retired attempts are known holds, never a reason to bootstrap another account.
         guard try !signer.hasRetainedKey() else { throw NativeAPIError.unsupported(String(localized: "This device has a retained face-verification key but its recovery record is unavailable. A replacement account cannot be created automatically.")) }
-        let captured = Scope(epoch: epoch, account: nil, token: nil)
+        let captured = Scope(epoch: epoch, account: nil, token: nil, retirementGeneration: sessionRetirement.snapshot().generation)
         let result = try await json("/auth/anonymous", method: "POST", body: .object([:]), scope: captured)
         try check(captured); try adopt(result, method: "anonymous"); return summary()
     }
@@ -768,7 +1270,13 @@ actor BackendRepository {
     }
     private func restorePendingRefreshDelivery() async throws {
         try retryArchivedRefreshCancellations()
-        guard let saved = try readRefreshDelivery() else { return }
+        guard var saved = try readRefreshDelivery() else { return }
+        if !credentialCurrent(saved.record.original), !saved.record.suspended {
+            var retired = saved.record; retired.suspended = true
+            let bytes = try encodedRefresh(retired)
+            guard try secrets.compareAndSwap(Self.refreshDeliverySlot, expected: saved.bytes, replacement: bytes) else { throw NativeAPIError.sessionChanged }
+            saved = (retired, bytes)
+        }
         let slot = try secrets.read("credentials").map { try JSONDecoder().decode(NativeCredentials.self, from: $0) }
         let held: NativeCredentials?
         if let profile = faceLifecycle, accountRecovery == nil { held = profile.promotionCredentials ?? profile.credentials }
@@ -871,37 +1379,79 @@ actor BackendRepository {
         } catch { /* Exact protected cancellation identity remains for retry. */ }
     }
     func clearSession(identity: Bool = false) {
-        retireUploadWork()
-        var removeCredentialSlot = true
-        if var record = guestDeletion, record.status?.completed != true, let current = credentials,
-           current.account_id == record.accountID, current.auth_method == "anonymous" {
-            do { try current.validateAnonymousRecovery(accountID: record.accountID); record.originalCredentials = current; try saveGuestDeletion(record) }
-            catch { removeCredentialSlot = false } // Keep the surviving rotation for next restore; public authority still retires.
-        }
-        if var record = faceLifecycle {
-            record.credentials = nil
-            do { try saveFaceLifecycle(record) } catch { removeCredentialSlot = false }
-        }
+        var retirement = sessionRetirement.retire()
+        defer { if retirementPersistenceError == nil { sessionRetirement.complete(retirement) } }
+        let retiredCredential = credentials
+        // Close in-memory authority before the first vault or file operation.
+        epoch += 1; credentials = nil; audienceProjection = nil; audienceProjectionEpoch = nil; intents = []; uploads = []; transport.cancelPending(); retireMedia()
         lifecycleSerial += 1; lifecycleBusy = false
         guestDeletionSerial += 1; guestDeletionBusy = false
         enrollmentSerial += 1; enrollmentBusy = false
         recoverySerial += 1; recoveryBusy = false
-        epoch += 1; credentials = nil; audienceProjection = nil; audienceProjectionEpoch = nil; intents = []; uploads = []; transport.cancelPending(); retireMedia()
-        if removeCredentialSlot { try? secrets.write("credentials", data: nil) }; try? secrets.write("operation-intents", data: nil)
-        try? secrets.write("upload-stages", data: nil)
-        if identity {
-            if let guestDeletion { try? clearGuestDeviceReferences(account: guestDeletion.accountID) }
+        retirementPersistenceError = nil
+        do { retirement = try authorityLedger.persistRetirement(retirement) }
+        catch { retirementPersistenceError = .unsupported(String(localized: "Sign-out is not durably confirmed. Unlock this device and retry before closing the app.")) }
+        do { try recordCredentialRetirement(retiredCredential) }
+        catch { retirementPersistenceError = .unsupported(String(localized: "Sign-out is not durably confirmed. Unlock this device and retry before closing the app.")) }
+        do { try retireUploadWork() }
+        catch { retirementPersistenceError = .unsupported(String(localized: "Sign-out is not durably confirmed. Unlock this device and retry before closing the app.")) }
+        var removeCredentialSlot = true
+        if var record = guestDeletion, record.status?.completed != true, let current = retiredCredential,
+           current.account_id == record.accountID, current.auth_method == "anonymous" {
+            do { try current.validateAnonymousRecovery(accountID: record.accountID); record.originalCredentials = current; try saveGuestDeletion(record) }
+            catch { removeCredentialSlot = false; retirementPersistenceError = .unavailable("session_retirement_unconfirmed") } // Keep the surviving rotation for next restore.
+        }
+        if var record = faceLifecycle {
+            record.credentials = nil
+            do { try saveFaceLifecycle(record) } catch { removeCredentialSlot = false; retirementPersistenceError = .unavailable("session_retirement_unconfirmed") }
+        }
+        var removedCredential = false
+        if removeCredentialSlot {
+            do {
+                removedCredential = try retireCredentialSlot(retiredCredential)
+                // Retry an earlier failed exact-slot retirement without adopting
+                // whatever newer credential another repository may have saved.
+                if let bytes = try secrets.read("credentials") {
+                    let saved = try JSONDecoder().decode(NativeCredentials.self, from: bytes)
+                    if retiredCredentialDigests.contains(Self.credentialDigest(saved)) {
+                        _ = try secrets.compareAndSwap("credentials", expected: bytes, replacement: nil)
+                    }
+                }
+            } catch { retirementPersistenceError = .unsupported(String(localized: "Sign-out is not durably confirmed. Unlock this device and retry before closing the app.")) }
+        }
+        if let retiredCredential, let session = try? sessionID(retiredCredential.access_token) {
+            do { try retireExportFiles(account: retiredCredential.account_id, session: session) }
+            catch { retirementPersistenceError = .unavailable("private_export_cleanup_unconfirmed") }
+        }
+        // Pending intents and upload stages are nonauthorizing recovery evidence.
+        // Keep their account binding on disk through logout/401. A later account
+        // cannot consume them, and a fresh same-account session can reconcile.
+        if identity && removedCredential {
+            let audienceRecoveryHeld: Bool
+            do { audienceRecoveryHeld = try secrets.read("audience-device-renewals") != nil } catch { audienceRecoveryHeld = true }
+            if audienceRecoveryHeld { /* Preserve the exact signed renewal proof. */ }
+            else if let guestDeletion { try? clearGuestDeviceReferences(account: guestDeletion.accountID) }
             else if enrollment != nil || accountRecovery != nil || faceLifecycle != nil || ordinaryLogin != nil { /* Preserve original recovery holds; never silently replace this account. */ }
-            else { if let device = try? device() { signer.clear(alias: device.keyAlias ?? NativeEnrollmentRecord.keyAlias) }; try? secrets.write("registered-device", data: nil); try? secrets.write("pending-face-device", data: nil); signer.clear() }
+            else if let retiredCredential {
+                do { try retireDeviceReferences(account: retiredCredential.account_id) }
+                catch { retirementPersistenceError = .unavailable("device_reference_retirement_unconfirmed") }
+            }
         }
     }
     func logout() async throws {
+        retireSessionAuthority()
         if let operation = try pendingAudienceMutation(), let original = credentials, original.auth_method == "anonymous", operation.accountID == original.account_id {
             // Preserve the sole anonymous authority before retiring UI/session
             // publication. Revoking it would make the exact uncertain operation
             // unrecoverable and must not create a different anonymous account.
             let held = try NativeAudienceSuspensionRecord(origin: origin, operation: operation, credentials: original)
-            try saveAudienceSuspension(held); clearSession(); return
+            try saveAudienceSuspension(held); clearSession(); if let retirementPersistenceError { throw retirementPersistenceError }; return
+        }
+        if let original = credentials, retainedAnonymousCredential(original) {
+            // This credential is the sole authority of a known setup/deletion
+            // hold. Retire public admission while preserving its exact private
+            // rotation for explicit same-account reconciliation.
+            clearSession(); if let retirementPersistenceError { throw retirementPersistenceError }; return
         }
         // Persist suspension BEFORE changing any local authority. Cancellation
         // runs independently; logout never waits on provider/network recovery.
@@ -920,7 +1470,9 @@ actor BackendRepository {
         } else { staged = nil }
         let previous = staged ?? credentials ?? faceLifecycle?.credentials
         let published = credentials
+        let pushDeviceID = try device()?.deviceID
         clearSession()
+        if let retirementPersistenceError { throw retirementPersistenceError }
         if let suspendedRefresh { Task { await self.cancelSuspendedRefresh(suspendedRefresh) } }
         if var record = ordinaryLogin { record.promotionCredentials = nil; try saveOrdinaryLogin(record) }
         if var record = enrollment, record.promotionCredentials != nil {
@@ -954,12 +1506,30 @@ actor BackendRepository {
                 } else { _ = try await cancelFaceProfileCapture() }
             } catch { cancellationError = error }
         }
-        if let previous { _ = try await json("/auth/logout", method: "POST", body: .object([:]), scope: Scope(epoch: epoch, account: nil, token: previous.access_token)) }
+        var pushCleanupError: Error?
+        if let previous {
+            let cleanup = Scope(epoch: epoch, account: nil, token: previous.access_token, retirementGeneration: sessionRetirement.snapshot().generation)
+            // Restrictive cleanup uses only the captured retired session. It
+            // cannot reopen normal repository admission or publish account data.
+            if previous.authenticated, let pushDeviceID {
+                do {
+                    let rows = try await json("/me/push-devices", scope: cleanup)["items"].array ?? []
+                    for row in rows where row["platform"].string == "ios" && row["auth_device_id"].string == pushDeviceID && row["active"].bool != false && row["active"].integer != 0 {
+                        let id = try row.uuid("id")
+                        let key = "ios-logout-" + NativeAppleStoreJournal.digest(Data((previous.account_id + ":" + previous.access_token + ":" + id).utf8))
+                        _ = try await json("/me/push-devices/" + id, method: "DELETE", body: .object(["operation_key": .string(key)]), scope: cleanup)
+                    }
+                } catch { pushCleanupError = error }
+            }
+            _ = try await json("/auth/logout", method: "POST", body: .object([:]), scope: cleanup)
+        }
         if let published, published.access_token != previous?.access_token {
-            do { _ = try await json("/auth/logout", method: "POST", body: .object([:]), scope: Scope(epoch: epoch, account: nil, token: published.access_token)) }
+            do { _ = try await json("/auth/logout", method: "POST", body: .object([:]), scope: Scope(epoch: epoch, account: nil, token: published.access_token, retirementGeneration: sessionRetirement.snapshot().generation)) }
             catch NativeAPIError.denied(401, _) { /* An already expired/revoked captured session has no remaining authority. */ }
         }
         if let cancellationError { throw cancellationError }
+        if let retirementPersistenceError { throw retirementPersistenceError }
+        if let pushCleanupError { throw pushCleanupError }
     }
     func policy() async throws -> String {
         let value = try await json("/auth/face/policy")
@@ -980,13 +1550,19 @@ actor BackendRepository {
     private func restoreEnrollment() throws {
         guard let data = try secrets.read("face-enrollment-journal") else { enrollment = nil; return }
         guard data.count <= 32 * 1024 else { throw NativeAPIError.invalidResponse }
-        let record = try JSONDecoder().decode(NativeEnrollmentRecord.self, from: data)
+        var record = try JSONDecoder().decode(NativeEnrollmentRecord.self, from: data)
         try record.validate(origin: origin); enrollment = record
+        if let staged = record.promotionCredentials, !credentialCurrent(staged) {
+            record.promotionCredentials = nil; record.promotionDevice = nil; record.originalAnonymous = nil; record.state = .registered
+            record.loginChallengeWire = nil; record.loginTerminalCode = nil; record.loginCaptures = []
+            try saveEnrollment(record)
+        }
     }
     private func saveEnrollment(_ record: NativeEnrollmentRecord) throws {
         try record.validate(origin: origin)
         let data = try JSONEncoder().encode(record); guard data.count <= 32 * 1024 else { throw NativeAPIError.invalidResponse }
-        try secrets.write("face-enrollment-journal", data: data); enrollment = record
+        if let staged = record.promotionCredentials, !credentialCurrent(staged) { throw NativeAPIError.sessionChanged }
+        try replaceOwnedJournal("face-enrollment-journal", previous: enrollment, replacement: record); enrollment = record
     }
     private func assertEnrollmentKey(_ record: NativeEnrollmentRecord) throws {
         let bytes = try record.startEnvelope.canonical(), raw = try signDevice(bytes)
@@ -1062,7 +1638,7 @@ actor BackendRepository {
         }
         let signed = try enrollmentRequest(record, step: "status")
         let token = credentials.flatMap { $0.account_id == record.accountID && !$0.authenticated && $0.expiresAt > Date() ? $0.access_token : nil }
-        let captured = Scope(epoch: epoch, account: nil, token: token)
+        let captured = Scope(epoch: epoch, account: nil, token: token, retirementGeneration: sessionRetirement.snapshot().generation)
         let value: WireValue
         do { value = try await json("/auth/face/registration/recovery", method: "POST", body: signed.0, scope: captured) }
         catch NativeAPIError.denied(404, "enrollment_not_found") {
@@ -1117,10 +1693,10 @@ actor BackendRepository {
             let profile = try NativeEnrollmentProfile(value["profile"])
             if let previous = record.profile { guard profile == previous else { throw NativeAPIError.invalidResponse } }
             next.profile = profile; next.challengeWire = nil; next.captures = []; next.retiredCaptures = []; next.loginChallengeWire = nil; next.loginTerminalCode = nil; next.loginCaptures = []; next.state = .registered
+            if !allowDeletionResume, credentials != nil { try retireForRestriction() }
             try saveEnrollment(next)
             if !allowDeletionResume {
                 try secrets.write("registered-device", data: JSONEncoder().encode(RegisteredDevice(accountID: next.accountID, faceHandle: next.faceHandle, deviceID: device, profileID: profile.id, profileRevision: profile.revision, modelID: profile.modelID)))
-                credentials = nil; epoch += 1; try secrets.write("credentials", data: nil); retireMedia()
             }
         } else {
             guard value["profile"] == .null else { throw NativeAPIError.invalidResponse }
@@ -1167,7 +1743,7 @@ actor BackendRepository {
         let captured = try scope(anonymous: true), value = try await json("/me", scope: captured)
         guard value["user_id"].string == record.accountID, value["auth_method"].string == "registered_face", value["authenticated"].bool == true else { throw NativeAPIError.invalidResponse }
         try check(captured); guard guestDeletion == nil, enrollment?.enrollmentKey == record.enrollmentKey else { throw NativeAPIError.sessionChanged }
-        try secrets.write("credentials", data: JSONEncoder().encode(credentials!))
+        try persistCredential(credentials!)
         try secrets.write("pending-face-device", data: nil); try secrets.write("face-enrollment-journal", data: nil); enrollment = nil
         return summary()!
     }
@@ -1246,7 +1822,7 @@ actor BackendRepository {
         guard enrollment != nil || ordinaryLogin != nil else { throw NativeAPIError.operationUnconfirmed(challenge.id) }
         let serial = try beginEnrollmentWork(); defer { endEnrollmentWork(serial) }
         guard challenge.expiresAt > Date(), challenge.poses.indices.contains(index), !bytes.isEmpty, bytes.count <= 8 * 1024 * 1024 else { throw NativeAPIError.invalidResponse }
-        let captured = challenge.purpose == "registration" ? try await readyScope(anonymous: true) : Scope(epoch: epoch, account: nil, token: nil)
+        let captured = challenge.purpose == "registration" ? try await readyScope(anonymous: true) : Scope(epoch: epoch, account: nil, token: nil, retirementGeneration: sessionRetirement.snapshot().generation)
         let hash = signer.sha256(bytes), mime = "image/jpeg"
         if var record = ordinaryLogin, enrollment == nil {
             try assertOrdinaryLoginKey(record)
@@ -1306,7 +1882,7 @@ actor BackendRepository {
                   (challenge.purpose == "registration" ? record.challengeWire : record.loginChallengeWire)?["challenge_id"].string == challenge.id else { throw NativeAPIError.invalidResponse }
             record.state = .completionPending; try saveEnrollment(record)
         }
-        let captured = challenge.purpose == "registration" ? try scope(anonymous: true) : Scope(epoch: epoch, account: nil, token: nil)
+        let captured = challenge.purpose == "registration" ? try scope(anonymous: true) : Scope(epoch: epoch, account: nil, token: nil, retirementGeneration: sessionRetirement.snapshot().generation)
         var envelope = challenge.deviceEnvelope(); envelope["step"] = .string("complete"); envelope["capture_manifest"] = .array(captures)
         let signature = try signDevice(WireValue.object(envelope).canonical(), alias: try device()?.keyAlias ?? NativeEnrollmentRecord.keyAlias)
         let path = challenge.purpose == "registration" ? "/auth/face/registration/complete" : "/auth/face/complete"
@@ -1449,7 +2025,8 @@ actor BackendRepository {
     private func saveOrdinaryLogin(_ record: NativeOrdinaryLoginRecord) throws {
         try record.validate(origin: origin); let data = try JSONEncoder().encode(record)
         guard data.count <= 32 * 1024 else { throw NativeAPIError.invalidResponse }
-        try secrets.write("ordinary-face-login-journal", data: data); ordinaryLogin = record
+        if let staged = record.promotionCredentials, !credentialCurrent(staged) { throw NativeAPIError.sessionChanged }
+        try replaceOwnedJournal("ordinary-face-login-journal", previous: ordinaryLogin, replacement: record); ordinaryLogin = record
     }
     private func restoreOrdinaryLogin() throws {
         guard let data = try secrets.read("ordinary-face-login-journal") else { ordinaryLogin = nil; return }
@@ -1460,6 +2037,18 @@ actor BackendRepository {
               (saved.keyAlias ?? NativeEnrollmentRecord.keyAlias) == record.keyAlias, saved.faceHandle == record.originalDevice.faceHandle,
               saved.profileID == record.originalDevice.profileID, saved.profileRevision == record.originalDevice.profileRevision else { throw NativeAPIError.sessionChanged }
         ordinaryLogin = record
+        if record.promotionCredentials.map({ !credentialCurrent($0) }) == true || authorityLedger.retiredChallenge(record.challengeWire["challenge_id"].string) {
+            var archived = record; archived.promotionCredentials = nil
+            let slot = "retired-ordinary-face-logins-v1"
+            let previous = try secrets.read(slot)
+            var rows = try previous.map { try JSONDecoder().decode([NativeOrdinaryLoginRecord].self, from: $0) } ?? []
+            if !rows.contains(where: { $0.challengeWire["challenge_id"] == record.challengeWire["challenge_id"] }) {
+                guard rows.count < 128 else { throw NativeAPIError.unavailable("session_retirement_storage_full") }; rows.append(archived)
+            }
+            guard try secrets.compareAndSwap(slot, expected: previous, replacement: JSONEncoder().encode(rows)),
+                  try secrets.compareAndSwap("ordinary-face-login-journal", expected: data, replacement: nil) else { throw NativeAPIError.sessionChanged }
+            ordinaryLogin = nil; return
+        }
         _ = try retireExpiredOrdinaryPromotion(record)
     }
     private func assertOrdinaryLoginKey(_ record: NativeOrdinaryLoginRecord) throws {
@@ -1491,8 +2080,8 @@ actor BackendRepository {
     }
     private func retireExpiredOrdinaryPromotion(_ record: NativeOrdinaryLoginRecord) throws -> NativeOrdinaryLoginRecord {
         guard let staged = record.promotionCredentials, staged.expiresAt <= Date() else { return record }
+        try retireForRestriction(staged)
         var held = record; held.promotionCredentials = nil; try saveOrdinaryLogin(held)
-        credentials = nil; epoch += 1; retireMedia(); try secrets.write("credentials", data: nil)
         return held
     }
     private func repairOrdinaryLoginPromotion() async throws -> NativeSessionSummary {
@@ -1509,7 +2098,7 @@ actor BackendRepository {
         guard let rows = devices["items"].array, rows.filter({ $0["current"].bool == true }).count == 1,
               rows.filter({ $0["id"].string == record.originalDevice.deviceID }).count == 1,
               rows.contains(where: { $0["current"].bool == true && $0["id"].string == record.originalDevice.deviceID && $0["status"].string == "active" }) else { throw NativeAPIError.invalidResponse }
-        try secrets.write("credentials", data: JSONEncoder().encode(credentials!))
+        try persistCredential(credentials!)
         try secrets.write("ordinary-face-login-journal", data: nil); ordinaryLogin = nil
         return summary()!
     }
@@ -1539,7 +2128,7 @@ actor BackendRepository {
         try record.validate(origin: origin)
         let data = try JSONEncoder().encode(record)
         guard data.count <= 16 * 1024 else { throw NativeAPIError.invalidResponse }
-        try secrets.write("guest-deletion-receipt", data: data); guestDeletion = record
+        try replaceOwnedJournal("guest-deletion-receipt", previous: guestDeletion, replacement: record); guestDeletion = record
     }
     private static func deletionToken() throws -> String {
         var bytes = [UInt8](repeating: 0, count: 32)
@@ -1583,7 +2172,7 @@ actor BackendRepository {
     }
     private func reconcileGuestDeletion(_ record: NativeGuestDeletionRecord, serial: Int, retryOriginal: Bool) async throws -> NativeGuestDeletionSummary {
         try record.validate(origin: origin); try checkGuestDeletion(record, serial: serial)
-        let captured = Scope(epoch: epoch, account: nil, token: nil)
+        let captured = Scope(epoch: epoch, account: nil, token: nil, retirementGeneration: sessionRetirement.snapshot().generation)
         do {
             let value = try await json("/privacy/account-deletion/status", method: "POST", body: .object(["status_token": .string(record.statusToken)]), scope: captured)
             try checkGuestDeletion(record, serial: serial)
@@ -1621,11 +2210,12 @@ actor BackendRepository {
         var acknowledged = guestDeletion!; acknowledged.status = status; acknowledged.statusUnavailable = false
         if status.completed { acknowledged.originalCredentials = nil }
         else if let current = credentials { try current.validateAnonymousRecovery(accountID: record.accountID); acknowledged.originalCredentials = current }
+        let retiringCredential = credentials
+        retireSessionAuthority()
         if !status.completed { try saveGuestDeletion(acknowledged) }
+        try retireForRestriction(retiringCredential)
         // Retire public guest authority immediately; the encrypted original
         // credential is retained solely for explicit same-account recovery.
-        epoch += 1; credentials = nil; intents = []; uploads = []; transport.cancelPending(); retireMedia()
-        for key in ["credentials", "operation-intents", "upload-stages"] { try secrets.write(key, data: nil) }
         try clearGuestDeviceReferences(account: record.accountID, completed: status.completed)
         // Publish terminal completion only after the local original credential
         // and guest references have been removed successfully. A storage error
@@ -1633,8 +2223,10 @@ actor BackendRepository {
         if status.completed { try saveGuestDeletion(acknowledged) }
     }
     private func clearGuestDeviceReferences(account: String, completed: Bool = false) throws {
+        try NativeIdentityCustody.withLock {
         if completed { try retireFaceLifecycleAfterDeletion(account: account); try retireAudienceAfterDeletion(account: account) }
         var removedOwnReference = false, anotherReference = false, canClearKey = false
+        var ownedAlias: String?, ownedPublicJWK: WireValue?
         if let data = try secrets.read("face-enrollment-journal") {
             let held = try JSONDecoder().decode(NativeEnrollmentRecord.self, from: data); try held.validate(origin: origin)
             if held.accountID == account {
@@ -1644,6 +2236,7 @@ actor BackendRepository {
                 // it cannot authenticate, sign or elevate a retired session.
                 let ownedKey = deletionOwnsKey(account: account, alias: held.keyAlias, publicJWK: held.publicJWK)
                 canClearKey = ownedKey
+                if ownedKey { ownedAlias = held.keyAlias; ownedPublicJWK = held.publicJWK }
                 try secrets.write("face-enrollment-journal", data: nil)
                 if enrollment?.accountID == account { enrollment = nil; enrollmentSerial += 1 }
                 removedOwnReference = ownedKey
@@ -1656,7 +2249,8 @@ actor BackendRepository {
                 else { anotherReference = true }
             }
         }
-        if removedOwnReference && !anotherReference && canClearKey { signer.clear() }
+        if removedOwnReference && !anotherReference && canClearKey, let ownedAlias { try retireUnreferencedDeviceKey(alias: ownedAlias, publicJWK: ownedPublicJWK) }
+        }
     }
     private func deletionOwnsKey(account: String, alias: String, publicJWK: WireValue) -> Bool {
         guard NativeAccountRecoveryRecord.validAlias(alias),
@@ -1776,7 +2370,7 @@ actor BackendRepository {
         }
         guard let current = credentials else { throw NativeAPIError.sessionChanged }
         try check(captured); try requireDurableGuestReceipt(currentRecord); try Task.checkCancellation()
-        try secrets.write("credentials", data: JSONEncoder().encode(current))
+        try persistCredential(current)
         try secrets.write("guest-deletion-receipt", data: nil); guestDeletion = nil
         return summary()!
     }
@@ -1800,6 +2394,18 @@ actor BackendRepository {
         if let cursor { payload["before_at"] = cursor["before_at"]; payload["before_id"] = cursor["before_id"] }
         return try await community("photos", payload: .object(payload))
     }
+    func photosByID(_ ids: [String], source: String = "all") async throws -> [NativePhoto] {
+        guard ids.count <= 100, Set(ids).count == ids.count, ids.allSatisfy({ UUID(uuidString: $0) != nil }),
+              ["all", "received", "contributions"].contains(source) else { throw NativeAPIError.invalidResponse }
+        if ids.isEmpty { return [] }
+        let response = try await community("photos.lookup", payload: .object(["source": .string(source), "asset_ids": .strings(ids)]))
+        guard let items = response["items"].array, let unavailable = response["unavailable_ids"].array?.compactMap(\.string) else { throw NativeAPIError.invalidResponse }
+        let photos = try items.map(NativePhoto.init), returned = Set(photos.map(\.id)), omitted = Set(unavailable), requested = Set(ids)
+        guard photos.count == returned.count, unavailable.count == omitted.count, returned.isDisjoint(with: omitted),
+              returned.union(omitted) == requested else { throw NativeAPIError.invalidResponse }
+        let byID = Dictionary(uniqueKeysWithValues: photos.map { ($0.id, $0) })
+        return ids.compactMap { byID[$0] }
+    }
     func inbox() async throws -> [WireValue] {
         let value = try await community("inbox", payload: .object([:]))
         guard let rows = value["items"].array ?? value["requests"].array,
@@ -1810,7 +2416,11 @@ actor BackendRepository {
         defer { expirePrivateMedia() }
         guard photo.source == "personal" else { throw NativeAPIError.invalidResponse }
         let captured = try await readyScope(), capturedMediaEpoch = mediaEpoch
-        let deadline = NativePrivateMediaDeadline(created: privateMediaClock.read(), authorityExpiresAt: credentials?.expiresAt)
+        let approval = try await requireAudience(.faceAuthentication, captured: captured)
+        try check(captured)
+        guard let expiresAt = credentials?.expiresAt else { throw NativeAPIError.authenticationRequired }
+        let deadline = NativePrivateMediaDeadline(created: privateMediaClock.read(), authorityExpiresAt:
+            try approval.authorityExpiresAt(sessionExpiresAt: expiresAt, purpose: .faceAuthentication, now: privateMediaClock.read().wall))
         expirePrivateMedia()
         let permission: WireValue
         do { permission = try await community("photos.validate", payload: .object(["asset_ids": .strings([photo.id])])) }
@@ -1849,13 +2459,28 @@ actor BackendRepository {
         if let pending = pending().first { throw NativeAPIError.operationUnconfirmed(pending.key) }
         let key = UUID().uuidString.lowercased(); var body = payload.object ?? [:]; body["operation_key"] = .string(key)
         let intent = NativeOperationIntent(key: key, accountID: captured.account!, source: source, action: action, payload: .object(body), approvedPairs: approved)
-        intents.append(intent); try saveIntents()
+        try persistIntent(intent)
         do { return (key, try await community(action, payload: intent.payload)) }
-        catch NativeAPIError.denied(let status, let code) where (400..<500).contains(status) && ![408, 429].contains(status) {
-            intents.removeAll { $0.key == key }; try saveIntents(); throw NativeAPIError.denied(status, code)
+        catch NativeAPIError.denied(let status, let code) where NativeOperationRetirementRecord.isTerminal(status: status, code: code) {
+            try check(captured); try retainTerminal(intent, status: status, code: code); try confirmed(key)
+            throw NativeAPIError.denied(409, "operation_recovered_without_result")
+        }
+        catch NativeAPIError.denied(let status, let code) where (400..<500).contains(status) && ![408, 429].contains(status) && code != "operation_key_conflict" {
+            try confirmed(key); throw NativeAPIError.denied(status, code)
         } catch { try check(captured); throw NativeAPIError.operationUnconfirmed(key) }
     }
-    private func confirmed(_ key: String) throws { intents.removeAll { $0.key == key }; try saveIntents() }
+    private func confirmed(_ key: String) throws {
+        guard let intent = intents.first(where: { $0.key == key }) else { return }
+        for _ in 0..<8 {
+            let previous = try secrets.read("operation-intents")
+            var rows = try readIntents(previous)
+            guard let index = rows.firstIndex(where: { $0.key == key && $0.accountID == intent.accountID }) else { intents = rows; return }
+            guard rows[index] == intent else { throw NativeAPIError.sessionChanged }
+            rows.remove(at: index)
+            if try secrets.compareAndSwap("operation-intents", expected: previous, replacement: JSONEncoder().encode(rows)) { intents = rows; return }
+        }
+        throw NativeAPIError.unavailable("operation_storage_changed")
+    }
     func snapshot(assetIDs: [String]? = nil, source: String = "personal") async throws -> NativeSnapshot {
         guard source == "personal" else { throw NativeAPIError.invalidResponse }
         let body = assetIDs.map { ["asset_ids": WireValue.strings($0)] } ?? [:]
@@ -1906,6 +2531,22 @@ actor BackendRepository {
     }
     private static func privacyIntentPath(_ path: String) -> Bool { path.hasPrefix("/privacy/") || path.hasPrefix("/privacy-exports/") }
     private func reconcileIntent(_ intent: NativeOperationIntent, retryUnknown: Bool) async throws -> WireValue {
+        if intent.action == "store.apple" {
+            let captured = try await readyScope()
+            let journal = try migrateAppleIntent(intent)
+            return try await recoverAppleJournal(journal, captured: captured, retryUnknown: retryUnknown)
+        }
+        do { return try await reconcileIntentResult(intent, retryUnknown: retryUnknown) }
+        catch NativeAPIError.denied(let status, let code) where NativeOperationRetirementRecord.isTerminal(status: status, code: code) {
+            // Restrictive facts were recovered, but the original business
+            // operation did not commit. This is terminal, never success or a
+            // reason to manufacture a replacement key automatically.
+            guard credentials?.account_id == intent.accountID else { throw NativeAPIError.sessionChanged }
+            try check(scope(anonymous: true)); try retainTerminal(intent, status: status, code: code)
+            try confirmed(intent.key); throw NativeAPIError.denied(409, "operation_recovered_without_result")
+        }
+    }
+    private func reconcileIntentResult(_ intent: NativeOperationIntent, retryUnknown: Bool) async throws -> WireValue {
         guard intent.source == "personal", intent.payload["source"] == .null || intent.payload["source"].string == "personal" else { throw NativeAPIError.invalidResponse }
         let weakerPrivacy = intent.path.map { Self.audienceWeakerPath($0, method: intent.method ?? "POST") && ($0.hasPrefix("/privacy/") || $0.hasPrefix("/privacy-exports/")) } == true
         var result = weakerPrivacy ? try await json("/privacy/operations/" + intent.key, scope: readyScope(anonymous: true)) : try await community("operation", payload: .object(["operation_key": .string(intent.key)]))
@@ -1931,18 +2572,124 @@ actor BackendRepository {
         let (key, value) = try await mutation("request.decide", payload: .object(["request_id": .string(requestID), "decision": .string(decision)]))
         try validateDecision(value, requestID: requestID); try confirmed(key); return value
     }
-    func post(_ path: String, payload: WireValue, operation: String, method: String = "POST") async throws -> WireValue {
+    func post(_ path: String, payload: WireValue, operation: String, method: String = "POST", allowNewAfterTerminal: Bool = false) async throws -> WireValue {
+        guard !path.hasPrefix("/subscriptions/"), !operation.hasPrefix("store.") else { throw NativeAPIError.invalidResponse }
         let captured = try await readyScope(anonymous: Self.audienceWeakerPath(path, method: method)), key = UUID().uuidString.lowercased(); var body = payload.object ?? [:]; body["operation_key"] = .string(key)
+        let push = path == "/me/push-devices" || path.hasPrefix("/me/push-devices/")
+        guard !allowNewAfterTerminal || push else { throw NativeAPIError.invalidResponse }
+        let terminalPush: Bool
+        if push { terminalPush = try terminalOperations().0.contains { $0.accountID == captured.account && $0.isPush && $0.replacementOperationKey == nil } }
+        else { terminalPush = false }
+        if terminalPush && !allowNewAfterTerminal { throw NativeAPIError.denied(409, "operation_recovered_without_result") }
         // The private intent retains the original body for recovery; it can
         // contain sensitive values such as a provider token until retired.
         if let intent = pending().first(where: { existing in
             !Self.privacyIntentPath(path) || existing.path.map(Self.privacyIntentPath) == true
         }) { throw NativeAPIError.operationUnconfirmed(intent.key) }
         let intent = NativeOperationIntent(key: key, accountID: captured.account!, source: "personal", action: operation, payload: .object(body), approvedPairs: nil, path: path, method: method)
-        intents.append(intent); try saveIntents()
+        try persistIntent(intent)
+        // The replacement body is durable before its relationship is recorded.
+        // A crash on either side retains a pending intent and cannot authorize a
+        // foreground callback to invent another operation.
+        if terminalPush { try bindExplicitPushReplacement(account: intent.accountID, key: intent.key) }
         do { let value = try await json(path, method: method, body: intent.payload, scope: captured); try confirmed(key); return value }
-        catch NativeAPIError.denied(let status, let code) where (400..<500).contains(status) && ![408, 429].contains(status) { try confirmed(key); throw NativeAPIError.denied(status, code) }
+        catch NativeAPIError.denied(let status, let code) where NativeOperationRetirementRecord.isTerminal(status: status, code: code) {
+            try check(captured); try retainTerminal(intent, status: status, code: code); try confirmed(key)
+            throw NativeAPIError.denied(409, "operation_recovered_without_result")
+        }
+        catch NativeAPIError.denied(let status, let code) where (400..<500).contains(status) && ![408, 429].contains(status) && code != "operation_key_conflict" { try confirmed(key); throw NativeAPIError.denied(status, code) }
         catch { throw NativeAPIError.operationUnconfirmed(key) }
+    }
+
+    private func appleJournal(_ slot: String) throws -> NativeAppleStoreJournal? {
+        guard let bytes = try secrets.read(slot) else { return nil }
+        guard bytes.count <= 64000 else { throw NativeAPIError.invalidResponse }
+        let value = try JSONDecoder().decode(NativeAppleStoreJournal.self, from: bytes)
+        try value.validate(origin: origin)
+        guard value.slot == slot else { throw NativeAPIError.invalidResponse }
+        return value
+    }
+    private func saveAppleJournal(_ next: NativeAppleStoreJournal, expected: NativeAppleStoreJournal?) throws {
+        try next.validate(origin: origin)
+        let bytes = try secrets.read(next.slot)
+        let current = try bytes.map { try JSONDecoder().decode(NativeAppleStoreJournal.self, from: $0) }
+        guard current == expected, try secrets.compareAndSwap(next.slot, expected: bytes, replacement: JSONEncoder().encode(next)) else {
+            throw NativeAPIError.operationUnconfirmed(next.operationKey)
+        }
+    }
+    private func migrateAppleIntent(_ intent: NativeOperationIntent) throws -> NativeAppleStoreJournal {
+        let candidate = try NativeAppleStoreJournal.legacy(intent, origin: origin)
+        let journal: NativeAppleStoreJournal
+        if let current = try appleJournal(candidate.slot) {
+            guard current.operationKey == candidate.operationKey, current.request == candidate.request else { throw NativeAPIError.operationUnconfirmed(intent.key) }
+            journal = current
+        } else { try saveAppleJournal(candidate, expected: nil); journal = candidate }
+        // Migration is durable before the older generic slot is retired.
+        try confirmed(intent.key)
+        return journal
+    }
+    private func recoverAppleJournal(_ initial: NativeAppleStoreJournal, captured: Scope, retryUnknown: Bool) async throws -> WireValue {
+        guard initial.accountID == captured.account, appleStoreWork.insert(initial.slot).inserted else { throw NativeAPIError.operationUnconfirmed(initial.operationKey) }
+        defer { appleStoreWork.remove(initial.slot) }
+        var held = initial
+        func persist(_ next: NativeAppleStoreJournal) throws {
+            try check(captured); try saveAppleJournal(next, expected: held); held = next
+        }
+        func dispatch() async throws {
+            var next = held; next.phase = .dispatched; try persist(next)
+            let result = try await json("/subscriptions/apple/transactions", method: "POST", body: held.request, scope: captured)
+            try check(captured); try held.validateResult(result)
+            next = held; next.directResult = result; try persist(next)
+        }
+        let firstDispatch = held.phase == .prepared
+        if firstDispatch {
+            do { try await dispatch() }
+            catch { try check(captured); try Task.checkCancellation() /* Lookup the original key after a lost reply. */ }
+        }
+        var receipt = try await json("/me/store-operations", method: "POST", body: .object(["operation_key": .string(held.operationKey)]), scope: captured)
+        try check(captured)
+        if try held.receiptResult(receipt) == nil, retryUnknown, !firstDispatch, held.receipt == nil, held.directResult == nil {
+            // Retry only the exact saved input/key after authenticated unknown
+            // status. The server's store operation boundary is idempotent; no
+            // new purchase or new key is created by this recovery attempt.
+            try await dispatch()
+            receipt = try await json("/me/store-operations", method: "POST", body: .object(["operation_key": .string(held.operationKey)]), scope: captured)
+            try check(captured)
+        }
+        guard let result = try held.receiptResult(receipt) else { throw NativeAPIError.operationUnconfirmed(held.operationKey) }
+        if let previous = held.receipt, previous != receipt { throw NativeAPIError.invalidResponse }
+        if held.receipt == nil {
+            var next = held; next.receipt = receipt; next.phase = .verified; try persist(next)
+        }
+        return result
+    }
+    func verifyAppleTransaction(product: String, transaction: String, original: String, signedTransaction: String) async throws -> WireValue {
+        let captured = try await readyScope()
+        let candidate = try NativeAppleStoreJournal(origin: origin, account: captured.account!, product: product,
+            transaction: transaction, original: original, signedTransaction: signedTransaction)
+        for intent in pending().filter({ $0.action == "store.apple" }) {
+            let legacy = try NativeAppleStoreJournal.legacy(intent, origin: origin)
+            if legacy.transactionID == transaction { _ = try migrateAppleIntent(intent) }
+        }
+        let journal: NativeAppleStoreJournal
+        if let saved = try appleJournal(candidate.slot) {
+            guard saved.accountID == captured.account, saved.productID == product, saved.transactionID == transaction,
+                  saved.originalTransactionID == original, saved.environment == candidate.environment else { throw NativeAPIError.invalidResponse }
+            // A redelivery may carry a newly signed JWS. Recover the originally
+            // submitted credential instead of overwriting its binding.
+            journal = saved
+        } else { try saveAppleJournal(candidate, expected: nil); journal = candidate }
+        return try await recoverAppleJournal(journal, captured: captured, retryUnknown: true)
+    }
+    func markAppleTransactionFinishing(transaction: String, completed: Bool = false) async throws {
+        let captured = try await readyScope()
+        let slot = "store-apple-" + NativeAppleStoreJournal.digest(Data((origin.absoluteString + "|" + captured.account! + "|" + transaction).utf8))
+        guard let journal = try appleJournal(slot), let receipt = journal.receipt,
+              try journal.receiptResult(receipt) != nil else { throw NativeAPIError.invalidResponse }
+        if journal.phase == .finished { return }
+        guard !completed || journal.phase == .finishPending else { throw NativeAPIError.invalidResponse }
+        var next = journal; next.phase = completed ? .finished : .finishPending
+        try check(captured); try saveAppleJournal(next, expected: journal)
     }
     func upload(_ bytes: Data, mime: String, title: String, batch: String, localID: String) async throws -> String {
         let captured = try await readyScope(), checksum = signer.sha256(bytes)
@@ -2036,12 +2783,22 @@ extension BackendRepository {
             // History was durably saved but the following active-slot removal
             // failed. Never resume an explicitly retired request automatically.
             accountRecovery = nil; try secrets.write("account-recovery-journal", data: nil)
-        } else { accountRecovery = record }
+        } else {
+            accountRecovery = record
+            if record.promotionCredentials.map({ !credentialCurrent($0) }) == true {
+                var retired = record
+                retired.promotionCredentials = nil; retired.promotionDevice = nil; retired.state = .registered
+                if !retired.captures.isEmpty { retired.retiredCaptures = retired.captures }
+                retired.captures = []; retired.challengeWire = nil; retired.loginTerminalCode = nil
+                try saveAccountRecovery(retired)
+            }
+        }
     }
     private func saveAccountRecovery(_ record: NativeAccountRecoveryRecord) throws {
         try record.validate(origin: origin); let data = try JSONEncoder().encode(record)
         guard data.count <= 32 * 1024 else { throw NativeAPIError.invalidResponse }
-        try secrets.write("account-recovery-journal", data: data); accountRecovery = record
+        if let staged = record.promotionCredentials, !credentialCurrent(staged) { throw NativeAPIError.sessionChanged }
+        try replaceOwnedJournal("account-recovery-journal", previous: accountRecovery, replacement: record); accountRecovery = record
     }
     func accountRecoverySummary() throws -> NativeAccountRecoverySummary? {
         guard guestDeletion == nil, let record = accountRecovery else { return nil }
@@ -2202,7 +2959,7 @@ extension BackendRepository {
     }
     private func reconcileAccountRecovery(serial: Int, retryStart: Bool = false) async throws -> NativeAccountRecoverySummary {
         guard let record = accountRecovery else { throw NativeAPIError.invalidResponse }; try checkRecovery(record, serial: serial)
-        let signed = try recoveryRequest(record, step: "status"), captured = Scope(epoch: epoch, account: nil, token: nil)
+        let signed = try recoveryRequest(record, step: "status"), captured = Scope(epoch: epoch, account: nil, token: nil, retirementGeneration: sessionRetirement.snapshot().generation)
         let value: WireValue
         do { value = try await json("/auth/face/recovery/status", method: "POST", body: signed.0, scope: captured) }
         catch NativeAPIError.denied(404, "account_recovery_not_found") {
@@ -2318,18 +3075,19 @@ extension BackendRepository {
         try archiveFaceLifecycleForRecovery(account: record.accountID)
         let previous = try self.device()
         if let previous { guard previous.accountID == record.accountID else { throw NativeAPIError.sessionChanged } }
-        try secrets.write("registered-device", data: JSONEncoder().encode(device)); try secrets.write("credentials", data: JSONEncoder().encode(credentials!))
+        try secrets.write("registered-device", data: JSONEncoder().encode(device)); try persistCredential(credentials!)
         if let enrollment, enrollment.accountID == record.accountID {
             try secrets.write("face-enrollment-journal", data: nil); self.enrollment = nil; enrollmentSerial += 1
-            signer.clear(alias: enrollment.keyAlias)
+            try retireUnreferencedDeviceKey(alias: enrollment.keyAlias, publicJWK: enrollment.publicJWK)
         }
-        if let previous, previous.accountID == record.accountID, previous.keyAlias != device.keyAlias { signer.clear(alias: previous.keyAlias ?? NativeEnrollmentRecord.keyAlias) }
-        for alias in record.supersededAliases { signer.clear(alias: alias) }
+        if let previous, previous.accountID == record.accountID, previous.keyAlias != device.keyAlias { try retireUnreferencedDeviceKey(alias: previous.keyAlias ?? NativeEnrollmentRecord.keyAlias) }
+        for alias in record.supersededAliases { try retireUnreferencedDeviceKey(alias: alias) }
         if let data = try secrets.read("pending-face-device"), try JSONDecoder().decode(RegisteredDevice.self, from: data).accountID == record.accountID { try secrets.write("pending-face-device", data: nil) }
         try secrets.write("recovery-key-backup", data: nil) // The successful server comparison consumed this key.
         let retained = recoveryArchives.filter { $0.accountID != record.accountID }
-        for retired in recoveryArchives where retired.accountID == record.accountID && retired.keyAlias != record.keyAlias { signer.clear(alias: retired.keyAlias) }
+        let retiring = recoveryArchives.filter { $0.accountID == record.accountID && $0.keyAlias != record.keyAlias }
         try secrets.write("retired-account-recoveries", data: JSONEncoder().encode(retained)); recoveryArchives = retained
+        for retired in retiring { try retireUnreferencedDeviceKey(alias: retired.keyAlias, publicJWK: retired.publicJWK) }
         try secrets.write("account-recovery-journal", data: nil); accountRecovery = nil
         if let data = try secrets.read("operation-intents") { intents = try JSONDecoder().decode([NativeOperationIntent].self, from: data).filter { $0.accountID == record.accountID } }
         return summary()!
@@ -2355,6 +3113,7 @@ extension BackendRepository {
         guard recoveryArchives.count < 16 else { throw NativeAPIError.unsupported(String(localized: "Sixteen earlier recovery attempts are retained. Keep their status; this device cannot create another attempt until your account is recovered and they can be retired safely.")) }
         var history = recoveryArchives; if !history.contains(where: { $0.requestID == record.requestID }) { history.append(record) }
         let data = try JSONEncoder().encode(history); guard data.count <= 512 * 1024 else { throw NativeAPIError.invalidResponse }
+        try retireForRestriction()
         try secrets.write("retired-account-recoveries", data: data); recoveryArchives = history
         // Cancel local publication BEFORE clearing the active slot. A storage
         // interruption retains the archived record and alias, never old authority.
@@ -2379,12 +3138,23 @@ extension BackendRepository {
         if lifecycleArchives.contains(where: { $0.controlOperationKey == record.controlOperationKey }) {
             // An interrupted archive never republishes the retired control.
             try secrets.write("face-profile-lifecycle", data: nil); faceLifecycle = nil
-        } else { faceLifecycle = record }
+        } else {
+            faceLifecycle = record
+            if record.promotionCredentials.map({ !credentialCurrent($0) }) == true || record.credentials.map({ !credentialCurrent($0) }) == true {
+                var retired = record
+                retired.credentials = nil; retired.promotionCredentials = nil; retired.promotionProfile = nil
+                retired.loginChallengeWire = nil; retired.loginTerminalCode = nil; retired.loginCaptures = []; retired.loginCompletionPending = false
+                retired.stableControlLogin = false; retired.currentAuthorityValidated = false
+                try saveFaceLifecycle(retired)
+            }
+        }
     }
     private func saveFaceLifecycle(_ record: NativeFaceLifecycleRecord) throws {
         try record.validate(origin: origin); let data = try JSONEncoder().encode(record)
         guard data.count <= 128 * 1024 else { throw NativeAPIError.invalidResponse }
-        try secrets.write("face-profile-lifecycle", data: data); faceLifecycle = record
+        if let staged = record.promotionCredentials, !credentialCurrent(staged) { throw NativeAPIError.sessionChanged }
+        if let active = record.credentials, !credentialCurrent(active) { throw NativeAPIError.sessionChanged }
+        try replaceOwnedJournal("face-profile-lifecycle", previous: faceLifecycle, replacement: record); faceLifecycle = record
     }
     private func archiveFaceLifecycleForRecovery(account: String) throws {
         guard var record = faceLifecycle else { return }
@@ -2406,6 +3176,8 @@ extension BackendRepository {
         guard lifecycleSerial == serial, guestDeletion == nil, accountRecovery == nil,
               faceLifecycle?.controlOperationKey == record.controlOperationKey, faceLifecycle?.accountID == record.accountID,
               faceLifecycle?.keyAlias == record.keyAlias, faceLifecycle?.publicKeyDigest == record.publicKeyDigest,
+              faceLifecycle?.controlKey == record.controlKey,
+              faceLifecycle?.controlRecoveryRenewal?.operationKey == record.controlRecoveryRenewal?.operationKey,
               record.apiOrigin == origin.absoluteString, !Task.isCancelled else { throw NativeAPIError.sessionChanged }
     }
     private func assertLifecycleKey(_ record: NativeFaceLifecycleRecord) throws {
@@ -2429,12 +3201,13 @@ extension BackendRepository {
         let purpose = record.loginChallengeWire == nil ? record.pending?.action.purpose : "login"
         let challenge = try wire.map { try NativeFaceChallenge($0, accountID: record.accountID, purpose: purpose ?? "login", allowExpired: true) }
         let captures = record.loginChallengeWire == nil ? record.pending?.captures ?? [] : record.loginCaptures
-        let checked = record.authorityUnavailable && !record.stableControlLogin || record.pending?.awaitingServer == true || record.loginCompletionPending || record.promotionCredentials != nil || captures.contains(where: { !$0.accepted })
+        let checked = record.controlRecoveryRenewal != nil || record.metadata.controlRecovery.map({ $0.expiresAt <= Date() }) == true || record.authorityUnavailable && !record.stableControlLogin || record.pending?.awaitingServer == true || record.loginCompletionPending || record.promotionCredentials != nil || captures.contains(where: { !$0.accepted })
         return NativeFaceLifecycleSummary(metadata: record.metadata, operation: record.pending,
             challenge: !checked && (challenge?.expiresAt ?? .distantPast) > Date() ? challenge : nil,
             receipts: captures.filter(\.accepted).map(\.wire), authorityUnavailable: record.authorityUnavailable,
             authenticated: summary()?.authenticated == true,
-            canRenewControl: record.authorityUnavailable && (record.authorityFailure == "face_profile_control_unavailable" || record.renewal != nil) && record.currentAuthorityValidated && record.credentials != nil && record.metadata.authenticationEnabled && (record.pending == nil || ["applied", "completed", "cancelled"].contains(record.pending?.serverState ?? "")))
+            canRenewControl: record.authorityUnavailable && (record.authorityFailure == "face_profile_control_unavailable" || record.renewal != nil) && record.currentAuthorityValidated && record.credentials != nil && record.metadata.authenticationEnabled && (record.pending == nil || ["applied", "completed", "cancelled"].contains(record.pending?.serverState ?? "")),
+            retainedControlRenewalPending: record.controlRecoveryRenewal != nil)
     }
     func openFaceLifecycle() async throws -> NativeFaceLifecycleSummary {
         if faceLifecycle != nil { return try await checkFaceLifecycle() }
@@ -2515,12 +3288,11 @@ extension BackendRepository {
             if action == .enroll { guard metadata.profile != nil else { throw NativeAPIError.invalidResponse } }
         }
         let authorityRetired = !metadata.authenticationEnabled || metadata.profile != record.metadata.profile
-        if authorityRetired { next.credentials = nil; next.currentAuthorityValidated = false }
-        try saveFaceLifecycle(next) // New authority/hold precedes retirement of its older credential slot.
         if authorityRetired {
-            credentials = nil; epoch += 1; retireMedia(); intents = []; uploads = []
-            try secrets.write("credentials", data: nil); try secrets.write("operation-intents", data: nil); try secrets.write("upload-stages", data: nil)
+            if credentials != nil || metadata.profile != record.metadata.profile { try retireForRestriction() }
+            next.credentials = nil; next.promotionCredentials = nil; next.promotionProfile = nil; next.currentAuthorityValidated = false
         }
+        try saveFaceLifecycle(next)
         if metadata.profile != record.metadata.profile || !metadata.authenticationEnabled {
             try retireOwnLifecycleIdentity(account: record.accountID)
         }
@@ -2560,6 +3332,7 @@ extension BackendRepository {
     }
     private func lifecycleStatus(serial: Int, retryOriginal: Bool = false) async throws -> NativeFaceLifecycleSummary {
         guard let record = faceLifecycle else { throw NativeAPIError.invalidResponse }; try checkLifecycle(record, serial: serial)
+        if let renewal = record.controlRecoveryRenewal { throw NativeAPIError.operationUnconfirmed(renewal.operationKey) }
         if record.renewal != nil { return try await reconcileControlRenewal(serial: serial, retry: retryOriginal) }
         let signed = try lifecycleRequest(record, step: "status", extra: record.pending.map { ["operation_key": .string($0.operationKey)] } ?? [:])
         let value: WireValue
@@ -2789,7 +3562,7 @@ extension BackendRepository {
         var device = record.originalDevice; device.profileID = profile.id; device.profileRevision = profile.revision; device.modelID = profile.modelID
         // Staged journal and current server device checks precede every durable
         // publication. A failed slot write is repairable from this journal.
-        try secrets.write("registered-device", data: JSONEncoder().encode(device)); try secrets.write("credentials", data: JSONEncoder().encode(credential))
+        try secrets.write("registered-device", data: JSONEncoder().encode(device)); try persistCredential(credential)
         record.credentials = credential; record.promotionCredentials = nil; record.promotionProfile = nil; record.loginChallengeWire = nil; record.loginTerminalCode = nil; record.loginCaptures = []; record.loginCompletionPending = false; record.authorityUnavailable = record.stableControlLogin; record.currentAuthorityValidated = true; record.stableControlLogin = false
         try saveFaceLifecycle(record); credentials = credential
         try retireOwnLifecycleIdentity(account: record.accountID)
@@ -2843,11 +3616,58 @@ extension BackendRepository {
         try secrets.write("face-profile-lifecycle", data: nil); faceLifecycle = nil; lifecycleSerial += 1
         // The server-completed deletion is the authority for retiring this exact
         // owned alias. The archive cannot authenticate or trigger new setup.
-        if deletionOwnsKey(account: account, alias: record.keyAlias, publicJWK: record.publicJWK) { signer.clear(alias: record.keyAlias) }
+        if deletionOwnsKey(account: account, alias: record.keyAlias, publicJWK: record.publicJWK) { try retireUnreferencedDeviceKey(alias: record.keyAlias, publicJWK: record.publicJWK) }
     }
 }
 
 extension BackendRepository {
+    /// Expired-control status proves only ownership of this retained management
+    /// secret and device. It never rotates a key or installs a product session.
+    func checkRetainedFaceControl() async throws -> NativeFaceLifecycleSummary {
+        let serial = try beginLifecycleWork(); defer { endLifecycleWork(serial) }
+        guard let record = faceLifecycle, record.renewal == nil else { throw NativeAPIError.invalidResponse }
+        try checkLifecycle(record, serial: serial)
+        let signed = try lifecycleRequest(record, step: "control-status")
+        let value = try await json("/auth/face/profile/control/status", method: "POST", body: signed.0, preserveRefreshAuthority: true)
+        try checkLifecycle(record, serial: serial)
+        let metadata = try NativeFaceProfileMetadata(value, account: record.accountID, device: record.originalDevice.deviceID, digest: record.publicKeyDigest, nonce: signed.1)
+        guard metadata.version >= record.metadata.version, metadata.deviceRevision == record.metadata.deviceRevision,
+              let recovery = metadata.controlRecovery, value["operation"] == .null else { throw NativeAPIError.invalidResponse }
+        try acceptLifecycleMetadata(value, record: record, nonce: signed.1)
+        var next = faceLifecycle!; next.authorityUnavailable = recovery.expiresAt <= Date() || next.controlRecoveryRenewal != nil
+        if next.authorityUnavailable { next.authorityFailure = "face_profile_control_unavailable" }
+        try saveFaceLifecycle(next); retireMedia()
+        return try faceLifecycleSummary()!
+    }
+    /// The immutable review binding, policy and operation key precede dispatch;
+    /// fresh nonce/signature are produced for every replay of the original input.
+    func renewRetainedFaceControl(consentPolicy: String?, retryOriginal: Bool = false) async throws -> NativeFaceLifecycleSummary {
+        let serial = try beginLifecycleWork(); defer { endLifecycleWork(serial) }
+        guard var record = faceLifecycle, record.renewal == nil else { throw NativeAPIError.invalidResponse }
+        try checkLifecycle(record, serial: serial)
+        let operation: NativeFaceControlRecoveryRenewal
+        if retryOriginal {
+            guard let original = record.controlRecoveryRenewal else { throw NativeAPIError.invalidResponse }; operation = original
+        } else {
+            guard record.controlRecoveryRenewal == nil, let consentPolicy else { throw NativeAPIError.invalidResponse }
+            operation = try NativeFaceControlRecoveryRenewal(metadata: record.metadata, consentPolicy: consentPolicy)
+            record.controlRecoveryRenewal = operation; try saveFaceLifecycle(record)
+        }
+        let signed = try lifecycleRequest(record, step: "control-renew", extra: operation.fields)
+        let value = try await json("/auth/face/profile/control/renew", method: "POST", body: signed.0, preserveRefreshAuthority: true)
+        try checkLifecycle(record, serial: serial)
+        let metadata = try NativeFaceProfileMetadata(value, account: record.accountID, device: record.originalDevice.deviceID, digest: record.publicKeyDigest, nonce: signed.1)
+        guard metadata.version >= record.metadata.version, metadata.deviceRevision == record.metadata.deviceRevision,
+              let recovery = metadata.controlRecovery, value["operation"] == .null else { throw NativeAPIError.invalidResponse }
+        try operation.receipt(value["control_renewal"], current: recovery)
+        // Keep the receipt's original dates separate from current metadata. A
+        // later state may have advanced; it grants no historical eligibility.
+        try acceptLifecycleMetadata(value, record: record, nonce: signed.1)
+        var next = faceLifecycle!; next.controlRecoveryRenewal = nil
+        next.authorityUnavailable = recovery.expiresAt <= Date(); next.authorityFailure = next.authorityUnavailable ? "face_profile_control_unavailable" : nil
+        try saveFaceLifecycle(next); retireMedia()
+        return try faceLifecycleSummary()!
+    }
     private func renewalCandidate(_ record: NativeFaceLifecycleRecord) throws -> NativeFaceLifecycleRecord {
         guard let renewal = record.renewal, renewal.previousOperationKey == record.controlOperationKey else { throw NativeAPIError.invalidResponse }
         var next = record; next.controlKey = renewal.key; next.controlOperationKey = renewal.operationKey
@@ -2917,13 +3737,38 @@ extension BackendRepository {
 // Durable ordinary personal uploads. A05 has its own token-free operation
 // journal, so a recovered reservation is adopted before any subsequent write.
 extension BackendRepository {
-    private func restoreUploadBatches() throws {
-        guard let bytes = try secrets.read("resumable-photo-batches-v1") else { uploadBatches = []; return }
+    private func uploadBatchJournal() throws -> ([NativeResumableUploadBatch], Data?) {
+        guard let bytes = try secrets.read("resumable-photo-batches-v1") else { return ([], nil) }
         guard bytes.count <= 2 * 1024 * 1024 else { throw NativeAPIError.invalidResponse }
         let values = try JSONDecoder().decode([NativeResumableUploadBatch].self, from: bytes)
         guard values.count <= 10, Set(values.map(\.id)).count == values.count else { throw NativeAPIError.invalidResponse }
         for value in values { try value.validate(origin: origin) }
-        uploadBatches = values
+        return (values, bytes)
+    }
+    private func restoreUploadBatches() throws {
+        uploadBatches = try uploadBatchJournal().0
+    }
+    private func retireDeletedAccountUploads(_ account: String) async throws {
+        // Bootstrap intentionally does not restore uploads while a deletion
+        // receipt exists. The durable roster, never an empty fresh cache, owns
+        // cleanup. Foreign-account rows retain every byte and revision.
+        var (batches, bytes) = try uploadBatchJournal()
+        let ids = batches.filter { $0.accountID == account }.map(\.id)
+        for index in batches.indices where batches[index].accountID == account {
+            batches[index].paused = true; batches[index].backgroundRetryAllowed = false; batches[index].revise()
+            try batches[index].validate(origin: origin)
+        }
+        if !ids.isEmpty {
+            do {
+                guard try secrets.compareAndSwap("resumable-photo-batches-v1", expected: bytes, replacement: JSONEncoder().encode(batches)) else { throw NativeAPIError.sessionChanged }
+            } catch {
+                // A storage failure must not keep sending a deleted account's
+                // bytes. Cancellation is nondestructive; files/roster stay held.
+                let stop = scheduleUploadCancellation(ids); await stop.value; throw error
+            }
+        }
+        uploadBatches = batches
+        let stop = scheduleUploadCancellation(ids); await stop.value
     }
     private func saveUploadBatches() throws {
         for value in uploadBatches { try value.validate(origin: origin) }
@@ -3002,11 +3847,11 @@ extension BackendRepository {
         for slot in uploadBatches[index].files.indices { uploadBatches[index].files[slot].selected = selected.contains(uploadBatches[index].files[slot].id) }
         uploadBatches[index].revise(); try saveUploadBatches(); return try uploadSummary(batchID: batchID)!
     }
-    private func retireUploadWork() {
+    private func retireUploadWork() throws {
         uploadSerial += 1; uploadBusy = false
         for index in uploadBatches.indices { uploadBatches[index].paused = true; uploadBatches[index].revise() }
-        try? saveUploadBatches()
         _ = scheduleUploadCancellation(uploadBatches.map(\.id))
+        try saveUploadBatches()
     }
     private func scheduleUploadCancellation(_ ids: [String]) -> Task<Void, Never> {
         let previous = uploadRetirement, transport = uploadTransport
@@ -3304,6 +4149,255 @@ extension BackendRepository {
 
 
 extension BackendRepository {
+    private static let applePurchaseSlot = "store-apple-journal-v1"
+    private func applePurchaseJournal() throws -> (NativeApplePurchaseJournal, Data?) {
+        let bytes = try secrets.read(Self.applePurchaseSlot)
+        guard (bytes?.count ?? 0) <= 2 * 1024 * 1024 else { throw NativeAPIError.invalidResponse }
+        var value = try bytes.map { try JSONDecoder().decode(NativeApplePurchaseJournal.self, from: $0) } ?? NativeApplePurchaseJournal(apiOrigin: origin.absoluteString)
+        try value.validate(origin: origin)
+        for uncertain in applePurchaseUncertainRecords {
+            if let index = value.records.firstIndex(where: { $0.operationKey == uncertain.operationKey }) {
+                value.records[index] = try value.records[index].retaining(uncertain)
+            } else { value.records.append(uncertain) }
+        }
+        try value.validate(origin: origin); return (value, bytes)
+    }
+    private func saveApplePurchases(_ value: NativeApplePurchaseJournal, replacing bytes: Data?) throws {
+        try value.validate(origin: origin)
+        let encoded = try JSONEncoder().encode(value)
+        guard encoded.count <= 2 * 1024 * 1024 else { throw NativeAPIError.unavailable("store_operation_storage_changed") }
+        let before = try bytes.map { try JSONDecoder().decode(NativeApplePurchaseJournal.self, from: $0) }
+        var held = applePurchaseUncertainRecords
+        for record in value.records where before?.records.first(where: { $0.operationKey == record.operationKey }) != record {
+            if let index = held.firstIndex(where: { $0.operationKey == record.operationKey }) { held[index] = try held[index].retaining(record) }
+            else { held.append(record) }
+        }
+        // Retain stronger observations before attempting storage. A lost write
+        // acknowledgment cannot admit a replacement or erase receipt evidence.
+        applePurchaseUncertainRecords = held
+        guard try secrets.compareAndSwap(Self.applePurchaseSlot, expected: bytes, replacement: encoded) else { throw NativeAPIError.unavailable("store_operation_storage_changed") }
+        applePurchaseUncertainRecords = []
+    }
+    /// Old generic store intents were already potentially dispatched. Import
+    /// their original key and input solely for typed receipt reconciliation.
+    /// Parsing an old JWS here is binding metadata, never signature acceptance.
+    private func migrateLegacyApplePurchases() throws {
+        guard let bytes = try secrets.read("operation-intents") else { return }
+        var old = try JSONDecoder().decode([NativeOperationIntent].self, from: bytes)
+        let legacy = old.filter { $0.action == "store.apple" || $0.path == "/subscriptions/apple/transactions" }
+        guard !legacy.isEmpty else { return }
+        var (journal, saved) = try applePurchaseJournal()
+        for intent in legacy {
+            guard intent.action == "store.apple", intent.path == "/subscriptions/apple/transactions", intent.method == "POST",
+                  intent.payload["operation_key"].string == intent.key, let jws = intent.payload["signed_transaction"].string,
+                  jws.utf8.count <= 32768, let product = intent.payload["product_id"].string else { throw NativeAPIError.invalidResponse }
+            let parts = jws.split(separator: ".", omittingEmptySubsequences: false)
+            guard parts.count == 3, let payload = Data(base64URL: String(parts[1])) else { throw NativeAPIError.invalidResponse }
+            let claims = try WireValue.decoded(payload)
+            guard claims["appAccountToken"].string?.lowercased() == intent.accountID, claims["productId"].string == product,
+                  let transaction = claims["transactionId"].string, let original = claims["originalTransactionId"].string,
+                  let environment = claims["environment"].string?.lowercased() else { throw NativeAPIError.invalidResponse }
+            let record = try NativeApplePurchaseRecord(account: intent.accountID, product: product, transaction: transaction, original: original,
+                environment: environment, signedTransaction: jws, operation: intent.key)
+            if let existing = journal.records.first(where: { $0.operationKey == record.operationKey }) {
+                guard existing.accountID == record.accountID, existing.credentialSHA256 == record.credentialSHA256 else { throw NativeAPIError.invalidResponse }
+            } else { journal.records.append(record) }
+        }
+        try saveApplePurchases(journal, replacing: saved)
+        old.removeAll { value in legacy.contains(where: { $0.key == value.key }) }
+        guard try secrets.compareAndSwap("operation-intents", expected: bytes, replacement: old.isEmpty ? nil : JSONEncoder().encode(old)) else { throw NativeAPIError.sessionChanged }
+        intents.removeAll { value in legacy.contains(where: { $0.key == value.key }) }
+    }
+    private func migrateCompleteApplePurchase(account: String, transaction: String) throws {
+        let slot = "store-apple-" + NativeAppleStoreJournal.digest(Data((origin.absoluteString + "|" + account + "|" + transaction).utf8))
+        guard let originalBytes = try secrets.read(slot) else { return }
+        guard originalBytes.count <= 64000 else { throw NativeAPIError.invalidResponse }
+        let original = try JSONDecoder().decode(NativeAppleStoreJournal.self, from: originalBytes)
+        try original.validate(origin: origin)
+        guard original.slot == slot, original.accountID == account, original.transactionID == transaction else { throw NativeAPIError.invalidResponse }
+        var (journal, bytes) = try applePurchaseJournal()
+        let existingIndex = journal.records.firstIndex(where: { $0.operationKey == original.operationKey })
+        var record = try NativeApplePurchaseRecord(account: original.accountID, product: original.productID,
+            transaction: original.transactionID, original: original.originalTransactionID, environment: original.environment,
+            signedTransaction: original.signedTransaction, operation: original.operationKey,
+            createdAt: existingIndex.map { journal.records[$0].createdAt } ?? original.preparedAt)
+        if let receipt = original.receipt {
+            guard try record.result(from: receipt) != nil else { throw NativeAPIError.invalidResponse }
+            record.receipt = receipt; record.phase = original.phase == .finished ? .finishObserved : .providerConfirmed
+            record.signedTransaction = nil
+        }
+        if let result = original.directResult { record.directResultSHA256 = NativeApplePurchaseRecord.hash(try result.canonical()) }
+        try record.validate()
+        if let index = existingIndex { journal.records[index] = try journal.records[index].retaining(record) }
+        else { journal.records.append(record) }
+        try saveApplePurchases(journal, replacing: bytes)
+        // The bounded roster now durably contains the strongest exact evidence.
+        // Remove only the copied old bytes so terminal credential erasure cannot
+        // leave an authorizing JWS stranded in the preceding per-transaction slot.
+        // A lost removal acknowledgement safely repeats this merge on restart.
+        guard try secrets.compareAndSwap(slot, expected: originalBytes, replacement: nil) else { throw NativeAPIError.sessionChanged }
+    }
+    func reserveApplePurchase(product: String) async throws -> NativeApplePurchaseReservation {
+        let captured = try await readyScope(); _ = try await json("/me", scope: captured); try check(captured)
+        try migrateLegacyApplePurchases()
+        var (journal, bytes) = try applePurchaseJournal()
+        let unresolvedTerminal = journal.records.contains { ended in
+            guard ended.accountID == captured.account, ended.productID == product, ended.phase == .recoveredWithoutResult,
+                  let latest = journal.records.last(where: { $0.accountID == ended.accountID && $0.productID == ended.productID && $0.transactionID == ended.transactionID && $0.environment == ended.environment }) else { return false }
+            return ![.providerConfirmed, .finishObserved, .entitlementRefresh, .complete].contains(latest.phase) || latest.receipt == nil
+        }
+        guard !unresolvedTerminal else {
+            throw NativeAPIError.denied(409, "operation_recovered_without_result")
+        }
+        if let held = journal.reservations.first(where: { $0.accountID == captured.account && $0.productID == product }) { return held }
+        // Never evict an unresolved purchase to open another payment sheet.
+        while journal.records.count + journal.reservations.count >= 64,
+              let index = journal.disposableRecordIndex { journal.records.remove(at: index) }
+        guard journal.records.count + journal.reservations.count < 64,
+              (try JSONEncoder().encode(journal)).count < 2 * 1024 * 1024 - 48 * 1024 else { throw NativeAPIError.unavailable("store_recovery_capacity_full") }
+        let reservation = NativeApplePurchaseReservation(accountID: captured.account!, productID: product, id: UUID().uuidString.lowercased())
+        journal.reservations.append(reservation); try saveApplePurchases(journal, replacing: bytes); return reservation
+    }
+    func releaseApplePurchaseReservation(_ reservation: NativeApplePurchaseReservation) throws {
+        var (journal, bytes) = try applePurchaseJournal()
+        journal.reservations.removeAll { $0.id == reservation.id && $0.accountID == reservation.accountID && $0.productID == reservation.productID }
+        try saveApplePurchases(journal, replacing: bytes)
+    }
+    func verifyApplePurchase(account: String, product: String, transaction: String, original: String, environment: String, signedTransaction: String,
+                             allowTerminalReplacement: Bool = false, expectedEpoch: Int? = nil) async throws -> NativeApplePurchaseRecord {
+        let initiated = try await readyScope()
+        guard initiated.account == account, expectedEpoch == nil || initiated.epoch == expectedEpoch else { throw NativeAPIError.sessionChanged }
+        do { return try await verifyApplePurchaseAttempt(account: account, product: product, transaction: transaction, original: original, environment: environment, signedTransaction: signedTransaction, expectedScope: initiated) }
+        catch NativeAPIError.denied(409, "operation_recovered_without_result") where allowTerminalReplacement {
+            try check(initiated)
+            guard let ended = try applePurchaseJournal().0.records.last(where: { $0.accountID == account && $0.productID == product && $0.transactionID == transaction && $0.environment == environment }),
+                  ended.phase == .recoveredWithoutResult, ended.originalTransactionID == original else { throw NativeAPIError.sessionChanged }
+            // StoreKit independently verified the same transaction identity. Its
+            // refreshed JWS may differ; the old operation is already terminal.
+            return try await verifyApplePurchaseAttempt(account: account, product: product, transaction: transaction, original: original, environment: environment,
+                signedTransaction: signedTransaction, expectedScope: initiated, replacingTerminal: ended.operationKey)
+        }
+    }
+    private func retireApplePurchaseWithoutResult(_ expected: NativeApplePurchaseRecord, captured: Scope, status: Int = 409, code: String = "operation_recovered_without_result") throws {
+        try check(captured)
+        var (journal, bytes) = try applePurchaseJournal()
+        guard let index = journal.records.firstIndex(where: { $0.operationKey == expected.operationKey && $0.accountID == captured.account }),
+              journal.records[index].credentialSHA256 == expected.credentialSHA256,
+              [.pending, .recoveredWithoutResult].contains(journal.records[index].phase), journal.records[index].receipt == nil,
+              journal.records[index].directResultSHA256 == nil else { throw NativeAPIError.invalidResponse }
+        try retainTerminal(NativeOperationRetirementRecord(origin: origin, account: expected.accountID, key: expected.operationKey, action: "store.apple",
+            path: "/subscriptions/apple/transactions", method: "POST", inputSHA256: expected.legacyInputHash, sourceStatus: status, sourceCode: code))
+        journal.records[index].phase = .recoveredWithoutResult; journal.records[index].signedTransaction = nil
+        try saveApplePurchases(journal, replacing: bytes)
+    }
+    private func verifyApplePurchaseAttempt(account: String, product: String, transaction: String, original: String, environment: String, signedTransaction: String,
+                                            expectedScope: Scope, replacingTerminal: String? = nil) async throws -> NativeApplePurchaseRecord {
+        let captured = try await readyScope()
+        try check(expectedScope)
+        guard captured.account == account else { throw NativeAPIError.sessionChanged }
+        try migrateLegacyApplePurchases()
+        try migrateCompleteApplePurchase(account: account, transaction: transaction)
+        var (journal, bytes) = try applePurchaseJournal()
+        let proposed = try NativeApplePurchaseRecord(account: account, product: product, transaction: transaction, original: original, environment: environment, signedTransaction: signedTransaction)
+        var firstDispatch = false
+        let existing = journal.records.last(where: { $0.accountID == account && $0.productID == product && $0.transactionID == transaction && $0.environment == environment })
+        if let replacingTerminal {
+            guard existing?.operationKey == replacingTerminal, existing?.phase == .recoveredWithoutResult,
+                  existing?.originalTransactionID == original else { throw NativeAPIError.sessionChanged }
+        }
+        var record: NativeApplePurchaseRecord
+        if let existing, replacingTerminal == nil {
+            guard existing.originalTransactionID == original, existing.phase != .retired else { throw NativeAPIError.sessionChanged }
+            record = existing
+        } else {
+            journal.reservations.removeAll { $0.accountID == account && $0.productID == product }
+            while journal.records.count + journal.reservations.count >= 64,
+                  let index = journal.disposableRecordIndex { journal.records.remove(at: index) }
+            guard journal.records.count + journal.reservations.count < 64 else { throw NativeAPIError.unavailable("store_recovery_capacity_full") }
+            journal.records.append(proposed)
+            try saveApplePurchases(journal, replacing: bytes) // potentially-dispatched marker precedes the sole POST
+            record = proposed; firstDispatch = true
+        }
+        guard applePurchaseBusy.insert(record.operationKey).inserted else { throw NativeAPIError.operationUnconfirmed(record.operationKey) }
+        defer { applePurchaseBusy.remove(record.operationKey) }
+        if record.phase == .recoveredWithoutResult {
+            try retireApplePurchaseWithoutResult(record, captured: captured)
+            throw NativeAPIError.denied(409, "operation_recovered_without_result")
+        }
+        var direct: WireValue?
+        if firstDispatch {
+            guard let payload = record.dispatchPayload else { throw NativeAPIError.invalidResponse }
+            do { direct = try await json("/subscriptions/apple/transactions", method: "POST", body: payload, scope: captured) }
+            catch NativeAPIError.denied(let status, let code) where NativeOperationRetirementRecord.isTerminal(status: status, code: code) {
+                try retireApplePurchaseWithoutResult(record, captured: captured, status: status, code: code); throw NativeAPIError.denied(409, "operation_recovered_without_result")
+            }
+            catch { try check(captured); try Task.checkCancellation() /* Recovery below never resends the JWS. */ }
+            if let direct {
+                try check(captured); try record.validateResult(direct)
+                var (observed, observedBytes) = try applePurchaseJournal()
+                guard let index = observed.records.firstIndex(where: { $0.operationKey == record.operationKey && $0.accountID == captured.account }),
+                      observed.records[index].phase == .pending else { throw NativeAPIError.invalidResponse }
+                record.directResultSHA256 = NativeApplePurchaseRecord.hash(try direct.canonical())
+                observed.records[index] = try observed.records[index].retaining(record)
+                try saveApplePurchases(observed, replacing: observedBytes)
+            }
+        }
+        let receipt: WireValue
+        do { receipt = try await json("/me/store-operations", method: "POST", body: .object(["operation_key": .string(record.operationKey)]), scope: captured) }
+        catch NativeAPIError.denied(let status, let code) where NativeOperationRetirementRecord.isTerminal(status: status, code: code) {
+            try check(captured); guard direct == nil else { throw NativeAPIError.invalidResponse }
+            try retireApplePurchaseWithoutResult(record, captured: captured, status: status, code: code); throw NativeAPIError.denied(409, "operation_recovered_without_result")
+        }
+        try check(captured)
+        guard let confirmed = try record.result(from: receipt) else { throw NativeAPIError.operationUnconfirmed(record.operationKey) }
+        if let direct { guard direct == confirmed else { throw NativeAPIError.invalidResponse } }
+        if let prior = record.receipt { guard prior == receipt else { throw NativeAPIError.invalidResponse } }
+        var (current, currentBytes) = try applePurchaseJournal()
+        guard let index = current.records.firstIndex(where: { $0.operationKey == record.operationKey && $0.accountID == account }),
+              ![.retired, .recoveredWithoutResult].contains(current.records[index].phase) else { throw NativeAPIError.sessionChanged }
+        record = current.records[index]; record.receipt = receipt; record.signedTransaction = nil
+        if record.phase == .pending { record.phase = .providerConfirmed }
+        current.records[index] = record; try saveApplePurchases(current, replacing: currentBytes)
+        return record
+    }
+    /// StoreKit finishing can complete while a scene/account is retiring. Save
+    /// that historical observation in its original slot without granting any
+    /// current account authority, making process death around finish repeatable.
+    func applePurchaseFinishObserved(_ operation: String, account: String) throws {
+        var (journal, bytes) = try applePurchaseJournal()
+        guard let index = journal.records.firstIndex(where: { $0.operationKey == operation && $0.accountID == account }),
+              [.providerConfirmed, .finishObserved, .entitlementRefresh, .complete].contains(journal.records[index].phase),
+              let receipt = journal.records[index].receipt, try journal.records[index].result(from: receipt) != nil else { throw NativeAPIError.sessionChanged }
+        if !journal.records[index].finished { journal.records[index].phase = .finishObserved; try saveApplePurchases(journal, replacing: bytes) }
+    }
+    func unfinishedApplePurchaseIDs(includeTerminal: Bool = false) async throws -> Set<String> {
+        let captured = try await readyScope(); try migrateLegacyApplePurchases()
+        return Set(try applePurchaseJournal().0.records.filter { $0.accountID == captured.account &&
+            ([.pending, .providerConfirmed].contains($0.phase) || includeTerminal && $0.phase == .recoveredWithoutResult) }.map(\.transactionID))
+    }
+    func refreshedAppleEntitlements() async throws -> WireValue {
+        let captured = try await readyScope()
+        var (journal, bytes) = try applePurchaseJournal()
+        for index in journal.records.indices where journal.records[index].accountID == captured.account && journal.records[index].phase == .finishObserved { journal.records[index].phase = .entitlementRefresh }
+        try saveApplePurchases(journal, replacing: bytes)
+        let value = try await json("/me/entitlements", scope: captured); try check(captured)
+        var (current, currentBytes) = try applePurchaseJournal()
+        for index in current.records.indices where current.records[index].accountID == captured.account && current.records[index].phase == .entitlementRefresh { current.records[index].phase = .complete }
+        try saveApplePurchases(current, replacing: currentBytes); return value
+    }
+    private func retireApplePurchasesAfterDeletion(account: String) throws {
+        var (journal, bytes) = try applePurchaseJournal()
+        // Payment recovery identity remains minimized and non-dispatchable; no
+        // signed receipt, entitlement or account credential survives deletion.
+        for index in journal.records.indices where journal.records[index].accountID == account {
+            journal.records[index].phase = .retired; journal.records[index].signedTransaction = nil; journal.records[index].receipt = nil; journal.records[index].directResultSHA256 = nil
+        }
+        journal.reservations.removeAll { $0.accountID == account }
+        try saveApplePurchases(journal, replacing: bytes)
+    }
+}
+
+extension BackendRepository {
     /// The Keychain slot is namespaced by current account. Restored selections
     /// are intent only; a fresh snapshot and preview still authorize sharing.
     func libraryState() async throws -> NativeLibraryState {
@@ -3319,20 +4413,252 @@ extension BackendRepository {
         guard value.accountID == captured.account, value.favoriteIDs.count <= 10000, value.query.utf16.count <= 200, ["all", "received", "contributions"].contains(value.source), value.category == nil || ["all", "portraits", "landscapes"].contains(value.category!) else { throw NativeAPIError.sessionChanged }
         try secrets.write("library-state-" + captured.account!, data: JSONEncoder().encode(value))
     }
-    func exportBytes(requestID: String) async throws -> Data {
+    func retainedPrivacyExportRequests() throws -> Set<String> {
+        try pruneExportDeliveries()
+        guard let credentials, let session = try? sessionID(credentials.access_token) else { return [] }
+        return Set(try exportJournals(secrets.read("export-deliveries-v2")).filter {
+            $0.apiOrigin == origin.absoluteString && $0.accountID == credentials.account_id && $0.sessionID == session
+        }.map(\.requestID))
+    }
+    private func eraseDeletedAccountExports(_ account: String) throws {
+        for row in try exportJournals(secrets.read("export-deliveries-v2")) where row.accountID == account {
+            try retireExportFiles(account: account, session: row.sessionID)
+        }
+    }
+    private func sessionID(_ token: String) throws -> String {
+        let parts = token.split(separator: ".")
+        guard parts.count == 3, let bytes = Data(base64URL: String(parts[1])) else { throw NativeAPIError.invalidResponse }
+        // JWT claims bind the local handoff; all requests still require the
+        // server's live session authorization. They are not local authority.
+        return try WireValue.decoded(bytes).uuid("jti")
+    }
+    private func exportJournals(_ bytes: Data?) throws -> [NativeExportDeliveryJournal] {
+        guard let bytes else { return [] }
+        guard bytes.count <= 256 * 1024 else { throw NativeAPIError.invalidResponse }
+        let rows = try JSONDecoder().decode([NativeExportDeliveryJournal].self, from: bytes)
+        guard rows.count <= 32, Set(rows.map(\.operationKey)).count == rows.count, Set(rows.map(\.fileID)).count == rows.count else { throw NativeAPIError.invalidResponse }
+        for row in rows {
+            guard let ownOrigin = URL(string: row.apiOrigin), ownOrigin.host != nil else { throw NativeAPIError.invalidResponse }
+            try row.validate(origin: ownOrigin)
+        }
+        return rows
+    }
+    private func saveExportJournal(_ next: NativeExportDeliveryJournal, expected: NativeExportDeliveryJournal?) throws {
+        try next.validate(origin: origin)
+        for _ in 0..<8 {
+            let bytes = try secrets.read("export-deliveries-v2")
+            var rows = try exportJournals(bytes)
+            if let index = rows.firstIndex(where: { $0.operationKey == next.operationKey }) {
+                guard rows[index] == expected else { throw NativeAPIError.operationUnconfirmed(next.operationKey) }; rows[index] = next
+            } else {
+                guard expected == nil, rows.count < 32 else { throw NativeAPIError.operationUnconfirmed(next.operationKey) }
+                if let existing = rows.first(where: { $0.apiOrigin == next.apiOrigin && $0.accountID == next.accountID && $0.sessionID == next.sessionID && $0.requestID == next.requestID }) {
+                    throw NativeAPIError.operationUnconfirmed(existing.operationKey)
+                }
+                rows.append(next)
+            }
+            if try secrets.compareAndSwap("export-deliveries-v2", expected: bytes, replacement: JSONEncoder().encode(rows)) { return }
+        }
+        throw NativeAPIError.unavailable("export_storage_changed")
+    }
+    private func pruneExportDeliveries() throws {
+        let bytes = try secrets.read("export-deliveries-v2"), now = Date()
+        let rows = try exportJournals(bytes)
+        var retained: [NativeExportDeliveryJournal] = []
+        for row in rows {
+            let expiry = try row.delivery.map { try NativeRefreshDeliveryRecord.date($0["expires_at"]) } ?? row.preparedAt.addingTimeInterval(86400)
+            if expiry <= now { try removeExportFiles(row) } else { retained.append(row) }
+        }
+        if retained.count != rows.count { _ = try secrets.compareAndSwap("export-deliveries-v2", expected: bytes, replacement: JSONEncoder().encode(retained)) }
+    }
+    private func retireExportFiles(account: String, session: String) throws {
+        for row in try exportJournals(secrets.read("export-deliveries-v2")) where row.apiOrigin == origin.absoluteString && row.accountID == account && row.sessionID == session {
+            exportExpiryTasks.removeValue(forKey: row.operationKey)?.cancel()
+            try removeExportFiles(row)
+        }
+    }
+    private func scheduleExportExpiry(_ journal: NativeExportDeliveryJournal, expiresAt: Date) {
+        exportExpiryTasks[journal.operationKey]?.cancel()
+        exportExpiryTasks[journal.operationKey] = Task { [weak self] in
+            do {
+                try await Task.sleep(for: .seconds(max(0, expiresAt.timeIntervalSinceNow)))
+                guard !Task.isCancelled, let self else { return }
+                await self.expireExportFile(journal)
+            } catch {}
+        }
+    }
+    private func expireExportFile(_ journal: NativeExportDeliveryJournal) {
+        // The file ID is immutable per delivery. A later session or delivery
+        // owns a different ID and cannot be removed by this old expiry task.
+        try? removeExportFiles(journal)
+        exportExpiryTasks.removeValue(forKey: journal.operationKey)
+    }
+    private func cachedExportPage(_ journal: NativeExportDeliveryJournal, offset: Int, previous: String) throws -> NativeExportManifestPage {
+        guard let delivery = journal.delivery,
+              let data = try exportFiles.read(journal.childFileID(kind: "manifest", index: offset), maximum: 512 * 1024) else {
+            throw NativeAPIError.unavailable("export_staged_copy_unavailable")
+        }
+        return try NativeExportManifestPage(WireValue.decoded(data), delivery: delivery, offset: offset, previous: previous)
+    }
+    private func pumpExportChunks(_ journal: NativeExportDeliveryJournal, current: () throws -> Void,
+                                  sink: (Data) throws -> Void) throws {
+        guard let delivery = journal.delivery, let count = delivery["chunk_count"].integer, let total = delivery["bytes"].integer else { throw NativeAPIError.invalidResponse }
+        var offset = 0, root = try NativeExportManifestPage.seed(delivery), bytes = 0, digest = SHA256()
+        while offset < count {
+            try current()
+            let page = try cachedExportPage(journal, offset: offset, previous: root)
+            for chunk in page.chunks {
+                try current()
+                guard let data = try exportFiles.read(journal.childFileID(kind: "chunk", index: chunk.index), maximum: NativeExportManifestPage.chunkBytes) else {
+                    throw NativeAPIError.unavailable("export_staged_copy_unavailable")
+                }
+                try chunk.validate(data)
+                guard bytes <= total - data.count else { throw NativeAPIError.invalidResponse }
+                digest.update(data: data); bytes += data.count
+                try current(); try sink(data); try current()
+            }
+            root = page.chunks.last!.root; offset = page.next ?? count
+        }
+        guard bytes == total, root == delivery["manifest_sha256"].string,
+              digest.finalize().map({ String(format: "%02x", $0) }).joined() == delivery["sha256"].string else { throw NativeAPIError.invalidResponse }
+        try current()
+    }
+    private func removeExportFiles(_ journal: NativeExportDeliveryJournal) throws {
+        guard let delivery = journal.delivery else { return }
+        if !journal.chunked {
+            if let data = try exportFiles.read(journal.fileID) { try journal.validateBytes(data); try exportFiles.remove(journal.fileID) }
+            return
+        }
+        guard let count = delivery["chunk_count"].integer, let total = delivery["bytes"].integer else { throw NativeAPIError.invalidResponse }
+        // A crash may leave a verified prefix of the assembled file. Match it
+        // against the independently verified chunks before removing it.
+        if try !exportFiles.removeVerifiedComplete(journal.fileID, bytes: total, hash: delivery.text("sha256")) {
+            try exportFiles.removeValidatedPrefix(journal.fileID, maximum: total) { sink in
+                try pumpExportChunks(journal, current: {}, sink: sink)
+            }
+        }
+        var offset = 0, root = try NativeExportManifestPage.seed(delivery), lastManifest: Int?
+        while offset < count {
+            let id = try journal.childFileID(kind: "manifest", index: offset)
+            guard let bytes = try exportFiles.read(id, maximum: 512 * 1024) else { break }
+            let page = try NativeExportManifestPage(WireValue.decoded(bytes), delivery: delivery, offset: offset, previous: root)
+            for chunk in page.chunks {
+                let chunkID = try journal.childFileID(kind: "chunk", index: chunk.index)
+                if let data = try exportFiles.read(chunkID, maximum: NativeExportManifestPage.chunkBytes) { try chunk.validate(data); try exportFiles.remove(chunkID) }
+            }
+            lastManifest = offset; root = page.chunks.last!.root; offset = page.next ?? count
+        }
+        // Keep every descriptor until all its chunks are gone, then retire
+        // pages from the end. Interrupted cleanup retains a verifiable prefix.
+        while let offset = lastManifest {
+            try exportFiles.remove(journal.childFileID(kind: "manifest", index: offset))
+            lastManifest = offset == 0 ? nil : offset - NativeExportManifestPage.pageSize
+        }
+    }
+    /// The live app receives a protected file URL, never a full in-memory large
+    /// export. Its lease is bounded by both this delivery and the current session.
+    func exportFile(requestID: String) async throws -> (file: URL, expiresAt: Date) {
         guard UUID(uuidString: requestID) != nil else { throw NativeAPIError.invalidResponse }
-        let captured = try await readyScope(anonymous: true)
-        let grant = try await post("/privacy-exports/\(requestID)/grant", payload: .object([:]), operation: "privacy.export.grant")
-        try check(captured)
-        guard grant["request_id"].string == requestID, let path = grant["grant_path"].string,
-              let parsed = URLComponents(string: path), parsed.scheme == nil, parsed.host == nil,
-              parsed.path == "/privacy-exports/retrieve", parsed.queryItems?.count == 1,
-              parsed.queryItems?.first?.name == "grant", (parsed.queryItems?.first?.value?.count ?? 0) <= 200 else { throw NativeAPIError.invalidResponse }
-        try grant.requireExpiry("expires_at")
-        let reply = try await request(path, scope: captured, binary: true)
-        try check(captured)
-        guard (reply.headers["content-type"] ?? "").hasPrefix("application/json"), !reply.data.isEmpty else { throw NativeAPIError.invalidResponse }
-        return reply.data
+        let captured = try await readyScope(anonymous: true), session = try sessionID(captured.token!)
+        try pruneExportDeliveries()
+        let rows = try exportJournals(secrets.read("export-deliveries-v2"))
+        var held: NativeExportDeliveryJournal
+        if let existing = rows.first(where: { $0.apiOrigin == origin.absoluteString && $0.accountID == captured.account && $0.sessionID == session && $0.requestID == requestID }) { held = existing }
+        else {
+            held = NativeExportDeliveryJournal(origin: origin, account: captured.account!, session: session, request: requestID)
+            try saveExportJournal(held, expected: nil)
+        }
+        guard exportWork.insert(held.operationKey).inserted else { throw NativeAPIError.operationUnconfirmed(held.operationKey) }
+        defer { exportWork.remove(held.operationKey) }
+        func persist(_ next: NativeExportDeliveryJournal) throws {
+            try check(captured); try Task.checkCancellation(); try saveExportJournal(next, expected: held); held = next
+        }
+        // Creation/recovery is an exact-key exchange. No export capability is
+        // carried in a URL, and its journal never occupies generic editing state.
+        let delivery = try await json("/privacy-exports/\(requestID)/deliveries", method: "POST",
+            body: .object(["operation_key": .string(held.operationKey)]), scope: captured)
+        try check(captured); try held.validateDelivery(delivery)
+        var next = held; next.delivery = delivery; try persist(next); try held.requireLive()
+        let expiry = min(try NativeRefreshDeliveryRecord.date(delivery["expires_at"]), credentials?.expiresAt ?? .distantPast)
+        guard expiry > Date() else { throw NativeAPIError.sessionChanged }
+        scheduleExportExpiry(held, expiresAt: expiry)
+        func current() throws {
+            try check(captured); try Task.checkCancellation(); try held.requireLive()
+            guard expiry > Date() else { throw NativeAPIError.sessionChanged }
+        }
+        let file: URL
+        if held.chunked {
+            let count = delivery["chunk_count"].integer!
+            var offset = 0, root = try NativeExportManifestPage.seed(delivery)
+            let deliveryID = try delivery.uuid("delivery_id")
+            while offset < count {
+                try current()
+                let pageID = try held.childFileID(kind: "manifest", index: offset)
+                if try exportFiles.read(pageID, maximum: 512 * 1024) == nil {
+                    guard delivery["state"].string == "available", !held.staged, !held.acknowledged else { throw NativeAPIError.unavailable("export_staged_copy_unavailable") }
+                    let value = try await json("/privacy-exports/deliveries/\(deliveryID)/manifest?offset=\(offset)", scope: captured)
+                    _ = try NativeExportManifestPage(value, delivery: delivery, offset: offset, previous: root)
+                    try current(); try exportFiles.stage(value.encoded(), id: pageID, maximum: 512 * 1024)
+                }
+                let page = try cachedExportPage(held, offset: offset, previous: root)
+                for chunk in page.chunks {
+                    try current()
+                    let id = try held.childFileID(kind: "chunk", index: chunk.index)
+                    if let data = try exportFiles.read(id, maximum: NativeExportManifestPage.chunkBytes) { try chunk.validate(data) }
+                    else {
+                        guard delivery["state"].string == "available", !held.staged, !held.acknowledged else { throw NativeAPIError.unavailable("export_staged_copy_unavailable") }
+                        let reply = try await request(chunk.path, scope: captured, binary: true, responseLimit: NativeExportManifestPage.chunkBytes)
+                        try current()
+                        guard (reply.headers["content-type"] ?? "").lowercased().split(separator: ";", maxSplits: 1).first?.trimmingCharacters(in: .whitespaces) == "application/octet-stream" else { throw NativeAPIError.invalidResponse }
+                        try chunk.validate(reply.data); try exportFiles.stage(reply.data, id: id, maximum: NativeExportManifestPage.chunkBytes)
+                        guard let confirmed = try exportFiles.read(id, maximum: NativeExportManifestPage.chunkBytes) else { throw NativeAPIError.unavailable("export_staging_unconfirmed") }
+                        try chunk.validate(confirmed)
+                    }
+                }
+                root = page.chunks.last!.root; offset = page.next ?? count
+            }
+            file = try exportFiles.assemble(id: held.fileID, bytes: delivery["bytes"].integer!, hash: try delivery.text("sha256"), current: current) { sink in
+                try pumpExportChunks(held, current: current, sink: sink)
+            }
+        } else if let staged = try exportFiles.read(held.fileID) {
+            try held.validateBytes(staged)
+            file = try exportFiles.verifiedURL(held.fileID, bytes: staged.count, hash: try delivery.text("sha256"), current: current)
+        } else {
+            guard delivery["state"].string == "available", !held.acknowledged else {
+                throw NativeAPIError.unsupported(String(localized: "This export was already delivered and its local copy is unavailable. Request a new export from the privacy center."))
+            }
+            let reply = try await request(try delivery.text("retrieve_path"), scope: captured, binary: true)
+            try check(captured); try Task.checkCancellation(); try held.requireLive()
+            guard (reply.headers["content-type"] ?? "").lowercased().hasPrefix("application/json") else { throw NativeAPIError.invalidResponse }
+            try held.validateBytes(reply.data)
+            try exportFiles.stage(reply.data, id: held.fileID)
+            file = try exportFiles.verifiedURL(held.fileID, bytes: reply.data.count, hash: try delivery.text("sha256"), current: current)
+        }
+        if !held.staged { next = held; next.staged = true; try persist(next) }
+        if !held.acknowledged {
+            let acknowledgement = try await json(try delivery.text("ack_path"), method: "POST",
+                body: .object(["operation_key": .string(held.acknowledgementKey), "sha256": delivery["sha256"]]), scope: captured)
+            try check(captured); try held.requireLive()
+            guard Set(acknowledgement.object?.keys.map { $0 } ?? []) == ["acknowledged", "delivery_id", "request_id"],
+                  acknowledgement["acknowledged"].bool == true, acknowledgement["delivery_id"] == delivery["delivery_id"],
+                  acknowledgement["request_id"].string == requestID else { throw NativeAPIError.invalidResponse }
+            next = held; next.acknowledged = true
+            var acknowledgedDelivery = delivery.object!; acknowledgedDelivery["state"] = .string("acknowledged"); next.delivery = .object(acknowledgedDelivery)
+            try persist(next)
+        }
+        try current()
+        _ = try exportFiles.verifiedURL(held.fileID, bytes: delivery["bytes"].integer!, hash: try delivery.text("sha256"), current: current)
+        return (file, expiry)
+    }
+    /// Bounded compatibility helper for controlled v2 consumers. The app uses
+    /// exportFile so a large export cannot accidentally allocate a full Data.
+    func exportBytes(requestID: String) async throws -> (bytes: Data, expiresAt: Date) {
+        let result = try await exportFile(requestID: requestID)
+        let values = try result.file.resourceValues(forKeys: [.fileSizeKey])
+        guard let count = values.fileSize, (1...20 * 1024 * 1024).contains(count) else { throw NativeAPIError.invalidResponse }
+        let bytes = try Data(contentsOf: result.file)
+        guard bytes.count == count, result.expiresAt > Date() else { throw NativeAPIError.sessionChanged }
+        return (bytes, result.expiresAt)
     }
 }
 
@@ -3340,6 +4666,7 @@ extension BackendRepository {
 extension BackendRepository {
     func registeredDeletionReceipt() throws -> NativeRegisteredDeletionRecord? {
         guard let data = try secrets.read("registered-deletion-receipt") else { return nil }
+        guard data.count <= NativeRegisteredDeletionRecord.maximumEncodedBytes else { throw NativeAPIError.invalidResponse }
         let record = try JSONDecoder().decode(NativeRegisteredDeletionRecord.self, from: data)
         try record.validate(origin: origin); return record
     }
@@ -3357,23 +4684,196 @@ extension BackendRepository {
         }
         let value = try await json("/privacy/account-deletion", method: "POST", body: record.payload, scope: captured)
         try check(captured); try record.validateResponse(value); record.response = value
-        try secrets.write("registered-deletion-receipt", data: JSONEncoder().encode(record)); return record
+        try saveRegisteredDeletion(record)
+        if record.completed { return try await cleanupRegisteredDeletion(record) }; return record
     }
     func checkRegisteredDeletion() async throws -> NativeRegisteredDeletionRecord {
         guard var record = try registeredDeletionReceipt() else { throw NativeAPIError.invalidResponse }
-        let value = try await json("/privacy/account-deletion/status", method: "POST", body: .object(["status_token": .string(record.statusToken)]), scope: Scope(epoch: epoch, account: nil, token: nil))
+        if record.completed { return try await cleanupRegisteredDeletion(record) }
+        let value = try await json("/privacy/account-deletion/status", method: "POST", body: .object(["status_token": .string(record.statusToken)]), scope: Scope(epoch: epoch, account: nil, token: nil, retirementGeneration: sessionRetirement.snapshot().generation))
         try record.validateResponse(value); record.response = value
-        try secrets.write("registered-deletion-receipt", data: JSONEncoder().encode(record))
-        if record.completed { clearSession(identity: true) }
+        try saveRegisteredDeletion(record)
+        if record.completed { return try await cleanupRegisteredDeletion(record) }
         return record
     }
     func finishRegisteredDeletionReceipt() async throws -> NativeSessionSummary? {
         guard let record = try registeredDeletionReceipt(), record.completed else { throw NativeAPIError.unsupported(String(localized: "The server must confirm completed deletion before starting again.")) }
-        try secrets.write("registered-deletion-receipt", data: nil); clearSession(identity: true); return try await bootstrap()
+        let cleaned = try await cleanupRegisteredDeletion(record)
+        guard cleaned.localCleanupComplete == true,
+              let saved = try secrets.read("registered-deletion-receipt"),
+              try JSONDecoder().decode(NativeRegisteredDeletionRecord.self, from: saved).operationKey == cleaned.operationKey,
+              try secrets.compareAndSwap("registered-deletion-receipt", expected: saved, replacement: nil) else { throw NativeAPIError.sessionChanged }
+        return try await bootstrap()
     }
     func continueRegisteredAccount() throws {
         guard let record = try registeredDeletionReceipt(), ["rejected", "cancelled"].contains(record.response?["privacy_request"]["status"].string ?? "") else { throw NativeAPIError.unsupported(String(localized: "Keep this receipt until the deletion request is resolved.")) }
         try secrets.write("registered-deletion-receipt", data: nil)
+    }
+    private func saveRegisteredDeletion(_ record: NativeRegisteredDeletionRecord) throws {
+        try record.validate(origin: origin)
+        guard let bytes = try secrets.read("registered-deletion-receipt"), bytes.count <= NativeRegisteredDeletionRecord.maximumEncodedBytes else { throw NativeAPIError.sessionChanged }
+        let current = try JSONDecoder().decode(NativeRegisteredDeletionRecord.self, from: bytes)
+        let encoded = try JSONEncoder().encode(record)
+        guard current.operationKey == record.operationKey, current.accountID == record.accountID, current.statusToken == record.statusToken,
+              !current.completed || record.completed, encoded.count <= NativeRegisteredDeletionRecord.maximumEncodedBytes,
+              try secrets.compareAndSwap("registered-deletion-receipt", expected: bytes, replacement: encoded) else { throw NativeAPIError.sessionChanged }
+    }
+    /// Completed server erasure authorizes only this account's local retirement.
+    /// Every removal is acknowledged; the receipt survives a failed write, a
+    /// failed key/file deletion or process termination at any step.
+    private func cleanupRegisteredDeletion(_ original: NativeRegisteredDeletionRecord) async throws -> NativeRegisteredDeletionRecord {
+        try original.validate(origin: origin)
+        guard original.completed else { throw NativeAPIError.invalidResponse }
+        guard !registeredDeletionCleanupBusy else { throw NativeAPIError.unavailable("deletion_cleanup_in_progress") }
+        registeredDeletionCleanupBusy = true; defer { registeredDeletionCleanupBusy = false }
+        let account = original.accountID
+        // Bootstrap deliberately stops at the deletion receipt, so the durable
+        // credential may not yet be in memory. Retire that exact authority before
+        // deleting its slot. The independent generation defeats a late write or
+        // restoration of those bytes after a cleanup failure or process restart.
+        // Credential writers share this custody gate; a newer foreign account
+        // must neither be removed nor have its authority generation invalidated.
+        try NativeIdentityCustody.withLock {
+            let stored: NativeCredentials?
+            if let bytes = try secrets.read("credentials") {
+                guard bytes.count <= 16 * 1024 else { throw NativeAPIError.invalidResponse }
+                stored = try JSONDecoder().decode(NativeCredentials.self, from: bytes)
+            } else { stored = nil }
+            let liveOwner = credentials?.account_id == account ? credentials : nil
+            let storedOwner = stored?.account_id == account ? stored : nil
+            let foreignLive = credentials != nil && liveOwner == nil
+            let foreignStored = stored != nil && storedOwner == nil
+            if liveOwner != nil { uploadSerial += 1; uploadBusy = false }
+            if (liveOwner != nil || storedOwner != nil) && !foreignLive && !foreignStored {
+                try retireForRestriction(storedOwner ?? liveOwner)
+            } else if liveOwner != nil {
+                epoch += 1; credentials = nil; audienceProjection = nil; audienceProjectionEpoch = nil
+                transport.cancelPending(); retireMedia()
+            }
+            try recordCredentialRetirement(liveOwner)
+            try recordCredentialRetirement(storedOwner)
+            if let storedOwner { _ = try retireCredentialSlot(storedOwner) }
+        }
+        _ = try uploadBatchJournal() // Validate all durable upload owners before their retirement writes.
+        try await retireDeletedAccountUploads(account)
+        guard var record = try registeredDeletionReceipt(), record.operationKey == original.operationKey, record.completed else { throw NativeAPIError.sessionChanged }
+        let decoder = JSONDecoder(), encoder = JSONEncoder()
+        func read<T: Decodable>(_ name: String, _ type: T.Type) throws -> T? {
+            guard let bytes = try secrets.read(name) else { return nil }
+            guard bytes.count <= 2 * 1024 * 1024 else { throw NativeAPIError.invalidResponse }
+            return try decoder.decode(type, from: bytes)
+        }
+        var references: [(account: String, alias: String, jwk: WireValue?)] = []
+        for name in ["registered-device", "pending-face-device"] {
+            if let value = try read(name, RegisteredDevice.self) { try validLocalDevice(value); references.append((value.accountID, value.keyAlias ?? NativeEnrollmentRecord.keyAlias, nil)) }
+        }
+        if let value = try read("face-enrollment-journal", NativeEnrollmentRecord.self) { try value.validate(origin: origin); references.append((value.accountID, value.keyAlias, value.publicJWK)) }
+        if let value = try read("ordinary-face-login-journal", NativeOrdinaryLoginRecord.self) { try value.validate(origin: origin); references.append((value.originalDevice.accountID, value.keyAlias, value.publicJWK)) }
+        if let value = try read("account-recovery-journal", NativeAccountRecoveryRecord.self) { try value.validate(origin: origin); references.append((value.accountID, value.keyAlias, value.publicJWK)); references += value.supersededAliases.map { (value.accountID, $0, nil) } }
+        if let value = try read("face-profile-lifecycle", NativeFaceLifecycleRecord.self) { try value.validate(origin: origin); references.append((value.accountID, value.keyAlias, value.publicJWK)) }
+        for value in try audienceDeviceRenewals().0 { references.append((value.accountID, value.keyAlias, nil)) }
+        for value in try read("retired-account-recoveries", [NativeAccountRecoveryRecord].self) ?? [] { try value.validate(origin: origin); references.append((value.accountID, value.keyAlias, value.publicJWK)); references += value.supersededAliases.map { (value.accountID, $0, nil) } }
+        for name in ["retired-face-profile-controls", "deleted-face-profile-controls"] {
+            for value in try read(name, [NativeFaceLifecycleRecord].self) ?? [] { try value.validate(origin: origin); references.append((value.accountID, value.keyAlias, value.publicJWK)) }
+        }
+        // Lifecycle archives can retain recovery credentials as well as signing
+        // aliases. Validate owner and payload together before collecting keys or
+        // dropping any reference, including references belonging to other users.
+        let archivedIdentities = try read("face-lifecycle-retired-identities", [WireValue].self) ?? []
+        guard archivedIdentities.count <= 16 else { throw NativeAPIError.invalidResponse }
+        for row in archivedIdentities {
+            guard Set(row.object?.keys.map { $0 } ?? []) == ["kind", "accountID", "payload"],
+                  let owner = row["accountID"].string, UUID(uuidString: owner) != nil,
+                  row["payload"]["accountID"].string == owner else { throw NativeAPIError.invalidResponse }
+            let payload = try row["payload"].encoded()
+            switch row["kind"].string {
+            case "face-enrollment-journal":
+                let value = try decoder.decode(NativeEnrollmentRecord.self, from: payload); try value.validate(origin: origin)
+                references.append((owner, value.keyAlias, value.publicJWK))
+            case "account-recovery-journal":
+                let value = try decoder.decode(NativeAccountRecoveryRecord.self, from: payload); try value.validate(origin: origin)
+                references.append((owner, value.keyAlias, value.publicJWK)); references += value.supersededAliases.map { (owner, $0, nil) }
+            case "recovery-key-backup":
+                let value = try decoder.decode(NativeRecoveryKeyRecord.self, from: payload); try value.validate(origin: origin)
+            default: throw NativeAPIError.invalidResponse
+            }
+        }
+        var planned = record.cleanupKeys ?? []
+        for reference in references where reference.account == account && !references.contains(where: { $0.alias == reference.alias && $0.account != account }) {
+            if !planned.contains(where: { $0.alias == reference.alias }), try signer.keyExists(alias: reference.alias) {
+                let current = try signer.publicJWK(alias: reference.alias, create: false)
+                if let expected = reference.jwk, try expected.canonical() != current.canonical() { throw NativeAPIError.unavailable("deletion_key_binding_changed") }
+                planned.append(.init(alias: reference.alias, publicJWK: current))
+            }
+        }
+        record.cleanupKeys = planned; record.localCleanupComplete = false
+        try saveRegisteredDeletion(record) // Key ownership survives erasing its journals.
+        func removeOwned<T: Codable>(_ name: String, _ type: T.Type, accountOf: (T) -> String) throws {
+            guard let bytes = try secrets.read(name) else { return }
+            let value = try decoder.decode(type, from: bytes)
+            if accountOf(value) == account {
+                guard try secrets.compareAndSwap(name, expected: bytes, replacement: nil) else { throw NativeAPIError.sessionChanged }
+            }
+        }
+        func filterOwned<T: Codable>(_ name: String, _ type: T.Type, accountOf: (T) -> String) throws {
+            guard let bytes = try secrets.read(name) else { return }
+            let values = try decoder.decode([T].self, from: bytes), kept = values.filter { accountOf($0) != account }
+            if values.count != kept.count {
+                guard try secrets.compareAndSwap(name, expected: bytes, replacement: kept.isEmpty ? nil : encoder.encode(kept)) else { throw NativeAPIError.sessionChanged }
+            }
+        }
+        // Delete files before their durable roster. A crash can repeat removal;
+        // it can never leave unowned staging bytes behind a completed receipt.
+        let (batches, batchBytes) = try uploadBatchJournal()
+        if let bytes = batchBytes {
+            for batch in batches where batch.accountID == account {
+                guard batch.paused, batch.backgroundRetryAllowed == false else { throw NativeAPIError.sessionChanged }
+                try uploadFiles.removeBatchConfirmed(batch.id)
+            }
+            let kept = batches.filter { $0.accountID != account }
+            guard try secrets.compareAndSwap("resumable-photo-batches-v1", expected: bytes, replacement: kept.isEmpty ? nil : encoder.encode(kept)) else { throw NativeAPIError.sessionChanged }
+            uploadBatches = kept
+        }
+        try removeOwned("credentials", NativeCredentials.self) { $0.account_id }
+        for name in ["registered-device", "pending-face-device"] { try removeOwned(name, RegisteredDevice.self) { $0.accountID } }
+        try removeOwned("face-enrollment-journal", NativeEnrollmentRecord.self) { $0.accountID }
+        try removeOwned("ordinary-face-login-journal", NativeOrdinaryLoginRecord.self) { $0.originalDevice.accountID }
+        try removeOwned("account-recovery-journal", NativeAccountRecoveryRecord.self) { $0.accountID }
+        try removeOwned("face-profile-lifecycle", NativeFaceLifecycleRecord.self) { $0.accountID }
+        try removeOwned("recovery-key-backup", NativeRecoveryKeyRecord.self) { $0.accountID }
+        try removeOwned(Self.refreshDeliverySlot, NativeRefreshDeliveryRecord.self) { $0.original.account_id }
+        try removeOwned("audience-mutation-journal", NativeAudienceMutationRecord.self) { $0.accountID }
+        try removeOwned("audience-suspended-authority", NativeAudienceSuspensionRecord.self) { $0.operation.accountID }
+        try filterOwned("operation-intents", NativeOperationIntent.self) { $0.accountID }
+        try filterOwned("operation-terminal-evidence", NativeOperationRetirementRecord.self) { $0.accountID }
+        try filterOwned("upload-stages", NativeUploadRecord.self) { $0.accountID }
+        try filterOwned("retired-account-recoveries", NativeAccountRecoveryRecord.self) { $0.accountID }
+        try filterOwned("face-lifecycle-retired-identities", WireValue.self) { $0["accountID"].string ?? "" }
+        for name in ["retired-face-profile-controls", "deleted-face-profile-controls"] { try filterOwned(name, NativeFaceLifecycleRecord.self) { $0.accountID } }
+        try filterOwned("retired-refresh-deliveries-v1", NativeRefreshDeliveryRecord.self) { $0.original.account_id }
+        try filterOwned("audience-operations-retired-after-deletion", NativeAudienceMutationRecord.self) { $0.accountID }
+        try filterOwned("audience-device-renewals", NativeAudienceDeviceRenewalRecord.self) { $0.accountID }
+        try retireApplePurchasesAfterDeletion(account: account)
+        try eraseDeletedAccountExports(account)
+        if let bytes = try secrets.read("guardian-bound-reference"), try WireValue.decoded(bytes)["account_id"].string == account {
+            guard try secrets.compareAndSwap("guardian-bound-reference", expected: bytes, replacement: nil) else { throw NativeAPIError.sessionChanged }
+        }
+        let library = "library-state-" + account
+        if let bytes = try secrets.read(library) { guard try secrets.compareAndSwap(library, expected: bytes, replacement: nil) else { throw NativeAPIError.sessionChanged } }
+        for key in planned where !references.contains(where: { $0.alias == key.alias && $0.account != account }) {
+            guard try signer.keyExists(alias: key.alias) else { continue }
+            // Another key at a reused alias belongs to its newer lifecycle.
+            if try signer.publicJWK(alias: key.alias, create: false).canonical() == key.publicJWK.canonical() { try signer.removeOwnedKey(alias: key.alias, publicJWK: key.publicJWK) }
+        }
+        if enrollment?.accountID == account { enrollment = nil; enrollmentSerial += 1; enrollmentBusy = false }
+        if ordinaryLogin?.originalDevice.accountID == account { ordinaryLogin = nil }
+        if accountRecovery?.accountID == account { accountRecovery = nil; recoverySerial += 1; recoveryBusy = false }
+        if faceLifecycle?.accountID == account { faceLifecycle = nil; lifecycleSerial += 1; lifecycleBusy = false }
+        if audienceSuspension?.operation.accountID == account { audienceSuspension = nil }
+        intents.removeAll { $0.accountID == account }; uploads.removeAll { $0.accountID == account }
+        recoveryArchives.removeAll { $0.accountID == account }; lifecycleArchives.removeAll { $0.accountID == account }
+        record.cleanupKeys = []; record.localCleanupComplete = true
+        try saveRegisteredDeletion(record); return record
     }
 }
 
@@ -3381,8 +4881,98 @@ extension BackendRepository {
 extension BackendRepository {
     // This allow-list permits safety/privacy work under a current durable session
     // even when an audience hold blocks all product work. It grants no backend authority.
+    private func audienceDeviceOwner(_ captured: Scope) throws -> RegisteredDevice {
+        try check(captured)
+        guard guestDeletion == nil, try registeredDeletionReceipt() == nil,
+              let bytes = try secrets.read("registered-device"), bytes.count <= 32 * 1024 else { throw NativeAPIError.authenticationRequired }
+        let owner = try JSONDecoder().decode(RegisteredDevice.self, from: bytes); try validLocalDevice(owner)
+        guard credentials == nil || credentials?.account_id == owner.accountID,
+              [enrollment?.accountID, accountRecovery?.accountID, faceLifecycle?.accountID].compactMap({ $0 }).allSatisfy({ $0 == owner.accountID }) else { throw NativeAPIError.sessionChanged }
+        return owner
+    }
+    private func checkAudienceDevice(_ owner: RegisteredDevice, captured: Scope) throws {
+        let current = try audienceDeviceOwner(captured)
+        guard try localEncodedDigest(current) == localEncodedDigest(owner) else { throw NativeAPIError.sessionChanged }
+    }
+    private func audienceDeviceRenewals() throws -> ([NativeAudienceDeviceRenewalRecord], Data?) {
+        guard let bytes = try secrets.read("audience-device-renewals") else { return ([], nil) }
+        guard bytes.count <= 256 * 1024 else { throw NativeAPIError.invalidResponse }
+        let rows = try JSONDecoder().decode([NativeAudienceDeviceRenewalRecord].self, from: bytes)
+        guard rows.count <= 32, Set(rows.map(\.accountID)).count == rows.count else { throw NativeAPIError.invalidResponse }
+        for row in rows {
+            let owner = RegisteredDevice(accountID: row.accountID, faceHandle: row.faceHandle, deviceID: row.deviceID, keyAlias: row.keyAlias)
+            try row.validate(origin: origin, device: owner)
+        }
+        return (rows, bytes)
+    }
+    func pendingAudienceDeviceRenewal() throws -> Bool {
+        let account: String?
+        if let current = credentials?.account_id { account = current } else { account = try device()?.accountID }
+        return try audienceDeviceRenewals().0.contains { $0.accountID == account }
+    }
+    func audienceDeviceBinding(_ status: NativeAudienceDeviceStatus) throws -> NativeAudienceSessionBinding {
+        let captured = Scope(epoch: epoch, account: nil, token: nil, retirementGeneration: sessionRetirement.snapshot().generation), owner = try audienceDeviceOwner(captured)
+        guard owner.accountID == status.accountID, owner.deviceID == status.deviceID else { throw NativeAPIError.sessionChanged }
+        return NativeAudienceSessionBinding(accountID: owner.accountID, epoch: epoch, registeredIdentity: false, deviceOnly: true)
+    }
+    private func signedAudienceDevice(_ owner: RegisteredDevice, captured: Scope, step: String, operation: NativeAudienceDeviceRenewalRecord? = nil) async throws -> NativeAudienceDeviceStatus {
+        try checkAudienceDevice(owner, captured: captured)
+        let nonce = UUID().uuidString.lowercased()
+        var fields: [String: WireValue] = ["account_id": .string(owner.accountID), "device_id": .string(owner.deviceID), "face_handle": .string(owner.faceHandle),
+            "request_nonce": .string(nonce), "request_expires_at": .integer(Int(Date().timeIntervalSince1970 * 1000) + 55_000)]
+        if let operation { try operation.validate(origin: origin, device: owner); fields.merge(operation.decisionBody) { _, new in new } }
+        let envelope = WireValue.object(fields.merging(["protocol": .string("lovelies-audience-device-v1"), "step": .string(step)]) { _, new in new })
+        fields["device_signature"] = .string(try signDevice(envelope.canonical(), alias: owner.keyAlias ?? NativeEnrollmentRecord.keyAlias))
+        try checkAudienceDevice(owner, captured: captured)
+        let value = try await json("/auth/face/audience/" + step, method: "POST", body: .object(fields), scope: captured, preserveRefreshAuthority: true)
+        try checkAudienceDevice(owner, captured: captured)
+        return try NativeAudienceDeviceStatus(value, account: owner.accountID, device: owner.deviceID, nonce: nonce, operation: operation)
+    }
+    func signedAudienceStatus() async throws -> NativeAudienceDeviceStatus {
+        let captured = Scope(epoch: epoch, account: nil, token: nil, retirementGeneration: sessionRetirement.snapshot().generation)
+        return try await signedAudienceDevice(audienceDeviceOwner(captured), captured: captured, step: "status")
+    }
+    func renewDeviceAudience(expectedVersion: Int, consentPolicy: String?, guardianRequired: Bool = false, retryOriginal: Bool = false) async throws -> NativeAudienceDeviceStatus {
+        guard !audienceMutationBusy else { throw NativeAPIError.operationUnconfirmed("audience_mutation_busy") }
+        audienceMutationBusy = true; defer { audienceMutationBusy = false }
+        let captured = Scope(epoch: epoch, account: nil, token: nil, retirementGeneration: sessionRetirement.snapshot().generation), owner = try audienceDeviceOwner(captured)
+        guard try pendingAudienceMutation() == nil else { throw NativeAPIError.operationUnconfirmed("audience_mutation_pending") }
+        let (rows, bytes) = try audienceDeviceRenewals()
+        let record: NativeAudienceDeviceRenewalRecord
+        if let existing = rows.first(where: { $0.accountID == owner.accountID }) {
+            guard retryOriginal else { throw NativeAPIError.operationUnconfirmed(existing.operationKey) }
+            try existing.validate(origin: origin, device: owner); record = existing
+        } else {
+            guard !retryOriginal, rows.count < 32 else { throw NativeAPIError.invalidResponse }
+            record = try NativeAudienceDeviceRenewalRecord(origin: origin, device: owner, expectedVersion: expectedVersion, consentPolicy: consentPolicy, guardianRequired: guardianRequired)
+            guard try secrets.compareAndSwap("audience-device-renewals", expected: bytes, replacement: JSONEncoder().encode(rows + [record])) else { throw NativeAPIError.sessionChanged }
+        }
+        // Errors retain the original exact key and reviewed decision. A fresh
+        // nonce authenticates recovery; it never substitutes a second mutation.
+        let step = record.guardianRequired ? "guardian-review" : "renew"
+        let result: NativeAudienceDeviceStatus
+        do { result = try await signedAudienceDevice(owner, captured: captured, step: step, operation: record) }
+        catch NativeAPIError.denied(let status, let code) where NativeOperationRetirementRecord.isTerminal(status: status, code: code) {
+            try checkAudienceDevice(owner, captured: captured)
+            try retainTerminal(NativeOperationRetirementRecord(origin: origin, account: record.accountID, key: record.operationKey, action: "audience.device." + step,
+                path: "/auth/face/audience/" + step, method: "POST", inputSHA256: NativeApplePurchaseRecord.hash(try WireValue.object(record.decisionBody).canonical()), sourceStatus: status, sourceCode: code))
+            let (retained, retainedBytes) = try audienceDeviceRenewals()
+            guard retained.filter({ $0 == record }).count == 1 else { throw NativeAPIError.sessionChanged }
+            let remaining = retained.filter { $0 != record }
+            guard try secrets.compareAndSwap("audience-device-renewals", expected: retainedBytes, replacement: remaining.isEmpty ? nil : JSONEncoder().encode(remaining)) else { throw NativeAPIError.sessionChanged }
+            audienceProjection = nil; audienceProjectionEpoch = nil; retireMedia()
+            throw NativeAPIError.denied(409, "audience_operation_recovered_without_result")
+        }
+        try checkAudienceDevice(owner, captured: captured)
+        let (current, currentBytes) = try audienceDeviceRenewals()
+        guard current.filter({ $0 == record }).count == 1 else { throw NativeAPIError.sessionChanged }
+        let retained = current.filter { $0 != record }
+        guard try secrets.compareAndSwap("audience-device-renewals", expected: currentBytes, replacement: retained.isEmpty ? nil : JSONEncoder().encode(retained)) else { throw NativeAPIError.sessionChanged }
+        audienceProjection = nil; audienceProjectionEpoch = nil; retireMedia()
+        return result
+    }
     private static func audienceWeakerPath(_ path: String, method: String = "GET") -> Bool {
-        path == "/me" || path == "/me/audience" || path.hasPrefix("/me/guardian-requests") || path.hasPrefix("/guardian-requests/") ||
+        path == "/me" || path == "/me/audience" || path == "/me/audience/renew" || path.hasPrefix("/me/guardian-requests") || path.hasPrefix("/guardian-requests/") ||
         path == "/me/devices" || path == "/me/sessions" || path == "/me/photo-preferences" || path == "/auth/session/revoke" || path == "/auth/device/revoke" ||
         path.hasPrefix("/privacy/") || path.hasPrefix("/privacy-requests/") || path.hasPrefix("/privacy-exports/") ||
         path == "/auth/logout" || (path.hasPrefix("/uploads/") && path.hasSuffix("/cancel"))
@@ -3399,7 +4989,8 @@ extension BackendRepository {
         return parsed
     }
     func audienceSessionBinding() -> NativeAudienceSessionBinding? {
-        credentials.map { NativeAudienceSessionBinding(accountID: $0.account_id, epoch: epoch, registeredIdentity: $0.authenticated) }
+        guard !sessionRetirement.snapshot().retiring else { return nil }
+        return credentials.flatMap { !credentialCurrent($0) || retiredCredentialDigests.contains(Self.credentialDigest($0)) ? nil : NativeAudienceSessionBinding(accountID: $0.account_id, epoch: epoch, registeredIdentity: $0.authenticated) }
     }
     func audiencePresentation(_ value: NativeAudienceProjection) throws -> NativeAudienceSessionBinding {
         guard audienceProjection == value, audienceProjectionEpoch == epoch, value.accountID == credentials?.account_id, let binding = audienceSessionBinding() else { throw NativeAPIError.sessionChanged }
@@ -3409,6 +5000,7 @@ extension BackendRepository {
         try await fetchAudience(readyScope(anonymous: true))
     }
     private func requireAudience(_ purpose: NativeAudiencePurpose, captured: Scope) async throws -> NativeAudienceProjection {
+        if try pendingAudienceDeviceRenewal() { throw NativeAPIError.operationUnconfirmed("audience_renewal_pending") }
         let value = try await fetchAudience(captured); try value.require(purpose); return value
     }
     func requireAudience(_ purpose: NativeAudiencePurpose) async throws -> NativeAudienceProjection {
@@ -3448,7 +5040,7 @@ extension BackendRepository {
         let purpose: NativeAudiencePurpose = path.hasPrefix("/uploads") ? .photoProcessing : .faceAuthentication
         let value = try await requireAudience(purpose, captured: captured)
         if path == "/community/action", let action = body?["action"].string,
-           !["photos", "photos.validate", "inbox", "history", "operation"].contains(action) { try value.require(.photoMatching) }
+           !["photos", "photos.validate", "photos.lookup", "inbox", "history", "operation"].contains(action) { try value.require(.photoMatching) }
         return value
     }
     private func recheckAudienceFence(_ previous: NativeAudienceProjection, captured: Scope, purpose: NativeAudiencePurpose = .faceAuthentication) async throws {
@@ -3514,7 +5106,7 @@ extension BackendRepository {
     }
     private func saveAudienceSuspension(_ held: NativeAudienceSuspensionRecord) throws {
         try held.validate(origin: origin)
-        try secrets.write("audience-suspended-authority", data: JSONEncoder().encode(held)); audienceSuspension = held
+        try replaceOwnedJournal("audience-suspended-authority", previous: audienceSuspension, replacement: held); audienceSuspension = held
     }
     private func restoreAudienceSuspension() throws -> Bool {
         guard let bytes = try secrets.read("audience-suspended-authority") else { return false }
@@ -3529,7 +5121,7 @@ extension BackendRepository {
         guard pending == held.operation || pending == nil && held.resolved else { throw NativeAPIError.sessionChanged }
         credentials = held.credentials; audienceSuspension = held; epoch += 1; retireMedia()
         if held.resolved && pending == nil {
-            try secrets.write("credentials", data: JSONEncoder().encode(held.credentials))
+            try persistCredential(held.credentials)
             try secrets.write("audience-suspended-authority", data: nil); audienceSuspension = nil; return false
         }
         return true
@@ -3542,6 +5134,7 @@ extension BackendRepository {
     }
     private func audienceMutation(path: String, method: String = "POST", body: WireValue, retryOriginal: Bool = false) async throws -> WireValue {
         guard !audienceMutationBusy else { throw NativeAPIError.operationUnconfirmed("audience_mutation_busy") }
+        guard try !pendingAudienceDeviceRenewal() else { throw NativeAPIError.operationUnconfirmed("audience_renewal_pending") }
         audienceMutationBusy = true; defer { audienceMutationBusy = false }
         let captured = try await readyScope(anonymous: true)
         let record: NativeAudienceMutationRecord
@@ -3557,7 +5150,14 @@ extension BackendRepository {
         do {
             let value = try await json(record.path, method: record.method, body: record.body, scope: captured)
             try check(captured)
-            if record.path == "/me/audience" { _ = try NativeAudienceProjection(value, account: record.accountID) }
+            if record.path == "/me/audience" { _ = try NativeAudienceProjection(value, account: record.accountID, allowLegacyReceipt: record.body["age_band"].string != nil) }
+            else if record.path == "/me/audience/renew" {
+                guard var projection = value.object else { throw NativeAPIError.invalidResponse }
+                projection.removeValue(forKey: "renewal")
+                let current = try NativeAudienceProjection(.object(projection), account: record.accountID)
+                try NativeAudienceDeviceStatus.validateReceipt(value["renewal"], key: record.operationKey,
+                    expectedVersion: record.body["expected_version"].integer ?? -1, currentVersion: current.version)
+            }
             else if record.path == "/me/guardian-requests" {
                 let full = try NativeAudienceProjection(value["audience"], account: record.accountID)
                 let request = try NativeGuardianRequest(value["guardian_request"], child: record.accountID)
@@ -3575,7 +5175,14 @@ extension BackendRepository {
             try retireAudienceMutation(record)
             audienceProjection = nil; audienceProjectionEpoch = nil; retireMedia()
             return value
-        } catch NativeAPIError.denied(let status, let code) where (400..<500).contains(status) && ![408, 429].contains(status) && code != "operation_key_conflict" {
+        } catch NativeAPIError.denied(let status, let code) where NativeOperationRetirementRecord.isTerminal(status: status, code: code) {
+            try check(captured)
+            try retainTerminal(NativeOperationRetirementRecord(origin: origin, account: record.accountID, key: record.operationKey, action: "audience." + record.path,
+                path: record.path, method: record.method, inputSHA256: NativeApplePurchaseRecord.hash(try record.body.canonical()), sourceStatus: status, sourceCode: code))
+            try retireAudienceMutation(record)
+            audienceProjection = nil; audienceProjectionEpoch = nil; retireMedia()
+            throw NativeAPIError.denied(409, "audience_operation_recovered_without_result")
+        } catch NativeAPIError.denied(let status, let code) where (400..<500).contains(status) && ![408, 429].contains(status) && !["operation_key_conflict", "explicit_auth_consent_required", "face_policy_changed", "consent_policy_changed", "audience_policy_changed"].contains(code) {
             try check(captured)
             try retireAudienceMutation(record)
             throw NativeAPIError.denied(status, code)
@@ -3585,7 +5192,7 @@ extension BackendRepository {
         if var held = audienceSuspension {
             guard held.operation == record, let current = credentials, current.account_id == record.accountID else { throw NativeAPIError.sessionChanged }
             held.credentials = current; held.resolved = true; try saveAudienceSuspension(held)
-            try secrets.write("credentials", data: JSONEncoder().encode(current))
+            try persistCredential(current)
         }
         guard let data = try secrets.read("audience-mutation-journal"),
               try JSONDecoder().decode(NativeAudienceMutationRecord.self, from: data) == record,
@@ -3593,13 +5200,22 @@ extension BackendRepository {
         if audienceSuspension != nil { try secrets.write("audience-suspended-authority", data: nil); audienceSuspension = nil }
     }
     func retryAudienceMutation() async throws -> NativeAudienceProjection {
-        _ = try await audienceMutation(path: "", body: .null, retryOriginal: true)
-        return try await audience()
+        let isRenewal = try pendingAudienceMutation()?.path == "/me/audience/renew"
+        let result = try await audienceMutation(path: "", body: .null, retryOriginal: true)
+        var current = try await audience()
+        if isRenewal { current.renewalNextStep = result["renewal"]["next_step"].string; audienceProjection = current }
+        return current
     }
     func declareAudience(_ band: NativeAgeBand, expectedVersion: Int) async throws -> NativeAudienceProjection {
         guard band != .unknown else { throw NativeAPIError.invalidResponse }
-        _ = try await audienceMutation(path: "/me/audience", method: "PUT", body: .object(["age_band": .string(band.rawValue), "policy_version": .string(NativeAudienceProjection.policy), "expected_version": .integer(expectedVersion)]))
+        _ = try await audienceMutation(path: "/me/audience", method: "PUT", body: .object(["at_least_13": .bool(band != .under13), "guardian_required": .bool(band == .teen), "policy_version": .string(NativeAudienceProjection.policy), "expected_version": .integer(expectedVersion)]))
         return try await audience()
+    }
+    func renewAudience(expectedVersion: Int, consentPolicy: String) async throws -> NativeAudienceProjection {
+        guard expectedVersion > 0, !consentPolicy.isEmpty, consentPolicy.utf8.count <= 128 else { throw NativeAPIError.invalidResponse }
+        let result = try await audienceMutation(path: "/me/audience/renew", body: .object(["at_least_13": .bool(true), "guardian_required": .bool(false), "policy_version": .string(NativeAudienceProjection.policy), "expected_version": .integer(expectedVersion), "consent": .object(["purpose": .string("face_authentication"), "policy_version": .string(consentPolicy), "granted": .bool(true)])]))
+        var current = try await audience(); current.renewalNextStep = result["renewal"]["next_step"].string; audienceProjection = current
+        return current
     }
     func createGuardianRequest(expectedVersion: Int) async throws -> NativeAudienceProjection {
         _ = try await audienceMutation(path: "/me/guardian-requests", body: .object(["expected_version": .integer(expectedVersion), "policy_version": .string(NativeAudienceProjection.policy)]))

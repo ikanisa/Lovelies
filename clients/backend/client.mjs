@@ -6,6 +6,7 @@ import {
 } from './contracts.mjs';
 import { FACE_PROTOCOL, MAX_FACE_CAPTURE_BYTES, faceChallenge, publicDeviceKey, deviceSignature,
   faceSigningBytes, faceCaptureDigest, faceCapturePayload, faceCompletionPayload } from './face-contracts.mjs';
+import {operatorCapabilities} from './operator-capabilities.mjs';
 
 export { LoveliesClientError, effectiveSelection } from './contracts.mjs';
 export { faceSigningBytes, faceCapturePayload, faceCompletionPayload } from './face-contracts.mjs';
@@ -110,6 +111,7 @@ function adminUserDetail(value, accountId) {
 export class LoveliesBackendClient {
   #base; #apiPrefix; #mediaOrigin; #fetch; #timeout; #jsonLimit; #previewLimit; #now; #prepared;
   #credentials = null; #epoch = 0; #requests = new Set(); #busy = false;
+  #operatorCapabilities = [];
   #snapshots = new Map(); #previews = new Map(); #operations = new Map();
   #faceChallenges = new Map();
 
@@ -143,9 +145,9 @@ export class LoveliesBackendClient {
     if (!allowAnonymous && this.#credentials.authMethod !== 'registered_face') fail('registered_face_required');
     return { epoch: this.#epoch, accountId: this.#credentials.accountId, token: this.#credentials.token };
   }
-  #adminScope() {
+  #adminScope(capability='users.read') {
     const scope = this.#scope();
-    if (!this.#credentials.roles.includes('admin')) fail('admin_required');
+    if (!this.#credentials.roles.includes('admin') && !this.#operatorCapabilities.includes(capability)) fail('admin_required');
     return scope;
   }
   #assert(scope) {
@@ -155,6 +157,7 @@ export class LoveliesBackendClient {
   /** Local logout/account boundary; callers must retire already displayed media. */
   clearSession() {
     this.#epoch += 1; this.#credentials = null; this.#abortReads();
+    this.#operatorCapabilities = [];
     this.#snapshots.clear(); this.#previews.clear(); this.#operations.clear(); this.#faceChallenges.clear(); this.#busy = false;
   }
 
@@ -249,6 +252,7 @@ export class LoveliesBackendClient {
     const method = this.#credentials.authMethod;
     if (uuid(result.user_id) !== scope.accountId || result.auth_method !== method || result.authenticated !== (method === 'registered_face') || result.profile_scope !== (method === 'registered_face' ? 'registered_face_profile' : 'anonymous_enrollment')) fail('account_scope_invalid');
     this.#credentials.roles = roles(result.roles);
+    this.#operatorCapabilities = operatorCapabilities(result);
     return freeze(copy(result));
   }
   async refresh() {
@@ -321,7 +325,7 @@ export class LoveliesBackendClient {
     uuid(result.profile_id); text(result.profile_revision, 128); text(result.model_id, 128);
     if (challenge.profile_id !== null && (result.profile_id !== challenge.profile_id || result.profile_revision !== challenge.profile_revision || result.model_id !== challenge.model_id)) fail('registered_reference_changed');
     this.#assert(entry.scope);
-    this.#epoch += 1; this.#abortReads(); this.#credentials = next;
+    this.#epoch += 1; this.#abortReads(); this.#credentials = next; this.#operatorCapabilities = [];
     this.#snapshots.clear(); this.#previews.clear(); this.#operations.clear(); this.#faceChallenges.clear();
     return freeze({ session: this.session, registeredFace: { accountId: next.accountId, faceHandle: entry.faceHandle,
       deviceId: result.device_id, profileId: result.profile_id, profileRevision: result.profile_revision, modelId: result.model_id } });
@@ -362,7 +366,7 @@ export class LoveliesBackendClient {
   /** Keep the original key/reason for an explicit retry after an ambiguous reply.
    * The server rechecks current admin authority and fresh face verification on every attempt. */
   async revokeAdminUserSession(accountId, sessionId, { reason, operationKey: suppliedKey } = {}) {
-    const scope = this.#adminScope(), account = uuid(accountId), session = uuid(sessionId), key = operationKey(suppliedKey);
+    const scope = this.#adminScope('users.sessions.revoke'), account = uuid(accountId), session = uuid(sessionId), key = operationKey(suppliedKey);
     if (!/^[A-Za-z0-9._:-]{16,128}$/.test(key)) fail('invalid_operation_key');
     if (typeof reason !== 'string' || reason.trim().length < 3 || reason.trim().length > 1000 || /[\x00-\x1f\x7f]/.test(reason)) fail('invalid_admin_reason');
     try {

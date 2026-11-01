@@ -1,3 +1,4 @@
+import { pushReceipt } from './notification-receipt-fixture.mjs';
 /** Prepared, unexecuted real harness/PG consumer cases. Root owns all DB runs. */
 import assert from 'node:assert/strict';
 import {test} from 'node:test';
@@ -14,17 +15,23 @@ async function noPurchase(h,account){assert.equal((await h.db.one('SELECT COUNT(
 async function storeReadFailure(t,stage,mode){
  let person;const calls=[],fault=faultResponse(mode);const h=await harness(t,{storeVerifier:async(envelope,path)=>{calls.push(path);assert.equal(envelope.input_hash,await digest(stable(envelope.input)));if(path==='/google/'+stage)return fault.response;assert.equal(path,'/google/subscription');return receipt(envelope,await purchase(person));}});person=await enroll(h);
  const res=await h.request('/subscriptions/google/transactions',{token:person.token,body:{product_id:vars.GOOGLE_PLAY_SUBSCRIPTION_PRODUCT_ID,purchase_token:'synthetic-purchase-token-'+key(),operation_key:key()}});
- assert.equal(res.status,503);assert.equal((await res.json()).error.code,mode==='stall'?'upstream_json_body_timeout':'upstream_json_body_fragment_limit');assert.deepEqual(calls,stage==='subscription'?['/google/subscription']:['/google/subscription','/google/acknowledge']);assert(fault.state.pulls>=1);assert.equal(fault.state.cancels,1);await noPurchase(h,person.accountId);
+ // An unreadable acknowledgement reply cannot establish whether the provider
+ // accepted the effect. Preserve the unresolved operation classification;
+ // subscription reads still expose their bounded-reader failure directly.
+ const expectedCode=stage==='acknowledge'?'store_operation_outcome_unresolved':mode==='stall'?'upstream_json_body_timeout':'upstream_json_body_fragment_limit';
+ assert.equal(res.status,503);assert.equal((await res.json()).error.code,expectedCode);assert.deepEqual(calls,stage==='subscription'?['/google/subscription']:['/google/subscription','/google/acknowledge']);assert(fault.state.pulls>=1);assert.equal(fault.state.cancels,1);await noPurchase(h,person.accountId);
  // In acknowledgement cases a provider call DID occur. No assertion says the
- // provider did nothing, and this test does not replay the operation blindly.
+ // provider did nothing: post-dispatch body failures expose an unresolved store
+ // outcome, preserving the original recovery identity. The exact call list
+ // proves no automatic resend, and this test does not replay it blindly.
 }
 for(const stage of ['subscription','acknowledge'])test(`private verifier ${stage} fragmentation is503 and never persists entitlement or silently resends`,async t=>storeReadFailure(t,stage,'fragment'));
 test('independent pre- and post-acknowledgement stalled Responses use the real deadline concurrently',{concurrency:2,timeout:140000},async t=>{
  await Promise.all(['subscription','acknowledge'].map(stage=>t.test(stage,{timeout:130000},child=>storeReadFailure(child,stage,'stall'))));
 });
 test('malformed private push receipt stays ambiguous and reconciles by GET without a second send',async t=>{
- const calls=[],fault=faultResponse('fragment');let operation;
- const h=await harness(t,{pushService:async request=>{calls.push(request.method);if(request.method==='POST'){operation=(await request.json()).operation_key;return fault.response;}return {operation_key:operation,status:'ambiguous'};}}),person=await enroll(h);
+ const calls=[],fault=faultResponse('fragment');let dispatch;
+ const h=await harness(t,{pushService:async request=>{calls.push(request.method);if(request.method==='POST'){dispatch=await request.json();return fault.response;}return pushReceipt(dispatch,{status:'ambiguous'});}}),person=await enroll(h);
  const device=await h.json('/me/push-devices',{token:person.token,body:{platform:'ios',push_token:'synthetic-push-'+key(),operation_key:key()}}),id=await h.db.transaction(()=>enqueueNotification(h.app,person.accountId,'support',key(),'Synthetic body boundary'));
  await assert.rejects(processNotificationJob({notification_id:id},h.app),e=>e instanceof ApiError&&e.status===503&&e.code==='upstream_json_body_fragment_limit');
  let row=await h.db.one('SELECT status,provider_receipt FROM notification_deliveries WHERE notification_id=?',id);assert.equal(row.status,'ambiguous');assert.equal(row.provider_receipt,null);assert.equal((await h.db.one('SELECT status FROM notification_jobs WHERE notification_id=?',id)).status,'ambiguous');

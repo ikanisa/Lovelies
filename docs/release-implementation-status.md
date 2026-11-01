@@ -1,3 +1,5 @@
+> Current deployment: locally hosted Supabase. The dated cloud-target material below is retained as historical evidence. See [current architecture](local-supabase-architecture.md), [local deployment](../deploy/local-supabase/README.md) and [current task register](release/local-supabase-tasks.json).
+
 # Lovelies readiness execution — 24 October 2026
 
 Current audience integration: [24 October checkpoint](release/audience-readiness-20261024.md). Its source-bound results and open regressions supersede earlier “current” descriptions below for modified API/native/operator/web files; earlier receipts retain their original scope. No release is accepted.

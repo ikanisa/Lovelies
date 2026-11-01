@@ -90,7 +90,7 @@ async function listenHarness(h,port=0){
  return {origin,request,json,anonymous:async({adult=false}={})=>{
   const guest=await json('/auth/anonymous',{body:{}},201);
   if(adult)await json('/me/audience',{method:'PUT',token:guest.access_token,body:{
-   age_band:'18_plus',policy_version:AUDIENCE_POLICY,expected_version:0,operation_key:crypto.randomUUID()}});
+   at_least_13:true,guardian_required:false,policy_version:AUDIENCE_POLICY,expected_version:0,operation_key:crypto.randomUUID()}});
   return guest;
  },
   community:(token,action,payload={},expected=200)=>json('/community/action',{token,body:{action,payload}},expected),

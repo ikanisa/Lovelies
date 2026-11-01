@@ -58,6 +58,8 @@ class SessionAtomicStorageTest {
         override fun delete() { baseFile.delete();backup.delete();if(algorithm==Algorithm.NEW_RENAME)next.delete() }
     }
     private fun atomic(algorithm: Algorithm)=FileAtomic(File(directory.newFolder(),"session.bin"),algorithm)
+    private fun stamped(value: WireObject,generation: Long): WireObject=value+mapOf(
+        SessionAuthorityStorage.STAMP to mapOf("generation" to generation,"credential_sha256" to null))
     private fun held(block: ()->Unit) {
         try { block();fail("An uncertain file must not become a fresh empty vault") }
         catch(problem: LiveFailure) { assertEquals("secure_storage_unavailable",problem.code);assertTrue(problem.ambiguous) }
@@ -88,12 +90,15 @@ class SessionAtomicStorageTest {
             assertEquals(evidence,vault.load());assertFalse(file.backup.exists());assertArrayEquals(bytes,file.baseFile.readBytes())
             assertEquals(0,file.writeCount);assertTrue(vault.savedValues.isEmpty())
             val repo=CloudflareRepository(origin,RepositoryBoundary(vault,{_,_,_,_,_,_->error("Backup recovery must not create a new account or call providers")}))
-            assertTrue(repo.bootstrap().isEmpty());assertEquals(legacy,repo.pending);assertEquals(evidence,vault.load())
-            assertEquals(1,file.writeCount);assertEquals(listOf(evidence),vault.savedValues)
+            val loaded=stamped(evidence,0L)
+            assertTrue(repo.bootstrap().isEmpty());assertEquals(legacy,repo.pending);assertEquals(loaded,vault.load())
+            assertEquals(1,file.writeCount);assertEquals(listOf(loaded),vault.savedValues)
             repo.restartAfterGuestDeletion();repo.logout(revokeIdentity=true)
             val retained=evidence-"guest_deletion"
-            assertEquals(3,file.writeCount);assertEquals(listOf(evidence,retained,retained),vault.savedValues)
-            assertEquals(legacy,repo.pending);assertEquals(retained,FileVault(SessionAtomicStorage(file)).load())
+            val retired=stamped(retained,1L)
+            assertEquals(3,file.writeCount);assertEquals(listOf(loaded,stamped(retained,0L),retired),vault.savedValues)
+            assertEquals(legacy,repo.pending);assertEquals(retired,FileVault(SessionAtomicStorage(file)).load())
+            assertEquals(1L,NativeProtocol.obj(vault.loadAuthority())["generation"])
             assertEquals(journal.wire(),vault.load()["google_store_operation"])
         }
     }
@@ -157,10 +162,111 @@ class SessionAtomicStorageTest {
         assertNotNull(storage.read());storage.hold() // SecureSession invokes this when AES/format/JSON validation rejects bytes.
         assertTrue(file.baseFile.delete());held { storage.read() };held { storage.write(byteArrayOf(2)) };assertEquals(0,file.writeCount)
     }
+    private inner class AuthorityFixture {
+        val origin="https://authority-fixture.invalid"
+        val file=atomic(Algorithm.NEW_RENAME)
+        val vault=FileVault(SessionAtomicStorage(file))
+        val coordinator=SessionStorageCoordinator()
+        val fence=SessionFence(coordinator.generation)
+        val storage=SessionAuthorityStorage(vault,origin,coordinator,fence)
+        init { assertTrue(storage.load().isEmpty()) }
+    }
+    private fun failedWrite(block: ()->Unit): Exception = try {
+        block();throw AssertionError("An unconfirmed or stale write must not report success")
+    } catch(problem: Exception) { problem }
+    @Test fun exactOwnCommittedWriteWithLostAcknowledgementCanRetainUncertaintyWithoutPublication() {
+        val fixture=AuthorityFixture();val scope=fixture.fence.scope()
+        val intent: WireObject=mapOf("pending" to mapOf("operation_key" to "original-operation","payload" to listOf("original")))
+        val lost=IOException("Synthetic lost vault acknowledgement")
+        fixture.vault.afterSave={throw lost}
+        assertSame(lost,failedWrite { fixture.storage.save(intent,scope) })
+        assertEquals(stamped(intent,0L),fixture.vault.load());assertEquals(scope,fixture.fence.scope())
+        fixture.vault.afterSave=null
+        val retained=intent+mapOf("write_uncertainty" to intent["pending"],"unrelated_draft" to "kept")
+        fixture.storage.save(retained,scope)
+        assertEquals(stamped(retained,0L),fixture.vault.load());assertEquals(2,fixture.file.writeCount)
+        assertEquals(scope,fixture.fence.scope());assertNull(fixture.fence.scope().accountId)
+    }
+    @Test fun ownUncommittedWriteCanRetainItsUncertaintyOverTheExactOriginalSnapshot() {
+        val fixture=AuthorityFixture();val scope=fixture.fence.scope()
+        val original: WireObject=mapOf("prior_receipt" to mapOf("operation_key" to "prior-operation","status" to "committed"))
+        fixture.storage.save(original,scope)
+        val attempted=original+mapOf("pending" to mapOf("operation_key" to "next-operation"))
+        val lost=IOException("Synthetic failure before the vault write")
+        fixture.vault.beforeSave={throw lost}
+        assertSame(lost,failedWrite { fixture.storage.save(attempted,scope) })
+        assertEquals(stamped(original,0L),fixture.vault.load());assertEquals(1,fixture.file.writeCount)
+        fixture.vault.beforeSave=null
+        val retained=attempted+mapOf("write_uncertainty" to attempted["pending"])
+        fixture.storage.save(retained,scope)
+        assertEquals(stamped(retained,0L),fixture.vault.load());assertEquals(2,fixture.file.writeCount)
+    }
+    @Test fun failedReadbackAfterOwnWriteRetainsTheExactAttemptForLaterReconciliation() {
+        val fixture=AuthorityFixture();val scope=fixture.fence.scope()
+        val attempted: WireObject=mapOf("pending" to mapOf("operation_key" to "readback-operation"))
+        val lost=IOException("Synthetic unavailable post-write readback");var failRead=true
+        fixture.vault.beforeLoad={if(fixture.file.writeCount==1 && failRead) { failRead=false;throw lost }}
+        assertSame(lost,failedWrite { fixture.storage.save(attempted,scope) })
+        assertEquals(scope,fixture.fence.scope());assertEquals(1,fixture.file.writeCount)
+        val retained=attempted+mapOf("write_uncertainty" to attempted["pending"])
+        fixture.storage.save(retained,scope)
+        assertEquals(stamped(retained,0L),fixture.vault.load());assertEquals(2,fixture.file.writeCount)
+    }
+    @Test fun ambiguousWriteCannotAdoptCompetingBytesEvenWhenTheOriginalMutableInputAlsoChanges() {
+        val fixture=AuthorityFixture();val scope=fixture.fence.scope()
+        val payload=linkedMapOf<String,Any?>("operation_key" to "original-operation","payload" to listOf("reviewed"))
+        val attempted: WireObject=mapOf("pending" to payload)
+        fixture.vault.afterSave={throw IOException("Synthetic lost vault acknowledgement")}
+        assertTrue(failedWrite { fixture.storage.save(attempted,scope) } is IOException)
+        fixture.vault.afterSave=null
+        // A distinct writer changes the full payload while retaining the same operation key.
+        // Mutating the caller's original object must not mutate the saved attempted-write proof.
+        payload["payload"]=listOf("different-unreviewed-value")
+        val competing=stamped(attempted,0L);fixture.vault.save(competing)
+        val before=fixture.vault.load();val writes=fixture.file.writeCount
+        val problem=failedWrite { fixture.storage.save(attempted+mapOf("unrelated_draft" to "must not overwrite"),scope) }
+        assertTrue(problem is LiveFailure);assertEquals("secure_storage_changed",(problem as LiveFailure).code)
+        assertEquals(before,fixture.vault.load());assertEquals(writes,fixture.file.writeCount)
+    }
+    @Test fun ambiguousWriteCannotResumeAfterScopeReplacementRetirementOrDurableGenerationChange() {
+        for(change in listOf("scope","retirement","durable-generation")) {
+            val fixture=AuthorityFixture();val scope=fixture.fence.scope()
+            val attempted: WireObject=mapOf("pending" to mapOf("operation_key" to "held-$change"))
+            fixture.vault.afterSave={throw IOException("Synthetic lost vault acknowledgement")}
+            assertTrue(failedWrite { fixture.storage.save(attempted,scope) } is IOException)
+            fixture.vault.afterSave=null
+            when(change) {
+                "scope"->fixture.fence.switch(null)
+                "retirement"->fixture.fence.retire(scope)
+                else->fixture.vault.saveAuthority(SessionAuthorityRecord(fixture.origin,1L).wire())
+            }
+            val before=fixture.vault.load();val writes=fixture.file.writeCount
+            for(ticket in listOf(fixture.fence.scope(),scope)) {
+                val problem=failedWrite { fixture.storage.save(attempted+mapOf("unrelated_draft" to "stale"),ticket) }
+                assertTrue(problem is LiveFailure);assertEquals("session_changed",(problem as LiveFailure).code)
+                assertEquals(before,fixture.vault.load());assertEquals(writes,fixture.file.writeCount)
+            }
+            assertNull(fixture.fence.scope().accountId)
+        }
+    }
     private class FileVault(private val storage: SessionAtomicStorage): RepositoryVault {
+        @Volatile private var authority: WireObject?=null
+        override fun loadAuthority()=authority?.toMap()
+        override fun saveAuthority(value: WireObject) { authority=value.toMap() }
+
         val savedValues=mutableListOf<WireObject>()
-        override fun load(): WireObject=storage.read()?.let { bytes->try { ObjectInputStream(ByteArrayInputStream(bytes)).use { NativeProtocol.obj(it.readObject()) } } finally { bytes.fill(0) } } ?: emptyMap()
-        override fun save(value: WireObject) { val bytes=serialize(value);try { storage.write(bytes);savedValues.add(value.toMap()) } finally { bytes.fill(0) } }
+        var beforeLoad: (() -> Unit)?=null
+        var beforeSave: ((WireObject) -> Unit)?=null
+        var afterSave: ((WireObject) -> Unit)?=null
+        override fun load(): WireObject {
+            beforeLoad?.invoke()
+            return storage.read()?.let { bytes->try { ObjectInputStream(ByteArrayInputStream(bytes)).use { NativeProtocol.obj(it.readObject()) } } finally { bytes.fill(0) } } ?: emptyMap()
+        }
+        override fun save(value: WireObject) {
+            beforeSave?.invoke(value)
+            val bytes=serialize(value)
+            try { storage.write(bytes);savedValues.add(value.toMap());afterSave?.invoke(value) } finally { bytes.fill(0) }
+        }
     }
     companion object {
         private fun serialize(value: WireObject): ByteArray=ByteArrayOutputStream().use { bytes->ObjectOutputStream(bytes).use { it.writeObject(value) };bytes.toByteArray() }

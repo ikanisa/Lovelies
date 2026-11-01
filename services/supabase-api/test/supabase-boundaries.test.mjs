@@ -34,7 +34,7 @@ test('PostgreSQL placeholders skip strings/comments, bind data separately and re
 test('every application table has forced RLS and anon/authenticated cannot use the private schema',async()=>{
  const h=await startHarness({consumeQueue:false});
  const tables=(await h.engine.query("SELECT count(*)::int total,count(*) FILTER(WHERE relrowsecurity AND relforcerowsecurity)::int protected FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace WHERE n.nspname='lovelies_private' AND c.relkind='r'")).rows[0];
- assert.equal(tables.total,69);assert.equal(tables.protected,69);
+ assert.equal(tables.total,87);assert.equal(tables.protected,87);
  for(const role of ['anon','authenticated']){
   const result=(await h.engine.query('SELECT has_schema_privilege($1,$2,$3) permitted',[role,'lovelies_private','USAGE'])).rows[0];assert.equal(result.permitted,false);
   await h.engine.exec('BEGIN; SET LOCAL ROLE '+role);
@@ -74,13 +74,13 @@ test('private Storage uses actual info metadata, propagates missing writes and n
   if(init?.method==='POST')return Response.json({error:'missing bucket'},{status:404});
   return new Response(bytes,{headers:{etag:'"abc"'}});
  };
- const bucket=new SupabasePrivateBucket('https://ltqfplqevxztlswlzexn.supabase.co','sb_secret_fixture','lovelies-photos',fetcher);
- assert.throws(()=>new SupabasePrivateBucket('ftp://localhost','sb_secret_fixture','lovelies-photos'),/HTTPS Storage required/);
+ const bucket=new SupabasePrivateBucket('https://supabase.example.invalid','sb_secret_fixture','lovelies-photos',fetcher);
+ assert.throws(()=>new SupabasePrivateBucket('ftp://localhost','sb_secret_fixture','lovelies-photos'),/HTTPS or an explicitly trusted private HTTP origin required/);
  const object=await bucket.get('private/photo.png');assert.equal(object.customMetadata.source_version,'version');assert.equal(object.httpMetadata.contentType,'image/png');assert.deepEqual(new Uint8Array(await object.arrayBuffer()),bytes);
  assert.equal(calls[0].init.headers.get('apikey'),'sb_secret_fixture');assert.equal(calls[0].init.headers.get('Authorization'),null);
  await assert.rejects(()=>bucket.put('private/missing.png',bytes),/private_storage_write_failed/);
  await assert.rejects(()=>bucket.head('../escape'),/invalid_private_object_key/);
- const redirect=new SupabasePrivateBucket('https://ltqfplqevxztlswlzexn.supabase.co','sb_secret_fixture','lovelies-photos',async()=>new Response(null,{status:302,headers:{Location:'https://evil.invalid'}}));
+ const redirect=new SupabasePrivateBucket('https://supabase.example.invalid','sb_secret_fixture','lovelies-photos',async()=>new Response(null,{status:302,headers:{Location:'https://evil.invalid'}}));
  await assert.rejects(()=>redirect.head('private/photo.png'),/storage_redirect_denied/);
 });
 

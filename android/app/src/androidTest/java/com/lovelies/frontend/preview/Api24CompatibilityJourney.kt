@@ -31,6 +31,7 @@ class Api24CompatibilityJourney : Instrumentation() {
     private lateinit var args: Bundle
     private val checks=mutableListOf<WireObject>()
     private val owned=mutableListOf<File>()
+    private val ownedMedia=mutableListOf<Pair<File,PrivateTemporaryMedia.Owned>>()
     private val notificationTags=mutableListOf<String>()
     private var activity: Activity?=null
     private var keyAlias: String?=null
@@ -42,6 +43,15 @@ class Api24CompatibilityJourney : Instrumentation() {
     private fun directory(parent: File,name: String): File = File(parent,name).also {
         check(!it.exists() && it.mkdir()) { "Owned probe namespace already exists or cannot be created" }
         owned.add(it)
+    }
+    private fun mediaOwnershipDirectory(cache: File) {
+        val folder=File(cache,"private-media-ownership-v1")
+        if(!Files.exists(folder.toPath(),LinkOption.NOFOLLOW_LINKS)) {
+            Files.createDirectory(folder.toPath());owned.add(folder)
+        }
+        check(Files.isDirectory(folder.toPath(),LinkOption.NOFOLLOW_LINKS) && !Files.isSymbolicLink(folder.toPath())) {
+            "Private-media ownership path is not a directory; preserve it"
+        }
     }
     override fun onCreate(arguments: Bundle?) { super.onCreate(arguments);args=arguments ?: Bundle();start() }
     override fun onStart() {
@@ -107,8 +117,12 @@ class Api24CompatibilityJourney : Instrumentation() {
             try {
                 val now=System.currentTimeMillis()
                 val name=UUID.randomUUID().toString()+".jpg"
+                directory(cache,PrivateTemporaryMedia.Kind.CAMERA.directory)
+                mediaOwnershipDirectory(cache)
                 val source=PrivateTemporaryMedia.write(cache,PrivateTemporaryMedia.Kind.CAMERA,name,jpeg,now)
-                owned.add(File(cache,"camera"));owned.add(source)
+                val sourceOwnership=PrivateTemporaryMedia.owned(cache,PrivateTemporaryMedia.Kind.CAMERA,source)
+                    ?: error("Owned camera artifact missing")
+                ownedMedia.add(cache to sourceOwnership)
                 check(source.readBytes().contentEquals(jpeg))
                 var replaceDenied=false
                 try { PrivateTemporaryMedia.write(cache,PrivateTemporaryMedia.Kind.CAMERA,name,byteArrayOf(9),now) }
@@ -120,6 +134,7 @@ class Api24CompatibilityJourney : Instrumentation() {
                 Os.symlink(foreign.absolutePath,link.absolutePath)
                 val result=PrivateTemporaryMedia.sweep(cache,PrivateTemporaryMedia.Kind.CAMERA,now+PrivateTemporaryMedia.CAMERA_AGE_MS)
                 check(!result.failed && result.removed==setOf(name) && !source.exists())
+                check(ownedMedia.remove(cache to sourceOwnership))
                 check(Files.isSymbolicLink(link.toPath()) && foreign.readBytes().contentEquals(byteArrayOf(8)) && unknown.readBytes().contentEquals(byteArrayOf(7)))
                 pass("Installed desugared private NIO preserves create-new/NOFOLLOW_LINKS, timestamps, expiry and unknown/symlink targets")
 
@@ -130,13 +145,15 @@ class Api24CompatibilityJourney : Instrumentation() {
                 check(!Files.exists(sharing.toPath(),LinkOption.NOFOLLOW_LINKS)) { "Shared-media path already exists; preserve it" }
                 Files.createDirectory(sharing.toPath())
                 owned.add(sharing)
+                mediaOwnershipDirectory(context.cacheDir)
                 val asset=UUID.randomUUID().toString()
                 val sent=OriginalMedia.share(context,asset,jpeg) {}
-                val uri=sent.getParcelableExtra<android.net.Uri>(Intent.EXTRA_STREAM) ?: error("Private share URI missing")
-                val created=sharing.listFiles()?.singleOrNull { it.name.startsWith("lovelies-$asset-") } ?: error("Owned share artifact missing")
-                owned.add(created)
+                ownedMedia.add(context.cacheDir to sent.file)
+                val intent=sent.intent
+                val uri=intent.getParcelableExtra<android.net.Uri>(Intent.EXTRA_STREAM) ?: error("Private share URI missing")
+                check(sent.file.file.parentFile==sharing.canonicalFile && sent.file.file.name.startsWith("lovelies-$asset-"))
                 check(context.contentResolver.openInputStream(uri)?.use { it.readBytes() }?.contentEquals(jpeg)==true)
-                check(sent.flags and Intent.FLAG_GRANT_READ_URI_PERMISSION!=0 && sent.clipData?.itemCount==1)
+                check(intent.flags and Intent.FLAG_GRANT_READ_URI_PERMISSION!=0 && intent.clipData?.itemCount==1)
                 pass("Actual production private share/FileProvider returns exact bytes with a temporary read grant")
 
                 val writeExpected=args.getString("media_write_permission_expected") ?: "denied"
@@ -208,6 +225,11 @@ class Api24CompatibilityJourney : Instrumentation() {
             mediaUri?.let { uri -> runCatching { check(targetContext.contentResolver.delete(uri,null,null)==1) }.onFailure { cleanupFailure=true } }
             pushPreferences?.let { name -> runCatching { check(targetContext.deleteSharedPreferences(name)) }.onFailure { cleanupFailure=true } }
             runCatching { vault?.let { it.deleteDevice(keyAlias);it.clear() } }.onFailure { cleanupFailure=true }
+            // Exact creation handles retire both media bytes and their records.
+            // A replaced file or mismatched record must survive for inspection.
+            ownedMedia.asReversed().forEach { (cache,media) ->
+                runCatching { check(PrivateTemporaryMedia.discard(cache,media)) }.onFailure { cleanupFailure=true }
+            }
             // Explicit owned paths only, never recursive traversal through the
             // deliberate symlink or removal of the shared global AES key.
             owned.asReversed().forEach { file -> runCatching { if(file.exists() || Files.isSymbolicLink(file.toPath()))check(file.delete()) }.onFailure { cleanupFailure=true } }

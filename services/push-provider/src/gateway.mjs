@@ -1,5 +1,8 @@
 import { createHash, timingSafeEqual } from 'node:crypto';
-import { LedgerConflict, receipt } from './ledger.mjs';
+import { LedgerConflict, receipt, PUSH_RECEIPT_PROTOCOL } from './ledger.mjs';
+import {boundDispatch,exact,HASH,UUID as planUUID,validatePlan,PushPlanError} from './push-plan.mjs';
+import {providerGeneration} from './providers.mjs';
+import {RosterUnavailable,validateRosterReceipt} from './remote-roster.mjs';
 const UUID = '[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}';
 const operationPattern = new RegExp('^notification:(' + UUID + '):(' + UUID + ')$');
 const uuidPattern = new RegExp('^' + UUID + '$');
@@ -65,12 +68,97 @@ export function createGateway({ ledger, providers, secret, now = Date.now, maxim
         try { result = await provider.send(prepared); }
         catch { result = { status: 'ambiguous', provider_code: 'dispatch_result_unconfirmed' }; }
         try { return response(200, receipt(await ledger.finish(input.operation_key, result), input.operation_key, now())); }
-        catch { return response(503, { operation_key: input.operation_key, status: 'ambiguous', provider_code: 'receipt_persistence_unconfirmed' }); }
+        catch { return response(503, { protocol: PUSH_RECEIPT_PROTOCOL, operation_key: input.operation_key, request_sha256: requestHash(input), status: 'ambiguous', provider_code: 'receipt_persistence_unconfirmed' }); }
       } finally { inFlight--; }
     } catch (error) {
       if (error instanceof InputError) return response(400, { error: error.message });
       if (error instanceof LedgerConflict) return response(409, { error: 'operation_payload_conflict' });
       return response(503, { error: 'provider_ledger_unavailable' });
+    }
+  };
+}
+
+/** Selected production gateway. The legacy factory remains a compatibility
+ * test/receipt adapter; server.start always selects this complete-roster path. */
+export function createRosterGateway({roster,providers,secret,generation,maximumInFlight=32,dispatchEnabled=true}){
+  if(typeof secret!=='string'||secret.length<32||secret.length>256||/\s/.test(secret)||!HASH.test(generation)||providerGeneration(providers)!==generation||typeof dispatchEnabled!=='boolean')
+    throw new Error('push_roster_gateway_configuration_invalid');
+  let inFlight=0;
+  return async request=>{
+    if(!authenticated(request.headers.get('authorization'),secret))return response(401,{error:'service_authentication_required'});
+    const url=new URL(request.url);
+    if(url.search||url.hash)return response(400,{error:'invalid_request'});
+    try{
+      if(request.method==='GET'&&url.pathname==='/ready'){
+        if(!dispatchEnabled)return response(503,{error:'push_recovery_only'});
+        const current=await roster.control();
+        if(current.control.state!=='serving'||current.control.provider_generation!==generation||providerGeneration(providers)!==generation)
+          return response(503,{error:'push_provider_generation_changed'});
+        return response(200,current);
+      }
+      let match=/^\/notifications\/([0-9a-f-]{36})(?:\/(retire))?$/.exec(url.pathname);
+      if(match&&planUUID.test(match[1])){
+        if(request.method!==(match[2]?'POST':'GET'))return response(405,{error:'method_unavailable'});
+        if(match[2]&&!exact(await boundedJSON(request,128),[]))throw new InputError('invalid_request');
+        return response(200,match[2]?await roster.retirePlan(match[1]):await roster.lookupPlan(match[1]));
+      }
+      if(request.method==='POST'&&url.pathname==='/notifications/plan'){
+        if(!dispatchEnabled)return response(503,{error:'push_recovery_only'});
+        return response(200,await roster.plan(validatePlan(await boundedJSON(request,16384))));
+      }
+      match=/^\/subjects\/([0-9a-f]{64})\/retire$/.exec(url.pathname);
+      if(match&&request.method==='POST'){
+        if(!exact(await boundedJSON(request,128),[]))throw new InputError('invalid_request');
+        return response(200,await roster.retireSubject(match[1]));
+      }
+      match=/^\/notifications\/page\/(0|[0-9a-f-]{36})$/.exec(url.pathname);
+      if(match&&request.method==='GET'&&(match[1]==='0'||planUUID.test(match[1])))return response(200,await roster.listPlans(match[1]==='0'?'':match[1]));
+      if(request.method==='GET'&&url.pathname.startsWith('/operations/')){
+        let key;try{key=decodeURIComponent(url.pathname.slice('/operations/'.length));}catch{throw new InputError('invalid_operation');}
+        if(!operationPattern.test(key))throw new InputError('invalid_operation');return response(200,await roster.lookup(key));
+      }
+      if(request.method!=='POST'||url.pathname!=='/send')return response(404,{error:'not_found'});
+      if(!dispatchEnabled)return response(503,{error:'push_recovery_only'});
+      if(inFlight>=maximumInFlight)return response(503,{error:'gateway_capacity'});
+      inFlight++;
+      try{
+        const value=await boundedJSON(request,8192);
+        if(!exact(value,['protocol','plan_sha256','dispatch'])||value.protocol!=='lovelies-push-send-v2'||!HASH.test(value.plan_sha256))throw new InputError('invalid_dispatch');
+        const input=boundDispatch(value.dispatch,parseDispatch);
+        const known=await roster.lookupPlan(input.notification.id),plan=known.result.plan;
+        if(!plan||known.result.plan_sha256!==value.plan_sha256||plan.subject_sha256!==input.subject_sha256||plan.provider_generation!==input.provider_generation)
+          return response(409,{error:'push_roster_binding_conflict'});
+        const intended=plan.attempts.find(entry=>entry.operation_key===input.operation_key);
+        if(!intended||intended.platform!==input.platform||intended.request_sha256!==requestHash(input)||intended.token_sha256!==createHash('sha256').update(input.token).digest('hex'))
+          return response(409,{error:'operation_payload_conflict'});
+        const old=known.result.receipts.find(entry=>entry.operation_key===input.operation_key);
+        validateRosterReceipt(old,plan,value.plan_sha256);
+        // A repeated exact request may inspect its historical outcome after a
+        // generation change. It can never use that outcome to start new work.
+        if(!['unstarted','preparing'].includes(old.status))return response(200,old);
+        if(input.provider_generation!==generation||providerGeneration(providers)!==generation)return response(409,{error:'push_provider_generation_changed'});
+        const reserved=await roster.reserve(input,value.plan_sha256);
+        validateRosterReceipt(reserved.receipt,plan,value.plan_sha256);
+        if(!reserved.claim)return response(200,reserved.receipt);
+        const provider=providers[input.platform];let prepared;
+        try{if(!provider)throw new Error('provider_unconfigured');prepared=await provider.prepare(input,reserved.receipt.provider_request_id);
+          if(providerGeneration(providers)!==generation)throw new Error('provider_generation_changed');}
+        catch{await roster.preflightFailed(input.operation_key,reserved.claim);return response(503,await roster.lookup(input.operation_key));}
+        const admitted=await roster.start(input.operation_key,reserved.claim,generation);
+        if(!admitted)return response(200,await roster.lookup(input.operation_key));
+        validateRosterReceipt(admitted,plan,value.plan_sha256);
+        if(admitted.status!=='dispatching')throw new RosterUnavailable();
+        let result;
+        if(providerGeneration(providers)!==generation)result={status:'rejected',provider_code:'gateway.provider_generation_changed',retryable:false,token_invalid:false};
+        else try{result=await provider.send(prepared);}catch{result={status:'ambiguous',provider_code:'dispatch_result_unconfirmed'};}
+        try{
+          const saved=await roster.finish(input.operation_key,result);validateRosterReceipt(saved,plan,value.plan_sha256);return response(200,saved);
+        }catch{return response(503,{...admitted,status:'ambiguous'});}
+      }finally{inFlight--;}
+    }catch(error){
+      if(error instanceof InputError||error instanceof PushPlanError)return response(400,{error:'invalid_request'});
+      if(error instanceof RosterUnavailable)return response(error.status,{error:error.code});
+      return response(503,{error:'provider_roster_unavailable'});
     }
   };
 }

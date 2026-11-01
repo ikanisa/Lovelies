@@ -10,6 +10,13 @@ import Foundation
         throw NativeAPIError.unsupported("Expected rejection: " + label)
     }
     static func main() throws {
+        let localOrigin = "https://supabase.company.example/functions/v1/lovelies-api"
+        try expect(try NativeConfiguration.validatedOrigin(localOrigin + "/").absoluteString == localOrigin, "explicit local Supabase origin is canonical")
+        for candidate in ["", "$(LOVELIES_API_ORIGIN)", "http://localhost:54321/functions/v1/lovelies-api", "https://company.example", "https://user@company.example/functions/v1/lovelies-api", "https://company.example:8443/functions/v1/lovelies-api", "https://company.example/functions/v1/../v1/lovelies-api", "https://company.example/functions/v1/%6covelies-api", localOrigin + "?token=x", localOrigin + "#x"] {
+            try reject("unsafe or unconfigured production API") { _ = try NativeConfiguration.validatedOrigin(candidate) }
+        }
+        try expect(try NativeConfiguration.validatedOrigin("http://localhost:8787", allowLocalHTTP: true).absoluteString == "http://localhost:8787", "simulator fixture remains explicitly debug only")
+
         let account = UUID().uuidString.lowercased(), operation = UUID().uuidString.lowercased(), request = UUID().uuidString.lowercased()
         var receipt = NativeRegisteredDeletionRecord(accountID: account, operationKey: operation, statusToken: "lvd_" + String(repeating: "a", count: 64), apiOrigin: "https://fixture/functions/v1/lovelies-api", preparedAt: Date())
         let origin = URL(string: receipt.apiOrigin)!

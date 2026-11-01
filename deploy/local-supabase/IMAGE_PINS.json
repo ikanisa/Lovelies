@@ -1,0 +1,74 @@
+{
+  "retrieved_on": "2026-11-01",
+  "upstream_commit": "a05e7ec1d79e67cba65e3871b7caf105db27f8b1",
+  "images": {
+    "studio": {
+      "upstream_image": "supabase/studio:2026.10.12-sha-3699278",
+      "pinned_image": "supabase/studio:2026.10.12-sha-3699278@sha256:948770ec467f00e6ae34c35018ef7cb23d7b30eb806b42c2cc0d7bcfdcf8a7a8",
+      "metadata_url": "https://hub.docker.com/v2/repositories/supabase/studio/tags/2026.10.12-sha-3699278",
+      "last_updated": "2026-10-12T04:32:42.903573Z"
+    },
+    "api-gw": {
+      "upstream_image": "envoyproxy/envoy:v1.39.1",
+      "pinned_image": "envoyproxy/envoy:v1.39.1@sha256:57e14a549d7bd43c8d3f6d03e8cfa653e037d4b38e133acd9b54f38c524401b4",
+      "metadata_url": "https://hub.docker.com/v2/repositories/envoyproxy/envoy/tags/v1.39.1",
+      "last_updated": "2026-08-27T01:05:14.256804Z"
+    },
+    "auth": {
+      "upstream_image": "supabase/gotrue:v2.197.0",
+      "pinned_image": "supabase/gotrue:v2.197.0@sha256:1736a63078f5922b198c4cbe50f80ab9a2d3b54fe8b7b6cfb2e9dc5dbbc12c6b",
+      "metadata_url": "https://hub.docker.com/v2/repositories/supabase/gotrue/tags/v2.197.0",
+      "last_updated": "2026-09-09T15:47:27.456455Z"
+    },
+    "rest": {
+      "upstream_image": "postgrest/postgrest:v14.18",
+      "pinned_image": "postgrest/postgrest:v14.18@sha256:c7cd7e265a85b05248abf53f4473fcec7e327c282d0bd0cf60f1551996d09fcf",
+      "metadata_url": "https://hub.docker.com/v2/repositories/postgrest/postgrest/tags/v14.18",
+      "last_updated": "2026-09-12T16:19:48.081591Z"
+    },
+    "realtime": {
+      "upstream_image": "supabase/realtime:v2.143.3",
+      "pinned_image": "supabase/realtime:v2.143.3@sha256:768b559241dd234c4e8852c5c0f504e598b80f1df2ad4dd78d5486fbed2f17a2",
+      "metadata_url": "https://hub.docker.com/v2/repositories/supabase/realtime/tags/v2.143.3",
+      "last_updated": "2026-10-09T05:22:06.183967Z"
+    },
+    "storage": {
+      "upstream_image": "supabase/storage-api:v1.81.0",
+      "pinned_image": "supabase/storage-api:v1.81.0@sha256:98ffec5d0678803783c30e404c27f4ec65e97efbe014088f2a86b4b8b54b9f54",
+      "metadata_url": "https://hub.docker.com/v2/repositories/supabase/storage-api/tags/v1.81.0",
+      "last_updated": "2026-10-09T10:56:17.108415Z"
+    },
+    "imgproxy": {
+      "upstream_image": "darthsim/imgproxy:v3.31.4",
+      "pinned_image": "darthsim/imgproxy:v3.31.4@sha256:73c5dda13199745b0d2d00e4149d4a589c5b2e205dbf335ca05eca8276b54712",
+      "metadata_url": "https://hub.docker.com/v2/repositories/darthsim/imgproxy/tags/v3.31.4",
+      "last_updated": "2026-06-09T15:37:37.133554Z"
+    },
+    "meta": {
+      "upstream_image": "supabase/postgres-meta:v0.100.0",
+      "pinned_image": "supabase/postgres-meta:v0.100.0@sha256:145325b7e39f8ef4931d6e8cfd3f6f4d655de09d72a2ccc96d9513542c2202bd",
+      "metadata_url": "https://hub.docker.com/v2/repositories/supabase/postgres-meta/tags/v0.100.0",
+      "last_updated": "2026-10-06T12:04:47.650606Z"
+    },
+    "functions": {
+      "upstream_image": "supabase/edge-runtime:v1.77.4",
+      "pinned_image": "supabase/edge-runtime:v1.77.4@sha256:ad45164b7548bf5820ed7be714789c17ac2865edce79a09cfb4c3756c3d365a8",
+      "metadata_url": "https://hub.docker.com/v2/repositories/supabase/edge-runtime/tags/v1.77.4",
+      "last_updated": "2026-10-01T05:44:33.006813Z"
+    },
+    "supavisor": {
+      "upstream_image": "supabase/supavisor:2.9.13",
+      "pinned_image": "supabase/supavisor:2.9.13@sha256:07f1a6098ffc04b80263bca4eb5c3e7bd2e03dfd1fc465aa108d7329000a1a4e",
+      "metadata_url": "https://hub.docker.com/v2/repositories/supabase/supavisor/tags/2.9.13",
+      "last_updated": "2026-09-10T21:23:06.008133Z"
+    }
+  },
+  "runtime_overrides": {
+    "functions": {
+      "selected_image": "public.ecr.aws/supabase/edge-runtime:v1.77.8@sha256:178c041398a33ded8219344382d0672a90051d1babbf0af03425cafe20039a75",
+      "reason": "Match the retained exact-version Edge harness and its documented root certificate provider behavior. Actual current-host TLS remains a qualification gate.",
+      "source": "scripts/test-isolated-supabase-edge.mjs",
+      "tls_source": "https://github.com/supabase/edge-runtime/blob/v1.77.8/crates/deno_facade/cert_provider.rs"
+    }
+  }
+}

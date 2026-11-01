@@ -1,3 +1,4 @@
+import { audienceBandSQL, audienceDeadlineSQL } from './audience-decision.ts';
 import { assertAudienceCapability } from './audience.ts';
 import { assertRegisteredActor } from './operations.ts';
 import { ApiError, stable, type Actor, type AppContext } from './types.ts';
@@ -33,7 +34,7 @@ export function assertStoreAuthorityFresh(value:StoreAuthorityDeadlines, now:num
 
 async function exactDeadlines(ctx:AppContext,actor:Actor,audience:Record<string,unknown>):Promise<StoreAuthorityDeadlines> {
   const own=await ctx.db.one<OwnDeadlines>(`SELECT s.expires_at session_expires_at,s.refresh_expires_at,
-    c.expires_at face_consent_expires_at,a.next_review_at audience_review_at,a.age_band,
+    c.expires_at face_consent_expires_at,${audienceDeadlineSQL('a')} audience_review_at,${audienceBandSQL('a')} age_band,
     a.version audience_version,a.policy_version audience_policy
     FROM sessions s JOIN face_profiles fp ON fp.account_id=s.account_id AND fp.revision=s.face_profile_revision
       AND fp.auth_epoch=s.face_profile_epoch AND fp.auth_consent_id=s.face_consent_id AND fp.status='active' AND fp.auth_enabled=1
@@ -50,11 +51,11 @@ async function exactDeadlines(ctx:AppContext,actor:Actor,audience:Record<string,
     if(typeof audience.approval!=='string'||typeof audience.request!=='string'||
       !integer(audience.approval_version)||!integer(audience.request_revision)||!integer(audience.guardian_version)) return unavailable();
     guardian=await ctx.db.one<GuardianDeadlines>(`SELECT p.expires_at guardian_approval_expires_at,
-      r.expires_at guardian_request_expires_at,g.next_review_at guardian_audience_review_at,
+      r.expires_at guardian_request_expires_at,${audienceDeadlineSQL('g')} guardian_audience_review_at,
       c.expires_at guardian_face_consent_expires_at
       FROM guardian_purpose_approvals p JOIN guardian_requests r ON r.id=p.request_id AND r.child_account_id=p.child_account_id
         AND r.guardian_account_id=p.guardian_account_id AND r.state='approved'
-      JOIN account_audience g ON g.account_id=p.guardian_account_id AND g.age_band='18_plus' AND g.status='eligible'
+      JOIN account_audience g ON g.account_id=p.guardian_account_id AND ${audienceBandSQL('g')}='18_plus' AND g.status='eligible'
       JOIN accounts ga ON ga.id=g.account_id AND ga.disabled_at IS NULL AND ga.identity_state='registered_face'
       JOIN face_profiles fp ON fp.account_id=ga.id AND fp.status='active' AND fp.auth_enabled=1
       JOIN consents c ON c.id=fp.auth_consent_id AND c.account_id=ga.id AND c.purpose='face_authentication'

@@ -1,9 +1,10 @@
 import { createServer } from 'node:http';
 import { Readable } from 'node:stream';
 import { pathToFileURL } from 'node:url';
-import { createGateway } from './gateway.mjs';
+import { createRosterGateway } from './gateway.mjs';
 import { RemoteDispatchLedger } from './remote-ledger.mjs';
-import { ApnsAuthorization, ApnsProvider, FcmAuthorization, FcmProvider } from './providers.mjs';
+import { RemoteRosterLedger } from './remote-roster.mjs';
+import { ApnsAuthorization, ApnsProvider, FcmAuthorization, FcmProvider, providerGeneration } from './providers.mjs';
 import { privateProviderFile } from './private-files.mjs';
 export async function configuredProviders(env = process.env) {
   // Default process startup cannot send provider work. Enable only with the
@@ -37,11 +38,35 @@ export function createNodeServer(handle) {
   server.requestTimeout = 45_000; server.headersTimeout = 10_000; server.keepAliveTimeout = 5_000;
   return server;
 }
+export async function configuredGateway(env=process.env,{fetcher=fetch}={}){
+  if(env.PUSH_RECOVERY_ONLY!==undefined&&!['true','false'].includes(env.PUSH_RECOVERY_ONLY))throw new Error('invalid_push_recovery_mode');
+  const recoveryOnly=env.PUSH_RECOVERY_ONLY==='true';
+  await configuredLedger(env,{fetcher});
+  const roster = new RemoteRosterLedger(env.PUSH_LEDGER_URL,env.PUSH_LEDGER_TOKEN,
+    {ledgerID:env.PUSH_LEDGER_ID,bootstrapID:env.PUSH_LEDGER_BOOTSTRAP_ID,fetcher});
+  // Both independent namespace pins and its current generation precede private
+  // key loading. Actual provider configuration is then hashed and compared.
+  const current=await roster.control();
+  if(!recoveryOnly&&current.control.state!=='serving')throw new Error('provider_roster_unavailable');
+  // Explicit recovery mode never loads credentials. It cannot admit a plan or
+  // call /send, and cannot report ready; only historical lookup and retirement
+  // remain available while credentials or generations are being reconciled.
+  const providers=recoveryOnly?{}:await configuredProviders(env);
+  try{
+    const generation=providerGeneration(providers);
+    if(!recoveryOnly&&(current.control.provider_generation!==generation||env.PUSH_PROVIDER_GENERATION&&env.PUSH_PROVIDER_GENERATION!==generation))
+      throw new Error('provider_generation_changed');
+    // A disabled or partially configured deployment must not claim delivery
+    // readiness. Historical lookups/retirement remain usable without sends.
+    const dispatchEnabled=!recoveryOnly&&env.PUSH_PROVIDER_SEND_ENABLED==='true'&&!!providers.ios&&!!providers.android;
+    const handle=createRosterGateway({roster,providers,generation,secret:env.PUSH_SERVICE_SECRET,dispatchEnabled});
+    return {handle,providers,generation,recoveryOnly};
+  }catch(error){await Promise.allSettled(Object.values(providers).map(provider=>provider.close()));throw error;}
+}
 export async function start(env = process.env) {
   const port = Number(env.PORT ?? 8091);
   if (!Number.isInteger(port) || port < 1 || port > 65535) throw new Error('invalid_gateway_port');
-  const ledger = await configuredLedger(env), providers = await configuredProviders(env);
-  const handle = createGateway({ ledger, providers, secret: env.PUSH_SERVICE_SECRET });
+  const {handle,providers}=await configuredGateway(env);
   const server = createNodeServer(handle);
   try { await new Promise((resolve, reject) => { server.once('error', reject); server.listen(port, env.HOST ?? '127.0.0.1', resolve); }); }
   catch (error) { await Promise.allSettled(Object.values(providers).map(provider => provider.close())); throw error; }

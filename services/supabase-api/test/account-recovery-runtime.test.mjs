@@ -133,7 +133,7 @@ const APPLICATION_TABLES = new Set([
   'financial_records', 'match_origins', 'media_grants', 'media_tickets', 'media_write_intents',
   'moderation_holds', 'notification_deliveries', 'notification_jobs', 'notification_settings',
   'notifications', 'operation_subjects', 'operations', 'outbox', 'photo_job_outbox',
-  'job_queue', 'privacy_deletion_status_receipts', 'privacy_export_grants',
+  'job_queue', 'privacy_deletion_status_receipts', 'privacy_export_grants', 'privacy_export_deliveries', 'processing_profile_batches',
   'privacy_exports', 'privacy_redaction_context', 'privacy_requests', 'processing_attempts',
   'push_devices', 'renditions', 'request_limits', 'retention_jobs', 'retention_objects',
   // v12 holds only opaque database/incarnation/checkpoint/operation metadata.
@@ -143,6 +143,21 @@ const APPLICATION_TABLES = new Set([
   'store_subscriptions', 'store_transactions', 'support_requests',
   'upload_transfers', 'upload_chunks', 'refresh_delivery_receipts',
   'account_audience', 'guardian_requests', 'guardian_purpose_approvals', 'audience_adult_reviews',
+  // v15: exact restriction IDs/scopes, hashes, recovery progress and private
+  // object verification metadata. No recovery key is a scope or proof field;
+  // all JSON/text columns remain in the exhaustive raw-capability scan.
+  'restore_transaction_facts', 'restore_recovery_runs', 'restore_replay_facts',
+  'restore_recovered_operations', 'restore_cleanup_objects',
+  // v16: progress/hash state, exact chunk paths and the explicitly redacted
+  // privacy-export catalog projections. Scan payload_text as well as metadata;
+  // no face_recovery_keys/intents or credential projection is materialized.
+  'privacy_export_snapshots', 'privacy_export_snapshot_rows', 'privacy_export_chunks',
+  // v17: account/grant/provisioner IDs, capability names, revisions and dates.
+  // These grants have no bearer/recovery secret and are not scan exemptions.
+  'operator_access_versions', 'operator_capability_grants',
+  // v18/v19: private review, matching, push proof, and encrypted managed Auth custody.
+  'audience_review_retirements','processing_attempt_profiles','processing_match_progress',
+  'notification_dispatch_plans','notification_recovered_receipts','managed_auth_bindings',
 ]);
 async function assertSecretNotStored(h, secret) {
   const tables = await h.storage.exec("SELECT table_name AS name FROM information_schema.tables WHERE table_schema='lovelies_private' AND table_type='BASE TABLE'");

@@ -1,18 +1,21 @@
+import { finishReviewCleanup } from './audience-renewal.ts';
 import { asyncSome } from './async-collections.ts';
 import { verifiedGrantReceipt } from './privacy-export-grant.ts';
 import { ApiError, digest, jsonBody, ok, stable, uuid, type AppContext, type Binding, type Database } from './types.ts';
 import { executeOperation, prepareOperation, retiredOperationInput, retiredOperationResponse } from './operations.ts';
 import { hasConsent } from './gallery.ts';
 import { mediaHeld, requireOperator } from './operators.ts';
+import { OPERATOR_CAPABILITIES } from './operator-capabilities.ts';
 import { AUDIENCE_POLICY } from './audience.ts';
+import { AUDIENCE_RULE, AUDIENCE_TERRITORY, AUDIENCE_REVIEW_MS, audienceDeadlineSQL } from './audience-decision.ts';
 import { INACTIVE_PROFILE_FACT, inactiveProfileOperationVersion } from './face-profile.ts';
 const DAY = 86400000;
 type InactiveKind = 'lifecycle' | 'job';
 type InactiveSource = { id: string; at: number };
 type InactiveSnapshot = { source: any; subject: string; key: string; at: number; policy: Policy; cleanup: any; operations: any[]; objects: any[]; writers: any[] };
 export const retentionSchemaStatements: readonly string[] = [
-    `CREATE TABLE IF NOT EXISTS retention_settings(id TEXT PRIMARY KEY CHECK(id='default'),version INTEGER NOT NULL CHECK(version>0),raw_days INTEGER NOT NULL CHECK(raw_days BETWEEN 1 AND 3650),preview_days INTEGER NOT NULL CHECK(preview_days BETWEEN 1 AND 3650),face_crop_days INTEGER NOT NULL CHECK(face_crop_days BETWEEN 1 AND 3650),free_cache_days INTEGER NOT NULL CHECK(free_cache_days BETWEEN 1 AND 3650),audit_days INTEGER NOT NULL CHECK(audit_days BETWEEN 1 AND 30),legal_hold INTEGER NOT NULL DEFAULT 0 CHECK(legal_hold IN(0,1)),updated_at INTEGER NOT NULL)`,
-    `CREATE TABLE IF NOT EXISTS asset_retention(asset_id TEXT PRIMARY KEY REFERENCES assets(id) ON DELETE CASCADE,raw_expires_at INTEGER NOT NULL,preview_expires_at INTEGER NOT NULL,legal_hold INTEGER NOT NULL DEFAULT 0 CHECK(legal_hold IN(0,1)),version INTEGER NOT NULL DEFAULT 1,updated_at INTEGER NOT NULL)`,
+    `CREATE TABLE IF NOT EXISTS retention_settings(id TEXT PRIMARY KEY CHECK(id='default'),version INTEGER NOT NULL CHECK(version>0),raw_days INTEGER NOT NULL CHECK(raw_days BETWEEN 1 AND 3650),preview_days INTEGER NOT NULL CHECK(preview_days BETWEEN 1 AND 3650),face_crop_days INTEGER NOT NULL CHECK(face_crop_days BETWEEN 1 AND 3650),free_cache_days INTEGER NOT NULL CHECK(free_cache_days BETWEEN 1 AND 3650),audit_days INTEGER NOT NULL CHECK(audit_days BETWEEN 1 AND 30),legal_hold INTEGER NOT NULL DEFAULT 0 CHECK(legal_hold IN(0,1)),updated_at INTEGER NOT NULL,restore_hold_episode_id TEXT)`,
+    `CREATE TABLE IF NOT EXISTS asset_retention(asset_id TEXT PRIMARY KEY REFERENCES assets(id) ON DELETE CASCADE,raw_expires_at INTEGER NOT NULL,preview_expires_at INTEGER NOT NULL,legal_hold INTEGER NOT NULL DEFAULT 0 CHECK(legal_hold IN(0,1)),version INTEGER NOT NULL DEFAULT 1,updated_at INTEGER NOT NULL,restore_hold_episode_id TEXT)`,
     `CREATE TABLE IF NOT EXISTS retention_jobs(id TEXT PRIMARY KEY,subject_id TEXT NOT NULL REFERENCES accounts(id),asset_id TEXT REFERENCES assets(id) ON DELETE CASCADE,kind TEXT NOT NULL CHECK(kind IN('raw','preview','profile')),binding_json TEXT NOT NULL CHECK(json_valid(binding_json)),policy_version INTEGER NOT NULL,object_version TEXT NOT NULL,status TEXT NOT NULL CHECK(status IN('pending','processing','failed','verified','blocked')),lease_token TEXT,lease_until INTEGER,created_at INTEGER NOT NULL,verified_at INTEGER,error_code TEXT,CHECK((asset_id IS NULL)=(kind='profile')))`,
     `CREATE UNIQUE INDEX IF NOT EXISTS retention_asset_job ON retention_jobs(asset_id,kind,object_version,policy_version) WHERE asset_id IS NOT NULL`,
     `CREATE UNIQUE INDEX IF NOT EXISTS retention_profile_job ON retention_jobs(subject_id,object_version,policy_version) WHERE kind='profile'`,
@@ -312,7 +315,7 @@ async function inactiveSnapshot(ctx: AppContext, kind: InactiveKind, candidate: 
             !cleanup || cleanup.request_id !== null || cleanup.subject_id !== subject || cleanup.bucket !== 'PHOTOS' || cleanup.object_key !== key ||
             cleanup.status !== 'verified' || cleanup.created_at !== candidate.at || !integer(cleanup.verified_at) || cleanup.verified_at < candidate.at || cleanup.verified_at > ctx.now()) return null;
         operations = await ctx.db.all<any>('SELECT * FROM face_profile_operations WHERE cleanup_id=? ORDER BY account_id,operation_key LIMIT 201', source.cleanup_id);
-        if (operations.length > 200) return null;
+        if (operations.length > 200 || await ctx.db.one('SELECT account_id FROM audience_review_retirements WHERE cleanup_id=? LIMIT 1',source.cleanup_id)) return null;
         const own = operations.filter(row => row.account_id === subject && row.operation_key === source.operation_key);
         if (source.operation_key.startsWith('audience:')) {
             if (operations.length !== 0) return null;
@@ -355,6 +358,7 @@ async function inactiveSnapshot(ctx: AppContext, kind: InactiveKind, candidate: 
  * after the await; unsupported/new writer or hold state preserves all old facts.
  * This phase never deletes an object or relabels an unknown key as completed. */
 export async function pruneInactiveProfileMetadata(ctx: AppContext, maximum = 50): Promise<number> {
+    await ctx.db.transaction(()=>finishReviewCleanup(ctx));
     if (!Number.isInteger(maximum) || maximum < 1 || maximum > 200) throw new ApiError(400, 'retention_limit_invalid');
     const kinds = await ctx.db.transaction(async (): Promise<InactiveKind[]> => {
         if ((await policy(ctx)).legal_hold) return [];
@@ -414,9 +418,9 @@ export async function handleRetention(request: Request, ctx: AppContext): Promis
     if (!['/admin/retention', '/admin/retention/run'].includes(path) && !asset)
         return null;
     const actor = await ctx.authenticate(request);
-    (await requireOperator(ctx, actor, true));
+    (await requireOperator(ctx, actor, true, request.method === 'GET' ? 'retention.read' : 'retention.manage'));
     if (request.method === 'GET')
-        return ok((await ctx.db.transaction(async () => { (await requireOperator(ctx, actor, true)); if (asset) {
+        return ok((await ctx.db.transaction(async () => { (await requireOperator(ctx, actor, true, request.method === 'GET' ? 'retention.read' : 'retention.manage')); if (asset) {
             const item = (await ctx.db.one<any>('SELECT * FROM assets WHERE id=?', uuid(asset[1])));
             if (!item)
                 throw new ApiError(404, 'asset_not_found');
@@ -431,7 +435,7 @@ export async function handleRetention(request: Request, ctx: AppContext): Promis
         if (!Number.isInteger(limit) || limit < 1 || limit > 200)
             throw new ApiError(400, 'retention_limit_invalid');
         const intent = await prepareOperation('retention.schedule', body, 'retention');
-        const receipt = (await executeOperation(ctx, actor, intent, async () => { (await requireOperator(ctx, actor, true)); (await snapshotExpired(ctx, limit)); return { scheduled: true, operation_key: intent.key }; }));
+        const receipt = (await executeOperation(ctx, actor, intent, async () => { (await requireOperator(ctx, actor, true, request.method === 'GET' ? 'retention.read' : 'retention.manage')); (await snapshotExpired(ctx, limit)); return { scheduled: true, operation_key: intent.key }; }));
         return ok(receipt); // Root's trusted alarm performs physical cleanup; never claim completion here.
     }
     if (request.method !== 'PATCH')
@@ -440,7 +444,7 @@ export async function handleRetention(request: Request, ctx: AppContext): Promis
     exact(body, asset ? ['raw_expires_at', 'preview_expires_at', 'legal_hold', 'expected_version', 'operation_key'] : ['raw_days', 'preview_days', 'face_crop_days', 'free_cache_days', 'audit_days', 'legal_hold', 'expected_version', 'operation_key']);
     const intent = await prepareOperation('retention.update', { ...body, ...(asset ? { asset_id: uuid(asset[1]) } : {}) }, 'retention');
     return ok((await executeOperation(ctx, actor, intent, async () => {
-        (await requireOperator(ctx, actor, true));
+        (await requireOperator(ctx, actor, true, request.method === 'GET' ? 'retention.read' : 'retention.manage'));
         if ((await ctx.db.one("SELECT id FROM retention_jobs WHERE status='processing' AND lease_until>? LIMIT 1", ctx.now())))
             throw new ApiError(409, 'retention_cleanup_in_progress');
         if (asset) {
@@ -611,6 +615,16 @@ async function adultReceiptGeneration(ctx: AppContext, id: string): Promise<stri
     return digest(stable({ review, audience_version: audience?.version ?? null }));
 }
 async function privacyOperation(ctx: AppContext, row: StoredOperation, input: Record<string, unknown>, result: Record<string, any>, request: any): Promise<boolean> {
+    if (['privacy.export.delivery.create', 'privacy.export.delivery.ack'].includes(row.action)) {
+        if (request.request_type !== 'export' || row.actor_id !== request.subject_id || input.protocol !== 'lovelies-privacy-export-delivery-v2') return false;
+        const create = row.action === 'privacy.export.delivery.create';
+        if (!shape(input, create ? ['operation_key', 'protocol', 'request_id', 'session_id'] : ['operation_key', 'protocol', 'delivery_id', 'session_id', 'sha256']) ||
+            !shape(result, create ? ['delivery_id'] : ['acknowledged', 'delivery_id', 'request_id'])) return false;
+        const delivery = await ctx.db.one<any>('SELECT * FROM privacy_export_deliveries WHERE id=? AND request_id=? AND subject_id=?', result.delivery_id, request.id, row.actor_id);
+        return !!delivery && delivery.session_id === input.session_id && (create
+            ? delivery.request_id === input.request_id && delivery.operation_key === row.operation_key
+            : input.delivery_id === delivery.id && input.sha256 === delivery.sha256 && delivery.acknowledged_at !== null && result.acknowledged === true && result.request_id === request.id);
+    }
     if (row.action === 'privacy.export.grant') {
         if (request.request_type !== 'export' || row.actor_id !== request.subject_id || input.request_id !== request.id) return false;
         // Do not minimize an unknown or damaged encrypted delivery record.
@@ -738,6 +752,62 @@ async function retireLinkedOperations(ctx: AppContext, link: OperationLink, budg
     }
     return complete;
 }
+/** New operator receipts retain their original identity while personal notes and
+ * historical account projections follow the one-year operator audit window.
+ * Unknown/corrupted versions and any live job/hold remain recoverable evidence. */
+async function pruneOperatorOperationCopies(ctx: AppContext, budget: {left:number}): Promise<void> {
+    if (!budget.left) return;
+    const entity='operator-operation-copies-v1';
+    const cursor=await ctx.db.one<{last_at:number|null;last_id:string|null}>(
+      "SELECT last_at,last_id FROM retention_scan_cursors WHERE scan='privacy' AND entity_id=?",entity);
+    const at=cursor?.last_at??null;
+    let after:{actor_id:string;source:string;operation_key:string}|null=null;
+    if(at!==null){
+        try{after=JSON.parse(cursor!.last_id!);}catch{throw new ApiError(503,'retention_cursor_invalid');}
+        if(!integer(at)||!object(after)||!shape(after,['actor_id','source','operation_key'])||!canonicalID(after.actor_id)||
+          !['operator_access','operator_recovery'].includes(after.source)||!textValue(after.operation_key,128,1))throw new ApiError(503,'retention_cursor_invalid');
+    }else if(cursor?.last_id!=null)throw new ApiError(503,'retention_cursor_invalid');
+    const rows = await ctx.db.all<StoredOperation>(`SELECT * FROM operations WHERE source IN('operator_access','operator_recovery')
+      AND created_at<=? AND payload_json<>?
+      ${after?'AND (created_at>? OR (created_at=? AND (actor_id>? OR (actor_id=? AND (source>? OR (source=? AND operation_key>?))))))':''}
+      ORDER BY created_at,actor_id,source,operation_key LIMIT ?`,ctx.now()-365*DAY,retiredOperationInput,
+      ...(after?[at,at,after.actor_id,after.actor_id,after.source,after.source,after.operation_key]:[]),budget.left);
+    const last=rows.at(-1);
+    // Advance past every examined row, including held or malformed receipts.
+    // An empty scan wraps; no prefix can indefinitely starve later records.
+    await ctx.db.run("INSERT INTO retention_scan_cursors(scan,entity_id,last_at,last_id) VALUES('privacy',?,?,?) ON CONFLICT(scan,entity_id) DO UPDATE SET last_at=excluded.last_at,last_id=excluded.last_id",
+      entity,last?.created_at??null,last?stable({actor_id:last.actor_id,source:last.source,operation_key:last.operation_key}):null);
+    for (const row of rows) {
+        let input: Record<string,any>;
+        try { input=JSON.parse(row.payload_json);if(!object(input)) continue; } catch { continue; }
+        const isAccess=row.source==='operator_access'&&row.action==='operator.access.update';
+        const isRecovery=row.source==='operator_recovery'&&row.action==='operator.photo.resume';
+        if(!isAccess&&!isRecovery) continue;
+        const account=isAccess?input.account_id:(await ctx.db.one<{owner_id:string}>('SELECT owner_id FROM processing_attempts WHERE id=?',String(input.attempt_id)))?.owner_id;
+        if(typeof account!=='string') continue;
+        if(isRecovery&&await ctx.db.one("SELECT id FROM processing_attempts WHERE id=? AND status IN('queued','running')",String(input.attempt_id))) continue;
+        if(isRecovery&&await ctx.db.one("SELECT id FROM job_queue WHERE category='photo' AND json_extract(payload_json,'$.attempt_id')=? AND state NOT IN('completed','failed')",String(input.attempt_id))) continue;
+        await retireLinkedOperations(ctx,{
+            entity:isAccess?account:String(input.attempt_id),subjects:[row.actor_id,account],
+            sql:'o.actor_id=? AND o.source=? AND o.operation_key=?',bindings:[row.actor_id,row.source,row.operation_key],
+            valid:(_record,payload,result)=> {
+                if(!textValue(payload.reason,1000,3))return false;
+                if(isAccess) {
+                    const saved=result.operator;
+                    return shape(payload,['account_id','capabilities','expires_at','expected_revision','reason','operation_key'])&&payload.account_id===account&&
+                        Array.isArray(payload.capabilities)&&new Set(payload.capabilities).size===payload.capabilities.length&&payload.capabilities.every(c=>OPERATOR_CAPABILITIES.includes(c as any))&&
+                        integer(payload.expected_revision)&&shape(result,['operator','authority','administrator_created'])&&result.authority==='current_database_grants'&&result.administrator_created===false&&
+                        object(saved)&&shape(saved,['id','name','status','identity_state','revision','administrator','capabilities','grants'])&&saved.id===account&&saved.administrator===false&&
+                        saved.revision===Number(payload.expected_revision)+1&&Array.isArray(saved.capabilities)&&Array.isArray(saved.grants)&&
+                        saved.grants.every((grant:any)=>object(grant)&&shape(grant,['id','capability','created_at','expires_at','revoked_at','expired'])&&typeof grant.id==='string'&&OPERATOR_CAPABILITIES.includes(grant.capability)&&integer(grant.created_at)&&integer(grant.expires_at)&&grant.revoked_at===null&&typeof grant.expired==='boolean');
+                }
+                return shape(payload,['asset_id','attempt_id','expected_revision','reason','operation_key'])&&typeof payload.expected_revision==='string'&&/^[0-9a-f]{64}$/.test(payload.expected_revision)&&
+                    shape(result,['protocol','asset_id','attempt_id','state','original_authority_preserved','completed','grants_created'])&&result.protocol==='lovelies-operator-recovery-v1'&&
+                    result.asset_id===payload.asset_id&&result.attempt_id===payload.attempt_id&&result.state==='queued'&&result.original_authority_preserved===true&&result.completed===false&&result.grants_created===0;
+            },
+        },budget);
+    }
+}
 type RetentionScan = 'support' | 'guardian' | 'adult' | 'privacy';
 /** Persist the last examined source, including blocked records, across isolates.
  * An empty bounded query proves exhaustion; only then does that class wrap.
@@ -810,13 +880,96 @@ async function pruneTerminalOperationCopies(ctx: AppContext, maximum: number): P
     for (const request of await terminalScan(ctx, 'privacy', `privacy_requests r WHERE r.status IN('completed','rejected','cancelled')
       AND coalesce(r.completed_at,r.reviewed_at) IS NOT NULL AND coalesce(r.completed_at,r.reviewed_at)<=?
       AND NOT EXISTS(SELECT 1 FROM privacy_exports e WHERE e.request_id=r.id AND e.status<>'retired')
-      AND NOT EXISTS(SELECT 1 FROM privacy_export_grants g WHERE g.request_id=r.id AND g.consumed_at IS NULL AND g.expires_at>?)`, 'coalesce(r.completed_at,r.reviewed_at)', [ctx.now() - 365 * DAY, ctx.now()], maximum)) {
+      AND NOT EXISTS(SELECT 1 FROM privacy_export_grants g WHERE g.request_id=r.id AND g.consumed_at IS NULL AND g.expires_at>?)
+      AND NOT EXISTS(SELECT 1 FROM privacy_export_deliveries d WHERE d.request_id=r.id AND d.acknowledged_at IS NULL AND d.expires_at>?)`, 'coalesce(r.completed_at,r.reviewed_at)', [ctx.now() - 365 * DAY, ctx.now(), ctx.now()], maximum)) {
         await retireLinkedOperations(ctx, {
             entity: request.id, subjects: [request.subject_id],
-            sql: "o.source='privacy' AND (json_extract(o.payload_json,'$.request_id')=? OR json_extract(CASE WHEN json_valid(json_extract(o.response_json,'$.privacy_request')) THEN json_extract(o.response_json,'$.privacy_request') ELSE '{}' END,'$.id')=?)",
-            bindings: [request.id, request.id],
+            sql: "o.source='privacy' AND (json_extract(o.payload_json,'$.request_id')=? OR json_extract(CASE WHEN json_valid(json_extract(o.response_json,'$.privacy_request')) THEN json_extract(o.response_json,'$.privacy_request') ELSE '{}' END,'$.id')=? OR json_extract(o.response_json,'$.request_id')=?)",
+            bindings: [request.id, request.id, request.id],
             valid: (row, input, result) => privacyOperation(ctx, row, input, result, request),
         }, budget);
+    }
+    await pruneOperatorOperationCopies(ctx,budget);
+}
+
+/** Legacy declarations retain their exact payload only until this 365-day
+ * evidence deadline, unless a scoped hold or unresolved operation/cleanup needs
+ * it. The original key/action/hash remain as a terminal 410 receipt forever. */
+async function audienceOperation(row:StoredOperation,input:Record<string,unknown>,result:Record<string,any>,ctx:AppContext):Promise<boolean> {
+    const consent=(value:unknown)=>object(value)&&shape(value,['purpose','policy_version','granted'])&&value.purpose==='face_authentication'&&value.granted===true&&textValue(value.policy_version,128,1);
+    if(row.action==='audience.declare'){
+        const legacy=Object.hasOwn(input,'age_band');
+        return shape(input,['operation_key','policy_version','expected_version',...(legacy?['age_band']:['at_least_13','guardian_required'])])&&
+            input.policy_version===AUDIENCE_POLICY&&integer(input.expected_version)&&
+            (legacy?['under13','13_17','18_plus'].includes(String(input.age_band)):typeof input.at_least_13==='boolean'&&typeof input.guardian_required==='boolean'&&(input.at_least_13||!input.guardian_required))&&
+            shape(result,['account_id'])&&result.account_id===row.actor_id;
+    }
+    if(row.action==='audience.control-renew-device'){
+        const receipt=result.control_renewal;
+        return shape(input,['account_id','device_id','control_hash','expected_binding','expected_version','operation_key','consent'])&&input.account_id===row.actor_id&&canonicalID(input.device_id)&&
+            typeof input.control_hash==='string'&&/^[0-9a-f]{64}$/.test(input.control_hash)&&typeof input.expected_binding==='string'&&/^[0-9a-f]{64}$/.test(input.expected_binding)&&integer(input.expected_version,1)&&consent(input.consent)&&
+            shape(result,['control_renewal'])&&object(receipt)&&shape(receipt,['operation_key','from_expires_at','to_expires_at'])&&receipt.operation_key===row.operation_key&&dateText(receipt.from_expires_at)&&dateText(receipt.to_expires_at)&&Date.parse(receipt.to_expires_at)>Date.parse(receipt.from_expires_at);
+    }
+    const minor=row.action==='audience.guardian-review-device',device=row.action!=='audience.renew',receipt=result.renewal;
+    if(!['audience.renew','audience.renew-device','audience.guardian-review-device'].includes(row.action)||
+        !shape(input,['account_id',...(device?['device_id']:[]),'at_least_13','guardian_required','policy_version','expected_version','operation_key',...(minor?[]:['consent'])])||
+        input.account_id!==row.actor_id||device&&!canonicalID(input.device_id)||input.at_least_13!==true||input.guardian_required!==minor||input.policy_version!==AUDIENCE_POLICY||!integer(input.expected_version,1)||!minor&&!consent(input.consent)||
+        !shape(result,['renewal'])||!object(receipt)||!shape(receipt,['operation_key','from_version','to_version','next_step'],minor?['guardian_request_id']:[])||receipt.operation_key!==row.operation_key||receipt.from_version!==input.expected_version||receipt.to_version!==Number(input.expected_version)+1||
+        !(minor?receipt.next_step==='guardian_review'&&canonicalID(receipt.guardian_request_id):['face_login','profile_recovery'].includes(receipt.next_step)))return false;
+    return !minor||!await ctx.db.one("SELECT id FROM guardian_requests WHERE id=? AND state IN('pending','under_review','approved')",receipt.guardian_request_id);
+}
+async function pruneAudienceEvidence(ctx:AppContext,maximum:number):Promise<void> {
+    const entity='audience-operation-evidence-v2',cutoff=ctx.now()-365*DAY;
+    const cursor=await ctx.db.one<{last_at:number|null;last_id:string|null}>("SELECT last_at,last_id FROM retention_scan_cursors WHERE scan='adult' AND entity_id=?",entity);
+    let after:{actor:string;key:string}|null=null;
+    if(cursor?.last_at!==null&&cursor?.last_at!==undefined){
+        try{after=JSON.parse(cursor.last_id!);}catch{throw new ApiError(503,'retention_cursor_invalid');}
+        if(!integer(cursor.last_at)||!object(after)||!shape(after,['actor','key'])||!canonicalID(after.actor)||typeof after.key!=='string'||!/^[A-Za-z0-9._:-]{16,128}$/.test(after.key))throw new ApiError(503,'retention_cursor_invalid');
+    }else if(cursor?.last_id!==null&&cursor?.last_id!==undefined)throw new ApiError(503,'retention_cursor_invalid');
+    const rows=await ctx.db.all<StoredOperation>(`SELECT o.actor_id,o.source,o.operation_key,o.action,o.payload_hash,o.payload_json,o.response_json,o.created_at FROM operations o
+      WHERE o.source='audience' AND o.action IN('audience.declare','audience.renew','audience.renew-device','audience.guardian-review-device','audience.control-renew-device')
+      AND o.created_at<=? AND o.payload_json<>? ${after?'AND (o.created_at>? OR (o.created_at=? AND (o.actor_id>? OR (o.actor_id=? AND o.operation_key>?))))':''}
+      ORDER BY o.created_at,o.actor_id,o.operation_key LIMIT ?`,cutoff,retiredOperationInput,...(after?[cursor!.last_at!,cursor!.last_at!,after.actor,after.actor,after.key]:[]),maximum);
+    const budget={left:maximum};
+    for(const row of rows)await retireLinkedOperations(ctx,{entity:row.actor_id,subjects:[row.actor_id],
+        sql:"o.source='audience' AND o.actor_id=? AND o.operation_key=?",bindings:[row.actor_id,row.operation_key],valid:(saved,input,result)=>audienceOperation(saved,input,result,ctx)},budget);
+    const last=rows.at(-1);
+    await ctx.db.run("INSERT INTO retention_scan_cursors(scan,entity_id,last_at,last_id) VALUES('adult',?,?,?) ON CONFLICT(scan,entity_id) DO UPDATE SET last_at=excluded.last_at,last_id=excluded.last_id",entity,last?.created_at??null,last?stable({actor:last.actor_id,key:last.operation_key}):null);
+    // This is representation minimization of a provably settled old decision,
+    // never a new declaration/review or age transition. The two flags retain
+    // exactly the same information as the original three-valued label.
+    const legacy=await ctx.db.all<{account_id:string}>(`SELECT a.account_id FROM account_audience a
+      WHERE a.decision_protocol='legacy-v1' AND a.declared_at BETWEEN 0 AND ? AND a.policy_version=?
+      AND ${noCurrentHold('h.subject_id=a.account_id')}
+      AND NOT EXISTS(SELECT 1 FROM media_write_intents w WHERE w.account_id=a.account_id AND w.status='pending')
+      AND NOT EXISTS(SELECT 1 FROM cleanup_intents c WHERE c.subject_id=a.account_id AND c.status<>'verified')
+      AND NOT EXISTS(SELECT 1 FROM face_profile_operations f WHERE f.account_id=a.account_id AND f.state='pending')
+      AND NOT EXISTS(SELECT 1 FROM operations o WHERE o.payload_json<>? AND
+        (o.actor_id=a.account_id OR EXISTS(SELECT 1 FROM operation_subjects os WHERE os.actor_id=o.actor_id AND os.source=o.source AND os.operation_key=o.operation_key AND os.subject_id=a.account_id))
+        AND (o.source='audience' OR instr(o.payload_json,'"age_band"')>0 OR instr(o.response_json,'"age_band"')>0))
+      ORDER BY a.declared_at,a.account_id LIMIT ?`,cutoff,AUDIENCE_POLICY,retiredOperationInput,maximum);
+    for(const row of legacy){
+        if(await operationRetirementBlocked(ctx,[row.account_id],row.account_id))continue;
+        await ctx.db.run(`UPDATE account_audience a SET at_least_13=CASE WHEN age_band='under13' THEN 0 ELSE 1 END,
+          guardian_required=CASE WHEN age_band='13_17' THEN 1 ELSE 0 END,decision_source='legacy_declaration',rule_version=?,territory=?,
+          next_review_at=${audienceDeadlineSQL('a')},age_band=NULL,decision_protocol='decision-v2'
+          WHERE account_id=? AND decision_protocol='legacy-v1' AND declared_at<=? AND ${noCurrentHold('h.subject_id=a.account_id')}`,
+          AUDIENCE_RULE,AUDIENCE_TERRITORY,row.account_id,cutoff);
+    }
+    const reviews=await ctx.db.all<{account_id:string;audience_version:number}>(`SELECT r.account_id,r.audience_version FROM audience_review_retirements r
+      WHERE r.retired_at<=? AND r.profile_id IS NULL AND r.cleanup_id IS NULL AND r.enrollment_binding IS NULL AND r.disposition IN('renewed','removed')
+      AND ${noCurrentHold('h.subject_id=r.account_id')}
+      AND NOT EXISTS(SELECT 1 FROM cleanup_intents c WHERE c.subject_id=r.account_id AND c.status<>'verified')
+      AND NOT EXISTS(SELECT 1 FROM media_write_intents w WHERE w.account_id=r.account_id AND w.status='pending')
+      AND NOT EXISTS(SELECT 1 FROM face_profile_operations o WHERE o.account_id=r.account_id AND o.state='pending')
+      AND NOT(r.removal_verified_at IS NOT NULL AND NOT EXISTS(SELECT 1 FROM face_profiles p WHERE p.account_id=r.account_id AND p.status='active')
+        AND EXISTS(SELECT 1 FROM face_profile_controls c JOIN auth_devices d ON d.id=c.device_id AND d.account_id=c.account_id AND d.status='active' AND d.revision=c.device_revision WHERE c.account_id=r.account_id)
+        AND NOT EXISTS(SELECT 1 FROM audience_review_retirements later WHERE later.account_id=r.account_id AND later.audience_version>r.audience_version AND later.removal_verified_at IS NOT NULL))
+      ORDER BY r.retired_at,r.account_id,r.audience_version LIMIT ?`,cutoff,maximum);
+    for(const r of reviews){
+        if(await operationRetirementBlocked(ctx,[r.account_id],r.account_id))continue;
+        await ctx.db.run(`DELETE FROM audience_review_retirements WHERE account_id=? AND audience_version=? AND profile_id IS NULL AND cleanup_id IS NULL AND ${noCurrentHold('h.subject_id=audience_review_retirements.account_id')}`,r.account_id,r.audience_version);
+        if(await ctx.db.one('SELECT account_id FROM audience_review_retirements WHERE account_id=? AND audience_version=?',r.account_id,r.audience_version))throw new ApiError(409,'retention_hold_changed');
     }
 }
 
@@ -829,10 +982,54 @@ export async function pruneRetainedMetadata(ctx: AppContext, maximum = 100): Pro
     const p = await policy(ctx);
     if (p.legal_hold) return;
     await pruneTerminalOperationCopies(ctx, maximum);
+    // Delivery bindings outlive ambiguous transport. Remove only old records
+    // whose linked operation copies and exact private object are already retired.
+    await ctx.db.run(`DELETE FROM privacy_export_deliveries WHERE id IN(SELECT d.id FROM privacy_export_deliveries d
+      JOIN privacy_exports e ON e.id=d.publication_id WHERE d.expires_at<=? AND e.status='retired'
+      AND EXISTS(SELECT 1 FROM cleanup_intents c WHERE c.request_id=d.request_id AND c.bucket='PRIVACY_EXPORTS' AND c.object_key=e.object_key AND c.status='verified')
+      AND NOT EXISTS(SELECT 1 FROM cleanup_intents c WHERE c.request_id=d.request_id AND c.status<>'verified')
+      AND NOT EXISTS(SELECT 1 FROM media_write_intents w WHERE w.account_id=d.subject_id AND w.status='pending')
+      AND NOT EXISTS(SELECT 1 FROM operations o WHERE o.actor_id=d.subject_id AND o.source='privacy'
+        AND (json_extract(o.payload_json,'$.delivery_id')=d.id OR json_extract(o.response_json,'$.delivery_id')=d.id))
+      AND ${noCurrentHold('h.subject_id=d.subject_id')}
+      AND NOT EXISTS(SELECT 1 FROM moderation_holds h JOIN assets a ON a.id=h.asset_id WHERE h.active=1 AND a.owner_id=d.subject_id)
+      AND NOT EXISTS(SELECT 1 FROM asset_retention r JOIN assets a ON a.id=r.asset_id WHERE r.legal_hold=1 AND a.owner_id=d.subject_id)
+      ORDER BY d.expires_at,d.id LIMIT ?)`,ctx.now()-365*DAY,maximum);
+    // Snapshot rows/hash tails are minimized at completion or retirement. The
+    // remaining manifest/writer metadata is removed only after exact object
+    // absence was verified for the root and every chunk, with no late writer.
+    const snapshots=await ctx.db.all<{id:string}>(`SELECT s.id FROM privacy_export_snapshots s JOIN privacy_exports e ON e.id=s.id
+      WHERE s.status IN('completed','retired') AND e.status='retired'
+      AND EXISTS(SELECT 1 FROM cleanup_intents c WHERE c.bucket='PRIVACY_EXPORTS' AND c.object_key=e.object_key AND c.subject_id=s.subject_id AND c.status='verified')
+      AND NOT EXISTS(SELECT 1 FROM cleanup_intents c WHERE c.bucket='PRIVACY_EXPORTS' AND c.object_key=e.object_key AND c.subject_id=s.subject_id AND c.status<>'verified')
+      AND NOT EXISTS(SELECT 1 FROM privacy_export_chunks k WHERE k.publication_id=s.id AND NOT EXISTS(
+        SELECT 1 FROM cleanup_intents c WHERE c.bucket='PRIVACY_EXPORTS' AND c.object_key=k.object_key AND c.subject_id=s.subject_id AND c.status='verified'))
+      AND NOT EXISTS(SELECT 1 FROM privacy_export_chunks k JOIN cleanup_intents c ON c.bucket='PRIVACY_EXPORTS' AND c.object_key=k.object_key AND c.subject_id=s.subject_id
+        WHERE k.publication_id=s.id AND c.status<>'verified')
+      AND NOT EXISTS(SELECT 1 FROM cleanup_intents c WHERE c.request_id=s.request_id AND c.status<>'verified')
+      AND NOT EXISTS(SELECT 1 FROM media_write_intents w WHERE w.account_id=s.subject_id AND w.status='pending')
+      AND ${noCurrentHold('h.subject_id=s.subject_id')}
+      AND NOT EXISTS(SELECT 1 FROM moderation_holds h JOIN assets a ON a.id=h.asset_id WHERE h.active=1 AND a.owner_id=s.subject_id)
+      AND NOT EXISTS(SELECT 1 FROM asset_retention r JOIN assets a ON a.id=r.asset_id WHERE r.legal_hold=1 AND a.owner_id=s.subject_id)
+      ORDER BY s.generated_at,s.id LIMIT ?`,maximum);
+    for(const row of snapshots) {
+        await ctx.db.run("UPDATE privacy_export_snapshots SET status='retired',hash_state_json='{}' WHERE id=?",row.id);
+        await ctx.db.run('DELETE FROM privacy_export_snapshot_rows WHERE snapshot_id=?',row.id);
+        await ctx.db.run('DELETE FROM privacy_export_chunks WHERE publication_id=?',row.id);
+        await ctx.db.run('DELETE FROM privacy_export_snapshots WHERE id=?',row.id);
+    }
+    // Never remove an active grant, nor the subject's revision counter. The
+    // counter prevents a stale provisioning screen from recreating old access.
+    await ctx.db.run(`DELETE FROM operator_capability_grants WHERE id IN(SELECT g.id FROM operator_capability_grants g
+      WHERE coalesce(g.revoked_at,g.expires_at)<=? AND g.expires_at<=?
+      AND NOT EXISTS(SELECT 1 FROM operations o WHERE o.source='operator_access' AND o.payload_json<>? AND json_extract(o.payload_json,'$.account_id')=g.account_id)
+      AND ${noCurrentHold('h.subject_id=g.account_id OR h.subject_id=g.granted_by')}
+      ORDER BY g.expires_at,g.id LIMIT ?)`,ctx.now()-365*DAY,ctx.now(),retiredOperationInput,maximum);
+    await pruneAudienceEvidence(ctx,maximum);
     const events = await ctx.db.all<{id:string}>(`SELECT e.id FROM audit_events e
       WHERE e.created_at <= ? - CASE
         WHEN e.action LIKE 'privacy.%' OR e.action LIKE 'guardian.%' OR e.action LIKE 'audience.%' OR e.action LIKE 'consent.%'
-          OR e.action LIKE 'face_profile.%' OR e.action LIKE 'admin.%' OR e.action LIKE 'support.%' OR e.action LIKE 'moderation.%'
+          OR e.action LIKE 'face_profile.%' OR e.action LIKE 'admin.%' OR e.action LIKE 'operator.%' OR e.action LIKE 'support.%' OR e.action LIKE 'moderation.%'
           OR EXISTS(SELECT 1 FROM accounts admin_actor WHERE admin_actor.id=e.actor_id AND instr(admin_actor.roles_json,'"admin"')>0) THEN ?
         WHEN e.action LIKE 'face.%' OR e.action LIKE 'auth.%' OR e.action LIKE 'session.%' OR e.action LIKE 'device.%' OR e.action LIKE 'security.%' THEN ?
         ELSE ? END
@@ -857,6 +1054,7 @@ export async function pruneRetainedMetadata(ctx: AppContext, maximum = 100): Pro
       AND EXISTS(SELECT 1 FROM retention_settings p WHERE p.id='default' AND p.legal_hold=0)
       AND coalesce(c.revoked_at,c.expires_at,c.created_at)<=?
       AND NOT EXISTS(SELECT 1 FROM face_profiles f WHERE f.consent_id=c.id OR f.auth_consent_id=c.id)
+      AND NOT EXISTS(SELECT 1 FROM audience_review_retirements r WHERE r.auth_consent_id=c.id OR r.enrollment_consent_id=c.id OR r.enrollment_rebound_consent_id=c.id)
       AND NOT EXISTS(SELECT 1 FROM sessions s WHERE s.face_consent_id=c.id)
       AND NOT EXISTS(SELECT 1 FROM auth_challenges a WHERE a.consent_id=c.id)
       AND NOT EXISTS(SELECT 1 FROM face_enrollment_intents i WHERE i.consent_id=c.id)

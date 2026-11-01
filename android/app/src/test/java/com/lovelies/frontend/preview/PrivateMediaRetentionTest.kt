@@ -2,8 +2,11 @@ package com.lovelies.frontend.preview
 
 import java.io.File
 import java.io.IOException
+import java.nio.channels.FileChannel
 import java.nio.file.Files
 import java.nio.file.LinkOption
+import java.nio.file.Path
+import java.nio.file.StandardOpenOption
 import java.nio.file.attribute.FileTime
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.*
@@ -33,8 +36,13 @@ class PrivateMediaRetentionTest {
     private fun batch()=PhotoUploadBatch.create(origin,account,device,batchId,listOf(cameraUri),listOf(cameraUri),"")
     private fun protection(batch: Any?=null,draft: Any?=null,account: String?=this.account,device: String?=this.device,uris: List<String> = emptyList())=
         PrivateTemporaryMedia.cameraRecoveryNames(batch,draft,origin,account,device,uris,authority)
+    // JVM fixtures retain actual directory durability; the Android descriptor
+    // implementation is exercised by the installed API-24 journey.
+    private fun syncDirectoryOnHost(path: Path) {
+        FileChannel.open(path,StandardOpenOption.READ,LinkOption.NOFOLLOW_LINKS).use { it.force(true) }
+    }
     private fun write(cache: File,kind: PrivateTemporaryMedia.Kind,name: String,created: Long)=
-        PrivateTemporaryMedia.write(cache,kind,name,bytes,created)
+        PrivateTemporaryMedia.write(cache,kind,name,bytes,created,directorySync=::syncDirectoryOnHost)
 
     @Test fun alreadyDisplayedOfflinePreviewClearsAtSessionDeadlineWithoutAnotherRequest()=runBlocking {
         val lease=PrivatePreviewLease.create(scope,actor,now,elapsed)!!
@@ -163,12 +171,38 @@ class PrivateMediaRetentionTest {
 
     @Test fun nameCollisionAndUnsafeWriteNeverReplaceOrRemoveExistingFile() {
         val cache=cache();val original=write(cache,PrivateTemporaryMedia.Kind.CAMERA,cameraName,now)
-        try { PrivateTemporaryMedia.write(cache,PrivateTemporaryMedia.Kind.CAMERA,cameraName,byteArrayOf(9),now);fail("Existing file was replaced") }
+        try { PrivateTemporaryMedia.write(cache,PrivateTemporaryMedia.Kind.CAMERA,cameraName,byteArrayOf(9),now,directorySync=::syncDirectoryOnHost);fail("Existing file was replaced") }
         catch(_: IOException) { }
         assertArrayEquals(bytes,original.readBytes())
         try { write(cache,PrivateTemporaryMedia.Kind.CAMERA,"../$cameraName",now);fail("Traversal write accepted") }
         catch(_: LiveFailure) { }
         assertEquals(listOf(cameraName),requireNotNull(original.parentFile).list()!!.toList())
+    }
+
+    @Test fun matchingLegacyFilenameAloneDoesNotAuthorizeCleanup() {
+        val cache=cache();val folder=File(cache,"shared-originals").apply { mkdir() }
+        val unknown=File(folder,shareName).apply { writeBytes(bytes);setLastModified(now-PrivateTemporaryMedia.SHARE_AGE_MS) }
+        assertTrue(PrivateTemporaryMedia.sweep(cache,PrivateTemporaryMedia.Kind.SHARED,now,all=true).removed.isEmpty())
+        assertNull(PrivateTemporaryMedia.owned(cache,PrivateTemporaryMedia.Kind.SHARED,unknown))
+        assertArrayEquals(bytes,unknown.readBytes())
+    }
+
+    @Test fun staleShareHandleCannotRemoveAReplacementAtTheSamePath() {
+        val cache=cache();val file=write(cache,PrivateTemporaryMedia.Kind.SHARED,shareName,now)
+        val owned=PrivateTemporaryMedia.owned(cache,PrivateTemporaryMedia.Kind.SHARED,file)!!
+        val replacement=File(file.parentFile,"replacement").apply { writeBytes(byteArrayOf(9,8,7)) }
+        Files.move(replacement.toPath(),file.toPath(),java.nio.file.StandardCopyOption.REPLACE_EXISTING)
+        assertFalse(PrivateTemporaryMedia.discard(cache,owned))
+        assertTrue(PrivateTemporaryMedia.sweep(cache,PrivateTemporaryMedia.Kind.SHARED,now,all=true).removed.isEmpty())
+        assertArrayEquals(byteArrayOf(9,8,7),file.readBytes())
+    }
+
+    @Test fun exactUnhandedShareCanBeDiscardedWithoutRemovingAnotherShareOrCameraSource() {
+        val cache=cache();val share=write(cache,PrivateTemporaryMedia.Kind.SHARED,shareName,now)
+        val camera=write(cache,PrivateTemporaryMedia.Kind.CAMERA,cameraName,now)
+        val owned=PrivateTemporaryMedia.owned(cache,PrivateTemporaryMedia.Kind.SHARED,share)!!
+        assertTrue(PrivateTemporaryMedia.discard(cache,owned));assertFalse(share.exists());assertArrayEquals(bytes,camera.readBytes())
+        assertFalse(PrivateTemporaryMedia.discard(cache,owned))
     }
 
     @Test fun failedDeletionRetainsTheFileAndSchedulesRetryWithoutClaimingRemoval() {
@@ -177,6 +211,49 @@ class PrivateMediaRetentionTest {
         assertTrue(result.failed);assertTrue(result.removed.isEmpty());assertEquals(60_000L,result.nextDelay)
         assertArrayEquals(bytes,source.readBytes())
         assertEquals(setOf(shareName),PrivateTemporaryMedia.sweep(cache,PrivateTemporaryMedia.Kind.SHARED,now).removed)
+    }
+
+    @Test fun directorySyncFailureAtEachBoundaryFailsClosedAndRemovesOnlyItsCreation() {
+        for(failAt in 1..3) {
+            val cache=cache().canonicalFile;val target=File(cache,"shared-originals/$shareName")
+            val unknown=File(cache,"unowned").apply { writeBytes(byteArrayOf(9,8,7)) }
+            val owner=File(cache,"private-media-ownership-v1/shared-$shareName.owner")
+            val failure=IOException("directory sync $failAt failed");val synced=mutableListOf<Path>()
+            val actual=runCatching {
+                PrivateTemporaryMedia.write(cache,PrivateTemporaryMedia.Kind.SHARED,shareName,bytes,now,directorySync={ path ->
+                    synced.add(path)
+                    assertTrue(owner.isFile)
+                    if(synced.size<3)assertEquals("Private bytes must wait for durable ownership",0L,target.length())
+                    else assertArrayEquals(bytes,target.readBytes())
+                    if(synced.size==failAt)throw failure
+                    syncDirectoryOnHost(path)
+                })
+            }.exceptionOrNull()
+            assertSame(failure,actual)
+            assertEquals(listOf(owner.parentFile.toPath(),cache.toPath().toRealPath(),target.parentFile.toPath()).take(failAt),synced)
+            assertFalse(target.exists());assertFalse(owner.exists())
+            assertArrayEquals(byteArrayOf(9,8,7),unknown.readBytes())
+        }
+    }
+
+    @Test fun directorySyncFailurePreservesAReplacementAndRejectsItsOldOwnership() {
+        val cache=cache().canonicalFile;val target=File(cache,"shared-originals/$shareName")
+        val replacement=File(cache,"replacement").apply { writeBytes(byteArrayOf(9,8,7)) }
+        val failure=IOException("final directory sync failed");var syncs=0
+        val actual=runCatching {
+            PrivateTemporaryMedia.write(cache,PrivateTemporaryMedia.Kind.SHARED,shareName,bytes,now,directorySync={ path ->
+                if(++syncs==3) {
+                    Files.move(replacement.toPath(),target.toPath(),java.nio.file.StandardCopyOption.REPLACE_EXISTING)
+                    throw failure
+                }
+                syncDirectoryOnHost(path)
+            })
+        }.exceptionOrNull()
+        assertSame(failure,actual);assertEquals(3,syncs)
+        assertArrayEquals(byteArrayOf(9,8,7),target.readBytes())
+        assertNull(PrivateTemporaryMedia.owned(cache,PrivateTemporaryMedia.Kind.SHARED,target))
+        assertTrue(PrivateTemporaryMedia.sweep(cache,PrivateTemporaryMedia.Kind.SHARED,now,all=true).removed.isEmpty())
+        assertArrayEquals(byteArrayOf(9,8,7),target.readBytes())
     }
 
     @Test fun futureOrUnusableCreationStampCannotExtendPrivateTempRetention() {

@@ -4,6 +4,175 @@ import CryptoKit
 import FoundationNetworking
 #endif
 
+enum NativePrivacyExportPhase: String, Codable, Sendable {
+    case prepared, open, staged, ackUnknown, sessionHeld, acknowledged, expiredLocal, retired, cleanup
+}
+struct NativePrivacyExportRecord: Codable, Equatable, Sendable {
+    let apiOrigin: String, accountID: String, requestID: String, operationKey: String
+    var delivery: WireValue?
+    var nextPart = 0, byteCount = 0
+    var chain: String
+    var archiveSHA256: String?
+    var phase: NativePrivacyExportPhase = .prepared
+    init(origin: URL, account: String, request: String) {
+        apiOrigin = origin.absoluteString; accountID = account; requestID = request
+        operationKey = "ios-export-" + UUID().uuidString.lowercased()
+        chain = Self.seed(request: request, account: account)
+    }
+    static let maximumPartBytes = 256 * 1024
+    static func hash(_ bytes: Data) -> String { SHA256.hash(data: bytes).map { String(format: "%02x", $0) }.joined() }
+    static func digest(_ value: String) -> Bool { value.range(of: "^[0-9a-f]{64}$", options: .regularExpression) != nil }
+    static func seed(request: String, account: String) -> String { hash(Data("lovelies-privacy-export-parts-v1\n\(request)\n\(account)".utf8)) }
+    static func advance(_ chain: String, index: Int, bytes: Data) -> String { hash(Data("\(chain):\(index):\(bytes.count):\(hash(bytes))".utf8)) }
+    var partCount: Int { delivery?["part_count"].integer ?? 0 }
+    var totalBytes: Int { delivery?["total_bytes"].integer ?? 0 }
+    var complete: Bool { [.staged, .ackUnknown, .sessionHeld, .acknowledged, .expiredLocal, .cleanup].contains(phase) }
+    var usable: Bool { [.sessionHeld, .acknowledged, .expiredLocal].contains(phase) }
+    var serverTerminal: Bool { [.acknowledged, .expiredLocal].contains(phase) }
+    var path: String { "/privacy-exports/\(requestID)/delivery/\(delivery?["delivery_id"].string ?? "")" }
+    func validate(origin: URL) throws {
+        guard apiOrigin == origin.absoluteString, UUID(uuidString: accountID) != nil, UUID(uuidString: requestID) != nil,
+              operationKey.range(of: "^[A-Za-z0-9._:-]{16,128}$", options: .regularExpression) != nil,
+              (0...1_000_000).contains(nextPart), byteCount >= 0, Self.digest(chain) else { throw NativeAPIError.invalidResponse }
+        if let delivery {
+            try validateMetadata(delivery)
+            guard phase != .prepared, nextPart <= partCount, byteCount <= totalBytes, byteCount >= nextPart else { throw NativeAPIError.invalidResponse }
+            if complete { guard nextPart == partCount, byteCount == totalBytes, chain == delivery["manifest_sha256"].string,
+                                let archiveSHA256, Self.digest(archiveSHA256) else { throw NativeAPIError.invalidResponse } }
+            if phase == .acknowledged { guard delivery["status"].string == "acknowledged" else { throw NativeAPIError.invalidResponse } }
+        } else if ![.prepared, .retired].contains(phase) || nextPart != 0 || byteCount != 0 { throw NativeAPIError.invalidResponse }
+        if nextPart == 0 { guard byteCount == 0, chain == Self.seed(request: requestID, account: accountID) else { throw NativeAPIError.invalidResponse } }
+        if let archiveSHA256 { guard Self.digest(archiveSHA256) else { throw NativeAPIError.invalidResponse } }
+    }
+    func validateMetadata(_ value: WireValue) throws {
+        let required: Set<String> = ["protocol", "request_id", "delivery_id", "operation_key", "manifest_sha256", "part_count", "total_bytes", "expires_at", "status"]
+        guard let keys = value.object.map({ Set($0.keys) }), required.isSubset(of: keys), keys.isSubset(of: required.union(["acknowledged_at"])),
+              value["protocol"].string == "lovelies-privacy-export-delivery-v1", value["request_id"].string == requestID,
+              value["operation_key"].string == operationKey, let manifest = value["manifest_sha256"].string, Self.digest(manifest),
+              ["open", "acknowledged"].contains(value["status"].string ?? ""), let count = value["part_count"].integer, (1...1_000_000).contains(count),
+              let total = value["total_bytes"].integer, (count...(count * Self.maximumPartBytes)).contains(total) else { throw NativeAPIError.invalidResponse }
+        _ = try value.uuid("delivery_id"); _ = try NativeRefreshDeliveryRecord.date(value["expires_at"])
+        if value["status"].string == "acknowledged" { _ = try NativeRefreshDeliveryRecord.date(value["acknowledged_at"]) }
+        else if value["acknowledged_at"] != .null { throw NativeAPIError.invalidResponse }
+        if let old = delivery {
+            for key in required.subtracting(["status"]) where old[key] != value[key] { throw NativeAPIError.invalidResponse }
+            if old["status"].string == "acknowledged", value["status"].string != "acknowledged" { throw NativeAPIError.invalidResponse }
+        }
+    }
+    func validatePart(_ bytes: Data, headers: [String: String], index: Int) throws {
+        guard (0..<partCount).contains(index), !bytes.isEmpty, bytes.count <= Self.maximumPartBytes,
+              headers["x-lovelies-export-part-index"] == String(index), headers["x-lovelies-export-manifest"] == delivery?["manifest_sha256"].string,
+              headers["x-lovelies-export-part-sha256"] == Self.hash(bytes) else { throw NativeAPIError.invalidResponse }
+    }
+}
+struct NativePrivacyExportFile: Sendable {
+    let accountID: String, requestID: String, operationKey: String, sha256: String, url: URL, expiresAt: Date
+}
+
+/// Private protected export staging is independent of expiring share-sheet
+/// copies. UUID account/request directories and exact operation hashes prevent
+/// another account's cleanup from erasing a retained archive.
+struct NativePrivacyExportFiles: Sendable {
+    let root: URL
+    init(root: URL = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0].appendingPathComponent("lovelies-privacy-exports", isDirectory: true)) {
+        self.root = root.standardizedFileURL
+    }
+    private func directory(_ record: NativePrivacyExportRecord, create: Bool) throws -> URL? {
+        guard let origin = URL(string: record.apiOrigin) else { throw NativeAPIError.invalidResponse }; try record.validate(origin: origin)
+        var current = root
+        let names = [NativePrivacyExportRecord.hash(Data(record.apiOrigin.utf8)), record.accountID, record.requestID,
+                     NativePrivacyExportRecord.hash(Data(record.operationKey.utf8))]
+        for name in [String?](arrayLiteral: nil) + names.map(Optional.some) {
+            if let name { current.appendPathComponent(name, isDirectory: true) }
+            guard (try? FileManager.default.destinationOfSymbolicLink(atPath: current.path)) == nil else { throw NativeAPIError.invalidResponse }
+            if !FileManager.default.fileExists(atPath: current.path) {
+                guard create else { return nil }
+                try FileManager.default.createDirectory(at: current, withIntermediateDirectories: true, attributes: [.protectionKey: FileProtectionType.complete])
+            }
+            let values = try current.resourceValues(forKeys: [.isDirectoryKey, .isSymbolicLinkKey])
+            guard values.isDirectory == true, values.isSymbolicLink != true else { throw NativeAPIError.invalidResponse }
+            var noBackup = URLResourceValues(); noBackup.isExcludedFromBackup = true; try current.setResourceValues(noBackup)
+        }
+        return current
+    }
+    private func file(_ name: String, record: NativePrivacyExportRecord, create: Bool) throws -> URL {
+        guard let directory = try directory(record, create: create) else { throw NativeAPIError.unavailable("privacy_export_local_unavailable") }
+        let url = directory.appendingPathComponent(name)
+        guard (try? FileManager.default.destinationOfSymbolicLink(atPath: url.path)) == nil else { throw NativeAPIError.invalidResponse }
+        if FileManager.default.fileExists(atPath: url.path) {
+            let values = try url.resourceValues(forKeys: [.isRegularFileKey, .isSymbolicLinkKey])
+            guard values.isRegularFile == true, values.isSymbolicLink != true else { throw NativeAPIError.invalidResponse }
+        }
+        return url
+    }
+    func stage(_ bytes: Data, index: Int, record: NativePrivacyExportRecord) throws {
+        guard (0..<record.partCount).contains(index), !bytes.isEmpty, bytes.count <= NativePrivacyExportRecord.maximumPartBytes else { throw NativeAPIError.invalidResponse }
+        let url = try file("\(index).part", record: record, create: true)
+        try bytes.write(to: url, options: [.atomic, .completeFileProtection])
+        let handle = try FileHandle(forWritingTo: url); defer { try? handle.close() }; try handle.synchronize()
+        guard try read(index: index, record: record) == bytes else { throw NativeAPIError.unavailable("privacy_export_storage_unavailable") }
+    }
+    func read(index: Int, record: NativePrivacyExportRecord) throws -> Data {
+        guard (0..<record.partCount).contains(index) else { throw NativeAPIError.invalidResponse }
+        let url = try file("\(index).part", record: record, create: false)
+        let size = try url.resourceValues(forKeys: [.fileSizeKey]).fileSize ?? 0
+        guard (1...NativePrivacyExportRecord.maximumPartBytes).contains(size) else { throw NativeAPIError.invalidResponse }
+        let bytes = try Data(contentsOf: url)
+        guard bytes.count == size else { throw NativeAPIError.invalidResponse }; return bytes
+    }
+    func verifyPrefix(_ record: NativePrivacyExportRecord) throws {
+        var chain = NativePrivacyExportRecord.seed(request: record.requestID, account: record.accountID), size = 0
+        for index in 0..<record.nextPart {
+            try Task.checkCancellation()
+            let bytes = try read(index: index, record: record)
+            chain = NativePrivacyExportRecord.advance(chain, index: index, bytes: bytes); size += bytes.count
+        }
+        guard chain == record.chain, size == record.byteCount else { throw NativeAPIError.invalidResponse }
+    }
+    func assemble(_ record: NativePrivacyExportRecord) throws -> (URL, String) {
+        guard record.nextPart == record.partCount, record.byteCount == record.totalBytes,
+              record.chain == record.delivery?["manifest_sha256"].string else { throw NativeAPIError.invalidResponse }
+        let pending = try file("archive.pending", record: record, create: true)
+        if FileManager.default.fileExists(atPath: pending.path) { try FileManager.default.removeItem(at: pending) }
+        guard FileManager.default.createFile(atPath: pending.path, contents: nil, attributes: [.protectionKey: FileProtectionType.complete]) else { throw NativeAPIError.unavailable("privacy_export_storage_unavailable") }
+        let output = try FileHandle(forWritingTo: pending); var digest = SHA256()
+        do {
+            var chain = NativePrivacyExportRecord.seed(request: record.requestID, account: record.accountID), size = 0
+            for index in 0..<record.nextPart {
+                try Task.checkCancellation(); let bytes = try read(index: index, record: record)
+                try output.write(contentsOf: bytes); digest.update(data: bytes)
+                chain = NativePrivacyExportRecord.advance(chain, index: index, bytes: bytes); size += bytes.count
+            }
+            guard chain == record.chain, size == record.byteCount else { throw NativeAPIError.invalidResponse }
+            try output.synchronize(); try output.close()
+        } catch { try? output.close(); throw error }
+        let url = try file("archive.json", record: record, create: true)
+        if FileManager.default.fileExists(atPath: url.path) { try FileManager.default.removeItem(at: url) }
+        try FileManager.default.moveItem(at: pending, to: url)
+        let hash = digest.finalize().map { String(format: "%02x", $0) }.joined()
+        try verifyArchive(url, byteCount: record.byteCount, sha256: hash)
+        return (url, hash)
+    }
+    func verifiedArchive(_ record: NativePrivacyExportRecord) throws -> URL {
+        guard record.complete, let hash = record.archiveSHA256 else { throw NativeAPIError.invalidResponse }
+        let url = try file("archive.json", record: record, create: false)
+        try verifyArchive(url, byteCount: record.byteCount, sha256: hash); return url
+    }
+    private func verifyArchive(_ url: URL, byteCount: Int, sha256: String) throws {
+        guard try url.resourceValues(forKeys: [.fileSizeKey]).fileSize == byteCount else { throw NativeAPIError.invalidResponse }
+        let input = try FileHandle(forReadingFrom: url); defer { try? input.close() }; var digest = SHA256(), size = 0
+        while let bytes = try input.read(upToCount: NativePrivacyExportRecord.maximumPartBytes), !bytes.isEmpty {
+            try Task.checkCancellation(); size += bytes.count; guard size <= byteCount else { throw NativeAPIError.invalidResponse }; digest.update(data: bytes)
+        }
+        guard size == byteCount, digest.finalize().map({ String(format: "%02x", $0) }).joined() == sha256 else { throw NativeAPIError.invalidResponse }
+    }
+    func erase(_ record: NativePrivacyExportRecord) throws {
+        guard let directory = try directory(record, create: false) else { return }
+        try FileManager.default.removeItem(at: directory)
+        guard !FileManager.default.fileExists(atPath: directory.path) else { throw NativeAPIError.unavailable("privacy_export_cleanup_unavailable") }
+    }
+}
+
 enum NativeUploadContentType: String, Sendable {
     case jpeg = "image/jpeg", png = "image/png", webp = "image/webp"
     var fileExtension: String { switch self { case .jpeg: return "jpg"; case .png: return "png"; case .webp: return "webp" } }
@@ -172,6 +341,18 @@ final class NativeUploadPrivateFiles: @unchecked Sendable {
             where chunk.lastPathComponent.hasPrefix(file.id + "-") && chunk.pathExtension == "chunk" { try? FileManager.default.removeItem(at: chunk) }
     }
     func removeBatch(_ batch: String) { guard UUID(uuidString: batch) != nil else { return }; try? FileManager.default.removeItem(at: root.appendingPathComponent(batch, isDirectory: true)) }
+    func removeBatchConfirmed(_ batch: String) throws {
+        guard UUID(uuidString: batch) != nil else { throw NativeAPIError.invalidResponse }
+        guard FileManager.default.fileExists(atPath: root.path) else { return }
+        let rootState = try root.resourceValues(forKeys: [.isDirectoryKey, .isSymbolicLinkKey])
+        guard rootState.isDirectory == true, rootState.isSymbolicLink != true else { throw NativeAPIError.invalidResponse }
+        let folder = root.appendingPathComponent(batch, isDirectory: true)
+        guard FileManager.default.fileExists(atPath: folder.path) else { return }
+        let state = try folder.resourceValues(forKeys: [.isDirectoryKey, .isSymbolicLinkKey])
+        guard state.isDirectory == true, state.isSymbolicLink != true else { throw NativeAPIError.invalidResponse }
+        try FileManager.default.removeItem(at: folder)
+        guard !FileManager.default.fileExists(atPath: folder.path) else { throw NativeAPIError.unavailable("private_file_cleanup") }
+    }
 }
 
 protocol NativeUploadFileTransport: Sendable {

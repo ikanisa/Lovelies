@@ -1,34 +1,302 @@
-# Audience API contract v1
+# Audience API contract v2
 
-Canonical protocol: `lovelies-audience-v1`; audience policy: `audience-2026-10-24-v1`.
-No dates of birth, identity documents, guardian contact details or face-age estimates are collected by these endpoints. Existing anonymous credentials remain the entry point. An age declaration is eligibility input, not verified identity or adulthood.
+Schema version: **16**. Canonical audience protocol: **`lovelies-audience-v2`**.
+The selected audience policy remains **`audience-2026-10-24-v1`**. This implements
+[the selected retention and young-user policy](retention-and-young-users.md).
+[Audience review and recovery](audience-review-recovery.md) describes maintenance,
+legacy evidence, cleanup custody and operator handoff.
 
-Every route requires a current own durable session. Restricted users retain own audience/status, privacy/export/deletion, logout and security-revocation access. Product and biometric routes remain denied. Request bodies reject unknown keys. `operation_key` is 16–128 characters in `[A-Za-z0-9._:-]`; reuse the exact key and body after an uncertain response. A different body under the same key returns `operation_key_conflict`.
+## Decisions, provenance and deadlines
 
-`GET /me/audience` returns `{protocol, policy_version, account_id, audience:{age_band,status,version,policy_version,next_review_at}, guardian_request, capabilities:{face_authentication,photo_matching,photo_processing}}`. Unknown audience is `{age_band:"unknown",status:"unknown",version:0,policy_version:null,next_review_at:null}`. `guardian_request` is null or the public request projection below. Dates are ISO-8601 strings or null. `audience.status` is exactly `unknown|blocked|guardian_pending|eligible|suspended`. Under13 uses `blocked`; revoked adult authority may use `suspended`. `eligible` indicates audience eligibility only; it creates neither subject consent nor photo access.
+Clients may ask the user to select a transient age range. Before writing a new
+journal or sending a new declaration, they derive exactly one decision tuple:
 
-`PUT /me/audience`: `{age_band:"under13"|"13_17"|"18_plus",policy_version:"audience-2026-10-24-v1",expected_version:<integer>,operation_key}`. Returns the same projection. First declaration expects version 0. Under-13 is blocked; 13–17 is `guardian_pending`; adult is `eligible`. Once declared under-13 or 13–17, the account cannot self-escalate to an older band. A reviewed adulthood transition is a separate operator operation described below. Repeating a declaration requires the exact idempotency key or current expected version; no silent age reset.
+| Transient selection | `at_least_13` | `guardian_required` | Initial state |
+| --- | --- | --- | --- |
+| Under 13 | `false` | `false` | `blocked` |
+| 13–17 | `true` | `true` | `guardian_pending` |
+| 18+ | `true` | `false` | `eligible` |
 
-`POST /me/guardian-requests`: `{expected_version:<audience version>,policy_version,operation_key}`. Only own 13–17 audience may create a request. Returns `{guardian_request:<projection>,audience:<full GET projection>}` with HTTP 201. One live pending/approved request at a time; pending requests expire after seven days. The random UUID is an unguessable linking reference; possession alone never approves authority. No invitation SMS/email is sent.
+`false,true` is invalid. The two flags carry the same three outcomes as the old
+label; this is data-shape minimization, not anonymization or reduced inferability.
+No birth date, exact age, document, guardian contact detail or face-age estimate
+is collected. Self declaration is not verified identity or verified adulthood.
 
-Public request projection: `{id,child_account_id,state,revision,policy_version,created_at,expires_at,purposes:{face_authentication,photo_matching,photo_processing}}`. `state` is `pending|under_review|approved|rejected|withdrawn|expired`; booleans represent currently effective guardian approvals. No guardian/reviewer identities or evidence reference is exposed to the child. `GET /me/guardian-requests/:id` returns `{guardian_request}` only to the child or bound guardian; other callers receive 404.
+`GET /me/audience` requires the subject's current own durable session and returns:
 
-`POST /guardian-requests/:id/claim`: `{expected_revision,policy_version,relationship_attested:true,purposes:["face_authentication", ...],operation_key}`. Purposes are a nonempty unique subset of the three values above. Requires a separate current registered-face adult-declared account; the child cannot claim. Returns `{guardian_request}`. State becomes `under_review`; no capability activates. The adult must request each purpose separately; this does not supply the child's own purpose consent or any media grant. Existing bound guardian cannot be replaced; create a fresh request after withdrawal/expiry instead.
+```json
+{
+  "protocol": "lovelies-audience-v2",
+  "policy_version": "audience-2026-10-24-v1",
+  "account_id": "<account UUID>",
+  "audience": {
+    "at_least_13": true,
+    "guardian_required": false,
+    "status": "eligible",
+    "version": 1,
+    "policy_version": "audience-2026-10-24-v1",
+    "source": "self_declaration",
+    "rule_version": "audience-13-plus-guardian-v1",
+    "territory": "global",
+    "declared_at": "<ISO date>",
+    "next_review_at": "<ISO date>",
+    "review_required": false
+  },
+  "guardian_request": null,
+  "capabilities": {
+    "face_authentication": true,
+    "photo_matching": true,
+    "photo_processing": true
+  },
+  "authority_expires_at": "<ISO date>"
+}
+```
 
-`GET /admin/guardian-requests` returns `{guardian_requests:[...]}` for an independently authenticated admin with an actual completed face-login challenge bound to the exact current session within five minutes. Refreshing a credential does not make a review fresh. Each operator row is the public request projection plus `guardian_account_id` (UUID or null), `reviewed_at` (ISO date or null), `requested_purposes` (unique subset of the three purpose strings, from the guardian claim), and `evidence_recorded` (boolean). The public `purposes` object contains effective approvals only, so all are false while under review. No evidence reference, raw document or unrelated guardian data is returned by the queue.
+Known declarations always have finite `declared_at` and `next_review_at`, with a
+positive interval no longer than 365 days. The server generates these dates,
+`source`, `rule_version` and `territory`; public declarations cannot choose them.
+Source is `self_declaration`, `independent_review`, or `legacy_declaration`.
+Legacy provenance never means that a new review took place. The selected rule
+uses the global 13+ product rule; it does not assert that every country permits
+identical operation or satisfies a store/legal release assessment.
 
-`POST /admin/guardian-requests/:id/review`: `{expected_revision,policy_version,decision:"approve"|"reject",evidence_method:"independent_live_review"|"independent_document_review",evidence_reference:<opaque 16–128-character reference>,adult_verified:true,parental_responsibility_verified:true,operation_key}`. Approval requires both verification judgments, a separate fresh registered-face administrator, current adult guardian account and unchanged child declaration. Evidence reference uses `[A-Za-z0-9._:-]`, must not be a URL or document/ID data, and refers to an operated independent review record. Reviewer must differ from child and guardian. Approval expires no later than 365 days and must be reviewed again. A false verification judgment cannot approve. Rejection may use false judgments. Returns `{guardian_request}`. Hosted operation and reviewer training are separate release requirements.
+Unknown audience has version 0, status `unknown`, both flags and all six provenance/
+policy/date values null, `review_required:false`, and false capabilities.
+Status is `unknown|blocked|guardian_pending|eligible|suspended`. A due known
+adult projects `suspended`; a minor without current guardian authority projects
+`guardian_pending`. An under 13 declaration stays blocked. Expiry is effective at
+`now >= next_review_at`, without waiting for maintenance.
 
-`POST /guardian-requests/:id/withdraw`: `{expected_revision,operation_key}`. Child or bound guardian may withdraw under weaker current-session authority, even if product eligibility has ceased. Returns `{guardian_request}`. Withdrawal immediately excludes processing, cancels pending biometric work, retires existing proposals/grants/tickets, revokes affected consents, and queues exact-key reference/capture cleanup. Later approval never restores old consents or media access.
+`next_review_at` describes the declaration. `authority_expires_at` separately
+bounds current audience capability: the earliest enabled purpose deadline,
+including own annual review, the selected guardian's annual review and current
+authentication-consent expiry, guardian request/approval expiry, and applicable
+current own-consent expiry. It is null when every audience capability is false.
+Clients must expire private presentation at this earlier deadline. Audience
+capability permits the next eligible journey only: a separate current purpose
+consent, registered-face session and exact media grant still govern actual use.
 
-`POST /admin/audience/:account_id/adult-review`: `{expected_version,policy_version,evidence_method,evidence_reference,adult_verified:true,operation_key}`. Independent fresh adult administrator reviews a previously declared minor's transition; self review is forbidden. No full birth date or document is persisted. Returns the subject's audience projection. This does not restore previous consents/grants or create face authority.
+## Declaration and exact recovery
 
-Errors: `audience_required` (403 missing/current-policy declaration), `age_not_supported` (403 under13), `guardian_approval_required` (403 minor pending/expired/revoked), `audience_version_changed`/`guardian_revision_changed` (409 optimistic conflict), `audience_age_review_required` (409 forbidden self escalation), `audience_policy_changed` (409 stale policy), `guardian_request_unavailable` (404 foreign/missing), `guardian_request_active` (409 current request already exists), `guardian_independent_review_required` (403 identity separation), `guardian_adult_required` (403 separate adult registered-face guardian needed), `guardian_evidence_required` (400 missing review evidence), and ordinary auth/idempotency errors. Login/recovery for a known account also enforce audience authority before a capture challenge; old unknown accounts cannot use a biometric bypass. Status/revocation routes do not expose foreign audience graphs.
+`PUT /me/audience` accepts only:
 
-Clients must render age selection, blocked/pending state and status/retry/withdrawal before requesting camera access. An error must not auto-declare adulthood, auto-consent, open the camera/picker, or retry a biometric action. A guardian claim requires the guardian's own eligible registered account. Guardian approval permits the child to give separate purpose consent; it never lets the guardian see the child's photos.
+```json
+{
+  "at_least_13": true,
+  "guardian_required": false,
+  "policy_version": "audience-2026-10-24-v1",
+  "expected_version": 0,
+  "operation_key": "<original stable operation key>"
+}
+```
 
-Every usable registration/login/recovery/replacement/enrollment-resume/lifecycle-resume challenge response additionally carries `audience_authority:{protocol:"lovelies-audience-challenge-v1",account_id,challenge_id,device_id,purpose,policy_version:"audience-2026-10-24-v1",audience_version:<positive integer>,expires_at:<ISO string>}`. It is emitted only after a current face-authentication audience check; expiry is no later than the enclosing challenge expiry. A retained, logged-out login/recovery client may use this HTTPS response only to allow the exact bound capture. Validate account/device/challenge/purpose equality and future expiry; do not infer age, guardian details, other-purpose consent, registration, media access or general product authority. Full audience projection remains available only under a current own durable session. Unknown logged-out accounts fail closed with `audience_required`; preserve their device/recovery journal and offer support rather than creating a new anonymous identity.
+The first declaration expects version 0. A new declaration increments one version.
+A previously under 13 or minor account cannot self-escalate to a different decision;
+a reviewed adult transition uses the independent administrator route. Replacing a
+known decision retires its old authority, consents and grants; it never grants a
+new biometric purpose implicitly. The response is the current full v2 projection.
 
-`GET /admin/users/:account_id` adds `audience` containing the same full canonical GET audience projection for that subject, under existing administrator authorization. The operator must use its actual `audience.audience.version` for a reviewed adulthood transition, never an invented/default revision.
+Operation keys are 16–128 characters in `[A-Za-z0-9._:-]`; lifecycle control and
+signed-request nonces use UUIDs. Clients durably save an operation's exact business
+body before its first request. Unknown transport/commit outcomes require the same
+key and body. A changed body conflicts. Receipt responses are historical outcomes;
+current projections are freshly read and must not be inferred from the receipt.
 
-Restricted privacy ambiguity recovery uses `GET /privacy/operations/:operation_key`: own durable session only, exact original receipt for own `privacy.request.export` or `privacy.request.delete`, or `{status:"unknown"}`. It does not disclose product/share operation results. The receipt is the original request acknowledgment; retrieve current status separately. `/community/action` operation lookups retain product authorization.
+A pre-v2 `age_band` body is accepted **only** for an existing original
+`audience.declare` receipt with matching actor/key/action/hash/exact payload. It
+never creates a new legacy declaration. A missing key returns 409
+`audience_upgrade_required`; the client retains its uncertain original journal.
+A proven restrictive restore returns `operation_recovered_without_result`, never
+false absence or permission to choose a new key. A positively retired original
+receipt returns 410; its original action/hash/key remain. Successful exact legacy
+recovery returns the current v2 projection, not a v1 projection.
+
+## Explicit adult annual renewal
+
+`POST /me/audience/renew` accepts the same flags/policy/version/key for a known,
+due, unchanged adult decision, plus a distinct affirmative purpose consent:
+
+```json
+{
+  "purpose": "face_authentication",
+  "policy_version": "<current face policy>",
+  "granted": true
+}
+```
+
+The object above is the `consent` field. It must come from a separate unchecked
+control; age selection does not imply consent. Own restricted sessions may use
+this route. No response issues credentials or starts a camera/challenge.
+
+The full v2 response adds:
+
+```json
+{
+  "renewal": {
+    "operation_key": "<original key>",
+    "from_version": 1,
+    "to_version": 2,
+    "next_step": "face_login"
+  }
+}
+```
+
+`next_step` is `face_login` only when this explicit new consent can bind the exact
+reference still legally retained in its original recovery window. Otherwise it is
+`profile_recovery`. The old authentication consent, matching/processing consents,
+old grants and prior guardian approvals stay retired. A new face login or the
+existing explicit profile lifecycle is required. The old registered bearer does
+not regain product authority from the new audience projection.
+
+A unique, still-live anonymous enrollment may instead bind one fresh consent to
+its unchanged original device/intent/epoch. Its original cancelled challenge is
+not reactivated or rewritten. Existing signed enrollment status/resume, using the
+original enrollment/resume keys, creates fresh captures. The receipt remains
+`profile_recovery`; clients retain the original enrollment journal and account.
+This metadata transition expires with the original enrollment control, and does
+not extend capture retention or reuse an old image.
+
+Exact committed receipt recovery accepts the original well-formed consent policy
+after a policy rotation. Current-policy validation applies before a **new** grant.
+The current projection remains restricted when current policy/reference authority
+is absent. An unknown old-policy request cannot grant consent or extend a control.
+
+## Signed own-device audience status and review
+
+A logged-out registered identity can use its exact existing active device key and
+saved face handle. These routes require no product bearer:
+
+| Route | Signed step | Additional immutable business fields |
+| --- | --- | --- |
+| `POST /auth/face/audience/status` | `status` | None |
+| `POST /auth/face/audience/renew` | `renew` | Adult flags, policy, expected version, key, separate consent |
+| `POST /auth/face/audience/guardian-review` | `guardian-review` | Minor flags, policy, expected version, key; no purpose consent |
+
+Every request includes `account_id`, `device_id`, `face_handle`, UUID
+`request_nonce`, integer millisecond `request_expires_at` in the next 60 seconds,
+and `device_signature`. Sign canonical stable JSON:
+
+```text
+{protocol:"lovelies-audience-device-v1",step,...all request fields except device_signature}
+```
+
+Retries retain the business key/body and sign a fresh nonce/deadline. The server
+rechecks exact account/device/handle/key revisions, enabled registered identity,
+request deadline, deletion state and restoration admission. Status remains
+available after reference cleanup, but revoked/mismatched devices remain denied.
+A signature is only an own-device binding; it is not a face match or civil identity.
+
+The response contains exactly the following current fields, plus an optional
+historical `renewal` receipt:
+
+```text
+{protocol:"lovelies-audience-device-v1",account_id,device_id,request_nonce,
+ audience:<v2 audience object>,authority_expires_at,
+ renewal_available,guardian_review_available,next_step,guardian_request,renewal?}
+```
+
+`guardian_request` is always present: null or only
+`{id,state,revision,policy_version,expires_at}`. No guardian identity or evidence
+is exposed. There are no product-capability booleans, credentials or challenges.
+
+`renewal_available` specifically means explicit unchanged-adult annual renewal is
+available. Such a due adult has current `next_step:"audience_review"` and null
+`authority_expires_at`. `guardian_review_available` is separately true when a
+known minor may explicitly renew their declaration/request: own annual expiry,
+or an expired/inactive guardian episode before that date. A still-valid approval
+or live pending request cannot be replaced through this route. The current steps
+are `audience_review|guardian_review|face_login|profile_recovery`.
+
+Minor review creates a new declaration version and fresh seven-day pending
+request atomically, retires old episodes and returns a receipt whose `next_step`
+is `guardian_review` and whose `guardian_request_id` names that new request. An
+exact retry returns the same request and version. There is no child purpose
+consent or product grant. A distinct guardian and fresh independent reviewer must
+approve again, followed by the child's separate consent and fresh face lifecycle.
+No minor route changes the decision to adult.
+
+## Existing guardian and independent-review routes
+
+`POST /me/guardian-requests` accepts `{expected_version,policy_version,
+operation_key}` for a current own minor declaration. Returns HTTP 201
+`{guardian_request,audience:<full v2 projection>}`. A due declaration requires
+explicit declaration/review renewal first. No SMS/email invitation is sent.
+
+The own-session public request projection is `{id,child_account_id,state,revision,
+policy_version,created_at,expires_at,purposes:{face_authentication,photo_matching,
+photo_processing}}`. States are ` pending|under_review|approved|rejected|withdrawn|
+expired `. Purpose booleans are currently effective approvals. ` GET
+/me/guardian-requests/:id ` returns `{guardian_request}` only to the child or bound
+guardian; foreign callers receive 404. No guardian/reviewer identity or evidence
+reference appears in the child's projection.
+
+`POST /guardian-requests/:id/claim` accepts `{expected_revision,policy_version,
+relationship_attested:true,purposes:[...],operation_key}`. Purposes are a nonempty,
+unique subset of the three supported values. It requires a separate current
+registered-face adult account. The state becomes `under_review`; no capability or
+child consent activates. A bound guardian cannot silently be replaced.
+
+`GET /admin/guardian-requests` is the paginated independent-review queue, with the
+existing status/query/sort/cursor contract. The administrator needs an actual
+completed face login tied to their exact current session within five minutes;
+refresh does not manufacture fresh review. Operator rows add guardian account,
+reviewed date, requested purposes and `evidence_recorded`, without returning an
+evidence reference or raw document.
+
+`POST /admin/guardian-requests/:id/review` accepts `{expected_revision,
+policy_version,decision:"approve"|"reject",evidence_method:
+"independent_live_review"|"independent_document_review",evidence_reference,
+adult_verified:true,parental_responsibility_verified:true,operation_key}`.
+The opaque evidence reference is 16–128 characters in `[A-Za-z0-9._:-]`, not a URL
+or document content. Approval needs both verification judgments, a separate fresh
+administrator, current adult guardian authority and unchanged child declaration.
+The reviewer differs from child and guardian. Approval lasts at most 365 days;
+its expiry does not rewrite the child's declaration metadata. False judgments
+cannot approve. Reviewer training and actual independent evidence remain operated
+release requirements.
+
+`POST /guardian-requests/:id/withdraw` accepts `{expected_revision,operation_key}`
+under own restricted child/guardian session authority. It immediately excludes
+old processing, cancels biometric work, retires proposals/grants/tickets and
+purpose consents, and schedules exact cleanup. Later approval cannot restore old
+consents or media access.
+
+`POST /admin/audience/:account_id/adult-review` accepts `{expected_version,
+policy_version,evidence_method,evidence_reference,adult_verified:true,
+operation_key}`. A fresh independent adult administrator reviews the transition;
+self review is forbidden. The new v2 source is `independent_review`. It grants no
+purpose consent or face/media authority. `GET /admin/users/:account_id` includes
+the full v2 audience projection; reviewers use its actual version.
+
+## Challenge, client and error boundaries
+
+All usable registration/login/recovery/replacement/resume/lifecycle challenges
+carry `audience_authority:{protocol:"lovelies-audience-challenge-v1",account_id,
+challenge_id,device_id,purpose,policy_version,audience_version,expires_at}`.
+Persisted challenge expiry and its outer response expiry are bounded by the
+current audience/guardian/consent deadline and, when relevant, the original 24h
+reference recovery window. The nested expiry cannot exceed that deadline.
+Current checks run again during capture, provider work and final publication.
+
+Clients validate exact account/device/challenge/purpose binding, positive current
+version and future expiry. No challenge authority implies adulthood, another
+purpose, media access or a general session. No error auto-declares adulthood,
+auto-consents, opens a camera/picker, or creates a replacement anonymous account.
+Unknown legacy identities remain restricted and preserve their original journals.
+
+Expected errors include missing/current-policy audience 403 `audience_required`,
+under 13 `age_not_supported`, minor `guardian_approval_required`, adult
+`audience_restricted`, version/conflict 409, forbidden self-escalation 409
+`audience_age_review_required`, policy 409 `audience_policy_changed`, separate
+consent 400 `explicit_auth_consent_required`, unchanged-proof 404
+`audience_device_unavailable`, expired proof 401 `audience_request_expired`, and
+`guardian_review_pending`/`guardian_review_not_due` 409. Receipt retirement 410,
+`operation_recovered_without_result` 409, and
+`audience_operation_outcome_unresolved` 503 retain their exact recovery meaning;
+clients keep uncertain immutable journals.
+
+Restricted own privacy/export/deletion/logout/security controls remain available
+under their existing authorization. `GET /privacy/operations/:operation_key`
+returns only the original own privacy request receipt or its truthful absence;
+it does not expose product/share results. Anti-abuse accounting remains active
+on signed HTTP routes even when the domain status operation is read-only.

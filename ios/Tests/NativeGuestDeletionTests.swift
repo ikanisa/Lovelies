@@ -5,6 +5,7 @@ import CryptoKit
 // and OS randomness are exercised. This does not qualify a server, Keychain,
 // Secure Enclave, iOS UI, physical device or completed private-file cleanup.
 private final class GuestSecrets: NativeSecretStore, @unchecked Sendable {
+    let authorityNamespace = "fixture-" + UUID().uuidString.lowercased()
     private let lock = NSLock()
     private var values: [String: Data] = [:]
     private var failReceipt = false

@@ -1,0 +1,174 @@
+# Layer over upstream/docker-compose.yml. Docker Compose >=2.24.4 is required.
+# Runtime files are generated once; no sample secret is a production input.
+name: lovelies-app
+services:
+  api-gw:
+    image: envoyproxy/envoy:v1.39.1@sha256:57e14a549d7bd43c8d3f6d03e8cfa653e037d4b38e133acd9b54f38c524401b4
+    ports: !reset []
+  supavisor:
+    image: supabase/supavisor:2.9.13@sha256:07f1a6098ffc04b80263bca4eb5c3e7bd2e03dfd1fc465aa108d7329000a1a4e
+    ports: !reset []
+  studio:
+    image: supabase/studio:2026.10.12-sha-3699278@sha256:948770ec467f00e6ae34c35018ef7cb23d7b30eb806b42c2cc0d7bcfdcf8a7a8
+    ports:
+      - 127.0.0.1:54323:3000
+  db:
+    image: supabase/postgres:17.11.0.003@sha256:7374d196da7e301512cc5329e18040e0f7bb856287b323777cdadecccbc6c7e4
+    volumes:
+      - app-db:/var/lib/postgresql/data
+    stop_grace_period: 60s
+  storage:
+    image: supabase/storage-api:v1.81.0@sha256:98ffec5d0678803783c30e404c27f4ec65e97efbe014088f2a86b4b8b54b9f54
+    volumes:
+      - app-storage:/var/lib/storage
+  imgproxy:
+    image: darthsim/imgproxy:v3.31.4@sha256:73c5dda13199745b0d2d00e4149d4a589c5b2e205dbf335ca05eca8276b54712
+    volumes:
+      - app-storage:/var/lib/storage
+  auth:
+    image: supabase/gotrue:v2.197.0@sha256:1736a63078f5922b198c4cbe50f80ab9a2d3b54fe8b7b6cfb2e9dc5dbbc12c6b
+    environment:
+      GOTRUE_EXTERNAL_ANONYMOUS_USERS_ENABLED: 'true'
+      GOTRUE_EXTERNAL_PHONE_ENABLED: 'false'
+      GOTRUE_SMS_AUTOCONFIRM: 'false'
+      GOTRUE_EXTERNAL_EMAIL_ENABLED: 'false'
+      GOTRUE_MAILER_AUTOCONFIRM: 'false'
+      GOTRUE_EXTERNAL_GOOGLE_ENABLED: 'false'
+      GOTRUE_RATE_LIMIT_ANONYMOUS_USERS: ${AUTH_ANONYMOUS_RATE_LIMIT:?required}
+      GOTRUE_JWT_EXP: '900'
+  functions:
+    image: public.ecr.aws/supabase/edge-runtime:v1.77.8@sha256:178c041398a33ded8219344382d0672a90051d1babbf0af03425cafe20039a75
+    env_file:
+      - ${LOVELIES_RUNTIME_DIR:?required}/api.env
+    environment:
+      SUPABASE_URL: http://api-gw:8000
+      INTERNAL_SUPABASE_URL: http://api-gw:8000
+      SUPABASE_DB_URL: postgresql://lovelies_runtime:${LOVELIES_API_DATABASE_PASSWORD:?required}@db:5432/postgres
+      # Empty opaque-key maps from upstream must not shadow a valid legacy JWT.
+      SUPABASE_SECRET_KEYS: !reset null
+      PUBLIC_API_BASE_URL: ${SUPABASE_PUBLIC_URL:?required}/functions/v1/lovelies-api
+      DENO_CERT: /run/custody/ca.crt
+      DENO_TLS_CA_STORE: mozilla,system
+      SSL_CERT_FILE: /run/custody/ca.crt
+      # Lovelies verifies its own revocable capability; managed Auth tokens stay server-held.
+      VERIFY_JWT: 'false'
+    volumes:
+      - ${LOVELIES_DEPLOYMENT_ROOT:?required}/functions-main:/home/deno/functions/main:ro
+      - ${LOVELIES_REPOSITORY_ROOT:?required}/supabase/functions/lovelies-api:/home/deno/functions/lovelies-api:ro
+      - ${LOVELIES_REPOSITORY_ROOT:?required}/supabase/functions/lovelies-api/deno.json:/home/deno/functions/deno.jsonc:ro
+      - ${LOVELIES_REPOSITORY_ROOT:?required}/services:/home/services:ro
+      - ${LOVELIES_RUNTIME_DIR:?required}/tls/ca.crt:/run/custody/ca.crt:ro
+      - ${LOVELIES_RUNTIME_DIR:?required}/lifecycle:/run/lovelies/lifecycle:ro
+    networks: [default,custody]
+  push-provider:
+    image: lovelies-private-services:${LOVELIES_IMAGE_TAG:?required}
+    restart: unless-stopped
+    user: ${LOVELIES_SERVICE_UID:?required}:${LOVELIES_SERVICE_GID:?required}
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    tmpfs: [/tmp]
+    command: [node,services/push-provider/src/server.mjs]
+    env_file: ["${LOVELIES_RUNTIME_DIR:?required}/push.env"]
+    environment:
+      HOST: 0.0.0.0
+      PORT: 8091
+      NODE_EXTRA_CA_CERTS: /run/custody/ca.crt
+    volumes:
+      - ${LOVELIES_RUNTIME_DIR:?required}/tls/ca.crt:/run/custody/ca.crt:ro
+      - ${LOVELIES_RUNTIME_DIR:?required}/providers:/run/lovelies/providers:ro
+    networks: [default,custody]
+  ml-face:
+    profiles: [inference]
+    image: lovelies-ml-face:${LOVELIES_IMAGE_TAG:?required}
+    build:
+      context: ${LOVELIES_REPOSITORY_ROOT:?required}/services/ml-face
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    tmpfs: [/tmp]
+    env_file: ["${LOVELIES_RUNTIME_DIR:?required}/ml.env"]
+    networks: [inference]
+  ml-proxy:
+    profiles: [inference]
+    image: caddy:2.11.7-alpine@sha256:e70b164da81ef698b3ad19af799ea6086ce6d9e48ed4079eb9fe26f6fbf14ee5
+    restart: unless-stopped
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    user: ${LOVELIES_SERVICE_UID:?required}:${LOVELIES_SERVICE_GID:?required}
+    tmpfs: [/tmp,/data,/config]
+    volumes:
+      - ${LOVELIES_DEPLOYMENT_ROOT:?required}/Caddyfile.inference:/etc/caddy/Caddyfile:ro
+      - ${LOVELIES_RUNTIME_DIR:?required}/tls/ml-proxy.key:/run/tls/key:ro
+      - ${LOVELIES_RUNTIME_DIR:?required}/tls/ml-proxy.crt:/run/tls/cert:ro
+    depends_on: [ml-face]
+    networks: [default,inference]
+  public-proxy:
+    image: caddy:2.11.7-alpine@sha256:e70b164da81ef698b3ad19af799ea6086ce6d9e48ed4079eb9fe26f6fbf14ee5
+    restart: unless-stopped
+    environment:
+      PUBLIC_HOST: ${PUBLIC_HOST:?required}
+      ACME_EMAIL: ${ACME_EMAIL:?required}
+    ports: ['80:80','443:443','443:443/udp']
+    volumes:
+      - ${LOVELIES_DEPLOYMENT_ROOT:?required}/Caddyfile:/etc/caddy/Caddyfile:ro
+      - ${LOVELIES_STATIC_ROOT:?required}:/srv:ro
+      - caddy-data:/data
+      - caddy-config:/config
+    depends_on: {api-gw: {condition: service_healthy}}
+    networks: [default]
+    logging:
+      driver: json-file
+      options: {max-size: 10m,max-file: '3'}
+  operator:
+    profiles: [operations]
+    image: lovelies-private-operator:${LOVELIES_IMAGE_TAG:?required}
+    build:
+      context: ${LOVELIES_REPOSITORY_ROOT:?required}
+      dockerfile: deploy/local-supabase/Operator.Dockerfile
+    user: ${LOVELIES_SERVICE_UID:?required}:${LOVELIES_SERVICE_GID:?required}
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    tmpfs: [/tmp]
+    env_file: ["${LOVELIES_RUNTIME_DIR:?required}/api.env"]
+    environment:
+      NODE_EXTRA_CA_CERTS: /run/custody/ca.crt
+      LOVELIES_STORAGE_SECRET: ${SERVICE_ROLE_KEY:?required}
+    volumes:
+      - ${LOVELIES_RUNTIME_DIR:?required}/tls/ca.crt:/run/custody/ca.crt:ro
+      - ${LOVELIES_RUNTIME_DIR:?required}/lifecycle:/run/lovelies/lifecycle:ro
+    networks: [default,custody]
+    command: [status]
+  rest:
+    image: postgrest/postgrest:v14.18@sha256:c7cd7e265a85b05248abf53f4473fcec7e327c282d0bd0cf60f1551996d09fcf
+  realtime:
+    image: supabase/realtime:v2.143.3@sha256:768b559241dd234c4e8852c5c0f504e598b80f1df2ad4dd78d5486fbed2f17a2
+  meta:
+    image: supabase/postgres-meta:v0.100.0@sha256:145325b7e39f8ef4931d6e8cfd3f6f4d655de09d72a2ccc96d9513542c2202bd
+networks:
+  inference:
+    internal: true
+  custody:
+    external: true
+    name: lovelies-custody
+volumes:
+  # Preserve the Vault/pgsodium root independently of Compose teardown.
+  db-config:
+    external: true
+    name: lovelies-app-db-config
+  app-db:
+    external: true
+    name: lovelies-app-db
+  app-storage:
+    external: true
+    name: lovelies-app-storage
+  caddy-data:
+    external: true
+    name: lovelies-caddy-data
+  caddy-config:
+    external: true
+    name: lovelies-caddy-config

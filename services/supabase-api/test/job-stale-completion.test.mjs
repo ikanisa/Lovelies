@@ -128,7 +128,8 @@ pgliteTest('actual maintenance endpoint returns 503 and existing fields for an u
  const claimed=await f.queue();assert.equal(claimed.state,'processing');assert(claimed.lease_token);
  f.advance();assert.deepEqual(await drainJobs(createApp(f.h.db,f.h.env,f.clock),1),{processed:1,failed:0});
  const successor=await f.queue();release.resolve();const response=await responsePromise;assert.equal(response.status,503);
- const body=await response.json();assert.deepEqual(Object.keys(body).sort(),['failed','maintenance_errors','privacy_health','processed','retention']);
+ const body=await response.json();assert.deepEqual(Object.keys(body).sort(),['failed','maintenance_errors','managed_auth','privacy_health','processed','retention']);
+ assert.deepEqual(body.managed_auth,{retired:0,unresolved:0},'the explicitly isolated test fixture has no managed Auth work');
  assert.equal(body.processed,0);assert.equal(body.failed,1);assert(Number.isSafeInteger(body.maintenance_errors));
  assert.equal(typeof body.privacy_health.status,'string');assert.equal(typeof body.retention.status,'string');
  assert.deepEqual(await f.queue(),successor);

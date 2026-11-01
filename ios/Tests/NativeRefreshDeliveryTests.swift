@@ -2,6 +2,7 @@ import Foundation
 import CryptoKit
 
 private final class DeliverySecrets: NativeSecretStore, @unchecked Sendable {
+    let authorityNamespace = "fixture-" + UUID().uuidString.lowercased()
     private let lock = NSLock(); private var values: [String: Data] = [:]
     private var failName: String?, failRemoval = false
     func fail(_ name: String, removal: Bool = false) { lock.lock(); defer { lock.unlock() }; failName = name; failRemoval = removal }

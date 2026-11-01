@@ -107,5 +107,145 @@ fun main() {
         check(error==null && FakeFirebase.autoInit && repo.mutations.isEmpty())
         check(FakeFirebase.setAttempts==1 && !PushConfiguration.optedIn(c))
     }
+    run("app-level notification disablement is effective before Android 13") {
+        val(c,_)=setup(true);android.os.Build.VERSION.SDK_INT=24;FakeSystem.manager.notificationsEnabled=false
+        try { check(!PushConfiguration.permitted(c)) } finally { android.os.Build.VERSION.SDK_INT=33 }
+    }
+    run("a muted updates channel is not reported enabled") {
+        val(c,_)=setup(true)
+        FakeSystem.manager.createNotificationChannel(android.app.NotificationChannel(PushConfiguration.CHANNEL,"Updates",android.app.NotificationManager.IMPORTANCE_NONE))
+        check(PushConfiguration.runtimePermitted(c) && !PushConfiguration.permitted(c))
+    }
+    run("foreground token reconciliation consumes a rotation only after current registration") {
+        val(c,repo)=setup(true);PushConfiguration.markRotation(c)
+        runBlocking { PushRegistration(c,repo).sync() }
+        check(repo.mutations.single().first=="notification.push.register")
+        check(!c.getSharedPreferences("lovelies-device-push",Context.MODE_PRIVATE).getBoolean("rotation_pending",true))
+    }
+    run("a concurrent newer rotation is preserved for the next reconciliation") {
+        val(c,repo)=setup(true);PushConfiguration.markRotation(c);val first=PushConfiguration.rotationVersion(c)
+        FakeFirebase.onComplete={ PushConfiguration.markRotation(c) }
+        runBlocking { PushRegistration(c,repo).sync() }
+        check(PushConfiguration.rotationVersion(c)!=null && PushConfiguration.rotationVersion(c)!=first)
+        check(c.getSharedPreferences("lovelies-device-push",Context.MODE_PRIVATE).getBoolean("rotation_pending",false))
+    }
+    run("a matching local hash cannot hide server deactivation") {
+        val(c,repo)=setup(true);repo.remoteActive=false
+        repo.registration=mapOf("account" to repo.credentials!!.account,"id" to registrationID,"device" to repo.identity!!.device,"hash" to NativeProtocol.sha256(FakeFirebase.token.toByteArray()))
+        runBlocking { PushRegistration(c,repo).sync() }
+        check(repo.mutations.single().first=="notification.push.register")
+    }
+    run("unconfirmed push status does not dispatch a second mutation or turn opt-out back on") {
+        val(c,repo)=setup(true);repo.recoveryFailure=LiveFailure("push_operation_requires_status",503,true)
+        val problem=runBlocking { runCatching { PushRegistration(c,repo).sync(false) }.exceptionOrNull() }
+        check((problem as? LiveFailure)?.code=="push_operation_requires_status")
+        check(!PushConfiguration.optedIn(c) && repo.mutations.isEmpty())
+    }
+    run("same permission action survives a transient read invalidation") {
+        val context=PhotoActionContext("account-a","session-a","device-a","photo-a","personal",12)
+        val owner=PhotoActionOwner.create(context)!!
+        check(owner.matches(context.copy())) // UI/read epoch is intentionally absent from this binding.
+    }
+    run("photo actions reject changed selection route session account and device") {
+        val context=PhotoActionContext("account-a","session-a","device-a","photo-a","personal",12)
+        val owner=PhotoActionOwner.create(context)!!
+        listOf(context.copy(photo="photo-b"),context.copy(source="contributions"),context.copy(route=10),context.copy(session="session-b"),context.copy(account="account-b"),context.copy(device="device-b"))
+            .forEach { check(!owner.matches(it)) }
+        check(PhotoActionOwner.create(context.copy(account=null))==null)
+    }
+    run("push typed receipt validates redacted input and current device without using historical active as authority") {
+        val journal=PushOperationJournal.create("https://fixture", "00000000-0000-4000-8000-000000000081","00000000-0000-4000-8000-000000000084",token="synthetic-private-push-token")
+        val payload=mapOf("protocol" to "lovelies-push-registration-receipt-v1","operation_key" to journal.key,"platform" to "android","push_token_sha256" to journal.tokenHash)
+        val hash=NativeProtocol.sha256(NativeProtocol.canonical(mapOf("action" to journal.action,"source" to "notification","payload" to payload)).toByteArray())
+        val receipt=mapOf("protocol" to "lovelies-push-operation-receipt-v1","operation_key" to journal.key,"status" to "committed","action" to journal.action,"payload_hash" to hash,
+            "result" to mapOf("id" to registrationID,"platform" to "android","active" to true),
+            "current" to mapOf("id" to registrationID,"auth_device_id" to journal.device,"platform" to "android","active" to 0))
+        check(PushOperationProtocol.receipt(receipt,journal)!=null && NativeProtocol.obj(receipt["current"])["active"]==0)
+        check(runCatching { PushOperationProtocol.receipt(receipt+mapOf("payload_hash" to "0".repeat(64)),journal) }.isFailure)
+        check(runCatching { PushOperationProtocol.receipt(receipt+mapOf("current" to (NativeProtocol.obj(receipt["current"])+mapOf("auth_device_id" to registrationID))),journal) }.isFailure)
+    }
+    run("unknown typed push receipt carries no registration authority") {
+        val journal=PushOperationJournal.create("https://fixture","00000000-0000-4000-8000-000000000081","00000000-0000-4000-8000-000000000084",target=registrationID)
+        val unknown=mapOf("protocol" to "lovelies-push-operation-receipt-v1","operation_key" to journal.key,"status" to "unknown")
+        check(PushOperationProtocol.receipt(unknown,journal)==null)
+        check(runCatching { PushOperationProtocol.receipt(unknown+mapOf("result" to mapOf("active" to true)),journal) }.isFailure)
+        check(PushOperationJournal.restore(journal.wire(),journal.origin)==journal)
+    }
+    runRecoveryChecks(::run)
+    runAccountCollectionChecks(::run)
+    runSessionAuthorityChecks(::run)
+    runChunkedExportChecks(::run)
+    run("replacement is confirmed before the previous device is revoked") {
+        val (c,repo)=setup(true)
+        repo.registration=mapOf("account" to repo.credentials!!.account,"id" to registrationID,"device" to repo.identity!!.device,"hash" to "old-hash")
+        runBlocking { PushRegistration(c,repo).sync() }
+        check(repo.mutations.map { it.first }==listOf("notification.push.register","notification.push.remove"))
+        check(repo.registration?.get("id")=="00000000-0000-4000-8000-000000000099")
+    }
+    run("ambiguous replacement leaves the previous registration intact") {
+        val (c,repo)=setup(true)
+        val old=mapOf("account" to repo.credentials!!.account,"id" to registrationID,"device" to repo.identity!!.device,"hash" to "old-hash")
+        repo.registration=old;repo.registerFailure=LiveFailure("push_operation_requires_status",503,true)
+        check(runBlocking { runCatching { PushRegistration(c,repo).sync() }.isFailure })
+        check(repo.registration==old && repo.mutations.none { it.first=="notification.push.remove" })
+    }
+    run("rotation callback during registration cannot be cleared by an older sync") {
+        val (c,repo)=setup(true);PushConfiguration.markRotation(c)
+        val before=PushConfiguration.rotationVersion(c)
+        repo.afterRegister={ PushConfiguration.markRotation(c) }
+        runBlocking { PushRegistration(c,repo).sync() }
+        check(PushConfiguration.rotationPending(c) && PushConfiguration.rotationVersion(c)>before)
+    }
+    run("same token cached locally is re-registered when server row is inactive") {
+        val (c,repo)=setup(true)
+        repo.registration=mapOf("account" to repo.credentials!!.account,"id" to registrationID,"device" to repo.identity!!.device,"hash" to NativeProtocol.sha256(FakeFirebase.token.toByteArray()))
+        repo.rows=listOf(mapOf("id" to registrationID,"platform" to "android","auth_device_id" to repo.identity!!.device,"active" to 0))
+        runBlocking { PushRegistration(c,repo).sync() }
+        check(repo.mutations.map { it.first }==listOf("notification.push.register"))
+    }
+    run("opt-out revokes only this authentication device's Android rows") {
+        val (c,repo)=setup(true)
+        repo.rows=listOf(mapOf("id" to registrationID,"platform" to "android","auth_device_id" to repo.identity!!.device,"active" to 1),
+            mapOf("id" to "00000000-0000-4000-8000-000000000093","platform" to "android","auth_device_id" to "00000000-0000-4000-8000-000000000094","active" to 1),
+            mapOf("id" to "00000000-0000-4000-8000-000000000095","platform" to "ios","auth_device_id" to repo.identity!!.device,"active" to 1))
+        runBlocking { PushRegistration(c,repo).sync(false) }
+        check(repo.mutations==listOf(Triple("notification.push.remove","/me/push-devices/$registrationID","DELETE")))
+    }
+    run("permission withdrawal during registration cannot publish success or retire old rows") {
+        val (c,repo)=setup(true)
+        repo.registration=mapOf("account" to repo.credentials!!.account,"id" to registrationID,"device" to repo.identity!!.device,"hash" to "old-hash")
+        repo.afterRegister={ PushConfiguration.setOptedIn(c,false) }
+        check(runBlocking { runCatching { PushRegistration(c,repo).sync() }.isFailure })
+        check(repo.registration?.get("id")==registrationID && repo.mutations.none { it.first=="notification.push.remove" } && PushConfiguration.rotationPending(c))
+    }
+    run("successful rotation consumes the durable marker and reconciles original operations") {
+        val (c,repo)=setup(true);PushConfiguration.markRotation(c)
+        runBlocking { PushRegistration(c,repo).sync() }
+        check(!PushConfiguration.rotationPending(c) && repo.reconciliations==1)
+    }
+    run("automatic sync cannot replace a terminal registration with a new key") {
+        val (c,repo)=setup(true);PushConfiguration.markRotation(c)
+        repo.registerFailure=LiveFailure("operation_recovered_without_result",409)
+        val failure=runBlocking { runCatching { PushRegistration(c,repo).sync() }.exceptionOrNull() } as? LiveFailure
+        check(failure?.code=="operation_recovered_without_result" && repo.terminalReplacementPermissions==listOf("register" to false))
+        check(repo.registration==null && PushConfiguration.rotationPending(c))
+    }
+    run("an explicit enabled setting authorizes a fresh operation after terminal registration") {
+        val (c,repo)=setup(true);repo.registerFailure=LiveFailure("operation_recovered_without_result",409)
+        runBlocking { PushRegistration(c,repo).sync(true) }
+        check(repo.terminalReplacementPermissions==listOf("register" to true) && repo.registration!=null)
+    }
+    run("automatic opt-out recovery cannot replace a terminal removal") {
+        val (c,repo)=setup(false);repo.registration=mapOf("account" to repo.credentials!!.account,"device" to repo.identity!!.device,"id" to registrationID,"hash" to "fixture")
+        repo.removeFailure=LiveFailure("operation_recovered_without_result",409)
+        val failure=runBlocking { runCatching { PushRegistration(c,repo).sync() }.exceptionOrNull() } as? LiveFailure
+        check(failure?.code=="operation_recovered_without_result" && repo.terminalReplacementPermissions==listOf("remove" to false) && repo.registration!=null)
+    }
+    run("explicit disable authorizes a fresh removal after a terminal rollback") {
+        val (c,repo)=setup(true);repo.registration=mapOf("account" to repo.credentials!!.account,"device" to repo.identity!!.device,"id" to registrationID,"hash" to "fixture")
+        repo.removeFailure=LiveFailure("operation_recovered_without_result",409)
+        runBlocking { PushRegistration(c,repo).sync(false) }
+        check(repo.terminalReplacementPermissions==listOf("remove" to true) && repo.registration==null && !PushConfiguration.optedIn(c))
+    }
     println("RESULT total=$total passed=${total-failed} failed=$failed");if(failed>0)kotlin.system.exitProcess(1)
 }

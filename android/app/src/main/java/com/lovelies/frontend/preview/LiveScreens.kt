@@ -57,6 +57,13 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.launch
 
+/** Keep progress semantics while using the app's English/Kinyarwanda state label. */
+@Composable
+internal fun LiveLoadingIndicator(modifier: Modifier = Modifier) {
+    val loading=stringResource(R.string.a11y_loading)
+    CircularProgressIndicator(color=Pink,modifier=modifier.semantics { stateDescription=loading })
+}
+
 /** Live screens reuse the screenshot's native controls and palette, with server-owned identity and photos. */
 @Composable
 fun LiveScreen(state: PreviewState) {
@@ -192,6 +199,11 @@ private fun LiveAudience(state: PreviewState) {
     val context=LocalContext.current
     val audience=live.audience
     var chosen by remember(audience?.account,audience?.version) { mutableStateOf<String?>(null) }
+    val device=live.deviceAudience
+    val decision=device?.decision ?: audience?.decision
+    var adultConfirmed by remember(decision?.version,live.audienceReviewPolicy) { mutableStateOf(false) }
+    var authenticationConsented by remember(decision?.version,live.audienceReviewPolicy) { mutableStateOf(false) }
+    var minorConfirmed by remember(decision?.version) { mutableStateOf(false) }
     var requestId by remember { mutableStateOf("") }
     var revision by remember { mutableStateOf("") }
     var attested by remember { mutableStateOf(false) }
@@ -202,12 +214,50 @@ private fun LiveAudience(state: PreviewState) {
             BodyText(stringResource(R.string.audience_intro),Modifier.padding(top=12.dp,bottom=18.dp),center=false)
             Text(when {
                 live.ownGuardianWithdrawalPending -> stringResource(R.string.audience_withdrawal_pending)
+                decision?.needsReview()==true -> stringResource(R.string.audience_annual_review_required)
+                device?.decision?.band=="under13" -> stringResource(R.string.audience_under13_blocked)
+                device!=null -> stringResource(R.string.audience_device_status_only)
                 audience==null -> stringResource(R.string.audience_check_required)
                 audience.band=="under13" -> stringResource(R.string.audience_under13_blocked)
                 audience.band=="unknown" -> stringResource(R.string.audience_choose_age)
                 audience.allows("face_authentication") -> stringResource(R.string.audience_eligible)
                 else -> stringResource(R.string.audience_guardian_pending)
             },color=Color.White,fontSize=17.sp,modifier=Modifier.fillMaxWidth().padding(bottom=18.dp).semantics { liveRegion=LiveRegionMode.Polite })
+            decision?.nextReview?.let { deadline ->
+                BodyText(stringResource(R.string.audience_review_due,java.text.DateFormat.getDateInstance(java.text.DateFormat.MEDIUM).format(java.util.Date(deadline))),Modifier.padding(bottom=12.dp),center=false,size=13)
+            }
+            if(decision!=null && (if(device!=null) { if(decision.guardianRequired==true)device.guardianReviewAvailable else device.renewalAvailable } else decision.needsReview() || decision.guardianRequired==true && audience?.status=="guardian_pending" && audience?.request?.state=="approved")) {
+                SectionTitle(stringResource(R.string.audience_annual_review_title))
+                BodyText(stringResource(R.string.audience_annual_review_detail),Modifier.padding(vertical=12.dp),center=false,size=13)
+                if(decision.band=="18_plus") {
+                    LiveToggle(stringResource(R.string.audience_confirm_adult),null,adultConfirmed,enabled=!live.busy && !live.audienceOperationPending) { adultConfirmed=!adultConfirmed }
+                    LiveToggle(stringResource(R.string.audience_confirm_auth),null,authenticationConsented,enabled=!live.busy && !live.audienceOperationPending && live.audienceReviewPolicy.isNotBlank()) { authenticationConsented=!authenticationConsented }
+                    if(live.audienceReviewPolicy.isNotBlank())BodyText(stringResource(R.string.audience_review_policy,live.audienceReviewPolicy),Modifier.padding(vertical=8.dp),center=false,size=12)
+                    PinkButton(stringResource(R.string.audience_renew_eligibility),Modifier.padding(top=12.dp),enabled=adultConfirmed && authenticationConsented && live.audienceReviewPolicy.isNotBlank() && !live.busy && !live.audienceOperationPending) { live.renewEligibility(adultConfirmed,authenticationConsented);adultConfirmed=false;authenticationConsented=false }
+                } else if(decision.band=="13_17") {
+                    LiveToggle(stringResource(R.string.audience_confirm_guardian),null,minorConfirmed,enabled=!live.busy && !live.audienceOperationPending) { minorConfirmed=!minorConfirmed }
+                    PinkButton(stringResource(if(device!=null)R.string.audience_renew_guardian else R.string.audience_renew_eligibility),Modifier.padding(top=12.dp),enabled=minorConfirmed && !live.busy && !live.audienceOperationPending) { live.renewMinorEligibility(minorConfirmed);minorConfirmed=false }
+                }
+            }
+            device?.request?.let { request ->
+                SectionTitle(stringResource(R.string.audience_request_heading))
+                val status=if(request.expires<=System.currentTimeMillis())R.string.copy_expired_bca9f3d2 else when(request.state) {
+                    "pending"->R.string.audience_request_waiting;"under_review"->R.string.copy_under_review_07000a6f;"approved"->R.string.copy_approved_c699109a
+                    "rejected"->R.string.copy_request_rejected_8ccc55ac;"withdrawn"->R.string.copy_withdrawn_a579599b;else->R.string.copy_expired_bca9f3d2
+                }
+                BodyText(stringResource(status),Modifier.padding(vertical=10.dp),center=false)
+                androidx.compose.foundation.text.selection.SelectionContainer { Text(stringResource(R.string.audience_request_reference_value,request.id,request.revision),color=Color.White,fontSize=14.sp) }
+                BodyText(stringResource(R.string.audience_request_share),Modifier.padding(vertical=12.dp),center=false,size=13)
+                BodyText(stringResource(R.string.audience_claim_limit),center=false,size=12)
+            }
+            if(device!=null && !device.decision.needsReview() && device.decision.status=="eligible") {
+                if(device.nextStep=="face_login")OutlineButton(stringResource(R.string.audience_continue_sign_in),Modifier.padding(top=12.dp),enabled=!live.busy && !live.audienceOperationPending) { live.continueDeviceAudience() }
+                else if(device.nextStep=="profile_recovery") {
+                    BodyText(stringResource(R.string.audience_profile_recovery),Modifier.padding(vertical=12.dp),center=false,size=13)
+                    if(live.hasLifecycle)OutlineButton(stringResource(R.string.audience_open_profile_recovery),enabled=!live.busy && !live.audienceOperationPending) { live.continueDeviceAudience() }
+                    else OutlineButton(stringResource(R.string.audience_use_recovery_backup),enabled=!live.busy && !live.audienceOperationPending) { live.showAccountRecoveryImport() }
+                }
+            }
             if(audience?.band=="unknown" && live.repository.credentials!=null) {
                 SectionTitle(stringResource(R.string.audience_age_label))
                 listOf("under13" to R.string.audience_under13,"13_17" to R.string.audience_13_17,"18_plus" to R.string.audience_18_plus).forEach { (band,label) ->
@@ -225,7 +275,7 @@ private fun LiveAudience(state: PreviewState) {
                         state.confirm(context.getString(R.string.audience_withdraw),context.getString(R.string.audience_withdraw_detail),context.getString(R.string.audience_withdraw)) { live.withdrawGuardianRequest(request) }
                     }
                 }
-                if(audience.request==null || audience.request.state in setOf("rejected","withdrawn","expired"))OutlineButton(stringResource(R.string.audience_create_request),Modifier.padding(top=12.dp),enabled=!live.busy && !live.audienceOperationPending && !live.guardianWithdrawalOperationPending) { live.createGuardianRequest() }
+                if(!audience.reviewRequired && (audience.request==null || audience.request.state in setOf("rejected","withdrawn","expired")))OutlineButton(stringResource(R.string.audience_create_request),Modifier.padding(top=12.dp),enabled=!live.busy && !live.audienceOperationPending && !live.guardianWithdrawalOperationPending) { live.createGuardianRequest() }
             }
             if(audience?.band=="18_plus" && audience.allows("face_authentication") && live.identityAuthenticated) {
                 SectionTitle(stringResource(R.string.audience_guardian_heading))
@@ -264,8 +314,13 @@ private fun LiveAudience(state: PreviewState) {
                 BodyText(stringResource(R.string.audience_saved_change),Modifier.padding(vertical=12.dp),center=false,size=13)
                 OutlineButton(stringResource(R.string.audience_retry_saved),enabled=!live.busy) { live.retryAudienceChange() }
             }
-            OutlineButton(stringResource(R.string.copy_check_status_99f3765b),Modifier.padding(top=12.dp),enabled=!live.busy && live.repository.credentials!=null) { live.refreshAudience() }
-            if(audience?.allows("face_authentication")==true && !live.ownGuardianWithdrawalPending)PinkButton(stringResource(R.string.copy_continue_2e026239),Modifier.padding(top=12.dp),enabled=!live.busy) { live.continueAfterAudience() }
+            OutlineButton(stringResource(R.string.copy_check_status_99f3765b),Modifier.padding(top=12.dp),enabled=!live.busy && (live.repository.credentials!=null || live.hasAudienceDevice)) { live.refreshAudience() }
+            if(live.hasAudienceDevice && device==null)OutlineButton(stringResource(R.string.audience_check_device_review),Modifier.padding(top=12.dp),enabled=!live.busy) { live.checkDeviceAudience() }
+            if(live.audienceRenewalContinuation!=null) {
+                BodyText(stringResource(R.string.audience_profile_recovery),Modifier.padding(vertical=12.dp),center=false,size=13)
+                OutlineButton(stringResource(R.string.audience_continue_sign_in),enabled=!live.busy && !live.audienceOperationPending) { live.continueAudienceRenewal() }
+            }
+            if(live.audienceRenewalContinuation==null && audience?.allows("face_authentication")==true && !live.ownGuardianWithdrawalPending)PinkButton(stringResource(R.string.copy_continue_2e026239),Modifier.padding(top=12.dp),enabled=!live.busy) { live.continueAfterAudience() }
             else if(live.repository.credentials==null && (live.repository.identity!=null || live.hasAccountRecovery || live.hasLifecycle))OutlineButton(stringResource(R.string.audience_check_sign_in),Modifier.padding(top=12.dp),enabled=!live.busy) { live.beginFace() }
             PolicyRow(state,R.string.privacy_policy,BuildConfig.PRIVACY_POLICY_URL)
             SettingRow(stringResource(R.string.audience_privacy_deletion),icon=Glyph.SHIELD,modifier=Modifier.padding(top=12.dp)) { state.navigate(44) }
@@ -323,10 +378,10 @@ private fun LiveCapture(state: PreviewState) {
                 captureContext=captureContext,onShutter=live::shutterContext,
                 onReady={owner,action->if(owner==live.captureContext()) { shutter=action;live.cameraReady=action!=null }},
                 onPhoto=live::capture,onError=live::cameraError,onStatus=live::cameraState,authorizePersonal=live::authorizePersonalCollection)
-            else Box(Modifier.fillMaxSize(),contentAlignment=Alignment.Center) { CircularProgressIndicator(color=Pink,modifier=Modifier.semantics { contentDescription=uiContext.getString(R.string.a11y_camera_loading) }) }
+            else Box(Modifier.fillMaxSize(),contentAlignment=Alignment.Center) { LiveLoadingIndicator(modifier=Modifier.semantics { contentDescription=uiContext.getString(R.string.a11y_camera_loading) }) }
             if(ready && !live.cameraForUpload && !live.reviewingCapture)Box(Modifier.align(Alignment.Center).fillMaxWidth(.78f).fillMaxHeight(.66f)
                 .border(2.dp,Pink,RoundedCornerShape(55.dp)))
-            if(live.busy)Box(Modifier.fillMaxSize().background(Ink.copy(alpha=.62f)),contentAlignment=Alignment.Center) { CircularProgressIndicator(color=Pink,modifier=Modifier.semantics { contentDescription=uiContext.getString(R.string.a11y_camera_loading) }) }
+            if(live.busy)Box(Modifier.fillMaxSize().background(Ink.copy(alpha=.62f)),contentAlignment=Alignment.Center) { LiveLoadingIndicator(modifier=Modifier.semantics { contentDescription=uiContext.getString(R.string.a11y_camera_loading) }) }
         }
         live.error?.let { BodyText(readableError(it.code, uiContext),Modifier.padding(bottom=12.dp),size=13) }
         if(live.reviewingCapture) {
@@ -377,7 +432,7 @@ private fun LiveUploadProgress(state: PreviewState) {
             LinearProgressIndicator(progress=(record.bytesAcknowledged.toDouble()/record.bytesTotal).toFloat(),color=Pink,backgroundColor=Hairline,
                 modifier=Modifier.fillMaxWidth().padding(top=24.dp).semantics { contentDescription=uiContext.getString(R.string.copy_1_s_of_2_s_photo_bytes_saved_c04a54b3, record.bytesAcknowledged.toString(), record.bytesTotal.toString()) })
             BodyText(uiContext.getString(R.string.copy_1_s_saved_1fcf155b, (record.bytesAcknowledged*100/record.bytesTotal).toString()),Modifier.padding(top=10.dp),size=13)
-        } else if(live.busy)CircularProgressIndicator(color=Pink,modifier=Modifier.padding(top=24.dp).size(28.dp))
+        } else if(live.busy)LiveLoadingIndicator(modifier=Modifier.padding(top=24.dp).size(28.dp))
         Spacer(Modifier.height(28.dp))
         if(record?.finished==true)PinkButton(stringResource(R.string.copy_view_matches_731444f2),enabled=!live.busy) { live.reviewPhotos(batch=record.batch) }
         else if(record?.cancelled!=true) {
@@ -398,7 +453,7 @@ private fun LiveProgress(state: PreviewState,title: String,message: String,art: 
         SourceHero(art,.68f,if(art=="upload-hero.png")184f/101f else if(art=="sharing-hero.png")168f/117f else 154f/163f)
         Text(title,color=Color.White,fontSize=23.sp,modifier=Modifier.padding(top=24.dp,bottom=12.dp))
         BodyText(message,Modifier.semantics { liveRegion=LiveRegionMode.Polite })
-        if(busy)CircularProgressIndicator(color=Pink,modifier=Modifier.padding(top=24.dp).size(28.dp).semantics { contentDescription=title })
+        if(busy)LiveLoadingIndicator(modifier=Modifier.padding(top=24.dp).size(28.dp).semantics { contentDescription=title })
         Spacer(Modifier.weight(1f))
     }
 }
@@ -477,17 +532,20 @@ private fun LiveViewer(state: PreviewState) {
     var chrome by remember { mutableStateOf(true) }
     var zoomed by remember { mutableStateOf(false) }
     val context=LocalContext.current
+    var permissionAction by remember { mutableStateOf<String?>(null) }
     val savePermission=rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted->
-        if(granted)live.selectedPhoto?.let { live.original(it) }
-        else state.info(uiContext.getString(R.string.copy_allow_photo_saving_b73adb30),uiContext.getString(R.string.copy_open_android_settings_and_allow_stor_a8cc21b8))
+        live.originalSavePermission(permissionAction,granted);permissionAction=null
+        if(!granted)state.info(uiContext.getString(R.string.copy_allow_photo_saving_b73adb30),uiContext.getString(R.string.copy_open_android_settings_and_allow_stor_a8cc21b8))
     }
-    LaunchedEffect(live.shareIntent) { live.shareIntent?.let { intent->
-        try { context.startActivity(android.content.Intent.createChooser(intent,uiContext.getString(R.string.copy_share_photo_58c755ac)));live.clearShareIntent() }
-        catch(_: android.content.ActivityNotFoundException) { live.clearShareIntent();state.info(uiContext.getString(R.string.copy_share_unavailable_9fa6cce2),uiContext.getString(R.string.copy_no_installed_app_can_share_this_phot_6764d270)) }
+    LaunchedEffect(live.shareIntent) { if(live.shareIntent!=null)live.claimShareHandoff()?.let { share->
+        try { context.startActivity(android.content.Intent.createChooser(share.intent,uiContext.getString(R.string.copy_share_photo_58c755ac))) }
+        catch(_: android.content.ActivityNotFoundException) { live.failedShareHandoff(share);state.info(uiContext.getString(R.string.copy_share_unavailable_9fa6cce2),uiContext.getString(R.string.copy_no_installed_app_can_share_this_phot_6764d270)) }
     } }
     val scope=rememberCoroutineScope()
+    LaunchedEffect(pager.isScrollInProgress) { if(pager.isScrollInProgress)live.cancelOriginalAction() }
+    LaunchedEffect(pager.currentPage) { live.selectedPhoto=rows.getOrNull(pager.currentPage) }
     LaunchedEffect(pager.settledPage) {
-        live.selectedPhoto=rows.getOrNull(pager.settledPage);live.persistNavigation();zoomed=false
+        live.persistNavigation();zoomed=false
     }
     val photo=rows.getOrNull(pager.currentPage) ?: rows.first()
     Column(Modifier.fillMaxSize()) {
@@ -517,9 +575,9 @@ private fun LiveViewer(state: PreviewState) {
         }
         if(chrome) {
             Row(Modifier.fillMaxWidth().padding(vertical=8.dp),horizontalArrangement=Arrangement.SpaceEvenly,verticalAlignment=Alignment.CenterVertically) {
-                TextButton(enabled=pager.currentPage>0,onClick={scope.launch { pager.scrollToPage(pager.currentPage-1) }}) { Text(stringResource(R.string.previous),color=if(pager.currentPage>0)Pink else Muted) }
+                TextButton(enabled=pager.currentPage>0,onClick={live.cancelOriginalAction();scope.launch { pager.scrollToPage(pager.currentPage-1) }}) { Text(stringResource(R.string.previous),color=if(pager.currentPage>0)Pink else Muted) }
                 Text("${pager.currentPage+1} / ${rows.size}",color=Muted)
-                TextButton(enabled=pager.currentPage<rows.lastIndex,onClick={scope.launch { pager.scrollToPage(pager.currentPage+1) }}) { Text(stringResource(R.string.next),color=if(pager.currentPage<rows.lastIndex)Pink else Muted) }
+                TextButton(enabled=pager.currentPage<rows.lastIndex,onClick={live.cancelOriginalAction();scope.launch { pager.scrollToPage(pager.currentPage+1) }}) { Text(stringResource(R.string.next),color=if(pager.currentPage<rows.lastIndex)Pink else Muted) }
             }
             Row(Modifier.fillMaxWidth().padding(vertical=12.dp),horizontalArrangement=Arrangement.SpaceEvenly) {
                 IconAction(Glyph.HEART,if(photo.id in live.favorites)uiContext.getString(R.string.copy_remove_favorite_95ed8147) else uiContext.getString(R.string.copy_add_favorite_5f2be110),color=if(photo.id in live.favorites)Pink else Color.White) { live.toggleFavorite(photo.id) }
@@ -528,8 +586,11 @@ private fun LiveViewer(state: PreviewState) {
             }
             if(photo.source=="contributions")PinkButton(stringResource(R.string.copy_review_matched_people_bda254b4),enabled=!live.busy) { live.selectedPhotoMatches() }
             Row(Modifier.fillMaxWidth(),horizontalArrangement=Arrangement.SpaceEvenly) {
-                TextButton(enabled=!live.busy,onClick={if(OriginalMedia.hasSavePermission(context))live.original(photo) else savePermission.launch(android.Manifest.permission.WRITE_EXTERNAL_STORAGE)}) { Text(stringResource(R.string.save_original),color=Pink) }
-                TextButton(enabled=!live.busy,onClick={live.original(photo,true)}) { Text(stringResource(R.string.share_original),color=Pink) }
+                TextButton(enabled=!live.busy && !pager.isScrollInProgress,onClick={if(OriginalMedia.hasSavePermission(context))live.original(photo) else {
+                    permissionAction=live.requestOriginalSavePermission(photo)
+                    if(permissionAction!=null)savePermission.launch(android.Manifest.permission.WRITE_EXTERNAL_STORAGE)
+                }}) { Text(stringResource(R.string.save_original),color=Pink) }
+                TextButton(enabled=!live.busy && !pager.isScrollInProgress,onClick={live.original(photo,true)}) { Text(stringResource(R.string.share_original),color=Pink) }
             }
             if(live.mediaStatus.isNotBlank())BodyText(live.mediaStatus,Modifier.padding(horizontal=18.dp).semantics { liveRegion=LiveRegionMode.Polite },size=12)
             Spacer(Modifier.height(14.dp))
@@ -540,21 +601,28 @@ private fun LiveViewer(state: PreviewState) {
 @Composable
 private fun LiveActivity(state: PreviewState) {
     val uiContext = androidx.compose.ui.platform.LocalContext.current
+    val uiResources = androidx.compose.ui.platform.LocalResources.current
     val live=state.live;val isNotification=state.route==18
     LivePage(state,if(isNotification)uiContext.getString(R.string.copy_notifications_753a22b2) else uiContext.getString(R.string.copy_activity_9e75940c),bottom=10) {
         Row(Modifier.fillMaxWidth(),horizontalArrangement=Arrangement.SpaceBetween) {
-            TextButton(onClick={state.navigate(17)}) { Text(uiContext.resources.getQuantityString(R.plurals.copy_request_heading_count, live.inbox.size, live.inbox.size),color=if(!isNotification)Pink else Muted) }
+            TextButton(onClick={state.navigate(17)}) { Text(uiResources.getQuantityString(R.plurals.copy_request_heading_count, live.inbox.size, live.inbox.size),color=if(!isNotification)Pink else Muted) }
             TextButton(onClick={state.navigate(18)}) { Text(stringResource(R.string.copy_notifications_753a22b2),color=if(isNotification)Pink else Muted) }
+        }
+        live.error?.let {
+            BodyText(readableError(it.code,uiContext),Modifier.padding(vertical=8.dp).semantics { liveRegion=LiveRegionMode.Polite },size=13)
+            TextButton(enabled=!live.busy,onClick={if(isNotification)live.refreshNotifications() else live.refreshInbox()}) { Text(stringResource(R.string.copy_refresh_0815aad4),color=Pink) }
         }
         if(isNotification)LazyColumn(verticalArrangement=Arrangement.spacedBy(9.dp)) {
             items(live.notifications,key={it["id"] as String}) { row -> SettingRow(row["title"] as? String ?: uiContext.getString(R.string.copy_notification_146a2866),subtitle=row["kind"] as? String,
                 icon=Glyph.BELL,trailing=if(row["read_at"]!=null)uiContext.getString(R.string.copy_read_4f0befe5) else uiContext.getString(R.string.copy_new_8b242db1)) { live.readNotification(row) } }
+            if(live.notificationCursor!=null)item(key="more-notifications") { TextButton(enabled=!live.busy,onClick=live::moreNotifications) { Text(stringResource(R.string.notifications_load_more),color=Pink) } }
         } else if(live.inbox.isEmpty())Box(Modifier.fillMaxSize(),contentAlignment=Alignment.Center) { BodyText(stringResource(R.string.copy_photo_requests_will_appear_here_375f2958)) }
         else LazyColumn(verticalArrangement=Arrangement.spacedBy(9.dp)) {
             items(live.inbox,key={it["id"] as String}) { row ->
                 val person=row["person"] as? Map<*,*>;val count=(row["photo_count"] as? Number)?.toInt() ?: 0
                 SettingRow(person?.get("name") as? String ?: uiContext.getString(R.string.copy_photo_request_1f865c7e),subtitle=stringResource(R.string.photo_status,photoCount(count),receiptLabel(row["status"] as? String, uiContext)),icon=Glyph.PEOPLE) { live.openReceipt(row) }
             }
+            if(live.inboxCursor!=null)item(key="more-inbox") { TextButton(enabled=!live.busy,onClick=live::moreInbox) { Text(stringResource(R.string.support_load_more),color=Pink) } }
         }
     }
 }
@@ -650,10 +718,11 @@ private fun LiveMatchSummary(state: PreviewState) {
 @Composable
 private fun LiveSelectPhotos(state: PreviewState) {
     val uiContext = androidx.compose.ui.platform.LocalContext.current
+    val uiResources = androidx.compose.ui.platform.LocalResources.current
     val live=state.live;val snap=live.snapshot
     LivePage(state,if(state.route==26)uiContext.getString(R.string.copy_matched_photos_d2c8fc60) else uiContext.getString(R.string.copy_select_photos_to_share_52f9b7e4)) {
         if(snap==null) { BodyText(stringResource(R.string.copy_open_a_photo_review_from_your_galle_7b747039));return@LivePage }
-        SectionTitle(uiContext.resources.getQuantityString(R.plurals.copy_photo_heading_count, live.draft.photos.size, live.draft.photos.size),trailing=if(live.draft.photos.isEmpty())uiContext.getString(R.string.copy_select_all_6af21072) else uiContext.getString(R.string.copy_deselect_all_4547f79d),onTrailing={
+        SectionTitle(uiResources.getQuantityString(R.plurals.copy_photo_heading_count, live.draft.photos.size, live.draft.photos.size),trailing=if(live.draft.photos.isEmpty())uiContext.getString(R.string.copy_select_all_6af21072) else uiContext.getString(R.string.copy_deselect_all_4547f79d),onTrailing={
             live.allPhotos(live.draft.photos.isEmpty())
         })
         if(snap.limited)ScopeNotice()
@@ -688,6 +757,7 @@ private fun LivePhotoPeople(state: PreviewState) {
 @Composable
 private fun LivePersonPhotos(state: PreviewState) {
     val uiContext = androidx.compose.ui.platform.LocalContext.current
+    val uiResources = androidx.compose.ui.platform.LocalResources.current
     val live=state.live;val snap=live.snapshot
     val person=snap?.people?.firstOrNull { it.id==live.focusedPerson } ?: snap?.people?.firstOrNull()
     LivePage(state,person?.name ?: uiContext.getString(R.string.copy_matched_person_687f11b0)) {
@@ -695,7 +765,7 @@ private fun LivePersonPhotos(state: PreviewState) {
         InitialAvatar(person.name,Modifier.align(Alignment.CenterHorizontally).padding(vertical=16.dp).size(76.dp))
         val rows=snap.photos.filter { photo -> snap.pairs.any { it.photo==photo.id && it.person==person.id } }
         val selected=live.effective.filter { it.person==person.id }.map { it.photo }.toSet()
-        SectionTitle(uiContext.resources.getQuantityString(R.plurals.copy_photo_heading_count, selected.size, selected.size))
+        SectionTitle(uiResources.getQuantityString(R.plurals.copy_photo_heading_count, selected.size, selected.size))
         LivePhotoGrid(live,rows,Modifier.weight(1f),selections=selected,onClick={live.togglePair(it.id,person.id)})
         BodyText(if(person.id !in live.draft.people)uiContext.getString(R.string.copy_this_person_is_excluded_from_all_sha_22e6fc93) else uiContext.getString(R.string.copy_only_checked_photos_will_be_included_44fd6a86, person.name),Modifier.padding(vertical=12.dp),size=12)
         OutlineButton(if(person.id in live.draft.people)uiContext.getString(R.string.copy_exclude_this_person_globally_5b824bb4) else uiContext.getString(R.string.copy_include_this_person_globally_b3ee2ea6)) { live.togglePerson(person.id) }
@@ -706,10 +776,11 @@ private fun LivePersonPhotos(state: PreviewState) {
 @Composable
 private fun LiveSelectPeople(state: PreviewState) {
     val uiContext = androidx.compose.ui.platform.LocalContext.current
+    val uiResources = androidx.compose.ui.platform.LocalResources.current
     val live=state.live;val snap=live.snapshot
     LivePage(state,uiContext.getString(R.string.copy_select_people_to_share_with_f00ebe36)) {
         if(snap==null) { BodyText(stringResource(R.string.copy_open_a_photo_review_first_e2f30cd2));return@LivePage }
-        SectionTitle(uiContext.resources.getQuantityString(R.plurals.copy_people_heading_count, live.draft.people.size, live.draft.people.size))
+        SectionTitle(uiResources.getQuantityString(R.plurals.copy_people_heading_count, live.draft.people.size, live.draft.people.size))
         LazyColumn(Modifier.weight(1f),verticalArrangement=Arrangement.spacedBy(9.dp)) {
             items(snap.people,key={it.id}) { person ->
                 val count=live.effective.count { it.person==person.id }
@@ -725,17 +796,18 @@ private fun LiveSelectPeople(state: PreviewState) {
 @Composable
 private fun LiveFinalReview(state: PreviewState) {
     val uiContext = androidx.compose.ui.platform.LocalContext.current
+    val uiResources = androidx.compose.ui.platform.LocalResources.current
     val live=state.live;val snap=live.snapshot;val view=live.preview
     LivePage(state,uiContext.getString(R.string.copy_review_share_023d8493)) {
         if(snap==null || view==null) { BodyText(stringResource(R.string.copy_review_your_current_selection_befor_b592a97e));PinkButton(stringResource(R.string.copy_review_selection_04dd6243)) { live.prepareShare() };return@LivePage }
         Column(Modifier.weight(1f).verticalScroll(rememberScrollState())) {
-            ReviewHeading(uiContext.resources.getQuantityString(R.plurals.copy_photo_heading_count, view.pairs.map { it.photo }.toSet().size, view.pairs.map { it.photo }.toSet().size)) { state.navigate(29) }
+            ReviewHeading(uiResources.getQuantityString(R.plurals.copy_photo_heading_count, view.pairs.map { it.photo }.toSet().size, view.pairs.map { it.photo }.toSet().size)) { state.navigate(29) }
             Row(Modifier.fillMaxWidth().height(155.dp),horizontalArrangement=Arrangement.spacedBy(5.dp)) {
                 snap.photos.filter { photo -> view.pairs.any { it.photo==photo.id } }.take(6).forEach { photo ->
                     LivePhotoImage(live,photo,Modifier.weight(1f).fillMaxHeight().clip(RoundedCornerShape(9.dp)))
                 }
             }
-            ReviewHeading(uiContext.resources.getQuantityString(R.plurals.copy_people_heading_count, view.pairs.map { it.person }.toSet().size, view.pairs.map { it.person }.toSet().size)) { state.navigate(31) }
+            ReviewHeading(uiResources.getQuantityString(R.plurals.copy_people_heading_count, view.pairs.map { it.person }.toSet().size, view.pairs.map { it.person }.toSet().size)) { state.navigate(31) }
             snap.people.filter { p -> view.pairs.any { it.person==p.id } }.forEach { person ->
                 val ids=view.pairs.filter { it.person==person.id }.map { it.photo }.toSet()
                 Row(Modifier.fillMaxWidth().padding(vertical=9.dp),verticalAlignment=Alignment.CenterVertically) {
@@ -785,12 +857,14 @@ private fun LiveReceipts(state: PreviewState) {
         }
         val result=live.outcome
         if(result==null) {
+            live.error?.let { BodyText(readableError(it.code,uiContext),Modifier.padding(vertical=8.dp).semantics { liveRegion=LiveRegionMode.Polite },size=13) }
             if(live.outgoing.isEmpty())BodyText(stringResource(R.string.copy_your_outgoing_photo_requests_will_a_c770b1b1),Modifier.padding(top=30.dp))
             LazyColumn(Modifier.weight(1f),verticalArrangement=Arrangement.spacedBy(9.dp)) {
                 items(live.outgoing,key={NativeProtocol.id(it["id"])}) { row->
                     val person=row["person"] as? Map<*,*>
                     SettingRow(person?.get("name") as? String ?: uiContext.getString(R.string.copy_photo_request_1f865c7e),subtitle=stringResource(R.string.photo_status,photoCount(row["photo_count"]),receiptLabel(row["status"] as? String, uiContext)),icon=Glyph.PEOPLE) { live.openReceipt(row) }
                 }
+                if(live.outgoingCursor!=null)item(key="more-history") { TextButton(enabled=!live.busy,onClick=live::moreHistory) { Text(stringResource(R.string.support_load_more),color=Pink) } }
             }
             OutlineButton(stringResource(R.string.copy_refresh_history_5ffdb33d),enabled=!live.busy) { live.refreshHistory() };return@LivePage
         }
@@ -845,7 +919,9 @@ private fun LiveAccount(state: PreviewState,choose: ()->Unit) {
                     SettingRow(label,icon=icon,modifier=Modifier.padding(bottom=8.dp)) { state.navigate(route) }
                 }
                 SettingRow(stringResource(R.string.audience_title),icon=Glyph.SHIELD,modifier=Modifier.padding(bottom=8.dp)) { live.showAudience() }
-                SettingRow(stringResource(R.string.copy_all_48_reference_screens_6b3d3425),subtitle=uiContext.getString(R.string.copy_explicit_screenshot_review_with_loca_f4ff7992),icon=Glyph.PHOTO) { state.enterReview() }
+                if(BuildConfig.REFERENCE_SCREENS) {
+                    SettingRow(stringResource(R.string.copy_all_48_reference_screens_6b3d3425),subtitle=uiContext.getString(R.string.copy_explicit_screenshot_review_with_loca_f4ff7992),icon=Glyph.PHOTO) { state.enterReview() }
+                }
             }
         }
         38 -> LiveFaceProfile(state)
@@ -870,11 +946,22 @@ private fun LiveAccount(state: PreviewState,choose: ()->Unit) {
         42 -> LivePage(state,uiContext.getString(R.string.copy_notifications_753a22b2)) {
             val notificationPermission=rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted->if(granted)live.enablePush(true) else state.info(uiContext.getString(R.string.copy_notifications_are_off_bdb15edc),uiContext.getString(R.string.copy_you_can_allow_notifications_later_in_abf7623a)) }
             val context=LocalContext.current
-            LiveToggle(uiContext.getString(R.string.copy_this_device_8fc5c8b9),null,PushConfiguration.optedIn(context) && PushConfiguration.permitted(context)) {
-                if(PushConfiguration.optedIn(context))live.enablePush(false)
-                else if(android.os.Build.VERSION.SDK_INT>=33 && !PushConfiguration.permitted(context))notificationPermission.launch(android.Manifest.permission.POST_NOTIFICATIONS)
+            val openNotificationSettings={
+                val intent=if(android.os.Build.VERSION.SDK_INT>=26)android.content.Intent(android.provider.Settings.ACTION_APP_NOTIFICATION_SETTINGS)
+                    .putExtra(android.provider.Settings.EXTRA_APP_PACKAGE,context.packageName)
+                else android.content.Intent(android.provider.Settings.ACTION_APPLICATION_DETAILS_SETTINGS,android.net.Uri.parse("package:${context.packageName}"))
+                runCatching { context.startActivity(intent) }
+                Unit
+            }
+            LiveToggle(uiContext.getString(R.string.copy_this_device_8fc5c8b9),null,live.pushEnabled) {
+                if(live.pushEnabled)live.enablePush(false)
+                else if(android.os.Build.VERSION.SDK_INT>=33 && !PushConfiguration.runtimePermitted(context) && !PushConfiguration.permissionRequested(context)) {
+                    if(PushConfiguration.markPermissionRequested(context))notificationPermission.launch(android.Manifest.permission.POST_NOTIFICATIONS)
+                }
+                else if(!PushConfiguration.permitted(context))openNotificationSettings()
                 else live.enablePush(true)
             }
+            if(!PushConfiguration.permitted(context))TextButton(onClick=openNotificationSettings) { Text(stringResource(R.string.push_open_settings),color=Pink) }
             if(live.pushStatus.isNotBlank())BodyText(live.pushStatus,Modifier.semantics { liveRegion=LiveRegionMode.Polite },size=13)
 
             SectionTitle(stringResource(R.string.copy_notification_preferences_0ead6c12))
@@ -898,12 +985,18 @@ private fun LiveAccount(state: PreviewState,choose: ()->Unit) {
             }
             NativeProtocol.rows(live.privacyCenter["requests"] ?: emptyList<WireObject>()).forEach { row ->
                 val id=NativeProtocol.id(row["id"])
-                val ready=row["request_type"]=="export" && (row["download_state"]=="ready" || live.repository.stagedExport()?.get("request")==id)
+                val ready=row["request_type"]=="export" && (row["download_state"]=="ready" || id in live.repository.retainedExportRequests())
                 val displayedStatus=if(row["request_type"]=="delete" && row["status"]=="completed")uiContext.getString(R.string.copy_account_deleted_9c9a92a1) else row["status"] as? String
                 val backupNotice=if(row["request_type"]=="delete" && row["status"]=="completed")uiContext.getString(R.string.deletion_backup_expiry_unconfirmed) else null
                 SettingRow(row["request_type"] as? String ?: uiContext.getString(R.string.copy_request_82454152),subtitle=listOfNotNull(displayedStatus,row["failure_code"] as? String).joinToString(" · "),trailing=if(ready)uiContext.getString(R.string.copy_save_efc007a3) else uiContext.getString(R.string.copy_status_005ef20f),icon=Glyph.EXPORT,modifier=Modifier.padding(bottom=8.dp)) {
-                    if(ready) { selectedExport=id;document.launch("lovelies-export-$id.json") }
+                    if(ready) { selectedExport=live.beginExportSave(id);if(selectedExport!=null)document.launch("lovelies-export-$id.json") }
                     else state.info(uiContext.getString(R.string.copy_request_status_2b321858),listOfNotNull(displayedStatus,backupNotice,row["reason"] as? String,row["failure_code"] as? String).joinToString("\n"))
+                }
+            }
+            val listedExports=NativeProtocol.rows(live.privacyCenter["requests"] ?: emptyList<WireObject>()).mapNotNull { it["id"] as? String }.toSet()
+            (live.repository.retainedExportRequests()-listedExports).sorted().forEach { id ->
+                SettingRow(uiContext.getString(R.string.copy_data_export_81b2478d),trailing=uiContext.getString(R.string.copy_save_efc007a3),icon=Glyph.EXPORT,modifier=Modifier.padding(bottom=8.dp)) {
+                    selectedExport=id;document.launch("lovelies-export-$id.json")
                 }
             }
             OutlineButton(stringResource(R.string.copy_refresh_requests_3dc3afd4),enabled=!live.busy) { live.refreshPrivacy() }
@@ -936,6 +1029,7 @@ private fun LiveAccount(state: PreviewState,choose: ()->Unit) {
                     live.supportRequests.forEach { row->SettingRow(row["subject"] as? String ?: uiContext.getString(R.string.copy_support_request_b40eff29),subtitle=receiptLabel(row["status"] as? String, uiContext),icon=Glyph.HELP,modifier=Modifier.padding(bottom=8.dp)) {
                         state.info(row["subject"] as? String ?: uiContext.getString(R.string.copy_support_request_b40eff29),listOfNotNull(row["status"] as? String,row["review_notes"] as? String).joinToString("\n"))
                     } }
+                    if(live.supportCursor!=null)TextButton(enabled=!live.busy,onClick=live::moreSupport) { Text(stringResource(R.string.support_load_more),color=Pink) }
                 }
             }
             }
@@ -979,6 +1073,7 @@ private fun LiveAccount(state: PreviewState,choose: ()->Unit) {
 private fun LiveFaceProfile(state: PreviewState) {
     val uiContext = androidx.compose.ui.platform.LocalContext.current
     val live=state.live;val meta=live.faceProfile ?: live.repository.faceLifecycle?.metadata;val record=live.repository.faceLifecycle
+    var controlConsent by remember(meta?.version,meta?.authPolicy,meta?.controlRecovery?.binding) { mutableStateOf(false) }
     LivePage(state,uiContext.getString(R.string.copy_manage_your_face_990044ce)) {
         Column(Modifier.weight(1f).verticalScroll(rememberScrollState()),horizontalAlignment=Alignment.CenterHorizontally) {
             GlowSymbol(Glyph.FACE,Modifier.padding(top=18.dp))
@@ -1000,6 +1095,18 @@ private fun LiveFaceProfile(state: PreviewState) {
                     BodyText(uiContext.getString(R.string.copy_previous_reference_cleanup_1_s_your__cf7ae9bd, meta.operation?.cleanup),Modifier.padding(bottom=12.dp),size=12)
             }
             live.error?.let { BodyText(readableError(it.code, uiContext),Modifier.padding(vertical=12.dp).semantics { liveRegion=LiveRegionMode.Polite },size=13) }
+            if(record!=null) {
+                OutlineButton(stringResource(R.string.audience_check_retained_control),Modifier.padding(top=12.dp),enabled=!live.busy) { live.checkRetainedFaceControl() }
+                if(record.controlRecoveryRenewal!=null) {
+                    BodyText(stringResource(R.string.audience_retained_control_pending),Modifier.padding(vertical=12.dp),center=false,size=13)
+                    OutlineButton(stringResource(R.string.audience_retry_retained_control),enabled=!live.busy) { live.renewRetainedFaceControl(false,true) }
+                } else if(meta!=null && meta.controlRecovery?.expires?.let { it<=System.currentTimeMillis() }==true) {
+                    BodyText(stringResource(R.string.audience_retained_control_detail),Modifier.padding(vertical=12.dp),center=false,size=13)
+                    LiveToggle(stringResource(R.string.audience_confirm_auth),null,controlConsent,enabled=!live.busy) { controlConsent=!controlConsent }
+                    BodyText(meta.authPolicy,Modifier.padding(vertical=8.dp),center=false,size=12)
+                    OutlineButton(stringResource(R.string.audience_renew_retained_control),enabled=controlConsent && !live.busy) { live.renewRetainedFaceControl(controlConsent);controlConsent=false }
+                }
+            }
             if(record?.intent!=null || record?.acknowledged==false || record?.loginKey!=null) {
                 BodyText(when(record?.state) { "cancelled"->uiContext.getString(R.string.copy_this_change_was_cancelled_by_the_ser_ab7a1099)
                     "registered"->uiContext.getString(R.string.copy_the_profile_update_is_complete_verif_b9f32166)
@@ -1197,7 +1304,7 @@ private fun LivePhotoImage(live: LiveController,photo: LivePhoto,modifier: Modif
     var producer by remember(photo.id,photo.version) { mutableStateOf<Any?>(null) }
     val generation=live.mediaGeneration;val active=live.foregroundActive;val registered=live.registered
     val scope=live.repository.currentScope();val actor=live.repository.credentials
-    val audienceDeadline=minOf(live.audience?.nextReview ?: Long.MAX_VALUE,
+    val audienceDeadline=minOf(live.audience?.authorityExpires ?: 0,live.audience?.nextReview ?: 0,
         if(live.audience?.band=="13_17")live.audience?.request?.expires ?: 0 else Long.MAX_VALUE)
     LaunchedEffect(photo.id,photo.version,generation,active,registered,scope,actor?.token,audienceDeadline) {
         val owned=Any();producer=owned;bitmap=null;lease=null;failed=false
@@ -1304,6 +1411,13 @@ internal fun displayedPhotoTitle(photo: LivePhoto,fallback: String): String = if
 @Composable private fun ScopeNotice() { BodyText(stringResource(R.string.copy_this_review_is_limited_to_the_photo_cdbe75a2),Modifier.padding(vertical=10.dp),center=false,size=12) }
 private fun receiptLabel(status: String?, context: android.content.Context)=when(status){"open"->context.getString(R.string.copy_open_538b10e9);"under_review"->context.getString(R.string.copy_under_review_07000a6f);"resolved"->context.getString(R.string.copy_resolved_503b5525);"closed"->context.getString(R.string.copy_closed_3201cae5);"requested"->context.getString(R.string.copy_awaiting_acceptance_383a8dc6);"accepted"->context.getString(R.string.copy_accepted_41d09a60);"declined"->context.getString(R.string.copy_declined_56d6cf67);"withdrawn"->context.getString(R.string.copy_withdrawn_a579599b);"revoked"->context.getString(R.string.copy_revoked_e58fe295);"expired"->context.getString(R.string.copy_expired_bca9f3d2);"failed"->context.getString(R.string.copy_failed_5579c3d4);else->context.getString(R.string.copy_unavailable_da4baaa9)}
 internal fun readableError(code: String, context: android.content.Context)=when(code) {
+    "collection_page_invalid","support_page_invalid"->context.getString(R.string.collection_page_error)
+    "privacy_export_session_changed","privacy_export_delivery_session_changed"->context.getString(R.string.export_session_changed)
+    "privacy_export_delivery_expired","privacy_export_delivery_unavailable","privacy_export_staged_copy_unavailable","privacy_export_already_saved"->context.getString(R.string.export_delivery_expired)
+    "privacy_export_delivery_pending"->context.getString(R.string.export_delivery_pending)
+    "session_retirement_unconfirmed","session_authority_unavailable","session_authority_invalid","session_retirement_storage_full"->context.getString(R.string.session_retirement_unconfirmed)
+    "session_reauthentication_required"->context.getString(R.string.copy_your_session_changed_verify_your_fac_f11c472f)
+    "privacy_export_storage_unavailable"->context.getString(R.string.export_storage_unavailable)
     "database_schema_not_ready"->context.getString(R.string.service_temporarily_unavailable)
     "audience_required","audience_choice_required"->context.getString(R.string.audience_choose_age)
     "audience_status_required"->context.getString(R.string.audience_check_required)
@@ -1311,7 +1425,10 @@ internal fun readableError(code: String, context: android.content.Context)=when(
     "guardian_approval_required"->context.getString(R.string.audience_guardian_pending)
     "audience_version_changed","guardian_revision_changed","audience_policy_changed","audience_age_review_required"->context.getString(R.string.audience_details_changed)
     "guardian_withdrawal_pending"->context.getString(R.string.audience_withdrawal_pending)
-    "audience_operation_pending"->context.getString(R.string.audience_saved_change)
+    "audience_operation_pending","audience_renewal_pending"->context.getString(R.string.audience_saved_change)
+    "audience_operation_recovered_without_result"->context.getString(R.string.audience_change_retired)
+    "audience_review_required","audience_restricted"->context.getString(R.string.audience_annual_review_required)
+    "audience_profile_recovery_required"->context.getString(R.string.audience_profile_recovery)
     "operation_key_conflict"->context.getString(R.string.audience_operation_conflict)
     "privacy_operation_scope_changed","weak_route_not_allowed","guardian_reference_scope_changed"->context.getString(R.string.audience_response_error)
     "audience_response_invalid","audience_operation_scope_changed","audience_authority_expired"->context.getString(R.string.audience_response_error)
@@ -1353,7 +1470,7 @@ internal fun readableError(code: String, context: android.content.Context)=when(
     "enrollment_requires_recovery"->context.getString(R.string.copy_recover_your_existing_face_setup_bef_7327a774)
     "face_verifier_unavailable","face_authentication_unavailable"->context.getString(R.string.copy_face_verification_is_unavailable_try_9c586f7d)
     "processing_consent_required"->context.getString(R.string.copy_enable_photo_processing_in_photo_pre_92d160cc)
-    "session_changed","registered_face_required","authentication_required"->context.getString(R.string.copy_your_session_changed_verify_your_fac_f11c472f)
+    "session_changed","collection_account_changed","registered_face_required","authentication_required"->context.getString(R.string.copy_your_session_changed_verify_your_fac_f11c472f)
     "face_comparison_failed","face_registration_mismatch"->context.getString(R.string.copy_the_face_could_not_be_verified_retak_b10f4fff)
     "review_changed","review_expired","eligibility_changed_review_required"->context.getString(R.string.copy_matches_or_permissions_changed_open__6586ed5d)
     "upload_storage_full","upload_storage_unavailable"->context.getString(R.string.copy_your_upload_is_saved_free_device_sto_0bcbaa85)

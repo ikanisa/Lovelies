@@ -16,9 +16,9 @@ class AudienceProtocolTest {
         "policy_version" to AudienceProtocol.POLICY,"created_at" to date(-1_000),"expires_at" to date(),"purposes" to choices)
     private fun projection(band: String="unknown",status: String="unknown",choices: WireObject=flags(),guardian: WireObject?=null): WireObject=mapOf(
         "protocol" to AudienceProtocol.PROTOCOL,"policy_version" to AudienceProtocol.POLICY,"account_id" to id(1),
-        "audience" to mapOf("age_band" to band,"status" to status,"version" to if(band=="unknown")0 else 1,
-            "policy_version" to if(band=="unknown")null else AudienceProtocol.POLICY,"next_review_at" to if(band=="13_17")date() else null),
-        "guardian_request" to guardian,"capabilities" to choices)
+        "audience" to mapOf("at_least_13" to if(band=="unknown")null else band!="under13","guardian_required" to if(band=="unknown")null else band=="13_17","status" to status,"version" to if(band=="unknown")0 else 1,
+            "policy_version" to if(band=="unknown")null else AudienceProtocol.POLICY,"next_review_at" to if(band!="unknown")date() else null,"source" to if(band!="unknown")"self_declaration" else null,"rule_version" to if(band!="unknown")"audience-13-plus-guardian-v1" else null,"territory" to if(band!="unknown")"global" else null,"declared_at" to if(band!="unknown")date(-1000) else null,"review_required" to false),
+        "guardian_request" to guardian,"capabilities" to choices,"authority_expires_at" to if(choices.values.any { it==true })date() else null)
     private fun rejected(block: ()->Unit) {
         try { block();fail("Expected closed permission parsing") } catch(expected: LiveFailure) { }
     }

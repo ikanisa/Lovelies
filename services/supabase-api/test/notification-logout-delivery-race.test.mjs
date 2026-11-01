@@ -1,3 +1,4 @@
+import { pushReceipt } from './notification-receipt-fixture.mjs';
 import assert from 'node:assert/strict';
 import {after,test} from 'node:test';
 import {startHarness,enroll,faceVerifierFixture} from './runtime-harness.mjs';
@@ -41,19 +42,19 @@ for(const item of cases)localTest(`logout handles ${item.name} delivery`,{timeou
 localTest('logout during an in-flight send keeps a second worker from reporting inbox-only',{timeout:30000},async t=>{
  const f=await fixture(t),entered=deferred(),release=deferred();let sends=0;
  f.h.env.PUSH_SERVICE={fetch:async(_url,init)=>{assert.equal(init?.method,'POST');sends++;const body=JSON.parse(init.body);entered.resolve();await release.promise;
-  return Response.json({operation_key:body.operation_key,status:'accepted',provider_message_id:'synthetic-receipt'});}};
+  return Response.json(pushReceipt(body,{status:'accepted',provider_message_id:'synthetic-receipt'}));}};
  const first=processNotificationJob({notification_id:f.note},f.h.app);void first.catch(()=>{});
  try{
   await Promise.race([entered.promise,first.then(()=>{throw Error('synthetic_send_did_not_pause');})]);
   await logout(f);assert.deepEqual(await f.h.db.one('SELECT active,token_value FROM push_devices WHERE id=?',f.device.id),{active:0,token_value:''});
   const second=processNotificationJob({notification_id:f.note},f.h.app);
   await assert.rejects(second,e=>e?.status===503&&e.code==='push_reconciliation_required');
-  assert.equal((await f.h.db.one('SELECT status FROM notification_jobs WHERE notification_id=?',f.note)).status,'queued');
+  assert.equal((await f.h.db.one('SELECT status FROM notification_jobs WHERE notification_id=?',f.note)).status,'ambiguous');
   assert.equal((await f.h.db.one('SELECT status FROM notification_deliveries WHERE notification_id=?',f.note)).status,'dispatching');
   assert.equal(sends,1);
  }finally{release.resolve();await first.catch(()=>{});}
  const delivery=await f.h.db.one('SELECT status,provider_receipt FROM notification_deliveries WHERE notification_id=?',f.note);
- assert.deepEqual(delivery,{status:'ambiguous',provider_receipt:null});
- assert.equal((await f.h.db.one('SELECT status FROM notification_jobs WHERE notification_id=?',f.note)).status,'ambiguous');
+ assert.deepEqual(delivery,{status:'accepted',provider_receipt:'synthetic-receipt'});
+ assert.equal((await f.h.db.one('SELECT status FROM notification_jobs WHERE notification_id=?',f.note)).status,'accepted');
  assert.equal(sends,1);
 });

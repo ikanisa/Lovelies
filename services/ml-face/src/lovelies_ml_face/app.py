@@ -25,6 +25,7 @@ from .service_auth import authenticated_transport
 from pictured_ml_face.models import CandidateEmbedding, FaceEmbedding, MatchDecision, MatchRequest, PhotoProcessRequest
 from pictured_ml_face.image_contract import ImageValidationError
 from pictured_ml_face.model_integrity import ModelPolicyError, parse_json_object
+from pictured_ml_face.vector_matching import rank_candidate_distances
 from .engine import OpenFacePipeline, MODEL, ENGINE_SPACE
 
 MAX_IMAGE = 20 * 1024 * 1024
@@ -65,6 +66,11 @@ class PhotoJob(Strict):
     source: Capture
     profiles: list[Profile] = Field(max_length=1000)
 
+class PhotoBatchJob(PhotoJob):
+    profiles: list[Profile] = Field(max_length=128)
+    ranking_protocol: Literal['lovelies-photo-ranking-page-v1']
+    include_preview: bool
+
 class FaceJob(Strict):
     reference_mode: Literal['first_registration','existing_reference','replace_reference']
     captures: list[Capture] = Field(min_length=1, max_length=3)
@@ -87,6 +93,9 @@ class BoundFaceJob(FaceJob, Binding):
 class BoundPhotoJob(PhotoJob, Binding):
     pass
 
+class BoundPhotoBatchJob(PhotoBatchJob, Binding):
+    pass
+
 
 def bound_result(job, handler) -> dict:
     payload = job.model_dump(exclude_unset=True)
@@ -100,7 +109,7 @@ def bound_result(job, handler) -> dict:
     # Defaults absent from the original JSON must not change its hash. Bound
     # models therefore hash only fields explicitly present in the wire payload.
     binding = {name: payload.pop(name) for name in Binding.model_fields}
-    model = FaceJob if isinstance(job, BoundFaceJob) else PhotoJob
+    model = FaceJob if isinstance(job, BoundFaceJob) else PhotoBatchJob if isinstance(job, BoundPhotoBatchJob) else PhotoJob
     return {**handler(model.model_validate(payload)), **binding}
 
 
@@ -150,7 +159,22 @@ def photo_result(job: PhotoJob) -> dict:
             candidates.extend(CandidateEmbedding(user_id=profile.account_id, face_profile_id=profile.profile_id,
                 embedding=vector) for vector in reference.embeddings)
         matched = {}
+        rankings = []
+        batched = isinstance(job, PhotoBatchJob)
+        # Bind every page to precisely the same detected query vectors/order.
+        # Only this digest leaves the private model, never the face embeddings.
+        query = hashlib.sha256(bytes.fromhex(job.source.sha256) + len(result.faces).to_bytes(4, 'big'))
         for index, face in enumerate(result.faces):
+            if batched:
+                query.update(np.asarray(face.embedding, dtype='<f4').tobytes())
+                ranked = rank_candidate_distances(MatchRequest(event_id='private-photo', detected_face_id=str(index),
+                    embedding=face.embedding, candidates=candidates))
+                rankings.append({'face_index': index, 'candidates': [
+                    {'account_id': candidate.user_id, 'profile_id': candidate.face_profile_id,
+                     'profile_version': by_profile[candidate.face_profile_id].revision,
+                     'model_version': by_profile[candidate.face_profile_id].model_id,
+                     'distance': distance} for distance, candidate in ranked]})
+                continue
             decision = pipeline.match_face(MatchRequest(event_id='private-photo', detected_face_id=str(index),
                 embedding=face.embedding, candidates=candidates))
             # The copied transport deliberately downgrades numerical matches to
@@ -161,6 +185,12 @@ def photo_result(job: PhotoJob) -> dict:
                 profile = by_profile[decision.face_profile_id]
                 matched[profile.account_id] = {'recipient_id': profile.account_id, 'profile_id': profile.profile_id,
                     'profile_version': profile.revision, 'model_version': profile.model_id}
+        response = {'model_version': MODEL, 'ranking': {
+            'protocol': job.ranking_protocol, 'query_sha256': query.hexdigest(),
+            'threshold': 0.42, 'review_margin': 0.05, 'faces': rankings,
+        }} if batched else {'model_version': MODEL, 'matches': list(matched.values())}
+        if batched and not job.include_preview:
+            return response
         # Normalize orientation and strip EXIF/ICC/GPS. Only the protected reduced
         # rendition returns to the Worker; originals remain in private quarantine.
         with Image.open(io.BytesIO(raw)) as source:
@@ -171,8 +201,7 @@ def photo_result(job: PhotoJob) -> dict:
             preview = output.getvalue()
         if len(preview) > 4 * 1024 * 1024:
             raise HTTPException(413, 'preview_too_large')
-        return {'model_version': MODEL, 'matches': list(matched.values()),
-            'preview': {'bytes_base64': base64.b64encode(preview).decode(), 'content_type':'image/jpeg',
+        return {**response, 'preview': {'bytes_base64': base64.b64encode(preview).decode(), 'content_type':'image/jpeg',
                 'width': image.width, 'height': image.height}}
     finally:
         raw[:] = bytes(len(raw))
@@ -261,19 +290,23 @@ def ready():
         'engine_artifact_sha256':pipeline.identity['engine_artifact_sha256'],
         'processing_fingerprint':pipeline.identity['processing_fingerprint'],
         'model_hashes':pipeline.identity['model_sha256'],
-        'capabilities':['face_registration','face_comparison','face_replacement','photo_processing'],
+        'capabilities':['face_registration','face_comparison','face_replacement','photo_processing','photo_matching_batches'],
         'limits':{'image_bytes':MAX_IMAGE,'image_pixels':40_000_000,'faces':100,'profiles':1000,
+            'photo_batch_profiles':128,
             'face_body_bytes':12*1024*1024,'photo_body_bytes':40*1024*1024},
         'model_artifacts':pipeline.artifact_integrity,'matching_evaluation':pipeline.evaluation_status,
         'authentication':'registered_face_comparison','liveness_required':False}
 @http_app.post('/internal/photo')
 async def process(job: BoundPhotoJob):
     return await run_in_threadpool(bound_result, job, photo_result)
+@http_app.post('/internal/photo-batch')
+async def process_batch(job: BoundPhotoBatchJob):
+    return await run_in_threadpool(bound_result, job, photo_result)
 @http_app.post('/internal/face')
 async def verify(job: BoundFaceJob):
     return await run_in_threadpool(bound_result, job, face_result)
 
 app = MlHttpBoundary(http_app, max_requests=2, body_timeout_seconds=30)
-app.limits.update({'/internal/photo':40*1024*1024, '/internal/face':12*1024*1024})
+app.limits.update({'/internal/photo':40*1024*1024, '/internal/photo-batch':40*1024*1024, '/internal/face':12*1024*1024})
 
 app = authenticated_transport(app, require_service_auth=True)

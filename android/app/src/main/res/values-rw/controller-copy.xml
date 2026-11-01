@@ -69,4 +69,5 @@
     </plurals>
     <string name="controller_a6e0f9a6503b">"Amakuru mashya y’ibanga ya konti"</string>
     <string name="controller_f72a6f212afb">"Ifoto ya Lovelies"</string>
+    <string name="store_verification_ended_restore">Kugenzura ibyo waguze byarangiye bitaremezwa. Hitamo Garura ibyo waguze kugira ngo wongere ugerageze.</string>
 </resources>

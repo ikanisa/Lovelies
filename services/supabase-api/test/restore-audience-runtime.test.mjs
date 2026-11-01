@@ -1,3 +1,4 @@
+import {planEvents} from './restore-plan-fixture.mjs';
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { randomUUID } from 'node:crypto';
@@ -22,6 +23,8 @@ const ordered = facts => [...new Map(facts.map(fact => [stable(fact), fact])).en
 const consentFact = (account, consent) => ({ kind: 'consent-withdrawn', scope: { account_id: account, consent_id: consent.id, purpose: consent.purpose } });
 const approvalFact = approval => ({ kind: 'guardian-approval-retired', scope: { child_account_id: approval.child_account_id,
   guardian_request_id: approval.request_id, guardian_approval_id: approval.id, purpose: approval.purpose } });
+const requestFact = (request, terminal_state) => ({ kind: 'guardian-request-retired', scope: { child_account_id: request.child_account_id,
+  guardian_request_id: request.id, request_revision: String(request.revision), terminal_state } });
 const profileFact = value => ({ kind: 'profile-retired', scope: { account_id: value.account_id, profile_id: value.id, profile_revision: value.revision } });
 
 async function administrator(h) {
@@ -42,7 +45,7 @@ async function family(t, { approved = true, registered = false, purposes = PURPO
   } };
   const child = await h.anonymous(), guardian = await administrator(h), reviewer = await administrator(h);
   await h.json('/me/audience', { method: 'PUT', token: child.access_token,
-    body: { ...base(), age_band: '13_17', expected_version: 0 } });
+    body: { ...base(), at_least_13: true, guardian_required: true, expected_version: 0 } });
   const created = await h.json('/me/guardian-requests', { token: child.access_token,
     body: { ...base(), expected_version: 1 } }, 201);
   const requestID = created.guardian_request.id;
@@ -72,7 +75,7 @@ async function family(t, { approved = true, registered = false, purposes = PURPO
     const response = await request(path, options); assert(response.status >= 500 && response.status <= 599);
     await response.body?.cancel();
   };
-  const declareBody = () => ({ ...base(), age_band: '13_17', expected_version: 1 });
+  const declareBody = () => ({ ...base(), at_least_13: true, guardian_required: true, expected_version: 1 });
   const declare = (body = declareBody(), expected = 200) => json('/me/audience', { method: 'PUT', body }, expected);
   const withdrawalBody = () => ({ operation_key: randomUUID(), expected_revision: approved ? 3 : 2 });
   const withdraw = (body = withdrawalBody(), expected = 200) => json('/guardian-requests/' + requestID + '/withdraw', { body }, expected);
@@ -82,8 +85,9 @@ async function family(t, { approved = true, registered = false, purposes = PURPO
     declareBody, declare, withdrawalBody, withdraw, adultBody, adult };
 }
 
-async function selectedFacts(f, { authority = true, guardian = true } = {}) {
+async function selectedFacts(f, { authority = true, guardian = true, terminal = 'withdrawn' } = {}) {
   const facts = [];
+  const request=await requestRow(f);if(guardian&&['pending','under_review','approved'].includes(request.state))facts.push(requestFact(request,terminal));
   if (guardian) for (const approval of await approvals(f))
     if (approval.status === 'approved' && approval.revoked_at === null) facts.push(approvalFact(approval));
   if (authority) {
@@ -96,8 +100,8 @@ async function assertPlan(f, actor, source, key, facts, { committed = true } = {
   const id = await restoreOperationID(actor, source, key), saved = await f.journal.lookup(id); assert(saved);
   if (committed) assert.equal(saved.status, 'committed');
   assert.deepEqual(saved.plan.allocations, {});
-  assert.deepEqual(saved.plan.events.map(({ kind, scope }) => ({ kind, scope })), ordered(facts));
-  assert.equal(new Set(saved.plan.events.map(value => value.operation_id)).size, facts.length);
+  assert.deepEqual(ordered((await planEvents(f,saved)).map(({ kind, scope }) => ({ kind, scope }))), ordered(facts));
+  assert.equal(new Set((await planEvents(f,saved)).map(value => value.operation_id)).size, facts.length);
   const encoded = JSON.stringify(saved.plan);
   for (const field of ['evidence_reference', 'evidence_method', 'template_key', 'template_digest', 'access_token', 'refresh_token', 'public_jwk'])
     assert(!encoded.includes('"' + field + '"'), 'Facts contain no private evidence, reference or credential material');
@@ -127,7 +131,7 @@ async function adjacentFutureExpiry(f) {
 async function expiredPendingChild(f, createdAt) {
   const child = await f.h.anonymous();
   await f.h.json('/me/audience', { method: 'PUT', token: child.access_token,
-    body: { ...base(), age_band: '13_17', expected_version: 0 } });
+    body: { ...base(), at_least_13: true, guardian_required: true, expected_version: 0 } });
   const result = await f.h.json('/me/guardian-requests', { token: child.access_token,
     body: { ...base(), expected_version: 1 } }, 201);
   const id = result.guardian_request.id;
@@ -136,7 +140,7 @@ async function expiredPendingChild(f, createdAt) {
 }
 
 test('a first anonymous declaration creates no invented old-authority facts or profile', async t => {
-  const f = await fixture(t), child = await f.h.anonymous(), body = { ...base(), age_band: '13_17', expected_version: 0 };
+  const f = await fixture(t), child = await f.h.anonymous(), body = { ...base(), at_least_13: true, guardian_required: true, expected_version: 0 };
   const handler = createHandler(createApp(f.db, f.h.env, f.h.app.now));
   const response = await handler(new Request('https://api.invalid/me/audience', { method: 'PUT',
     headers: { authorization: 'Bearer ' + child.access_token, 'content-type': 'application/json' }, body: JSON.stringify(body) }));
@@ -150,7 +154,7 @@ test('a first anonymous declaration creates no invented old-authority facts or p
 
 test('anonymous child redeclaration retires its old approved relationship even without a profile or consent', async t => {
   const f = await family(t), body = f.declareBody(), facts = await selectedFacts(f);
-  assert.equal(await profile(f), null); assert.equal((await consents(f)).length, 0); assert.equal(facts.length, 3);
+  assert.equal(await profile(f), null); assert.equal((await consents(f)).length, 0); assert.equal(facts.length, 4);
   await f.declare(body); await assertPlan(f, f.child.account_id, 'audience', body.operation_key, facts);
   assert.equal((await projection(f)).version, 2); assert.equal((await projection(f)).status, 'guardian_pending');
   assert.equal((await requestRow(f)).state, 'withdrawn'); assert((await approvals(f)).every(p => p.status === 'revoked'));
@@ -169,10 +173,10 @@ test('registered redeclaration records exact old purposes/profile revision and p
 });
 
 test('requested-only relationships terminate without an invented approval-retirement fact', async t => {
-  const f = await family(t, { approved: false }), body = f.withdrawalBody();
-  await f.withdraw(body); await assertPlan(f, f.child.account_id, 'guardian', body.operation_key, []);
+  const f = await family(t, { approved: false }), body = f.withdrawalBody(), facts=await selectedFacts(f);
+  await f.withdraw(body); await assertPlan(f, f.child.account_id, 'guardian', body.operation_key, facts);
   assert.equal((await requestRow(f)).state, 'withdrawn'); assert((await approvals(f)).every(p => p.status === 'revoked'));
-  assert.equal(await cursor(f), 0);
+  assert.equal(await cursor(f), 1);
 });
 
 test('guardian withdrawal records exact approved purposes and old profile, while replay returns current authority', async t => {
@@ -191,15 +195,16 @@ test('rejection records no never-approved guardian fact and cannot self-review',
   const path = '/admin/guardian-requests/' + f.requestID + '/review';
   await f.json(path, { token: f.guardian.token, body }, 403);
   assert.equal(await f.journal.lookup(await restoreOperationID(f.guardian.accountId, 'guardian', body.operation_key)), null);
+  const facts=await selectedFacts(f,{terminal:'rejected'});
   await f.json(path, { token: f.reviewer.token, body });
-  await assertPlan(f, f.reviewer.accountId, 'guardian', body.operation_key, []);
+  await assertPlan(f, f.reviewer.accountId, 'guardian', body.operation_key, facts);
   assert.equal((await requestRow(f)).state, 'rejected');
 });
 
 test('independent adulthood review retires old child authority and leaves the reviewed adult eligible', async t => {
   const f = await family(t, { registered: true }), body = f.adultBody(), facts = await selectedFacts(f);
   await f.adult(body); const saved = await assertPlan(f, f.reviewer.accountId, 'audience', body.operation_key, facts);
-  const current = await projection(f); assert.equal(current.age_band, '18_plus'); assert.equal(current.status, 'eligible');
+  const current = await projection(f); assert.equal(current.age_band,null); assert.equal(current.at_least_13,1); assert.equal(current.guardian_required,0); assert.equal(current.status, 'eligible');
   assert.equal((await requestRow(f)).state, 'withdrawn');
   await f.adult(body); assert.deepEqual(await f.journal.lookup(saved.plan.operation_id), saved);
   assert.equal((await f.h.db.one('SELECT count(*) n FROM audience_adult_reviews WHERE account_id=?', f.child.account_id)).n, 1);
@@ -234,10 +239,10 @@ test('fresh guardian approval creates no restrictive grant-retirement facts', as
 });
 
 test('expired approved relationship produces exact one-episode system facts and repeated maintenance is a no-op', async t => {
-  const f = await family(t, { registered: true }), facts = await selectedFacts(f);
+  const f = await family(t, { registered: true }), facts = await selectedFacts(f,{terminal:'expired'});
   await expire(f); await f.db.invocation(() => maintainAudience(f.context));
   const id = await expiryID(f), saved = await f.journal.lookup(id); assert.equal(saved.status, 'committed');
-  assert.deepEqual(saved.plan.events.map(({ kind, scope }) => ({ kind, scope })), facts);
+  assert.deepEqual(ordered((await planEvents(f,saved)).map(({ kind, scope }) => ({ kind, scope }))), facts);
   assert.deepEqual(saved.plan.allocations, {}); assert.equal((await requestRow(f)).state, 'expired');
   const before = await cursor(f); await f.db.invocation(() => maintainAudience(f.context));
   assert.equal(await cursor(f), before); assert.deepEqual(await f.journal.lookup(id), saved);
@@ -262,24 +267,24 @@ test('old expiration after independently reviewed adulthood cannot retire a new 
   assert.equal((await requestRow(f)).state, 'expired'); assert.deepEqual(await projection(f), audience);
   assert.deepEqual(await f.h.db.one('SELECT * FROM consents WHERE id=?', consent), before);
   assert.deepEqual(await profile(f), newProfile);
-  const saved = await f.journal.lookup(await expiryID(f)); assert.deepEqual(saved.plan.events, []);
+  const saved = await f.journal.lookup(await expiryID(f)); assert.deepEqual((await planEvents(f,saved)).map(({kind,scope})=>({kind,scope})),[requestFact(old,'expired')]);
 });
 
 test('an old expiry cannot suspend a same-version replacement guardian episode', async t => {
   const f = await family(t), replacement = randomUUID(); await expire(f);
   await f.h.db.run(`INSERT INTO guardian_requests(id,child_account_id,state,child_audience_version,policy_version,created_at,expires_at)
     VALUES(?,?,'pending',1,?,?,?)`, replacement, f.child.account_id, AUDIENCE_POLICY, f.h.app.now() + 1, f.h.app.now() + 86400000);
-  const before = await projection(f), facts = await selectedFacts(f, { authority: false });
+  const before = await projection(f), facts = await selectedFacts(f, { authority: false, terminal:'expired' });
   await f.db.invocation(() => maintainAudience(f.context));
   const saved = await f.journal.lookup(await expiryID(f));
-  assert.deepEqual(saved.plan.events.map(({ kind, scope }) => ({ kind, scope })), facts);
+  assert.deepEqual(ordered((await planEvents(f,saved)).map(({ kind, scope }) => ({ kind, scope }))), facts);
   assert.equal((await requestRow(f)).state, 'expired');
   assert.equal((await f.h.db.one('SELECT state FROM guardian_requests WHERE id=?', replacement)).state, 'pending');
   assert.deepEqual(await projection(f), before);
 });
 
 test('expired-request replacement journals the old approval before inserting a fresh pending request', async t => {
-  const f = await family(t), facts = await selectedFacts(f), body = { ...base(), expected_version: 1 }; await expire(f);
+  const f = await family(t), facts = await selectedFacts(f,{terminal:'expired'}), body = { ...base(), expected_version: 1 }; await expire(f);
   const reply = await f.json('/me/guardian-requests', { body }, 201);
   await assertPlan(f, f.child.account_id, 'guardian', body.operation_key, facts);
   assert.notEqual(reply.guardian_request.id, f.requestID); assert.equal(reply.guardian_request.state, 'pending');
@@ -324,7 +329,7 @@ for (const newAuthority of ['adult', 'replacement']) test('expiry rechecks new '
       admitted = true;
       // This independent committed change occurs after candidate admission and
       // before the per-request transaction. It must be rechecked inside it.
-      if (newAuthority === 'adult') await f.h.db.run("UPDATE account_audience SET age_band='18_plus',status='eligible',version=version+1 WHERE account_id=?", f.child.account_id);
+      if (newAuthority === 'adult') await f.h.db.run("UPDATE account_audience SET age_band=NULL,at_least_13=1,guardian_required=0,status='eligible',version=version+1 WHERE account_id=?", f.child.account_id);
       else await f.h.db.run(`INSERT INTO guardian_requests(id,child_account_id,state,child_audience_version,policy_version,created_at,expires_at)
         VALUES(?,?,'pending',1,?,?,?)`, replacement, f.child.account_id, AUDIENCE_POLICY, f.h.app.now() + 1, f.h.app.now() + 86400000);
       await f.h.db.run(`INSERT INTO consents(id,account_id,purpose,policy_version,status,created_at)
@@ -333,7 +338,7 @@ for (const newAuthority of ['adult', 'replacement']) test('expiry rechecks new '
     }
     return selected;
   };
-  const facts = await selectedFacts(f, { authority: false });
+  const facts = await selectedFacts(f, { authority: false, terminal:'expired' });
   await f.db.invocation(() => maintainAudience(f.context)); assert.equal(admitted, true);
   await assertPlan(f, f.child.account_id, 'audience.guardian-expiry-v1', 'guardian.expire:' + f.requestID + ':3', facts);
   assert.equal((await requestRow(f)).state, 'expired'); assert.deepEqual(await projection(f), current.audience);
@@ -341,23 +346,27 @@ for (const newAuthority of ['adult', 'replacement']) test('expiry rechecks new '
   if (newAuthority === 'replacement') assert.equal((await requestRow(f, replacement)).state, 'pending');
 });
 
-for (const blockedCause of ['capacity', 'scope']) test('oldest ' + blockedCause + ' denial rolls back and reports while a later independent expiry commits', async t => {
+test('oldest invalid approval scope rolls back and reports while a later independent expiry commits', async t => {
   const f = await family(t, { registered: true }), now = f.h.app.now(); await expire(f);
   await f.h.db.run('UPDATE guardian_requests SET created_at=? WHERE id=?', now - 2000, f.requestID);
-  if (blockedCause === 'capacity') {
-    const count = (await selectedFacts(f)).length;
-    for (let index = count; index < 33; index++) await f.h.db.run(`INSERT INTO consents(id,account_id,purpose,policy_version,status,created_at)
-      VALUES(?,?,'photo_processing','photo-policy-fixture-v1','granted',?)`, randomUUID(), f.child.account_id, now);
-  } else {
-    const foreign = await f.h.anonymous(), selected = (await approvals(f))[0];
-    await f.h.db.run('UPDATE guardian_purpose_approvals SET child_account_id=? WHERE id=?', foreign.account_id, selected.id);
-  }
-  const later = await expiredPendingChild(f, now - 1000), before = await snapshot(f);
+  const foreign = await f.h.anonymous(), selected = (await approvals(f))[0];
+  await f.h.db.run('UPDATE guardian_purpose_approvals SET child_account_id=? WHERE id=?', foreign.account_id, selected.id);
+  const later = await expiredPendingChild(f, now - 1000), before = await snapshot(f),laterBefore=await requestRow(f,later.id);
   await assert.rejects(() => f.db.invocation(() => maintainAudience(f.context)), error => error.code === 'audience_maintenance_blocked');
   assert.deepEqual(await snapshot(f), before); assert.equal(await f.journal.lookup(await expiryID(f)), null);
   assert.equal((await requestRow(f, later.id)).state, 'expired');
   assert.equal((await f.h.db.one('SELECT version FROM account_audience WHERE account_id=?', later.child.account_id)).version, 2);
-  await assertPlan(f, later.child.account_id, 'audience.guardian-expiry-v1', 'guardian.expire:' + later.id + ':1', []);
+  await assertPlan(f, later.child.account_id, 'audience.guardian-expiry-v1', 'guardian.expire:' + later.id + ':1', [requestFact(laterBefore,'expired')]);
+});
+
+test('one expiry journals every fact across multiple manifest pages',async t=>{
+  const f=await family(t,{registered:true});await expire(f);
+  let facts=await selectedFacts(f,{terminal:'expired'});
+  for(let i=facts.length;i<65;i++)await f.h.db.run("INSERT INTO consents(id,account_id,purpose,policy_version,status,created_at) VALUES(?,?,'photo_processing','photo-policy-fixture-v1','granted',?)",randomUUID(),f.child.account_id,f.h.app.now());
+  facts=await selectedFacts(f,{terminal:'expired'});assert.equal(facts.length,65);
+  await f.db.invocation(()=>maintainAudience(f.context));
+  await assertPlan(f,f.child.account_id,'audience.guardian-expiry-v1','guardian.expire:'+f.requestID+':3',facts);
+  assert.equal((await requestRow(f)).state,'expired');assert((await consents(f)).every(c=>c.status==='revoked'));
 });
 
 test('a bounded blocked page advances across invocations to a later independent child without changing any blocked episode', async t => {
@@ -391,7 +400,7 @@ test('a bounded blocked page advances across invocations to a later independent 
   assert.deepEqual(await f.h.db.one("SELECT last_at,last_id FROM retention_scan_cursors WHERE scan='guardian' AND entity_id='audience-expiry-v1'"), { last_at: null, last_id: null });
   await assert.rejects(() => f.db.invocation(() => maintainAudience(f.context)), error => error.code === 'audience_maintenance_blocked');
   assert.deepEqual(pageSizes, [100, 2, 0, 100]);
-  assert.deepEqual(await snapshot(f), before); assert.equal(await cursor(f), 0);
+  assert.deepEqual(await snapshot(f), before); assert.equal(await cursor(f), 1);
 });
 
 for (const malformedCandidate of ['negative-time', 'legacy-id', 'oversized-time']) test('unsupported ' + malformedCandidate + ' source stays intact while repeated paging processes later independent work', async t => {
@@ -420,7 +429,7 @@ for (const malformedCandidate of ['negative-time', 'legacy-id', 'oversized-time'
   assert.equal((await requestRow(f, next.id)).state, 'expired'); assert.deepEqual(await source(), before);
   assert.equal((await f.h.db.one("SELECT last_id FROM retention_scan_cursors WHERE scan='guardian' AND entity_id='audience-expiry-v1'")).last_id, next.id);
   assert.equal(await f.journal.lookup(await restoreOperationID(unsupported.child.account_id, 'audience.guardian-expiry-v1', 'guardian.expire:' + id + ':1')), null);
-  assert.equal(await cursor(f), 0);
+  assert.equal(await cursor(f), 2);
 });
 
 test('audience expiry updates only its named cursor and preserves retention class and other owner namespaces', async t => {
@@ -447,7 +456,16 @@ for (const fatal of ['journal-poison', 'unknown-sql']) test('maintenance ' + fat
   const f = await family(t), now = f.h.app.now(); await expire(f);
   await f.h.db.run('UPDATE guardian_requests SET created_at=? WHERE id=?', now - 2000, f.requestID);
   const later = await expiredPendingChild(f, now - 1000), before = await snapshot(f), laterBefore = await requestRow(f, later.id);
-  if (fatal === 'journal-poison') f.faults.reply = { path: '/v1/operations/prepare', stage: 'after' };
+  const operationID=await expiryID(f);let expiryPrepares=0;
+  if (fatal === 'journal-poison') {
+    // Annual-review cleanup has its own preceding transaction. Lose only this
+    // exact guardian expiry's reply, after its independent plan was accepted.
+    const prepare=f.journal.prepare.bind(f.journal);
+    f.journal.prepare=async input=>{
+      if(input.operation_id===operationID){expiryPrepares++;f.faults.reply={path:'/v1/operations/prepare',stage:'after'};}
+      return prepare(input);
+    };
+  }
   else {
     const run = f.db.run.bind(f.db);
     f.db.run = async (sql, ...bindings) => { if (sql.startsWith('UPDATE guardian_requests SET state=')) throw Error('synthetic_unknown_sql_failure'); return run(sql, ...bindings); };
@@ -455,19 +473,20 @@ for (const fatal of ['journal-poison', 'unknown-sql']) test('maintenance ' + fat
   await assert.rejects(() => f.db.invocation(() => maintainAudience(f.context)), error => fatal === 'journal-poison' ? unavailable(error) : error.message === 'synthetic_unknown_sql_failure');
   assert.deepEqual(await snapshot(f), before); assert.deepEqual(await requestRow(f, later.id), laterBefore);
   assert.equal(await f.h.db.one("SELECT * FROM retention_scan_cursors WHERE scan='guardian' AND entity_id='audience-expiry-v1'"), null);
-  if (fatal === 'journal-poison') { assert.equal(f.faults.reply, undefined); assert.equal((await f.journal.lookup(await expiryID(f))).status, 'pending'); }
-  else assert.equal(await f.journal.lookup(await expiryID(f)), null);
+  if (fatal === 'journal-poison') { assert.equal(expiryPrepares,1);assert.equal(f.faults.reply,undefined);assert.equal((await f.journal.lookup(operationID)).status,'pending'); }
+  else assert.equal(await f.journal.lookup(operationID), null);
+  assert.equal(await f.journal.lookup(await restoreOperationID(later.child.account_id,'audience.guardian-expiry-v1','guardian.expire:'+later.id+':1')),null);
 });
 
 test('more than32 aggregate expiry facts are committed as separate bounded relationship transactions', async t => {
   const f = await family(t); await expire(f);
   const episodes = [{ account: f.child.account_id, id: f.requestID }];
   // Twelve independent children have three actual approved purpose episodes
-  // each. There is no request/version truncation to squeeze36 facts into32.
+  // each, plus the exact terminal request. No episode is truncated.
   for (let index = 0; index < 11; index++) {
     const child = await f.h.anonymous(), id = randomUUID(); episodes.push({ account: child.account_id, id });
     await f.h.json('/me/audience', { method: 'PUT', token: child.access_token,
-      body: { ...base(), age_band: '13_17', expected_version: 0 } });
+      body: { ...base(), at_least_13: true, guardian_required: true, expected_version: 0 } });
     await f.h.db.run("UPDATE account_audience SET status='eligible' WHERE account_id=?", child.account_id);
     await f.h.db.run(`INSERT INTO guardian_requests(id,child_account_id,guardian_account_id,state,child_audience_version,policy_version,
       created_at,expires_at,revision,reviewed_by,reviewed_at) VALUES(?,?,?,'approved',1,?,?,?,3,?,?)`,
@@ -477,31 +496,20 @@ test('more than32 aggregate expiry facts are committed as separate bounded relat
       randomUUID(), id, child.account_id, f.guardian.accountId, purpose, purpose === 'face_authentication' ? 'face-policy-fixture-v1' : 'photo-policy-fixture-v1', f.h.app.now() - 5000, f.h.app.now() - 1);
   }
   await f.db.invocation(() => maintainAudience(f.context));
-  assert.equal(await cursor(f), 36);
+  assert.equal(await cursor(f), 48);
   for (const episode of episodes) {
     const saved = await f.journal.lookup(await restoreOperationID(episode.account, 'audience.guardian-expiry-v1', 'guardian.expire:' + episode.id + ':3'));
-    assert.equal(saved.status, 'committed'); assert.equal(saved.plan.events.length, 3);
+    assert.equal(saved.status, 'committed'); assert.equal(saved.plan.events.length, 4);
     assert.equal((await f.h.db.one('SELECT state FROM guardian_requests WHERE id=?', episode.id)).state, 'expired');
     assert(saved.plan.events.every(event => event.scope.child_account_id === episode.account));
   }
 });
 
-for (const count of [32, 33]) test(count + ' selected declaration facts are ' + (count === 32 ? 'atomic' : 'rejected before domain writes'), async t => {
-  const f = await family(t, { registered: true }), body = f.declareBody();
-  let facts = await selectedFacts(f);
-  for (let index = facts.length; index < count; index++) await f.h.db.run(`INSERT INTO consents(id,account_id,purpose,policy_version,status,created_at)
-    VALUES(?,?,'photo_processing','photo-policy-fixture-v1','granted',?)`, randomUUID(), f.child.account_id, f.h.app.now());
-  facts = await selectedFacts(f); assert.equal(facts.length, count);
-  const before = await snapshot(f); f.trace.length = 0;
-  if (count === 32) { await f.declare(body); await assertPlan(f, f.child.account_id, 'audience', body.operation_key, facts); assert.equal(await cursor(f), 32); }
-  else {
-    assert.equal((await f.declare(body, 503)).error.code, 'audience_restriction_capacity');
-    assert.deepEqual(await snapshot(f), before);
-    assert.equal(await f.journal.lookup(await restoreOperationID(f.child.account_id, 'audience', body.operation_key)), null);
-    const writes = f.trace.filter(item => item.kind === 'sql' && /^(UPDATE|INSERT|DELETE) /.test(item.sql));
-    const housekeeping = sql => sql.startsWith('UPDATE restore_control ') || sql.startsWith('DELETE FROM request_limits WHERE expires_at<') || sql.startsWith('INSERT INTO request_limits(key,hits,expires_at) VALUES(');
-    assert(writes.every(item => housekeeping(item.sql)), 'Capacity cannot commit domain/receipt/cleanup changes');
-  }
+for(const count of [32,33,65])test(count+' selected declaration facts commit the complete audience restriction',async t=>{
+ const f=await family(t,{registered:true}),body=f.declareBody();let facts=await selectedFacts(f);
+ for(let index=facts.length;index<count;index++)await f.h.db.run("INSERT INTO consents(id,account_id,purpose,policy_version,status,created_at) VALUES(?,?,'photo_processing','photo-policy-fixture-v1','granted',?)",randomUUID(),f.child.account_id,f.h.app.now());
+ facts=await selectedFacts(f);assert.equal(facts.length,count);
+ await f.declare(body);await assertPlan(f,f.child.account_id,'audience',body.operation_key,facts);assert.equal(await cursor(f),count);
 });
 
 test('cached withdrawal receipts still require current session authority', async t => {
@@ -526,7 +534,7 @@ test('a cached adulthood review cannot bypass independently revoked reviewer aut
   const logged = await f.json('/auth/face/complete', { body: await captureProofs(f.h, challenge, f.reviewer.keys.privateKey) });
   assert.deepEqual(logged.roles, ['user']);
   const ordinary = await f.json('/admin/audience/' + f.child.account_id + '/adult-review', { token: logged.access_token, body }, 403);
-  assert.equal(ordinary.error.code, 'admin_required');
+  assert.equal(ordinary.error.code, 'operator_capability_required');
   assert.deepEqual(await f.journal.lookup(id), saved); assert.deepEqual(await snapshot(f), before);
 });
 
@@ -574,7 +582,13 @@ for (const stage of ['before', 'after']) test('lost guardian-retirement prepare 
   assert.equal(f.faults.reply, undefined); assert.deepEqual(await snapshot(f), before);
   const saved = await f.journal.lookup(await restoreOperationID(f.child.account_id, 'guardian', body.operation_key));
   if (stage === 'before') assert.equal(saved, null);
-  else { assert.equal(saved.status, 'pending'); assert.equal(saved.plan.events.length, 3); await assert.rejects(() => f.db.one('SELECT id FROM accounts LIMIT 1'), unavailable); }
+  else { assert.equal(saved.status, 'pending'); assert.equal(saved.plan.events.length, 4);
+    await f.db.one('SELECT id FROM accounts LIMIT 1');const recovered=await f.journal.lookup(saved.plan.operation_id);
+    assert.equal(recovered.status,'recovered');assert.deepEqual(recovered.plan,saved.plan);assert.equal(recovered.plan_hash,saved.plan_hash);
+    assert.equal((await requestRow(f)).state,'withdrawn');assert((await approvals(f)).every(p=>p.status==='revoked'));
+    await f.withdraw(body,410);
+    assert.equal(await f.h.db.one("SELECT operation_key FROM operations WHERE actor_id=? AND source='guardian' AND operation_key=?",f.child.account_id,body.operation_key),null);
+  }
 });
 
 test('callback failure rolls back all relationship/consent/profile changes before journal acceptance', async t => {
@@ -588,15 +602,17 @@ test('callback failure rolls back all relationship/consent/profile changes befor
   assert.equal(await f.journal.lookup(await restoreOperationID(f.child.account_id, 'guardian', body.operation_key)), null);
 });
 
-test('accepted expiry plan with rejected SQL commit preserves pending facts and refuses callback replay', async t => {
-  const f = await family(t), id = await expiryID(f), facts = await selectedFacts(f); await expire(f);
+test('accepted expiry plan with rejected SQL commit recovers the exact terminal episode without callback replay', async t => {
+  const f = await family(t), id = await expiryID(f), facts = await selectedFacts(f,{terminal:'expired'}); await expire(f);
   const before = await snapshot(f), prepare = f.journal.prepare.bind(f.journal); let armed = true;
   f.journal.prepare = async value => { const saved = await prepare(value); if (armed && value.operation_id === id) { armed = false; f.faults.beforeCommit = true; } return saved; };
   await assert.rejects(() => f.db.invocation(() => maintainAudience(f.context)));
   assert.deepEqual(await snapshot(f), before); const saved = await f.journal.lookup(id); assert.equal(saved.status, 'pending');
-  assert.deepEqual(saved.plan.events.map(({ kind, scope }) => ({ kind, scope })), facts);
-  await assert.rejects(() => f.db.invocation(() => maintainAudience(f.context)), unavailable);
-  assert.deepEqual(await f.journal.lookup(id), saved);
+  assert.deepEqual(ordered((await planEvents(f,saved)).map(({ kind, scope }) => ({ kind, scope }))), facts);
+  await f.db.invocation(() => maintainAudience(f.context));
+  const recovered=await f.journal.lookup(id);assert.equal(recovered.status,'recovered');assert.deepEqual(recovered.plan,saved.plan);assert.equal(recovered.plan_hash,saved.plan_hash);
+  assert.equal((await requestRow(f)).state,'expired');assert((await approvals(f)).every(p=>p.status==='revoked'));
+  assert.equal(await f.h.db.one("SELECT operation_key FROM operations WHERE actor_id=? AND source='audience.guardian-expiry-v1' AND operation_key=?",f.child.account_id,'guardian.expire:'+f.requestID+':3'),null);
 });
 
 for (const mode of ['commit', 'ack-before', 'ack-after']) test('withdrawal ' + mode + ' uncertainty preserves the exact SQL boundary and original result', async t => {

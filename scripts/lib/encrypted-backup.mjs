@@ -5,6 +5,7 @@ import fs from 'node:fs/promises';
 import {PassThrough,Transform,Writable} from 'node:stream';
 import {pipeline} from 'node:stream/promises';
 import path from 'node:path';
+import {backupControllerIdentity} from './backup-process.mjs';
 
 export const PROJECT='ltqfplqevxztlswlzexn';
 export const BACKUP_TTL=7*86400000;
@@ -48,8 +49,13 @@ async function locked(directory,work,{create=true}={}){
   await backupDirectory(directory,{create});
   const name=path.join(directory,'.lovelies-backup.lock');
   const handle=await fs.open(name,'wx',0o600);
-  try{await handle.writeFile(JSON.stringify({pid:process.pid}));await handle.sync();return await work();}
-  finally{await handle.close();await fs.unlink(name);}
+  const original=await handle.stat();
+  try{await handle.writeFile(JSON.stringify(await backupControllerIdentity()));await handle.sync();await syncDirectory(directory);return await work();}
+  finally{
+    await handle.close();const current=await fs.lstat(name);
+    if(current.dev!==original.dev||current.ino!==original.ino||current.isSymbolicLink())throw fail('backup_lock_identity_changed');
+    await fs.unlink(name);await syncDirectory(directory);
+  }
 }
 async function syncDirectory(directory){const handle=await fs.open(directory,'r');try{await handle.sync();}finally{await handle.close();}}
 async function writeAll(handle,bytes){let at=0;while(at<bytes.length){const {bytesWritten}=await handle.write(bytes,at,bytes.length-at);if(!bytesWritten)throw fail('backup_write_incomplete');at+=bytesWritten;}}

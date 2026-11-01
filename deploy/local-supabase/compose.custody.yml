@@ -1,0 +1,116 @@
+# Separate Compose project and EXTERNAL volumes: app rollback never owns custody.
+name: lovelies-custody
+services:
+  custody-db:
+    image: supabase/postgres:17.11.0.003@sha256:7374d196da7e301512cc5329e18040e0f7bb856287b323777cdadecccbc6c7e4
+    restart: unless-stopped
+    environment:
+      POSTGRES_PASSWORD: ${CUSTODY_POSTGRES_PASSWORD:?required}
+      PGPASSWORD: ${CUSTODY_POSTGRES_PASSWORD:?required}
+      POSTGRES_DB: postgres
+      PGDATABASE: postgres
+      POSTGRES_HOST: /var/run/postgresql
+      PGPORT: 5432
+      POSTGRES_PORT: 5432
+      CUSTODY_JOURNAL_PASSWORD: ${CUSTODY_JOURNAL_PASSWORD:?required}
+      CUSTODY_PUSH_PASSWORD: ${CUSTODY_PUSH_PASSWORD:?required}
+    command: [postgres, -c, config_file=/etc/postgresql/postgresql.conf, -c, log_min_messages=fatal]
+    volumes:
+      - custody-db:/var/lib/postgresql/data
+      - custody-db-config:/etc/postgresql-custom
+      - ${LOVELIES_DEPLOYMENT_ROOT:?required}/custody-schema.sql:/etc/lovelies/custody-schema.sql:ro
+      - ${LOVELIES_DEPLOYMENT_ROOT:?required}/initialize-custody.sh:/docker-entrypoint-initdb.d/init-scripts/99-lovelies-custody.sh:ro
+    networks: [custody]
+    healthcheck:
+      test: [CMD-SHELL, 'pg_isready -h 127.0.0.1 -U postgres -d postgres']
+      interval: 5s
+      timeout: 5s
+      retries: 20
+    stop_grace_period: 60s
+    logging: &logging
+      driver: json-file
+      options: {max-size: 10m, max-file: '3'}
+  restore-journal:
+    build:
+      context: ${LOVELIES_REPOSITORY_ROOT:?required}
+      dockerfile: deploy/local-supabase/Service.Dockerfile
+    image: lovelies-private-services:${LOVELIES_IMAGE_TAG:?required}
+    restart: unless-stopped
+    user: ${LOVELIES_SERVICE_UID:?required}:${LOVELIES_SERVICE_GID:?required}
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    tmpfs: [/tmp]
+    command: [node, services/restore-journal/src/server.mjs]
+    environment:
+      SUPABASE_PROJECT_ID: ltqfplqevxztlswlzexn
+      RESTORE_JOURNAL_TOKEN: ${RESTORE_JOURNAL_TOKEN:?required}
+      RESTORE_JOURNAL_BOOTSTRAP_TOKEN: ${RESTORE_JOURNAL_BOOTSTRAP_TOKEN:?required}
+      RESTORE_JOURNAL_OBSERVER_TOKEN: ${RESTORE_JOURNAL_OBSERVER_TOKEN:?required}
+      CUSTODY_DATABASE_URL: postgres://lovelies_journal:${CUSTODY_JOURNAL_PASSWORD:?required}@custody-db:5432/postgres
+      CUSTODY_DATABASE_TLS_MODE: disable-internal
+      CUSTODY_DATABASE_TRUSTED_HOSTS: custody-db
+      CUSTODY_SERVICE_ORIGIN: https://restore-journal:8443
+      CUSTODY_HEALTH_TOKEN: ${CUSTODY_HEALTH_TOKEN:?required}
+      CUSTODY_TLS_KEY_FILE: /run/custody/tls.key
+      CUSTODY_TLS_CERT_FILE: /run/custody/tls.crt
+      NODE_EXTRA_CA_CERTS: /run/custody/ca.crt
+      PORT: 8443
+    volumes:
+      - ${LOVELIES_RUNTIME_DIR:?required}/tls/restore-journal.key:/run/custody/tls.key:ro
+      - ${LOVELIES_RUNTIME_DIR:?required}/tls/restore-journal.crt:/run/custody/tls.crt:ro
+      - ${LOVELIES_RUNTIME_DIR:?required}/tls/ca.crt:/run/custody/ca.crt:ro
+    networks: [custody]
+    depends_on: {custody-db: {condition: service_healthy}}
+    healthcheck:
+      test: [CMD, node, deploy/local-supabase/healthcheck.mjs]
+      interval: 15s
+      timeout: 10s
+      retries: 4
+    logging: *logging
+  push-ledger:
+    image: lovelies-private-services:${LOVELIES_IMAGE_TAG:?required}
+    restart: unless-stopped
+    user: ${LOVELIES_SERVICE_UID:?required}:${LOVELIES_SERVICE_GID:?required}
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    tmpfs: [/tmp]
+    command: [node, services/push-provider/src/ledger-server.mjs]
+    environment:
+      SUPABASE_PROJECT_ID: ltqfplqevxztlswlzexn
+      PUSH_LEDGER_ID: ${PUSH_LEDGER_ID:?required}
+      PUSH_LEDGER_TOKEN: ${PUSH_LEDGER_TOKEN:?required}
+      PUSH_LEDGER_BOOTSTRAP_TOKEN: ${PUSH_LEDGER_BOOTSTRAP_TOKEN:?required}
+      CUSTODY_DATABASE_URL: postgres://lovelies_push:${CUSTODY_PUSH_PASSWORD:?required}@custody-db:5432/postgres
+      CUSTODY_DATABASE_TLS_MODE: disable-internal
+      CUSTODY_DATABASE_TRUSTED_HOSTS: custody-db
+      CUSTODY_SERVICE_ORIGIN: https://push-ledger:8443
+      CUSTODY_HEALTH_TOKEN: ${CUSTODY_HEALTH_TOKEN:?required}
+      CUSTODY_TLS_KEY_FILE: /run/custody/tls.key
+      CUSTODY_TLS_CERT_FILE: /run/custody/tls.crt
+      NODE_EXTRA_CA_CERTS: /run/custody/ca.crt
+      PORT: 8443
+    volumes:
+      - ${LOVELIES_RUNTIME_DIR:?required}/tls/push-ledger.key:/run/custody/tls.key:ro
+      - ${LOVELIES_RUNTIME_DIR:?required}/tls/push-ledger.crt:/run/custody/tls.crt:ro
+      - ${LOVELIES_RUNTIME_DIR:?required}/tls/ca.crt:/run/custody/ca.crt:ro
+    networks: [custody]
+    depends_on: {custody-db: {condition: service_healthy},restore-journal: {condition: service_started}}
+    healthcheck:
+      test: [CMD, node, deploy/local-supabase/healthcheck.mjs]
+      interval: 15s
+      timeout: 10s
+      retries: 4
+    logging: *logging
+networks:
+  custody:
+    name: lovelies-custody
+    internal: true
+volumes:
+  custody-db:
+    external: true
+    name: lovelies-custody-db
+  custody-db-config:
+    external: true
+    name: lovelies-custody-db-config

@@ -187,26 +187,78 @@ class GuestDeletionTest {
         fence.switch(null)
         failed("session_changed") { withGuestDeletionPhase(fence,installed,intent,{intent}) { error("Later logout epoch was adopted") } }
     }
-    @Test fun logoutCannotInterleaveInsideTheGuardedCredentialAndEpochTransition() {
-        val intent=record();val fence=SessionFence();val before=fence.switch(null)
-        val entered=CountDownLatch(1);val release=CountDownLatch(1);val attempted=CountDownLatch(1)
-        val installed=AtomicReference<SessionScope>();val failure=AtomicReference<Throwable>();val loggedOut=AtomicBoolean(false)
+    @Test fun logoutRetiresImmediatelyAndRejectsLateGuestCredentialPublication() {
+        val intent=record().let { it.copy(receipt=GuestDeletionReceipt.parse(response(it),it)) }
+        val originalBody=NativeProtocol.canonical(intent.requestBody())
+        val anonymous=mapOf("account_id" to account,"auth_method" to "anonymous",
+            "access_token" to "guest-before","refresh_token" to "guest-refresh-before")
+        val refreshed=anonymous+mapOf("access_token" to "late-guest","refresh_token" to "late-guest-refresh")
+        val foreignDevice=mapOf("account" to other,"alias" to "foreign-key","device" to other)
+        val initial: WireObject=mapOf("guest_deletion" to intent.wire(),"credentials" to anonymous,"device" to foreignDevice)
+        val candidate=initial+mapOf("credentials" to refreshed)
+        val durable=AtomicReference(initial);val authority=AtomicReference<WireObject?>()
+        val entered=CountDownLatch(1);val release=CountDownLatch(1);val retired=CountDownLatch(1);val finished=CountDownLatch(1)
+        val vault=object: RepositoryVault {
+            override fun load()=durable.get()
+            override fun save(value: WireObject) {
+                entered.countDown();check(release.await(15,TimeUnit.SECONDS));durable.set(value)
+            }
+            override fun loadAuthority()=authority.get()
+            override fun saveAuthority(value: WireObject) { authority.set(value) }
+        }
+        val coordinator=SessionStorageCoordinator();val fence=SessionFence(coordinator.generation)
+        val storage=SessionAuthorityStorage(vault,origin,coordinator,fence)
+        assertEquals(initial,storage.load())
+        val before=fence.switch(null);val visible=AtomicReference(intent);val published=AtomicBoolean(false)
+        val installed=AtomicReference<SessionScope>();val retirementScope=AtomicReference<SessionScope>()
+        val failure=AtomicReference<Throwable>();val retirementFailure=AtomicReference<Throwable>();val writeFailure=AtomicReference<LiveFailure>()
         val worker=Thread({
-            try { withGuestDeletionPhase(fence,before,intent,{intent}) {
-                entered.countDown();check(release.await(5,TimeUnit.SECONDS));installed.set(fence.switch(account))
+            try { withGuestDeletionPhase(fence,before,intent,{visible.get()}) {
+                persistGuestDeletionState(candidate,{ value ->
+                    try { storage.save(value,before,adoptingCredential=true) }
+                    catch(problem: LiveFailure) { writeFailure.set(problem);throw problem }
+                }) {
+                    published.set(true);installed.set(fence.publish(before,account));visible.set(intent)
+                }
             } } catch(problem: Throwable) { failure.set(problem) }
-        },"GuestDeletionPhaseTest")
-        val logout=Thread({ attempted.countDown();fence.switch(null);loggedOut.set(true) },"GuestDeletionLogoutTest")
+            finally { finished.countDown() }
+        },"GuestDeletionBlockedWriterTest")
+        val logout=Thread({
+            try { retirementScope.set(storage.persistRetirement(fence.retire(before),initial)) }
+            catch(problem: Throwable) { retirementFailure.set(problem) }
+            finally { retired.countDown() }
+        },"GuestDeletionImmediateRetirementTest")
         try {
-            worker.start();assertTrue(entered.await(5,TimeUnit.SECONDS));logout.start();assertTrue(attempted.await(5,TimeUnit.SECONDS))
-            val deadline=System.nanoTime()+TimeUnit.SECONDS.toNanos(2)
-            while(logout.state!=Thread.State.BLOCKED && !loggedOut.get() && System.nanoTime()<deadline)Thread.yield()
-            assertEquals("Logout must share the phase monitor",Thread.State.BLOCKED,logout.state)
-            assertFalse(loggedOut.get());release.countDown();worker.join(5000);logout.join(5000)
-            failure.get()?.let { throw AssertionError("Phase transition failed",it) }
-            assertTrue(loggedOut.get())
-            val owned=requireNotNull(installed.get())
-            failed("session_changed") { withGuestDeletionPhase(fence,owned,intent,{intent}) { error("Cancelled installed credentials were dispatched") } }
+            worker.start();assertTrue("Writer did not reach the vault",entered.await(5,TimeUnit.SECONDS))
+            logout.start();assertTrue("Retirement waited for the blocked credential write",retired.await(5,TimeUnit.SECONDS))
+            retirementFailure.get()?.let { throw AssertionError("Retirement failed",it) }
+            val current=requireNotNull(retirementScope.get())
+            assertEquals(1L,release.count);assertEquals(1L,finished.count)
+            assertNull(current.accountId);assertEquals(before.authorityGeneration+1,current.authorityGeneration)
+            assertEquals(current,fence.scope());assertEquals(initial,durable.get())
+            assertEquals(current.authorityGeneration,SessionAuthorityRecord.parse(requireNotNull(authority.get()),origin).generation)
+            failed("session_changed") { fence.assert(before) }
+            failed("session_changed") { fence.publish(before,account) }
+
+            release.countDown();assertTrue(finished.await(5,TimeUnit.SECONDS));worker.join(5000);logout.join(5000)
+            assertFalse(worker.isAlive);assertFalse(logout.isAlive)
+            assertEquals("session_changed",writeFailure.get()?.code)
+            assertEquals("deletion_storage_unavailable",(failure.get() as? LiveFailure)?.code)
+            assertFalse(published.get());assertNull(installed.get());assertEquals(intent,visible.get());assertEquals(current,fence.scope())
+            failed("session_changed") { withGuestDeletionPhase(fence,before,intent,{visible.get()}) { fail("Retired phase thawed credentials") } }
+            assertEquals(refreshed,durable.get()["credentials"])
+            assertEquals(before.authorityGeneration,NativeProtocol.obj(durable.get()[SessionAuthorityStorage.STAMP])["generation"])
+            val restartedCoordinator=SessionStorageCoordinator();val restartedFence=SessionFence(restartedCoordinator.generation)
+            val restartedStorage=SessionAuthorityStorage(vault,origin,restartedCoordinator,restartedFence)
+            val recovered=restartedStorage.load()
+            val restored=GuestDeletionRecord.restore(recovered["guest_deletion"],origin,account,"anonymous")
+            assertEquals(intent,restored);assertEquals(originalBody,NativeProtocol.canonical(restored.requestBody()))
+            assertEquals(foreignDevice,recovered["device"])
+            // Original-account anonymous recovery evidence remains available without publishing a session.
+            assertEquals(refreshed,recovered["credentials"]);assertNull(restartedFence.scope().accountId)
+            assertEquals(current.authorityGeneration,restartedFence.scope().authorityGeneration)
+            failed("deletion_not_completed") { restored.assertRestartAllowed() }
+            failed("session_changed") { restartedFence.publish(before,account) }
         } finally { release.countDown();worker.join(5000);if(logout.state!=Thread.State.NEW)logout.join(5000) }
     }
     @Test fun failedCompletionWriteCannotPublishCompletionOrCleanThePriorGuestState() {

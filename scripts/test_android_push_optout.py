@@ -28,7 +28,24 @@ def run(args,out):
     kotlinc=locate(args.kotlinc,LOCAL_KOTLINC,'kotlinc')
     java=locate(args.java,None,'java')
     coroutines=Path(args.coroutines).expanduser().resolve() if args.coroutines else kotlinc.parent.parent/'lib/kotlinx-coroutines-core-jvm.jar'
-    inputs=[Path(__file__).resolve(),SOURCE/'PushMessaging.kt',SOURCE/'NativeProtocol.kt',*sorted(FIXTURE.glob('*.kt')),kotlinc,java,coroutines]
+    sources=[SOURCE/name for name in ('PushMessaging.kt','NativeProtocol.kt','PushOperationRecovery.kt','PhotoActionOwner.kt','PrivacyExportDelivery.kt','StorePurchaseRecovery.kt','PhotoUploadJournal.kt','AccountCollectionPage.kt','SessionAuthority.kt','ChunkedPrivacyExport.kt')]
+    media_source=SOURCE/'OriginalMedia.kt'
+    media=media_source.read_text()
+    # Compile the actual lease/ownership implementation with real temporary host file I/O.
+    # Tests explicitly inject real host directory fsync; throwing platform stubs ensure
+    # they do not silently accept Android Os calls. The installed Android journey tests
+    # that production default; MediaStore and FileProvider also require native execution.
+    boundary='/** No re-encoding: the server-authorized original is written verbatim. */'
+    if media.count(boundary)!=1:raise RuntimeError('private-media source boundary changed')
+    extracted=out/'PrivateMediaSource.kt'
+    header='\n'.join(line for line in media.splitlines() if line.startswith(('package ','import java.','import kotlinx.')))
+    body=media[media.index('/** A displayed preview'):media.index(boundary)]
+    extracted.write_text(header+'\n\n'+body)
+    vault_source=SOURCE/'RepositoryBoundary.kt'
+    vault=out/'RepositoryVaultPort.kt'
+    source=vault_source.read_text()
+    vault.write_text('package com.lovelies.frontend.preview\n\n'+source[source.index('internal interface RepositoryVault'):source.index('internal class AndroidRepositoryVault')])
+    inputs=[Path(__file__).resolve(),*sources,media_source,vault_source,*sorted(FIXTURE.glob('*.kt')),kotlinc,java,coroutines]
     if not coroutines.is_file() or not (FIXTURE/'SignedOutOptOutTests.kt').is_file():raise RuntimeError('fixture or Kotlin coroutines jar missing')
     before={str(p):digest(p) for p in inputs}
     env=os.environ.copy()
@@ -37,13 +54,13 @@ def run(args,out):
     compiler=([str(kotlinc)] if os.access(kotlinc,os.X_OK) else ['sh',str(kotlinc)])
     binary=out/'signed-out-optout.jar'
     compile_cmd=[*compiler,'-jvm-target','17','-cp',str(coroutines),'-include-runtime','-d',str(binary),
-                 *[str(p) for p in sorted(FIXTURE.glob('*.kt'))],str(SOURCE/'NativeProtocol.kt'),str(SOURCE/'PushMessaging.kt')]
+                 *[str(p) for p in sorted(FIXTURE.glob('*.kt'))],*[str(p) for p in sources],str(extracted),str(vault)]
     test_cmd=[str(java),'-cp',str(binary)+os.pathsep+str(coroutines),'com.lovelies.frontend.preview.SignedOutOptOutTestsKt']
     sandbox=Path('/usr/bin/sandbox-exec')
     offline='macos-sandbox' if sys.platform=='darwin' and sandbox.is_file() else 'synthetic-fakes-only'
     if offline=='macos-sandbox':test_cmd=[str(sandbox),'-p','(version 1) (allow default) (deny network*)',*test_cmd]
     steps=[]
-    for name,cmd,marker in (('compile',compile_cmd,None),('test',test_cmd,'RESULT total=15 passed=15 failed=0')):
+    for name,cmd,marker in (('compile',compile_cmd,None),('test',test_cmd,'RESULT total=80 passed=80 failed=0')):
         if name=='test' and steps[-1].get('exit')!=0:
             steps.append({'name':name,'skipped':'compile failed'});continue
         try:
@@ -58,7 +75,7 @@ def run(args,out):
     except OSError:stable=False
     passed=stable and all(s.get('exit')==0 and s.get('marker_matches') is not False for s in steps)
     report={'passed':passed,'source_inputs_stable':stable,'input_sha256':before,'test_process_offline_scope':offline,'steps':steps,
-            'scope':'actual app push/protocol source plus synthetic same-account Android/Firebase fakes; no real provider or user notification',
+            'scope':'actual push, action binding, account pagination, session authority, chunked export/store recovery and temporary-media ownership source; synthetic Android/Firebase/HTTP/vault boundaries; real temporary host filesystem with explicit host directory fsync; Android Os directory-sync default is not executed here and requires the installed Android journey; no real provider, Android lifecycle, MediaStore or FileProvider',
             'toolchain_limit':'selected executable and coroutine jar are hashed; the entire JDK/compiler dependency closure is not'}
     (out/'result.json').write_text(json.dumps(report,indent=2)+'\n')
     print(json.dumps({'passed':passed,'source_inputs_stable':stable,'test_process_offline_scope':offline,'evidence':str(out) if args.evidence_dir else None}))

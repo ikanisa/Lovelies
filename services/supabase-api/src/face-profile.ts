@@ -1,7 +1,8 @@
 import { assertAudienceCapability } from './audience.ts';
 import { ApiError, digest, jsonBody, ok, record, stable, uuid, type AppContext } from './types.ts';
 import { authenticate, opaque, type AccountRow } from './auth.ts';
-import { assertRegisteredActor } from './operations.ts';
+import { assertRegisteredActor, assertRestoreOperationAvailable, prepareOperation, executeAudienceDeviceOperation } from './operations.ts';
+import { audienceAuthorityExpiry, audienceReferenceDeadline, recoverableReviewReference, completeReviewReference, completedReviewRemoval, audienceReviewRemovalState } from './audience-renewal.ts';
 import { hasConsent } from './gallery.ts';
 import { flushPrivacyCleanup } from './privacy.ts';
 import { policy, verifyKey, challengeResponse, getChallenge, captures, manifest, activeFaceVerifiers, type Profile, type Challenge, type Device } from './face-auth.ts';
@@ -66,6 +67,11 @@ async function state(account: string, ctx: AppContext): Promise<State> {
     (await ctx.db.run('INSERT OR IGNORE INTO face_profile_states(account_id,version,matching_paused) VALUES(?,1,0)', account));
     return (await ctx.db.one<State>('SELECT * FROM face_profile_states WHERE account_id=?', account))!;
 }
+async function existingState(account:string,ctx:AppContext):Promise<State> {
+    const value=await ctx.db.one<State>('SELECT * FROM face_profile_states WHERE account_id=?',account);
+    if(!value)throw new ApiError(404,'face_profile_control_unavailable');
+    return value;
+}
 function secret(value: unknown): string {
     if (typeof value !== 'string' || !/^lfl_[A-Za-z0-9_-]{43}$/.test(value))
         throw new ApiError(400, 'face_profile_control_invalid');
@@ -89,17 +95,17 @@ function envelope(input: Record<string, any>, step: string): Record<string, unkn
     const { device_signature, ...fields } = input;
     return { protocol: DEVICE_PROTOCOL, step, ...fields };
 }
-async function controlAuthority(row: Control, ctx: AppContext): Promise<Device> {
+async function controlAuthority(row: Control, ctx: AppContext, allowExpired = false): Promise<Device> {
     const current = (await ctx.db.one<Control>('SELECT * FROM face_profile_controls WHERE account_id=? AND device_id=?', row.account_id, row.device_id));
     const account = (await ctx.db.one<AccountRow>('SELECT * FROM accounts WHERE id=?', row.account_id));
     const device = (await ctx.db.one<Device>('SELECT * FROM auth_devices WHERE account_id=? AND id=?', row.account_id, row.device_id));
-    if (!current || stable(current) !== stable(row) || current.expires_at <= ctx.now() || !account || account.disabled_at !== null ||
+    if (!current || stable(current) !== stable(row) || (!allowExpired && current.expires_at <= ctx.now()) || !account || account.disabled_at !== null || account.identity_state !== 'registered_face' ||
         !device || device.status !== 'active' || device.revision !== row.device_revision || device.public_jwk !== row.public_jwk || device.face_handle === null)
         throw new ApiError(401, 'face_profile_control_unavailable');
     (await noDeletion(row.account_id, ctx));
     return device;
 }
-async function signed(input: Record<string, any>, step: string, ctx: AppContext): Promise<Control> {
+async function signed(input: Record<string, any>, step: string, ctx: AppContext, allowExpired = false): Promise<Control> {
     const account = uuid(input.account_id), deviceId = uuid(input.device_id), controlHash = await digest(secret(input.control_key));
     nonce(input, ctx);
     const row = (await ctx.db.one<Control>('SELECT * FROM face_profile_controls WHERE account_id=? AND device_id=?', account, deviceId));
@@ -118,14 +124,14 @@ async function signed(input: Record<string, any>, step: string, ctx: AppContext)
     }
     if (row.control_hash !== controlHash)
         throw new ApiError(401, 'face_profile_control_unavailable');
-    const device = (await controlAuthority(row, ctx));
+    const device = (await controlAuthority(row, ctx, allowExpired));
     await verifyKey(JSON.parse(device.public_jwk), envelope(input, step), input.device_signature);
     nonce(input, ctx);
-    (await controlAuthority(row, ctx));
+    (await controlAuthority(row, ctx, allowExpired));
     if (await digest(device.public_jwk) !== row.public_key_digest)
         throw new ApiError(401, 'face_profile_control_unavailable');
     nonce(input, ctx);
-    (await controlAuthority(row, ctx));
+    (await controlAuthority(row, ctx, allowExpired));
     return row;
 }
 export async function lifecycleOperation(challenge: string, ctx: AppContext): Promise<LifecycleOperation | null> {
@@ -153,7 +159,7 @@ export async function lifecycleAuthority(op: LifecycleOperation, ctx: AppContext
     if (c.consent_id !== op.consent_id || c.device_id !== op.control_device_id || c.device_revision !== op.control_revision)
         throw new ApiError(409, 'face_profile_operation_changed');
     if (c.profile_id === null ? p !== null || op.action !== 'enroll' :
-        !p || p.status !== 'active' || p.id !== c.profile_id || p.revision !== c.profile_revision ||
+        !p || (p.status !== 'active' && !(op.action === 'restore_authentication' && await recoverableReviewReference(ctx,op.account_id,p))) || p.id !== c.profile_id || p.revision !== c.profile_revision ||
             p.model_id !== c.model_id || p.template_digest !== c.reference_digest || p.auth_epoch !== c.profile_auth_epoch)
         throw new ApiError(409, 'registered_reference_changed');
     if (!(await ctx.db.one("SELECT id FROM consents WHERE id=? AND account_id=? AND purpose='face_authentication' AND status='granted' AND revoked_at IS NULL AND policy_version=? AND (expires_at IS NULL OR expires_at>?)", op.consent_id, op.account_id, policy(ctx), ctx.now())))
@@ -216,22 +222,23 @@ async function operationMetadata(op: LifecycleOperation, ctx: AppContext): Promi
     return { operation_key: op.operation_key, action: op.action, state: status, generation: op.generation,
         challenge_id: challengeId, challenge, captures: progress, cleanup_state: (await operationCleanupState(op, ctx)) };
 }
-export async function lifecycleMetadata(account: string, deviceId: string, ctx: AppContext, op?: LifecycleOperation | null, requestNonce?: string): Promise<Record<string, unknown>> {
-    const s = (await state(account, ctx)), profile = (await ctx.db.one<Profile>('SELECT * FROM face_profiles WHERE account_id=?', account));
+export async function lifecycleMetadata(account: string, deviceId: string, ctx: AppContext, op?: LifecycleOperation | null, requestNonce?: string, readOnly=false): Promise<Record<string, unknown>> {
+    const s = (await (readOnly?existingState(account,ctx):state(account, ctx))), profile = (await ctx.db.one<Profile>('SELECT * FROM face_profiles WHERE account_id=?', account));
     const device = (await ctx.db.one<Device>('SELECT * FROM auth_devices WHERE account_id=? AND id=?', account, deviceId));
     const control = (await ctx.db.one<Control>('SELECT * FROM face_profile_controls WHERE account_id=? AND device_id=?', account, deviceId));
     const removal = s.removal_operation_key ? (await operation(account, s.removal_operation_key, ctx)) : null;
+    const recoverable = profile && await recoverableReviewReference(ctx,account,profile);
     const preferences = (await ctx.db.one<{
         receive_matches: number;
     }>('SELECT receive_matches FROM account_preferences WHERE account_id=?', account));
     return { protocol: PROTOCOL, authenticated: false, account_id: account, device_id: deviceId,
         device_revision: device?.revision, public_key_digest: control?.public_key_digest, version: s.version,
         auth_policy_version: policy(ctx), photo_policy_version: photoPolicy(ctx),
-        profile: profile?.status === 'active' ? { id: profile.id, revision: profile.revision, model_id: profile.model_id } : null,
+        profile: profile && (profile.status === 'active' || recoverable) ? { id: profile.id, revision: profile.revision, model_id: profile.model_id } : null,
         authentication_enabled: profile?.status === 'active' && profile.auth_enabled === 1 && await hasConsent(ctx, account, 'face_authentication'),
         matching_enabled: profile?.status === 'active' && s.matching_paused === 0 && await hasConsent(ctx, account, 'photo_matching'),
         processing_enabled: (await hasConsent(ctx, account, 'photo_processing')), receive_matches: preferences?.receive_matches === 1,
-        matching_paused: s.matching_paused === 1, removal_state: removal ? (await operationCleanupState(removal, ctx)) : 'none',
+        matching_paused: s.matching_paused === 1, removal_state: removal ? (await operationCleanupState(removal, ctx)) : await audienceReviewRemovalState(ctx,account),
         operation: op ? (await operationMetadata(op, ctx)) : null, ...(requestNonce ? { request_nonce: requestNonce } : {}) };
 }
 export async function invalidateRecipientProfile(account: string, ctx: AppContext): Promise<void> {
@@ -300,12 +307,12 @@ export async function unusedPendingConsents(account: string, ctx: AppContext, de
 async function restrictPendingCancellation(restore: RestoreTransactionScope, account: string,
     source: 'face-profile.cancel-v1' | 'face-profile.control-renew-v1', key: string, hash: string,
     ctx: AppContext, deviceId: string, operationKey?: string): Promise<void> {
+    const operationID = await restoreOperationID(account, source, key);
+    await assertRestoreOperationAvailable(ctx, operationID, hash);
     const rows = await unusedPendingConsents(account, ctx, deviceId, operationKey);
     const selected = [...new Map(rows.filter(row => row.status !== 'revoked').map(row => [row.id, row])).values()]
         .sort((a, b) => a.id < b.id ? -1 : a.id > b.id ? 1 : 0);
-    if (selected.length > 32)
-        throw new ApiError(503, 'face_profile_restriction_capacity');
-    restore.operation({ operation_id: await restoreOperationID(account, source, key), input_hash: hash, allocations: {} });
+    restore.operation({ operation_id: operationID, input_hash: hash, allocations: {} });
     for (const row of selected)
         await restore.restrict('consent-withdrawn', { account_id: row.account_id, consent_id: row.id, purpose: row.purpose });
 }
@@ -332,10 +339,10 @@ function version(value: unknown): number {
         throw new ApiError(400, 'face_profile_version_invalid');
     return Number(value);
 }
-function authConsent(value: unknown, ctx: AppContext, purpose: string): Record<string, any> {
+function authConsent(value: unknown, ctx: AppContext, purpose: string, currentPolicy=true): Record<string, any> {
     const consent = record(value);
     if (Object.keys(consent).some(k => !['purpose', 'policy_version', 'granted'].includes(k)) ||
-        consent.purpose !== purpose || consent.granted !== true || consent.policy_version !== (purpose === 'face_authentication' ? policy(ctx) : photoPolicy(ctx)))
+        consent.purpose !== purpose || consent.granted !== true || typeof consent.policy_version!=='string' || !/^[A-Za-z0-9._-]{1,128}$/.test(consent.policy_version) || currentPolicy&&consent.policy_version !== (purpose === 'face_authentication' ? policy(ctx) : photoPolicy(ctx)))
         throw new ApiError(400, purpose === 'face_authentication' ? 'explicit_auth_consent_required' : 'explicit_matching_consent_required');
     return consent;
 }
@@ -408,6 +415,67 @@ async function createControl(request: Request, ctx: AppContext): Promise<Respons
     }));
     return ok((await lifecycleMetadata(account, deviceId, ctx)), 201);
 }
+/** Read-only proof of an exact retained lifecycle control remains usable after
+ * its administrative expiry. It grants neither biometric use nor a session. */
+async function controlRecoveryBinding(row: Control, ctx: AppContext): Promise<string> {
+    const account = await ctx.db.one('SELECT id,identity_state,disabled_at,auth_epoch FROM accounts WHERE id=?',row.account_id);
+    const device = await ctx.db.one('SELECT * FROM auth_devices WHERE account_id=? AND id=?',row.account_id,row.device_id);
+    const profile = await ctx.db.one('SELECT * FROM face_profiles WHERE account_id=?',row.account_id);
+    const consents = await ctx.db.all('SELECT id,purpose,policy_version,status,revoked_at,expires_at,profile_revision FROM consents WHERE account_id=? ORDER BY id',row.account_id);
+    const audience = await ctx.db.one('SELECT * FROM account_audience WHERE account_id=?',row.account_id);
+    return digest(stable({protocol:'lovelies-face-control-recovery-binding-v1',control:row,account,device,profile,consents,audience,state:await existingState(row.account_id,ctx)}));
+}
+async function controlRecoveryMetadata(row:Control,ctx:AppContext):Promise<Record<string,unknown>> {
+    return {binding:await controlRecoveryBinding(row,ctx),expires_at:new Date(row.expires_at).toISOString()};
+}
+async function recoverControl(request:Request,ctx:AppContext,renew:boolean):Promise<Response> {
+    const input=await jsonBody(request,8192);
+    exact(input,renew?['operation_key','expected_version','expected_binding','consent']:[]);
+    let row=await signed(input,renew?'control-renew':'control-status',ctx,true);
+    let bound=await controlRecoveryBinding(row,ctx);
+    let authorityDeadline=Infinity;
+    const fresh=()=>{nonce(input,ctx);if(ctx.now()>=authorityDeadline)throw new ApiError(409,'face_profile_authority_expired');};
+    const guard=async()=>{
+        fresh();await controlAuthority(row,ctx,true);
+        if(await controlRecoveryBinding(row,ctx)!==bound)throw new ApiError(409,'face_profile_control_changed');
+        fresh();
+    };
+    ctx.db.bindInvocationAuthority?.(guard,fresh,'audience_operation_outcome_unresolved');
+    let receipt:Record<string,unknown>={};
+    if(renew){
+        authConsent(input.consent,ctx,'face_authentication',false);
+        uuid(input.operation_key);version(input.expected_version);
+        if(typeof input.expected_binding!=='string'||!/^[0-9a-f]{64}$/.test(input.expected_binding))
+            throw new ApiError(400,'face_profile_control_binding_invalid');
+        const durable={account_id:row.account_id,device_id:row.device_id,control_hash:row.control_hash,
+            expected_binding:input.expected_binding,expected_version:input.expected_version,operation_key:input.operation_key,consent:input.consent};
+        const intent=await prepareOperation('audience.control-renew-device',durable,'audience');
+        receipt=await executeAudienceDeviceOperation(ctx,row.account_id,intent,async restore=>{
+            authConsent(input.consent,ctx,'face_authentication');
+            if(row.expires_at>ctx.now())throw new ApiError(409,'face_profile_control_not_expired');
+            if(bound!==input.expected_binding||(await state(row.account_id,ctx)).version!==input.expected_version)
+                throw new ApiError(409,'face_profile_control_changed');
+            await assertAudienceCapability(ctx,row.account_id,'face_authentication');
+            authorityDeadline=await audienceReferenceDeadline(ctx,row.account_id);
+            const pending=await unusedPendingConsents(row.account_id,ctx,row.device_id);
+            for(const c of pending.filter(c=>c.status!=='revoked'))
+                await restore.restrict('consent-withdrawn',{account_id:c.account_id,consent_id:c.id,purpose:c.purpose});
+            await cancelDeviceLifecycle(row.account_id,row.device_id,ctx);
+            const from=row.expires_at,to=ctx.now()+CONTROL_MS;
+            await ctx.db.run('UPDATE face_profile_controls SET expires_at=? WHERE account_id=? AND device_id=? AND control_hash=? AND expires_at=?',to,row.account_id,row.device_id,row.control_hash,from);
+            row=(await ctx.db.one<Control>('SELECT * FROM face_profile_controls WHERE account_id=? AND device_id=?',row.account_id,row.device_id))!;
+            bound=await controlRecoveryBinding(row,ctx);
+            fresh();
+            return {control_renewal:{operation_key:input.operation_key,from_expires_at:new Date(from).toISOString(),to_expires_at:new Date(to).toISOString()}};
+        },guard);
+    }
+    return ctx.db.read(async()=>{
+        await guard();
+        const result={...await lifecycleMetadata(row.account_id,row.device_id,ctx,null,uuid(input.request_nonce),true),
+            control_recovery:await controlRecoveryMetadata(row,ctx),...receipt};
+        await guard();return ok(result);
+    });
+}
 async function status(request: Request, ctx: AppContext): Promise<Response> {
     const input = await jsonBody(request, 4096);
     exact(input, ['operation_key']);
@@ -435,13 +503,15 @@ async function action(request: Request, ctx: AppContext): Promise<Response> {
     const op = (await ctx.db.transaction(async restore => {
         nonce(input, ctx);
         (await controlAuthority(row, ctx));
+        const operationID = await restoreOperationID(row.account_id, 'face-profile.action-v1', uuid(input.operation_key));
+        await assertRestoreOperationAvailable(ctx, operationID, hash);
         const old = (await previous(input, hash, row, ctx));
         if (old)
             return old;
         const profile = (await ctx.db.one<Profile>('SELECT * FROM face_profiles WHERE account_id=?', row.account_id));
         if (!profile || profile.status !== 'active')
             throw new ApiError(409, 'face_profile_unavailable');
-        restore.operation({ operation_id: await restoreOperationID(row.account_id, 'face-profile.action-v1', uuid(input.operation_key)),
+        restore.operation({ operation_id: operationID,
             input_hash: hash, allocations: {} });
         const withdrawMatching = ['pause', 'resume', 'remove'].includes(input.action);
         const withdrawAuthentication = ['withdraw_authentication', 'remove'].includes(input.action);
@@ -470,12 +540,9 @@ async function action(request: Request, ctx: AppContext): Promise<Response> {
             kind: 'consent-withdrawn', scope: { account_id: consent.account_id, consent_id: consent.id, purpose: consent.purpose } }));
         if (selectedRetirement)
             facts.push({ kind: 'profile-retired', scope: { account_id: row.account_id, profile_id: profile.id, profile_revision: profile.revision } });
-        // One action is atomic. Until durable batching exists, fail before any
-        // SQL mutation rather than silently journal only a prefix of episodes.
+        // All exact episodes are retained in the bounded independent manifest.
         const orderedFacts = [...new Map(facts.map(fact => [stable(fact), fact])).entries()]
             .sort(([a], [b]) => a < b ? -1 : a > b ? 1 : 0).map(([, fact]) => fact);
-        if (orderedFacts.length > 32)
-            throw new ApiError(503, 'face_profile_restriction_capacity');
         for (const fact of orderedFacts)
             await restore.restrict(fact.kind, fact.scope);
         const value = (await storeOperation(input, hash, row, input.action, ctx));
@@ -550,7 +617,9 @@ async function insertChallenge(op: LifecycleOperation, ctx: AppContext): Promise
     const profile = (await ctx.db.one<Profile>('SELECT * FROM face_profiles WHERE account_id=?', op.account_id));
     const purpose = op.action === 'replace' ? 'replacement' : 'registration', required = op.action === 'restore_authentication' ? 1 : 3;
     const id = crypto.randomUUID(), now = ctx.now();
-    (await ctx.db.run("INSERT INTO auth_challenges(id,account_id,device_id,purpose,nonce,profile_revision,profile_id,policy_version,expires_at,created_at,session_id,auth_epoch,consent_id,device_revision,model_id,profile_auth_epoch,reference_digest,required_captures,engine_identity) VALUES(?,?,?,?,?,?,?,?,?,?,NULL,?,?,?,?,?,?,?,?)", id, op.account_id, op.control_device_id, purpose, opaque('lfn_'), profile?.revision ?? null, profile?.id ?? null, policy(ctx), now + CHALLENGE_MS, now, op.auth_epoch, op.consent_id, op.control_revision, profile?.model_id ?? null, profile?.auth_epoch ?? null, profile?.template_digest ?? null, required, selectedGeneration(ctx.env)));
+    const retained=profile&&await recoverableReviewReference(ctx,op.account_id,profile);
+    const expires=Math.min(now+CHALLENGE_MS,await audienceReferenceDeadline(ctx,op.account_id),retained?.recover_until??Infinity);
+    (await ctx.db.run("INSERT INTO auth_challenges(id,account_id,device_id,purpose,nonce,profile_revision,profile_id,policy_version,expires_at,created_at,session_id,auth_epoch,consent_id,device_revision,model_id,profile_auth_epoch,reference_digest,required_captures,engine_identity) VALUES(?,?,?,?,?,?,?,?,?,?,NULL,?,?,?,?,?,?,?,?)", id, op.account_id, op.control_device_id, purpose, opaque('lfn_'), profile?.revision ?? null, profile?.id ?? null, policy(ctx), expires, now, op.auth_epoch, op.consent_id, op.control_revision, profile?.model_id ?? null, profile?.auth_epoch ?? null, profile?.template_digest ?? null, required, selectedGeneration(ctx.env)));
     (await ctx.db.run('UPDATE face_profile_operations SET challenge_id=?,generation=generation+1 WHERE account_id=? AND operation_key=?', id, op.account_id, op.operation_key));
     return (await getChallenge(id, ctx));
 }
@@ -579,10 +648,10 @@ async function challenge(request: Request, ctx: AppContext): Promise<Response> {
         const profile = (await ctx.db.one<Profile>('SELECT * FROM face_profiles WHERE account_id=?', row.account_id)), s = (await state(row.account_id, ctx));
         if (input.action === 'enroll') {
             const removal = s.removal_operation_key ? (await operation(row.account_id, s.removal_operation_key, ctx)) : null;
-            if (profile || !removal || (await operationCleanupState(removal, ctx)) !== 'completed')
+            if (profile || !(removal && (await operationCleanupState(removal, ctx)) === 'completed') && !await completedReviewRemoval(ctx,row.account_id))
                 throw new ApiError(409, 'face_profile_cleanup_pending');
         }
-        else if (!profile || profile.status !== 'active' || (input.action === 'replace' && profile.auth_enabled !== 1) ||
+        else if (!profile || (profile.status !== 'active' && !(input.action === 'restore_authentication' && await recoverableReviewReference(ctx,row.account_id,profile))) || (input.action === 'replace' && profile.auth_enabled !== 1) ||
             (input.action === 'restore_authentication' && profile.auth_enabled !== 0))
             throw new ApiError(409, 'face_profile_unavailable');
         if ((await ctx.db.one("SELECT operation_key FROM face_profile_operations WHERE account_id=? AND state='pending' LIMIT 1", row.account_id)))
@@ -629,6 +698,8 @@ export async function commitLifecycle(op: LifecycleOperation, challenge: Challen
     (await lifecycleAuthority(op, ctx));
     const old = (await ctx.db.one<Profile>('SELECT * FROM face_profiles WHERE account_id=?', op.account_id));
     const epoch = (challenge.profile_auth_epoch ?? 0) + 1;
+    const retained=old&&await recoverableReviewReference(ctx,op.account_id,old);
+    if(retained)await completeReviewReference(ctx,retained);
     (await revokeAuthentication(op.account_id, op.control_device_id, ctx, challenge.id));
     // The newly explicit authentication consent was cancelled by the broad
     // withdrawal; only this exact challenge's consent is regranted atomically.
@@ -681,6 +752,10 @@ export async function handleFaceProfile(request: Request, ctx: AppContext): Prom
         return null;
     if (path === '/auth/face/profile/control')
         return (await createControl(request, ctx));
+    if (path === '/auth/face/profile/control/status')
+        return recoverControl(request,ctx,false);
+    if (path === '/auth/face/profile/control/renew')
+        return recoverControl(request,ctx,true);
     if (path === '/auth/face/profile/status')
         return (await status(request, ctx));
     if (path === '/auth/face/profile/action')

@@ -1,10 +1,12 @@
+import {planEvents} from './restore-plan-fixture.mjs';
+import {assertRestrictedAbort} from './restore-restricted-abort.fixture.mjs';
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { randomUUID } from 'node:crypto';
 import { createApp, createHandler } from '../src/index.ts';
 import { restoreOperationID } from '../src/restore-transaction.ts';
 import { enroll, captureProofs, faceVerifierFixture, sign, encode, stable } from './runtime-harness.mjs';
-import { fixture, digest, unavailable } from './restore-database-fixture.mjs';
+import { fixture, digest } from './restore-database-fixture.mjs';
 import { addConsentReference, assertIsolatedReference, assertSurvivingSecuritySession, historicalRevokedNull, referenceRows } from './restore-consent-reference-fixtures.mjs';
 
 const AUTH_POLICY = 'face-policy-fixture-v1';
@@ -80,11 +82,13 @@ async function logoutFixture(t, { registered = false } = {}) {
       consent: { purpose: 'face_authentication', policy_version: AUTH_POLICY, granted: true } }) }, 201);
     return h.db.one('SELECT * FROM face_profile_operations WHERE account_id=? AND operation_key=?', person.accountId, key);
   };
+  const pushFacts=[];
   const seedPush = async () => {
     assert(person.deviceId);
     const id = randomUUID(), value = 'synthetic-private-push-' + randomUUID(), hash = digest(value);
     await h.db.run("INSERT INTO push_devices(id,account_id,auth_device_id,platform,token_hash,token_value,active,created_at,updated_at) VALUES(?,?,?,'ios',?,?,1,?,?)",
       id, person.accountId, person.deviceId, hash, value, h.app.now(), h.app.now());
+    pushFacts.push({kind:'push-device-retired',scope:{account_id:person.accountId,device_id:id,token_hash:hash}});
     const deliveries = [];
     for (const status of ['queued', 'accepted']) {
       const notification = randomUUID(), delivery = randomUUID(); deliveries.push({ id: delivery, status });
@@ -95,7 +99,7 @@ async function logoutFixture(t, { registered = false } = {}) {
     return { id, value, deliveries };
   };
   return { ...f, context, person, sessionID: original.id, original, beforeProfile, request, json, logout, uncertain,
-    otherDevice, pending, realPending, seedPush, now: () => clock, setClock: value => { clock = value; } };
+    otherDevice, pending, realPending, seedPush, pushFacts, now: () => clock, setClock: value => { clock = value; } };
 }
 
 async function snapshot(f) {
@@ -110,9 +114,12 @@ async function assertPlan(f, facts, { committed = true } = {}) {
   assert.deepEqual(saved.plan.allocations, {});
   assert.equal(saved.plan.input_hash, digest(stable({ protocol: 'lovelies-auth-logout-v1', account_id: f.person.accountId,
     session_id: f.sessionID, device_id: f.original.device_id, device_revision: f.original.device_revision })));
-  assert.deepEqual(saved.plan.events.map(({ kind, scope }) => ({ kind, scope })), ordered(facts));
-  assert.equal(new Set(saved.plan.events.map(value => value.operation_id)).size, facts.length);
-  const encoded = JSON.stringify(saved.plan);
+  // Explicit operation facts retain their stable original slots. SQL-captured
+  // push restrictions are appended in the capture roster's canonical order.
+  const events=await planEvents(f,saved),expected=[...ordered(facts),...ordered(f.pushFacts)];
+  assert.deepEqual(events.map(({ kind, scope }) => ({ kind, scope })), expected);
+  assert.equal(new Set(events.map(value => value.operation_id)).size, expected.length);
+  const encoded = JSON.stringify({plan:saved.plan,events});
   for (const field of ['access_token', 'refresh_token', 'refresh_hash', 'public_jwk', 'template_key', 'template_digest', 'control_key', 'token_value'])
     assert(!encoded.includes('"' + field + '"'), 'Logout plans contain no credential, device key, private media reference or push token');
   for (const value of [f.person.token, f.person.refresh_token, f.person.faceHandle, f.beforeProfile?.template_key, f.beforeProfile?.template_digest].filter(Boolean)) assert(!encoded.includes(value));
@@ -231,17 +238,9 @@ for (const malformed of ['cross-account', 'other-purpose']) test('malformed pend
   assert.deepEqual(await snapshot(f), before); assert.equal(await f.journal.lookup(await logoutID(f)), null); assert.equal(await cursor(f), 0);
 });
 
-for (const pendingCount of [31, 32]) test((pendingCount + 1) + ' logout facts include the session and are atomic or refused before effects', async t => {
-  const f = await logoutFixture(t, { registered: true }), selected = []; await f.seedPush();
-  for (let index = 0; index < pendingCount; index++) selected.push(await f.pending());
-  const before = await snapshot(f); f.trace.length = 0;
-  if (pendingCount === 31) {
-    await f.logout(); await assertPlan(f, [sessionFact(f), ...selected.map(row => consentFact(f, row.consentID))]); assert.equal(await cursor(f), 32);
-  } else {
-    assert.equal((await f.logout(503)).error.code, 'logout_restriction_capacity'); assert.deepEqual(await snapshot(f), before);
-    assert.equal(await f.journal.lookup(await logoutID(f)), null); assert.equal(await cursor(f), 0);
-    assert(!f.trace.some(value => value.kind === 'sql' && /^(INSERT|UPDATE|DELETE) /.test(value.sql) && !value.sql.startsWith('UPDATE restore_control ')));
-  }
+for(const pendingCount of [30,31,63])test((pendingCount+2)+' logout facts include every pending consent, push retirement and the session',async t=>{
+ const f=await logoutFixture(t,{registered:true}),selected=[];await f.seedPush();for(let index=0;index<pendingCount;index++)selected.push(await f.pending());
+ await f.logout();await assertPlan(f,[sessionFact(f),...selected.map(row=>consentFact(f,row.consentID))]);assert.equal(await cursor(f),pendingCount+2);
 });
 
 for (const invalid of ['session-revoked', 'account-disabled', 'epoch-changed', 'roles-changed', 'device-revoked', 'device-revision']) test('logout retains fresh privacy authority for ' + invalid, async t => {
@@ -321,14 +320,16 @@ test('a callback error after the session SQL effect rolls every lifecycle and pu
   await f.uncertain(); assert.equal(consumed, true); assert.deepEqual(await snapshot(f), before); assert.equal(await f.journal.lookup(await logoutID(f)), null);
 });
 
-test('an accepted logout plan with a rejected SQL commit preserves pending facts and refuses callback replay', async t => {
-  const f = await logoutFixture(t, { registered: true }), pending = await f.pending(), before = await snapshot(f), id = await logoutID(f);
+test('an accepted logout plan with rejected SQL commit recovers exact session, consent and push restrictions', async t => {
+  const f = await logoutFixture(t, { registered: true }), pending = await f.pending();await f.seedPush();
+  const before = await snapshot(f), id = await logoutID(f);
   const prepare = f.journal.prepare.bind(f.journal); let armed = true;
   f.journal.prepare = async value => { const saved = await prepare(value); if (armed && value.operation_id === id) { armed = false; f.faults.beforeCommit = true; } return saved; };
-  await f.uncertain(); assert.equal(armed, false); assert.equal(f.faults.beforeCommit, false); assert.deepEqual(await snapshot(f), before);
-  const saved = await assertPlan(f, [sessionFact(f), consentFact(f, pending.consentID)], { committed: false }); assert.equal(saved.status, 'pending');
-  await assert.rejects(() => f.db.one('SELECT id FROM accounts LIMIT 1'), unavailable);
-  await f.uncertain(); assert.deepEqual(await snapshot(f), before); assert.deepEqual(await f.journal.lookup(id), saved);
+  await f.uncertain(); assert.equal(armed, false); assert.equal(f.faults.beforeCommit, false);
+  const saved = await assertPlan(f, [sessionFact(f), consentFact(f, pending.consentID)], { committed: false });
+  assert(['pending','recovered'].includes(saved.status),'a rejected SQL commit must not create a committed action receipt');
+  const {recovered,after}=await assertRestrictedAbort(f,{saved,before,snapshot});
+  await f.logout(401);assert.deepEqual(await snapshot(f),after);assert.deepEqual(await f.journal.lookup(id),recovered);assert.equal(await cursor(f),3);
 });
 
 for (const mode of ['outage', 'prepare-before', 'prepare-after', 'commit-result-loss', 'ack-before', 'ack-after']) test('logout ' + mode + ' preserves the exact journal and actual SQL boundary without replaying authority', async t => {
@@ -357,8 +358,8 @@ for (const mode of ['outage', 'prepare-before', 'prepare-after', 'commit-result-
   if (mode === 'prepare-after') {
     assert.equal(f.faults.reply, undefined); assert.deepEqual(await snapshot(f), before);
     await assertPlan(f, facts, { committed: false }); assert.equal(saved.status, 'pending');
-    await assert.rejects(() => f.db.one('SELECT id FROM accounts LIMIT 1'), unavailable);
-    await f.uncertain(); assert.deepEqual(await f.journal.lookup(id), saved); return;
+    const {recovered,after}=await assertRestrictedAbort(f,{saved,before,snapshot});
+    await f.logout(401);assert.deepEqual(await snapshot(f),after);assert.deepEqual(await f.journal.lookup(id),recovered);return;
   }
   assert.notEqual((await session(f)).revoked_at, null);
   assert.equal((await f.h.db.one('SELECT status FROM consents WHERE id=?', pending.consentID)).status, 'revoked');
@@ -393,7 +394,7 @@ for (const kind of ['enrollment', 'recovery', 'session']) for (const consentStat
     assert.equal((await f.h.db.one('SELECT active FROM push_devices WHERE id=?', push.id)).active, 0);
     if (consentStatus === 'historical-revoked-null') assert.equal(after.consents.find(row => row.id === pending.consentID).revoked_at, null);
     await assertSurvivingSecuritySession(f, reference);
-    await f.logout(401); assert.deepEqual(await f.journal.lookup(await logoutID(f)), saved); assert.equal(await cursor(f), 1);
+    await f.logout(401); assert.deepEqual(await f.journal.lookup(await logoutID(f)), saved); assert.equal(await cursor(f), 2);
   });
 
 for (const kind of ['enrollment', 'recovery', 'session']) test(`logout still cancels unshared work when the ${kind} reference was already revoked`, async t => {

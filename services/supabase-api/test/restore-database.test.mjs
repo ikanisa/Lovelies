@@ -121,7 +121,7 @@ test('callback failure before prepare rolls back data without creating an indepe
   assert.equal(f.trace.filter(value => value.kind === 'journal' && value.path === '/v1/operations/prepare').length, 0);
 });
 
-test('accepted prepare with lost reply rolls PostgreSQL back and retains original allocations/restrictions without automatic replay', async t => {
+test('accepted prepare with lost reply rolls SQL back, replays only restrictions, and retires the original callback', async t => {
   const f = await fixture(t), id = randomUUID(), operation = intent([restriction()]), initial = await controlRow(f.h); let callbacks = 0;
   f.faults.reply = { path: '/v1/operations/prepare', stage: 'after' };
   const callback = async () => { callbacks++; await insertAccount(f.db, id); };
@@ -129,12 +129,14 @@ test('accepted prepare with lost reply rolls PostgreSQL back and retains origina
   assert.equal(callbacks, 1); assert.equal(await rowCount(f.h, 'accounts'), 0); assert.deepEqual(await controlRow(f.h), initial);
   const retained = await f.journal.lookup(operation.operation_id);
   assert.equal(retained.status, 'pending'); assert.deepEqual(retained.plan.allocations, operation.allocations); assert.deepEqual(retained.plan.events, operation.events);
-  await assert.rejects(() => f.db.transaction(callback, operation), unavailable);
-  await assert.rejects(() => f.db.one('SELECT count(*) AS n FROM accounts'), unavailable);
-  assert.equal(callbacks, 1); assert.equal((await f.journal.control()).state, 'pending');
+  await assert.rejects(() => f.db.transaction(callback, operation),error=>error.code==='operation_retired_by_recovery'&&error.status===410);
+  assert.equal((await f.db.one('SELECT count(*) AS n FROM accounts')).n,0);
+  assert.equal(callbacks, 1); assert.equal((await f.journal.control()).state, 'serving');
   assert.equal(f.trace.filter(value => value.kind === 'journal' && value.path === '/v1/operations/prepare').length, 1);
-  for (const marker of [f.marker, retained.plan.next]) await assert.rejects(() => f.journal.admission(marker), unavailable);
-  assert.equal((await f.journal.control()).state, 'pending');
+  const recovered=await f.journal.lookup(operation.operation_id);assert.equal(recovered.status,'recovered');assert.equal(recovered.plan_hash,retained.plan_hash);assert.deepEqual(recovered.plan,retained.plan);
+  assert.equal((await f.journal.admission(retained.plan.next)).state,'serving');
+  assert.equal(Number((await privateRows(f.h,'SELECT count(*) n FROM lovelies_private.restore_replay_facts'))[0].n),1);
+  await assert.rejects(()=>f.db.transaction(callback,{...operation,input_hash:'f'.repeat(64)}),error=>error.code==='operation_key_conflict'&&error.status===409);assert.equal(callbacks,1);
 });
 
 for (const mode of ['controlUpdate', 'beforeCommit']) test(`prepared manifest with ${mode} failure preserves both SQL data/control rollback and independent pending intent`, async t => {
@@ -144,7 +146,27 @@ for (const mode of ['controlUpdate', 'beforeCommit']) test(`prepared manifest wi
     new RegExp(mode === 'controlUpdate' ? 'synthetic_control_update_failure' : 'synthetic_commit_rejected'));
   assert.equal(callbacks, 1); assert.equal(await rowCount(f.h, 'accounts'), 0); assert.deepEqual(await controlRow(f.h), before);
   assert.equal((await f.journal.lookup(operation.operation_id)).status, 'pending');
-  await assert.rejects(() => f.db.one('SELECT count(*) AS n FROM accounts'), unavailable);
+  assert.equal((await f.db.one('SELECT count(*) AS n FROM accounts')).n,0);assert.equal(callbacks,1);
+  const recovered=await f.journal.lookup(operation.operation_id);assert.equal(recovered.status,'recovered');assert.deepEqual(recovered.plan.events,operation.events);
+  assert.equal((await f.journal.control()).state,'serving');assert.equal((await controlRow(f.h)).last_plan_hash,recovered.plan_hash);
+});
+
+test('unbound setup leaves no fact backlog; a bound non-fenced writer fails atomically and the fenced writer drains exact capture',async t=>{
+ const f=await fixture(t,{seed:false}),account=await seedAccount(f.h),consent=randomUUID(),connection=databaseConnection(f.h,[],{});t.after(()=>connection.close());
+ const raw=callback=>connection.begin(async c=>{await c.query('SET LOCAL ROLE lovelies_api',[]);await c.query('SET LOCAL search_path TO lovelies_private,pg_catalog',[]);return callback(c);});
+ await raw(async c=>{await c.query("INSERT INTO consents(id,account_id,purpose,policy_version,status,created_at) VALUES($1,$2,'photo_matching','synthetic','granted',1000)",[consent,account]);await c.query("UPDATE consents SET status='revoked',revoked_at=1500 WHERE id=$1",[consent]);});
+ assert.equal(Number((await privateRows(f.h,'SELECT count(*) n FROM lovelies_private.restore_transaction_facts'))[0].n),0);
+ await privateRows(f.h,"UPDATE lovelies_private.consents SET status='granted',revoked_at=NULL WHERE id=$1",[consent]);await installMarker(f.h,f.marker);
+ await assert.rejects(raw(c=>c.query("UPDATE consents SET status='revoked',revoked_at=2000 WHERE id=$1",[consent])),error=>error.code==='55000'&&error.message==='restore_writer_fence_required');
+ assert.equal((await privateRows(f.h,'SELECT status FROM lovelies_private.consents WHERE id=$1',[consent]))[0].status,'granted');
+ await f.db.run("UPDATE consents SET status='revoked',revoked_at=2000 WHERE id=?",consent);
+ assert.equal((await f.journal.control()).marker.cursor.sequence,1);assert.equal((await f.db.one('SELECT count(*) n FROM restore_transaction_facts')).n,0);
+ const grant=randomUUID(),grantor=await seedAccount(f.h);await f.h.db.run("INSERT INTO operator_capability_grants(id,account_id,capability,granted_by,operation_key,created_at,expires_at) VALUES(?,?,'privacy.review',?,'synthetic-capability-revoke',1000,9000000000000)",grant,account,grantor);
+ await assert.rejects(raw(c=>c.query('UPDATE operator_capability_grants SET revoked_at=2000 WHERE id=$1',[grant])),error=>error.code==='55000'&&error.message==='restore_writer_fence_required');
+ await f.db.run('UPDATE operator_capability_grants SET revoked_at=2000 WHERE id=?',grant);
+ const control=await controlRow(f.h),plan=await f.journal.lookup(control.last_operation_id);assert.equal(plan.status,'committed');
+ assert.deepEqual(plan.plan.events.map(e=>({kind:e.kind,scope:e.scope})),[{kind:'operator-capability-retired',scope:{account_id:account,grant_id:grant,capability:'privacy.review'}}]);
+ assert.equal((await f.journal.control()).marker.cursor.sequence,2);assert.equal((await f.db.one('SELECT count(*) n FROM restore_transaction_facts')).n,0);
 });
 
 for (const stage of ['before', 'after']) test(`post-commit acknowledgement loss ${stage} service delivery reconciles only the exact durable PostgreSQL marker`, async t => {
@@ -191,7 +213,7 @@ test('same-version PostgreSQL snapshot rollback quarantines independently and de
   // Explicit disposable-fixture restore of the old control and account snapshot.
   // The schema version is unchanged, exactly the condition the new gate detects.
   await installMarker(f.h, f.marker);
-  await asBackend(f.h.engine, () => f.h.engine.query('UPDATE lovelies_private.accounts SET name=$1 WHERE id=$2', ['Preserved synthetic account', id]));
+  await privateRows(f.h,'UPDATE lovelies_private.accounts SET name=$1 WHERE id=$2', ['Preserved synthetic account', id]);
   const restored = await controlRow(f.h); f.trace.length = 0;
   await assert.rejects(() => f.db.one('SELECT name FROM accounts WHERE id=?', id), unavailable);
   assert.equal((await f.journal.control()).state, 'quarantined');
@@ -250,7 +272,7 @@ test('additive v12 preserves all v11 data/protection and creates one empty force
   await h.engine.exec(migration);
   assert.equal((await rawRows(h, 'SELECT current_user AS role'))[0].role, migrator);
   const after = await tableHashes(h), afterProtection = await protection(h);
-  assert.equal(Object.keys(after).length, 69);
+  assert.equal(Object.keys(after).length, 69); // This fixture applies only historical v12, not the current v14 schema.
   for (const [name, hash] of Object.entries(before)) if (name !== 'schema_versions') assert.equal(after[name], hash, name + ' changed during additive migration');
   assert.deepEqual(afterProtection.filter(row => row.relname !== 'restore_control'), beforeProtection);
   assert.deepEqual(afterProtection.find(row => row.relname === 'restore_control'), { relname: 'restore_control', relrowsecurity: true, relforcerowsecurity: true });

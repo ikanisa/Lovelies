@@ -14,7 +14,7 @@ function client(handler){return async(path,{token,body}={})=>{
 };}
 
 test('real PostgreSQL advisory lock serializes independent pools while rollback and roles stay isolated',options,async t=>{
- const h=await startHarness({consumeQueue:false}),other=connectPostgres(h.databaseUrl);t.after(()=>other.close());
+ const h=await startHarness({consumeQueue:false}),other=connectPostgres(h.databaseUrl,undefined,undefined,{mode:'disable-internal',trustedPlaintextHosts:[new URL(h.databaseUrl).hostname]});t.after(()=>other.close());
  const inspector=(await h.engine.query('SELECT current_user role,session_user login')).rows[0];
  assert.equal(inspector.role,inspector.login);
  assert.notEqual(inspector.role,'lovelies_api');
@@ -42,7 +42,7 @@ test('real PostgreSQL advisory lock serializes independent pools while rollback 
 });
 
 test('real independent API pools consume one refresh credential exactly once under twelve simultaneous requests',options,async t=>{
- const h=await startHarness({consumeQueue:false}),other=connectPostgres(h.databaseUrl);t.after(()=>other.close());
+ const h=await startHarness({consumeQueue:false}),other=connectPostgres(h.databaseUrl,undefined,undefined,{mode:'disable-internal',trustedPlaintextHosts:[new URL(h.databaseUrl).hostname]});t.after(()=>other.close());
  const second=client(createHandler(createApp(other,h.env))),anonymous=await h.anonymous({adult:true});
  const replies=await Promise.all(Array.from({length:12},async(_,index)=>index%2?second('/auth/session/refresh',{body:{refresh_token:anonymous.refresh_token}}):(async()=>{const response=await h.request('/auth/session/refresh',{body:{refresh_token:anonymous.refresh_token}});return {status:response.status,body:await response.json()};})()));
  assert.equal(replies.filter(reply=>reply.status===200).length,1);
@@ -53,7 +53,7 @@ test('real independent API pools consume one refresh credential exactly once und
 
 test('real three-pool simultaneous review commits and recipient approvals create only exact approved grants',options,async t=>{
  const processor=envelope=>({...envelope,preview:{bytes_base64:Buffer.from(fixturePng('preview:'+envelope.asset_id)).toString('base64'),content_type:'image/png',width:1,height:1},matches:envelope.profiles.map(profile=>({recipient_id:profile.account_id,profile_id:profile.profile_id,profile_version:profile.revision,model_version:profile.model_id}))});
- const h=await startHarness({faceVerifier:faceVerifierFixture,photoProcessor:processor}),pools=[connectPostgres(h.databaseUrl),connectPostgres(h.databaseUrl)];t.after(()=>Promise.all(pools.map(db=>db.close())));
+ const h=await startHarness({faceVerifier:faceVerifierFixture,photoProcessor:processor}),pools=[connectPostgres(h.databaseUrl,undefined,undefined,{mode:'disable-internal',trustedPlaintextHosts:[new URL(h.databaseUrl).hostname]}),connectPostgres(h.databaseUrl,undefined,undefined,{mode:'disable-internal',trustedPlaintextHosts:[new URL(h.databaseUrl).hostname]})];t.after(()=>Promise.all(pools.map(db=>db.close())));
  const clients=[client(createHandler(h.app)),...pools.map(db=>client(createHandler(createApp(db,h.env))))];
  const owner=await enroll(h),first=await enroll(h),second=await enroll(h);
  for(const person of [owner,first,second])await h.json('/me/photo-preferences',{token:person.token,body:{receive_matches:true,photo_matching_consent:true,processing_consent:true,policy_version:'photo-policy-fixture-v1',operation_key:key()}});

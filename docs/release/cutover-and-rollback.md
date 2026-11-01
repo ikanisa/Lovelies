@@ -1,3 +1,5 @@
+> **Current deployment, 1 November 2026:** locally hosted Supabase replaces the historical cloud/Cloudflare target below. The integrated API requires schema19 and managed Auth. Follow [the current architecture](../local-supabase-architecture.md), the versioned `deploy/local-supabase` configuration and current task evidence. Old host observations, versions and credentials are historical and cannot qualify this candidate. Preserve unknown data and existing app signing identities.
+
 # Existing-app cutover and rollback
 
 Lovelies updates the existing Memories app records. The owner confirms no real

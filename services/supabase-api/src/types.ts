@@ -1,8 +1,11 @@
 import type { RestoreTransactionScope } from './restore-transaction.ts';
+import type { ManagedAuthProvider } from './managed-auth-provider.ts';
 
 export type Binding = string | number | null | ArrayBuffer;
-export type InvocationAuthorityOutcomeCode = 'store_operation_outcome_unresolved' | 'privacy_export_grant_outcome_unresolved';
+export type InvocationAuthorityOutcomeCode = 'store_operation_outcome_unresolved' | 'privacy_export_grant_outcome_unresolved' | 'queue_repair_outcome_unresolved' | 'audience_operation_outcome_unresolved';
 export interface Database {
+    /** Production adapters expose this to keep Auth HTTP outside SQL locks. */
+    inTransaction?(): boolean;
     invocation<T>(callback: () => T | Promise<T>): Promise<T>;
     /** Opt-in authority for one active invocation; the caller retains ownership
      * of its exact actor and a synchronous expiry check. */
@@ -35,21 +38,32 @@ export type PhotoAuthorityProfile = Readonly<{ account_id:string; profile_id:str
 export interface PhotoProcessorFetcher extends ServiceFetcher {
     fetch(input:string|Request|URL,init?:RequestInit,assertAuthority?:(stage:PhotoAuthorityStage,profile?:PhotoAuthorityProfile)=>Promise<void>):Promise<Response>;
 }
+/** A stable queue key is not proof that a worker can still consume it. */
+export type QueueAdmission = Readonly<{
+    id: string;
+    state: 'pending' | 'processing' | 'completed' | 'failed';
+    admission: 'queued' | 'existing' | 'terminal';
+    domain_terminal: boolean;
+}>;
 export interface SupabaseEnv {
     PHOTOS: PrivateBucket; QUARANTINE: PrivateBucket; PRIVACY_EXPORTS: PrivateBucket;
-    PHOTO_JOBS: {send(body:unknown):Promise<void>};
+    PHOTO_JOBS: {send(body:unknown):Promise<QueueAdmission | void>};
     FACE_AUTH_VERIFIER?: ServiceFetcher; PHOTO_PROCESSOR?: PhotoProcessorFetcher;
     MODEL_SERVICE_READINESS?: (signal?:AbortSignal)=>Promise<boolean>;
     INFERENCE_ENGINE_IDENTITY?: string;
     APP_ENV: string; AUTH_SIGNING_SECRET?:string; MEDIA_SIGNING_SECRET?:string;
+    MANAGED_AUTH?:ManagedAuthProvider; MANAGED_AUTH_ENCRYPTION_KEY?:string;
     FACE_AUTH_POLICY_VERSION?:string; PHOTO_MODEL_VERSION?:string; PHOTO_CONSENT_POLICY_VERSION?:string;
-    STORE_VERIFIER?:ServiceFetcher; PUSH_SERVICE?:ServiceFetcher;
+    STORE_VERIFIER?:ServiceFetcher; PUSH_SERVICE?:ServiceFetcher; PUSH_PROVIDER_GENERATION?:string;
+    PUSH_LEDGER_ID?:string; PUSH_LEDGER_BOOTSTRAP_ID?:string;
     APPLE_BUNDLE_ID?:string; APPLE_APP_ID?:string; APPLE_SUBSCRIPTION_PRODUCT_ID?:string;
     GOOGLE_PLAY_PACKAGE_NAME?:string; GOOGLE_PLAY_SUBSCRIPTION_PRODUCT_ID?:string;
     GOOGLE_PLAY_SERVICE_ACCOUNT_EMAIL?:string; GOOGLE_PLAY_SERVICE_ACCOUNT_PRIVATE_KEY?:string;
     GOOGLE_PLAY_SERVICE_ACCOUNT_PRIVATE_KEY_ID?:string; GOOGLE_PLAY_RTDN_AUDIENCE?:string;
     GOOGLE_PLAY_RTDN_SERVICE_ACCOUNT_EMAIL?:string; ALLOWED_ORIGINS?:string; PUBLIC_APP_BASE_URL?:string;
     PUBLIC_API_BASE_URL?:string; INTERNAL_MAINTENANCE_SECRET?:string;
+    UPLOAD_MAX_INFLIGHT?:string; UPLOAD_MAX_RESERVED_SOURCE_BYTES?:string; UPLOAD_MAX_DAILY_SOURCE_BYTES?:string;
+    UPLOAD_MAX_DAILY_RESERVATIONS?:string; PHOTO_MAX_DAILY_ATTEMPTS?:string;
 }
 export type Actor = {
     accountId: string;

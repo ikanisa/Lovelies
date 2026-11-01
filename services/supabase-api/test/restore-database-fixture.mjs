@@ -29,7 +29,13 @@ const asBackend = async (engine, callback) => {
   try { return await callback(); } finally { await engine.exec('RESET ROLE'); }
 };
 const rawRows = async (h, sql, values = []) => numberRows((await h.engine.query(sql, values)).rows);
-const privateRows = (h, sql, values = []) => asBackend(h.engine, () => rawRows(h, sql, values));
+const privateRows = (h, sql, values = []) => asBackend(h.engine, async () => {
+  // Explicit fixture-only raw seed/snapshot restoration. Never install this
+  // bypass in the production Database or the independently fenced fixture DB.
+  await h.engine.query("SELECT set_config('lovelies.restore_replay','on',false)");
+  try { return await rawRows(h, sql, values); }
+  finally { await h.engine.exec('RESET lovelies.restore_replay'); }
+});
 const rowCount = async (h, table) => Number((await privateRows(h, 'SELECT count(*) AS n FROM lovelies_private.' + table))[0].n);
 const controlRow = async h => (await privateRows(h, 'SELECT * FROM lovelies_private.restore_control WHERE singleton=1'))[0] ?? null;
 
@@ -95,10 +101,15 @@ function databaseConnection(h, trace, faults) {
 
 async function fixture(t, { seed = true } = {}) {
   const h = await startHarness({ consumeQueue: false }), trace = [], faults = {}, storage = new MemoryStorage();
+  const seedTransaction=h.db.transaction.bind(h.db);
+  h.db.transaction=(callback,intent)=>seedTransaction(async restore=>{
+    await h.db.one("SELECT set_config('lovelies.restore_replay','on',true)");
+    return callback(restore);
+  },intent);
   let db;
   t.after(async () => { try { await db?.close(); } finally { await h.close(); } });
   const version = Number((await privateRows(h, 'SELECT max(version) AS n FROM lovelies_private.schema_versions'))[0].n);
-  assert.equal(version, 13);
+  assert.equal(version, 19);
   assert.equal(await rowCount(h, 'restore_control'), 0, 'default harness must never seed serving admission');
   let tick = 1_000;
   const rawJournal = async (path, body) => handleOperationRequest(new Request('https://journal.invalid' + path, {
@@ -133,9 +144,9 @@ async function fixture(t, { seed = true } = {}) {
 const intent = (events = []) => ({ operation_id: randomUUID(), input_hash: digest('synthetic-logical-operation'), allocations: { id_0: randomUUID() }, events });
 const insertAccount = (db, id, name = 'Synthetic account') => db.run('INSERT INTO accounts(id,name,created_at) VALUES(?,?,?)', id, name, 1_000);
 async function seedAccount(h, id = randomUUID()) {
-  await asBackend(h.engine, () => h.engine.query('INSERT INTO lovelies_private.accounts(id,name,created_at) VALUES($1,$2,$3)', [id, 'Preserved synthetic account', 1_000]));
+  await privateRows(h,'INSERT INTO lovelies_private.accounts(id,name,created_at) VALUES($1,$2,$3)', [id, 'Preserved synthetic account', 1_000]);
   return id;
 }
-const userSql = trace => trace.filter(value => value.kind === 'sql' && !/^(SET TRANSACTION READ ONLY|SELECT pg_advisory_xact_lock\(|SET LOCAL ROLE |SET LOCAL search_path |SELECT project_id,database_id,incarnation_id,checkpoint_revision,checkpoint_hash,journal_sequence,journal_hash,last_operation_id,last_plan_hash FROM restore_control WHERE singleton=1|UPDATE restore_control SET)/.test(value.sql));
+const userSql = trace => trace.filter(value => value.kind === 'sql' && !/^(SET TRANSACTION READ ONLY|SELECT pg_advisory_xact_lock\(|SET LOCAL ROLE |SET LOCAL search_path |SELECT set_config\('lovelies\.(writer_protocol|restore_replay)'|SELECT project_id,database_id,incarnation_id,checkpoint_revision,checkpoint_hash,journal_sequence,journal_hash,last_operation_id,last_plan_hash FROM restore_control WHERE singleton=1|UPDATE restore_control SET)/.test(value.sql));
 
 export { folder,migration,baselineNames,input,numberRows,digest,unavailable,readOnly,asBackend,rawRows,privateRows,rowCount,controlRow,installMarker,databaseConnection,fixture,intent,insertAccount,seedAccount,userSql };

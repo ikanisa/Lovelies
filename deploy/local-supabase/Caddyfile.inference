@@ -1,0 +1,9 @@
+{
+ admin off
+ auto_https off
+}
+https://ml-proxy:8443 {
+ tls /run/tls/cert /run/tls/key
+ header -Server
+ reverse_proxy ml-face:8080
+}

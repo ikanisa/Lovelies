@@ -1,8 +1,21 @@
 project_id = "lovelies"
 
+# Development CLI only. Production uses the pinned self-hosted stack.
+[auth]
+enable_signup = true
+enable_anonymous_sign_ins = true
+
+[auth.email]
+enable_signup = false
+
+[auth.sms]
+enable_signup = false
+
 [functions.lovelies-api]
 # App-signed anonymous/registered-face JWTs are verified by the backend against
-# current PostgreSQL authority on every protected operation. Supabase Auth JWT
+# current PostgreSQL and managed Auth session authority on every protected
+# operation. The managed identity remains anonymous; face authority is local.
+# Supabase Auth JWT
 # verification cannot validate this custom capture/consent/device contract.
 verify_jwt = false
 entrypoint = "./functions/lovelies-api/index.ts"

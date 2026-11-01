@@ -412,7 +412,7 @@ fun PinkToggle(checked: Boolean, label: String, interactive: Boolean = true, onT
         .then(if(interactive)Modifier.toggleable(value=checked,role=Role.Switch,onValueChange={onToggle()}).semantics { contentDescription=label }
             else Modifier.clearAndSetSemantics { }),contentAlignment=Alignment.Center) {
         Box(Modifier.width(52.dp).height(31.dp).clip(CircleShape).background(if(checked)Pink else Color(0xFF3B3B40))) {
-            Box(Modifier.padding(4.dp).offset(x=thumbOffset).size(23.dp).align(Alignment.CenterStart)
+            Box(Modifier.padding(4.dp).offset { IntOffset(thumbOffset.roundToPx(),0) }.size(23.dp).align(Alignment.CenterStart)
                 .clip(CircleShape).background(if(checked)Color.White else Muted))
         }
     }

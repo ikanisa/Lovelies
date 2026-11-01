@@ -390,6 +390,7 @@ private fun HelpCenter(state: PreviewState) {
 @Composable
 private fun AccountSecurity(state: PreviewState) {
     val uiContext = androidx.compose.ui.platform.LocalContext.current
+    val uiResources = androidx.compose.ui.platform.LocalResources.current
     var editing by remember { mutableStateOf<String?>(null) }
     Column(Modifier.fillMaxSize().padding(horizontal = 18.dp)) {
         ScreenHeader(uiContext.getString(R.string.copy_account_security_fb84c56c),onBack = state::back)
@@ -407,7 +408,7 @@ private fun AccountSecurity(state: PreviewState) {
                     state.toggle("Two-Factor Authentication")
                 }
                 DividerLine(Modifier.padding(horizontal = 14.dp))
-                SettingRow(uiContext.getString(R.string.copy_active_devices_c1fb33b8),icon = Glyph.DEVICE,trailing = uiContext.resources.getQuantityString(R.plurals.copy_device_count, state.deviceCount, state.deviceCount)) {
+                SettingRow(uiContext.getString(R.string.copy_active_devices_c1fb33b8),icon = Glyph.DEVICE,trailing = uiResources.getQuantityString(R.plurals.copy_device_count, state.deviceCount, state.deviceCount)) {
                     state.confirm(uiContext.getString(R.string.copy_active_devices_c1fb33b8),uiContext.getString(R.string.copy_sample_devices_1_s_2_s_and_3_s_remov_22e51542, "iPhone 15", "iPad", "MacBook"),uiContext.getString(R.string.copy_remove_sample_dbc29df5)) {
                         state.deviceCount = (state.deviceCount - 1).coerceAtLeast(1)
                     }

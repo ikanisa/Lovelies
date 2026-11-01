@@ -1,3 +1,4 @@
+import { pushReceipt } from './notification-receipt-fixture.mjs';
 import assert from 'node:assert/strict';
 import { after, test } from 'node:test';
 import { startHarness, enroll, captureProofs, faceVerifierFixture, fixturePng, sha256, closeHarnesses } from './runtime-harness.mjs';
@@ -88,7 +89,7 @@ test('real reviewed acceptance grants are revoked bilaterally by block and stay 
 });
 
 test('durable private notification outbox uses an accepted provider operation receipt and preserves preference mutes',async()=>{
-  let sends=0;const h=await startHarness({faceVerifier:faceVerifierFixture,pushService:async request=>{assert.equal(request.method,'POST');const body=await request.json();assert.equal(body.notification.title,'Your support request was reviewed');assert(!JSON.stringify(body.notification).includes('private-push-token'));sends++;return {status:'accepted',operation_key:body.operation_key,provider_message_id:key('provider')};}});try{
+  let sends=0;const h=await startHarness({faceVerifier:faceVerifierFixture,pushService:async request=>{assert.equal(request.method,'POST');const body=await request.json();assert.equal(body.notification.title,'Your support request was reviewed');assert(!JSON.stringify(body.notification).includes('private-push-token'));sends++;return pushReceipt(body,{status:'accepted',provider_message_id:key('provider')});}});try{
     const owner=await enroll(h),admin=await administrator(h);
     await h.json('/me/notification-settings',{method:'PATCH',token:owner.token,body:{match_alerts:false,operation_key:key('mute')}});await h.json('/me/notification-settings',{method:'PATCH',token:owner.token,body:{payment_alerts:false,operation_key:key('mute')}});const settings=await h.json('/me/notification-settings',{token:owner.token});assert.equal(settings.match_alerts,false);assert.equal(settings.payment_alerts,false);assert.equal(settings.support_alerts,true);
     await h.json('/me/push-devices',{token:owner.token,body:{platform:'ios',push_token:'private-push-token-'+crypto.randomUUID(),operation_key:key('push')}});
@@ -116,7 +117,13 @@ test('privacy export excludes provider/push/private media secrets and erasure mi
     // started its worker before a manual process request arrives; reconcile the
     // authoritative result instead of requiring a second competing executor.
     await until(()=>h.json('/privacy-requests/'+exported.id,{token:admin.token}),value=>value.privacy_request.status==='completed');
-    const grant=await h.json('/privacy-exports/'+exported.id+'/grant',{token:owner.token,body:{}});const response=await h.request(grant.grant_path,{token:owner.token}),text=await response.text();assert.equal(response.status,200);for(const secret of ['private-push-token','store.transaction.payload','template_key','payload_json','token_hash','profiles_json'])assert(!text.includes(secret),secret);assert(text.includes('store_transactions'));
+    // A held export uses recoverable delivery: reading it does not delete the
+    // server's held evidence, unlike the legacy consume-on-read operation.
+    const delivery=await h.json('/privacy-exports/'+exported.id+'/deliveries',{token:owner.token,body:{operation_key:key('export-delivery')}});
+    assert.equal(delivery.protocol,'lovelies-privacy-export-delivery-v2');
+    const response=await h.request(delivery.retrieve_path,{token:owner.token}),text=await response.text();assert.equal(response.status,200);for(const secret of ['private-push-token','store.transaction.payload','template_key','payload_json','token_hash','profiles_json'])assert(!text.includes(secret),secret);assert(text.includes('store_transactions'));
+    const publication=await h.db.one('SELECT export_key FROM privacy_requests WHERE id=?',exported.id);
+    assert(await h.env.PRIVACY_EXPORTS.head(publication.export_key),'the held server copy survives the authorized read');
     // Account deletion cannot clear this independently imposed evidence hold.
     // Its qualified operator must release it through the supported review path.
     await h.json('/admin/safety/reports/'+report.id+'/resolve',{token:admin.token,body:{action:'release',expected_revision:2,reason:'Independent review permits the requested erasure',operation_key:key('release-hold')}});

@@ -20,7 +20,7 @@ const revoke = (h, admin, account, session, extra = {}, expected = 200) => h.jso
   token: admin.token, body: { session_id: session, reason: 'Reported lost session', operation_key: operationKey(), ...extra },
 }, expected);
 
-test('user management requires current registered-face administrator authority for every route', async () => {
+test('user management requires current registered-face operator scope for every route', async () => {
   const h = await startHarness({ faceVerifier: faceVerifierFixture, consumeQueue: false });
   try {
     const anonymous = await h.anonymous({adult:true}), person = await enroll(h), admin = await administrator(h);
@@ -28,7 +28,7 @@ test('user management requires current registered-face administrator authority f
     for (const path of paths) {
       assert.equal((await h.json(path, {}, 401)).error.code, 'authentication_required');
       assert.equal((await h.json(path, { token: anonymous.access_token }, 403)).error.code, 'registered_face_required');
-      assert.equal((await h.json(path, { token: person.token }, 403)).error.code, 'admin_required');
+      assert.equal((await h.json(path, { token: person.token }, 403)).error.code, 'operator_capability_required');
       await h.json(path, { token: admin.token });
     }
     await revoke(h, person, admin.accountId, sessionId(admin.token), {}, 403);

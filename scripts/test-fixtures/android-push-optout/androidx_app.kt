@@ -15,5 +15,6 @@ class NotificationCompat { companion object { const val VISIBILITY_PRIVATE=0 }
     }
 }
 class NotificationManagerCompat { companion object { fun from(context:Context)=NotificationManagerCompat() }
+    fun areNotificationsEnabled()=FakeSystem.manager.notificationsEnabled
     fun notify(tag:String,id:Int,notification:Notification) { FakeSystem.manager.enqueue(tag,id,notification) }
 }

@@ -4,17 +4,24 @@ Native Android (Kotlin/Compose) and iOS (SwiftUI) applications using the owner-s
 
 ## Supabase backend
 
-The owner-selected backend is Supabase project `ltqfplqevxztlswlzexn`.
-`services/supabase-api` owns PostgreSQL transactions and private Supabase Storage,
-with a separately authenticated private YuNet/SFace inference service. The
-Cloudflare implementation remains available as preserved source/provenance.
-See [architecture and deployment inputs](docs/supabase-backend.md) and
-[current implementation and verification](docs/release-implementation-status.md).
+The current target is **locally hosted Supabase**. PostgreSQL, private Storage,
+managed Auth and Edge Functions are operated in the selected local environment.
+The earlier cloud-project and Cloudflare files are retained as provenance.
 
-Anonymous app sessions upgrade only after the backend verifies all three signed
-profile captures. These are custom current-authority sessions, not Supabase
-managed Auth users. No privileged Supabase key is included in either native app
-or the operator browser.
+Start with [the current architecture](docs/local-supabase-architecture.md),
+[the deployment definition](deploy/local-supabase/README.md) and
+[the implementation and qualification register](docs/release/local-supabase-tasks.json).
+The [implementation record](docs/release/implementation-20261101.md),
+[package reconciliation](docs/release/package-reconciliation.md) and
+[scoped verification evidence](docs/release/implementation-verification.json)
+explain the selected contracts, completed checks and remaining release gates.
+The production API preserves anonymous-first, three signed selfie enrollment and
+registered-face sign-in. The server holds managed Auth credentials privately;
+managed anonymous identity alone grants no face, operator or photo authority.
+Native clients retain the current session/device capability protocol. No OTP or
+liveness check is added, and privileged Supabase keys never enter a client bundle.
+
+Local verification:
 
 ```sh
 pnpm install --frozen-lockfile

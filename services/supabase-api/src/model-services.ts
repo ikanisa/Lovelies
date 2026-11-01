@@ -2,7 +2,7 @@
 // inference is an authenticated private HTTP service, never a Cloudflare binding.
 import type {PrivateBucket,PrivateObject,ServiceFetcher,PhotoProcessorFetcher,PhotoAuthorityStage,PhotoAuthorityProfile} from './types.ts';
 import {stable} from './types.ts';
-import {INFERENCE_ENGINE_SPACE,INFERENCE_MODEL_ID,INFERENCE_LIMITS,INFERENCE_REPLY_BYTES,INFERENCE_READY_BYTES,
+import {INFERENCE_ENGINE_SPACE,INFERENCE_MODEL_ID,INFERENCE_LIMITS,INFERENCE_REPLY_BYTES,INFERENCE_READY_BYTES,INFERENCE_PHOTO_RANKING_PROTOCOL,
   exactBinding,exactReadiness,sha256Identity,type InferenceBinding} from './inference-contract.ts';
 import {encodeGeneration} from './inference-generation.ts';
 interface Env { PHOTOS:PrivateBucket; QUARANTINE:PrivateBucket; MODEL_VERSION:string; FACE_AUTH_POLICY_VERSION:string;
@@ -145,7 +145,7 @@ async function serviceReply(env:Env,path:string,payload?:ServiceBody,limit=INFER
     const pending=service.fetch(request);
     void pending.then(late=>{if(controller.signal.aborted)void late.body?.cancel().catch(()=>{});},()=>{});
     response=await Promise.race([pending,timeout,aborted]);
-    if(response.status===409&&!response.redirected&&(path==='/internal/face'||path==='/internal/photo')){
+    if(response.status===409&&!response.redirected&&(path==='/internal/face'||path==='/internal/photo'||path==='/internal/photo-batch')){
       let incompatible=false;
       try{
         const error=await Promise.race([body(response as unknown as Request,1024,controller.signal),timeout,aborted]);
@@ -209,13 +209,16 @@ async function privateObject(bucket:PrivateBucket,key:string,limit:number,expect
   return {bytes,object};
 }
 async function handlePhoto(request:Request,env:Env,assertAuthority?:PhotoAuthorityAssertion):Promise<Response> {
-  if(request.method!=='POST'||new URL(request.url).pathname!=='/process')throw new BoundaryError(404,'route_not_found');
+  const path=new URL(request.url).pathname,batched=path==='/process-batch';
+  if(request.method!=='POST'||!['/process','/process-batch'].includes(path))throw new BoundaryError(404,'route_not_found');
   const p=await body(request,1024*1024);configured(env);
   const engine_identity=assertEngineGeneration(p.engine_identity,env);
   for(const name of ['attempt_id','asset_id','source_version'])identifier(p[name]);
   hash(p.source_checksum_sha256);
   if(p.model_version!==env.MODEL_VERSION||typeof p.nonce!=='string'||p.nonce.length>128||!p.nonce||
-    typeof p.quarantine_key!=='string'||!p.quarantine_key.startsWith('source/')||!Array.isArray(p.profiles)||p.profiles.length>1000)
+    typeof p.quarantine_key!=='string'||!p.quarantine_key.startsWith('source/')||!Array.isArray(p.profiles)||
+    p.profiles.length>(batched?INFERENCE_LIMITS.photo_batch_profiles:INFERENCE_LIMITS.profiles)||
+    batched&&(p.ranking_protocol!==INFERENCE_PHOTO_RANKING_PROTOCOL||typeof p.include_preview!=='boolean'))
     throw new BoundaryError(409,'processing_origin_invalid');
   const owned:Uint8Array[]=[];
   try {
@@ -236,7 +239,8 @@ async function handlePhoto(request:Request,env:Env,assertAuthority?:PhotoAuthori
     // Count the complete wire form incrementally before retaining a large
     // snapshot. Base64 is ASCII; the other fields use their actual UTF-8 size.
     // UUID/digest placeholders have exactly the lengths of the final binding.
-    let serializedBytes=new TextEncoder().encode(stable({asset_id:p.asset_id,
+    const batchFields=batched?{ranking_protocol:INFERENCE_PHOTO_RANKING_PROTOCOL,include_preview:p.include_preview}:{};
+    let serializedBytes=new TextEncoder().encode(stable({asset_id:p.asset_id,...batchFields,
       source:{...sourcePayload,bytes_base64:''},profiles:[],engine_space:INFERENCE_ENGINE_SPACE,
       engine_artifact_sha256:env.ENGINE_ARTIFACT_SHA256,processing_fingerprint:env.PROCESSING_FINGERPRINT,
       request_id:'0'.repeat(36),request_sha256:'0'.repeat(64)})).length+sourcePayload.bytes_base64.length;
@@ -258,11 +262,17 @@ async function handlePhoto(request:Request,env:Env,assertAuthority?:PhotoAuthori
         profiles.push(admitted);
       }finally{template.bytes.fill(0);owned.pop();}
     }
-    const result=await inference(env,'/internal/photo',{asset_id:p.asset_id,source:sourcePayload,profiles},engine_identity,request.signal,
+    const result=await inference(env,batched?'/internal/photo-batch':'/internal/photo',{asset_id:p.asset_id,source:sourcePayload,profiles,...batchFields},engine_identity,request.signal,
       assertAuthority?()=>photoAuthority(assertAuthority,'before_dispatch'):undefined);
-    if(result.model_version!==env.MODEL_VERSION||!Array.isArray(result.matches)||result.matches.length>p.profiles.length)throw new BoundaryError(503,'processor_result_invalid');
+    if(result.model_version!==env.MODEL_VERSION)throw new BoundaryError(503,'processor_result_invalid');
+    if(batched){
+      if(!result.ranking||result.ranking.protocol!==INFERENCE_PHOTO_RANKING_PROTOCOL||!sha256Identity(result.ranking.query_sha256)||
+        result.ranking.threshold!==0.42||result.ranking.review_margin!==0.05||!Array.isArray(result.ranking.faces)||result.ranking.faces.length>INFERENCE_LIMITS.faces||
+        !p.include_preview&&result.preview!==undefined)throw new BoundaryError(503,'processor_result_invalid');
+    }else if(!Array.isArray(result.matches)||result.matches.length>p.profiles.length)throw new BoundaryError(503,'processor_result_invalid');
     return json({attempt_id:p.attempt_id,nonce:p.nonce,asset_id:p.asset_id,source_version:p.source_version,
-      source_checksum_sha256:p.source_checksum_sha256,model_version:p.model_version,engine_identity,preview:result.preview,matches:result.matches});
+      source_checksum_sha256:p.source_checksum_sha256,model_version:p.model_version,engine_identity,
+      ...(result.preview===undefined?{}:{preview:result.preview}),...(batched?{ranking:result.ranking}:{matches:result.matches})});
   }finally{for(const b of owned)b.fill(0);}
 }
 async function handleFace(request:Request,env:Env):Promise<Response> {

@@ -1,3 +1,4 @@
+import { assertOperatorOperationCapability } from './operator-capabilities.ts';
 import { assertAudienceCapability } from './audience.ts';
 import { ApiError, digest, stable, type Actor, type AppContext } from './types.ts';
 import { assertEnrollmentActor, assertPrivacyActor } from './auth.ts';
@@ -13,11 +14,74 @@ export type PreparedOperation = Readonly<{
 // receipt, while its original action/hash/key continue preventing re-execution.
 export const retiredOperationInput = 'null';
 export const retiredOperationResponse = stable({ protocol: 'lovelies-operation-retired-v1', status: 'retired' });
+type RecoveredOperationReceipt = { input_hash: string; plan_hash: string; outcome: string };
+function assertRecoveredOperationReceipt(outcome: RecoveredOperationReceipt): void {
+    if (!['restricted-abort','restore-retired'].includes(outcome.outcome) || !/^[0-9a-f]{64}$/.test(outcome.input_hash) ||
+        !/^[0-9a-f]{64}$/.test(outcome.plan_hash))
+        throw new ApiError(503, 'operation_receipt_unavailable');
+}
+// Keep this bounded registry aligned with prepareOperation-backed product routes.
+// Signed face/session lifecycles have separate status protocols. This is a lookup
+// registry, not a new restriction on legacy committed rows or operation admission.
+const genericOperationSources = Object.freeze([
+    'personal', 'notification', 'account', 'privacy', 'support', 'moderation', 'safety',
+    'admin_users', 'audience', 'guardian', 'retention', 'media', 'store', 'queue_repair',
+]);
+/** Call inside the lookup's admitted transaction after authenticating its actor.
+ * Outcomes retain only account/source/key-derived IDs, so probe the fixed set of
+ * exact IDs rather than scanning or adding identifying columns. A proven rollback
+ * is terminal; it never means unknown or permits an original callback to run again. */
+export async function assertGenericOperationNotRecovered(ctx: AppContext, actorID: string, key: string, committedSources: readonly string[]): Promise<void> {
+    // The generic lookup historically accepts a wider key format than admission.
+    // Such keys cannot have a current derived outcome, but may have legacy receipts.
+    if (!/^[A-Za-z0-9._:-]{16,128}$/.test(key)) return;
+    const identities = await Promise.all(genericOperationSources.map(async source =>
+        [await restoreOperationID(actorID, source, key), source] as const));
+    const sources = new Map(identities);
+    const outcomes = await ctx.db.all<RecoveredOperationReceipt & { operation_id: string }>(
+        'SELECT operation_id,input_hash,plan_hash,outcome FROM restore_recovered_operations WHERE operation_id IN (' + identities.map(() => '?').join(',') + ')',
+        ...identities.map(([id]) => id));
+    const recoveredSources = outcomes.map(outcome => {
+        const source = sources.get(outcome.operation_id);
+        if (!source) throw new ApiError(503, 'operation_receipt_unavailable');
+        return source;
+    });
+    // The generic route cannot validate the dedicated store receipt contract,
+    // including terminal or mixed-source evidence. Preserve its fail-closed result.
+    if (recoveredSources.includes('store')) throw new ApiError(503, 'store_operation_receipt_unavailable');
+    for (const outcome of outcomes) assertRecoveredOperationReceipt(outcome);
+    if (committedSources.some(source => recoveredSources.includes(source)))
+        throw new ApiError(503, 'operation_receipt_unavailable');
+    if (new Set([...committedSources, ...recoveredSources]).size > 1)
+        throw new ApiError(409, 'operation_source_ambiguous');
+    if (outcomes.length) throw new ApiError(409, 'operation_recovered_without_result');
+}
+/** Call only after the route has authenticated its current actor. The original
+ * key identifies a terminal restrictive replay, never a successful response or
+ * permission to retry the callback with a newly generated key. */
+export async function assertOperationNotRecovered(ctx: AppContext, actorID: string, source: string, key: string, expectedHash?: string): Promise<void> {
+    const operationID = await restoreOperationID(actorID, source, key);
+    const outcome = await ctx.db.one<RecoveredOperationReceipt>(
+        'SELECT input_hash,plan_hash,outcome FROM restore_recovered_operations WHERE operation_id=?', operationID);
+    if (!outcome) return;
+    assertRecoveredOperationReceipt(outcome);
+    if (expectedHash !== undefined && outcome.input_hash !== expectedHash) throw new ApiError(409, 'operation_key_conflict');
+    throw new ApiError(409, 'operation_recovered_without_result');
+}
 export function assertOperationReceiptAvailable(row: { payload_json: string; response_json: string }): void {
     if (row.payload_json !== retiredOperationInput && row.response_json !== retiredOperationResponse) return;
     if (row.payload_json !== retiredOperationInput || row.response_json !== retiredOperationResponse)
         throw new ApiError(503, 'operation_receipt_unavailable');
     throw new ApiError(410, 'operation_receipt_retired');
+}
+/** A reconciled prepare has a terminal negative outcome. Check only after the
+ * caller's current authority, but before an allocation or business callback. */
+export async function assertRestoreOperationAvailable(ctx: AppContext, operationID: string, inputHash: string): Promise<void> {
+    const recovered = await ctx.db.one<{input_hash:string}>(
+        'SELECT input_hash FROM restore_recovered_operations WHERE operation_id=?', operationID);
+    if (!recovered) return;
+    if (recovered.input_hash !== inputHash) throw new ApiError(409, 'operation_key_conflict');
+    throw new ApiError(410, 'operation_retired_by_recovery');
 }
 /** Anonymous credentials can enroll, but do not authorize private data mutation
  * or release. The durable row is checked in addition to the signed credential. */
@@ -135,9 +199,17 @@ type OperationAllocations = Readonly<Record<string, string>>;
 type AllocationFactory = (operationID: string) => OperationAllocations | Promise<OperationAllocations>;
 /** Uses the same durable key after ambiguity. The callback and all authorizing
  * reads/writes are awaited inside one PostgreSQL transaction. */
-async function executeAuthorizedOperation<T extends Record<string, unknown>>(ctx: AppContext, actor: Actor, intent: PreparedOperation, callback: (restore: RestoreTransactionScope, allocations: OperationAllocations) => T | Promise<T>, subjectIds: readonly string[], assertAuthority: () => void | Promise<void>, allocate?: AllocationFactory): Promise<T> {
-    return (await ctx.db.transaction(async restore => {
+async function executeAuthorizedOperation<T extends Record<string, unknown>>(ctx: AppContext, actor: Actor | Pick<Actor, 'accountId'>, intent: PreparedOperation, callback: (restore: RestoreTransactionScope, allocations: OperationAllocations) => T | Promise<T>, subjectIds: readonly string[], assertAuthority: () => void | Promise<void>, allocate?: AllocationFactory): Promise<T> {
+    const operatorGuard = async () => {
+        if ('sessionId' in actor) return assertOperatorOperationCapability(ctx, actor, intent.action, intent.source);
+        if (intent.source !== 'audience' || !['audience.renew-device','audience.guardian-review-device','audience.control-renew-device'].includes(intent.action))
+            throw new ApiError(400, 'operation_scope_invalid');
+    };
+    const outcome = await ctx.db.transaction(async restore => {
         (await assertAuthority());
+        await operatorGuard();
+        const operationID = await restoreOperationID(actor.accountId, intent.source, intent.key);
+        await assertRestoreOperationAvailable(ctx, operationID, intent.hash);
         const previous = (await ctx.db.one<{
             action: string;
             payload_hash: string;
@@ -150,15 +222,16 @@ async function executeAuthorizedOperation<T extends Record<string, unknown>>(ctx
             }
             if (previous.payload_json === retiredOperationInput || previous.response_json === retiredOperationResponse) {
                 (await assertAuthority());
+                await operatorGuard();
                 assertOperationReceiptAvailable(previous);
             }
             if (previous.payload_json !== intent.payloadJson) throw new ApiError(409, 'operation_key_conflict');
             (await assertAuthority());
+            await operatorGuard();
             return JSON.parse(previous.response_json) as T;
         }
         // A SQL receipt retry above never re-prepares its committed independent
         // operation. New callbacks bind the logical key before collecting facts.
-        const operationID = await restoreOperationID(actor.accountId, intent.source, intent.key);
         const allocations: OperationAllocations = Object.freeze({ ...(allocate ? await allocate(operationID) : {}) });
         restore.operation({ operation_id: operationID, input_hash: intent.hash, allocations });
         const result = await callback(restore, allocations);
@@ -168,6 +241,7 @@ async function executeAuthorizedOperation<T extends Record<string, unknown>>(ctx
             throw new ApiError(500, 'invalid_operation_result');
         }
         (await assertAuthority());
+        await operatorGuard();
         const responseJson = stable(result);
         if (new TextEncoder().encode(intent.payloadJson + responseJson).byteLength > 1900000)
             throw new ApiError(500, 'operation_result_too_large');
@@ -180,8 +254,13 @@ async function executeAuthorizedOperation<T extends Record<string, unknown>>(ctx
                 (await ctx.db.run('INSERT INTO operation_subjects(actor_id,source,operation_key,subject_id) VALUES(?,?,?,?)', actor.accountId, intent.source, intent.key, subject));
             }
         }
+        await operatorGuard();
         return JSON.parse(responseJson) as T;
-    }));
+    });
+    // Independent journal acknowledgement can also wait after SQL commits.
+    // Release an operator response only while its current scope still exists.
+    await operatorGuard();
+    return outcome;
 }
 /** Protected product operations retain registered-face authority. */
 export async function executeOperation<T extends Record<string, unknown>>(ctx: AppContext, actor: Actor, intent: PreparedOperation, callback: (restore: RestoreTransactionScope) => T | Promise<T>, subjectIds: readonly string[] = []): Promise<T> {
@@ -214,4 +293,13 @@ export async function executeAccountDeletionOperation<T extends Record<string, u
 export async function executeRestrictedOperation<T extends Record<string, unknown>>(ctx: AppContext, actor: Actor, intent: PreparedOperation, callback: (restore: RestoreTransactionScope) => T | Promise<T>, subjectIds: readonly string[] = []): Promise<T> {
     if (!['audience', 'guardian', 'privacy'].includes(intent.source)) throw new ApiError(400, 'operation_scope_invalid');
     return executeAuthorizedOperation(ctx, actor, intent, callback, subjectIds, () => assertPrivacyActor(actor, ctx));
+}
+
+/** The device proof authorizes only a new eligibility decision for its own
+ * already-bound account. It never fabricates an Actor or a product session. */
+export async function executeAudienceDeviceOperation<T extends Record<string, unknown>>(ctx: AppContext, accountId: string, intent: PreparedOperation,
+    callback: (restore: RestoreTransactionScope) => T | Promise<T>, assertDevice: () => Promise<void>): Promise<T> {
+    if (intent.source !== 'audience' || !['audience.renew-device','audience.guardian-review-device','audience.control-renew-device'].includes(intent.action))
+        throw new ApiError(400, 'operation_scope_invalid');
+    return executeAuthorizedOperation(ctx, { accountId }, intent, callback, [], assertDevice);
 }

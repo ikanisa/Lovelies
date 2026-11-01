@@ -1,9 +1,11 @@
+import { operatorCapabilities } from './operator-capabilities.ts';
 import { assertAudienceCapability, audienceContext } from './audience.ts';
 import { cancelDeviceLifecycle, unusedPendingConsents } from './face-profile.ts';
 import { cancelRefreshDelivery, refreshWithDelivery } from './refresh-delivery.ts';
 import { ApiError, digest, jsonBody, ok, stable, uuid, type Actor, type AppContext } from './types.ts';
 import { restoreOperationID } from './restore-transaction.ts';
 import { sessionRetirementScope, type RetirementSession } from './session-retirement.ts';
+import { assertManagedSession, prepareManagedSession, bindManagedSession, maintainManagedAuth } from './managed-auth.ts';
 const ACCESS_MS = 900000;
 const REFRESH_MS = 30 * 24 * 60 * 60 * 1000;
 const ISSUER = 'lovelies-supabase';
@@ -44,6 +46,7 @@ export type SessionSpec = {
     consentId?: string;
     deviceId?: string;
     deviceRevision?: string;
+    predecessorSessionId?: string;
 };
 export type PreparedSession = {
     spec: SessionSpec;
@@ -52,6 +55,7 @@ export type PreparedSession = {
     createdAt: number;
     expiresAt: number;
     refreshExpiresAt: number;
+    managedBindingId?: string;
     credentials: {
         access_token: string;
         refresh_token: string;
@@ -136,6 +140,7 @@ export async function assertPrivacyActor(actor: Actor, ctx: AppContext, allowExp
         (!allowExpired && session.expires_at <= now) || session.refresh_expires_at <= now ||
         !sameRoles(accountRoles(account.roles_json), actor.roles))
         throw new ApiError(401, 'session_invalid');
+    await assertManagedSession(actor, ctx, allowExpired);
     if (actor.authMethod === 'anonymous') {
         if (account.identity_state !== 'anonymous' || !sameRoles(actor.roles, ['user']))
             throw new ApiError(401, 'session_invalid');
@@ -240,8 +245,9 @@ export async function prepareSession(spec: SessionSpec, ctx: AppContext): Promis
     const accessToken = `${header}.${body}.${base64url(signature)}`;
     signature.fill(0);
     const refreshHash = await digest(refreshToken);
+    const managedBindingId = await prepareManagedSession(spec, (issuedSeconds + 900) * 1000, createdAt + REFRESH_MS, ctx);
     return { spec, id, refreshHash, createdAt, expiresAt: (issuedSeconds + 900) * 1000,
-        refreshExpiresAt: createdAt + REFRESH_MS,
+        refreshExpiresAt: createdAt + REFRESH_MS, ...(managedBindingId ? {managedBindingId} : {}),
         credentials: { access_token: accessToken, refresh_token: refreshToken, expires_in: 900,
             token_type: 'Bearer', roles: [...spec.roles], auth_method: spec.authMethod, account_id: spec.accountId } };
 }
@@ -256,6 +262,7 @@ export async function insertPreparedSession(prepared: PreparedSession, ctx: AppC
     (await ctx.db.run(`INSERT INTO sessions(id,account_id,refresh_hash,expires_at,refresh_expires_at,auth_epoch,
     auth_method,face_profile_revision,face_consent_id,device_id,created_at,face_profile_epoch,device_revision)
     VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?)`, prepared.id, spec.accountId, prepared.refreshHash, prepared.expiresAt, prepared.refreshExpiresAt, spec.authEpoch, spec.authMethod, spec.profileRevision ?? null, spec.consentId ?? null, spec.deviceId ?? null, prepared.createdAt, spec.profileEpoch ?? null, spec.deviceRevision ?? null));
+    await bindManagedSession(prepared.managedBindingId, prepared.id, spec.accountId, ctx);
     (await (restrictedRefresh ? assertPrivacyActor : assertEnrollmentActor)({ accountId: spec.accountId, sessionId: prepared.id, roles: spec.roles,
         expiresAt: prepared.expiresAt, authEpoch: spec.authEpoch, authMethod: spec.authMethod }, ctx));
 }
@@ -325,6 +332,7 @@ export async function handleAuth(request: Request, ctx: AppContext): Promise<Res
             revision: string;
         }>('SELECT id,revision FROM face_profiles WHERE account_id=? AND status=\'active\'', actor.accountId));
         return ok({ user_id: actor.accountId, name: account.name, roles: actor.roles,
+            operator_capabilities: actor.authMethod === 'registered_face' ? await operatorCapabilities(ctx, actor.accountId) : [],
             auth_method: actor.authMethod, authenticated: actor.authMethod === 'registered_face',
             profile_scope: actor.authMethod === 'registered_face' ? 'registered_face_profile' : 'anonymous_enrollment',
             ...(actor.authMethod === 'registered_face' && profile ? { profile_id: profile.id, profile_revision: profile.revision } : {}) });
@@ -347,7 +355,7 @@ export async function handleAuth(request: Request, ctx: AppContext): Promise<Res
         const prepared = await prepareSession({ accountId: actor.accountId, roles: actor.roles,
             authEpoch: actor.authEpoch, authMethod: old.auth_method, profileRevision: old.face_profile_revision ?? undefined,
             profileEpoch: old.face_profile_epoch ?? undefined, consentId: old.face_consent_id ?? undefined,
-            deviceId: old.device_id ?? undefined, deviceRevision: old.device_revision ?? undefined }, ctx);
+            deviceId: old.device_id ?? undefined, deviceRevision: old.device_revision ?? undefined, predecessorSessionId: old.id }, ctx);
         (await ctx.db.transaction(async () => {
             (await assertRefreshActor(actor, ctx, true));
             const current = (await ctx.db.one<SessionRow>('SELECT * FROM sessions WHERE id=? AND refresh_hash=?', old.id, hash));
@@ -362,9 +370,6 @@ export async function handleAuth(request: Request, ctx: AppContext): Promise<Res
         const actor = await authenticate(request, ctx);
         (await ctx.db.transaction(async restore => {
             const selected = await logoutRetirement(actor, ctx);
-            // One logout is atomic, including the session itself. Reject an
-            // oversized manifest before the first lifecycle/push/session effect.
-            if (selected.facts.length > 32) throw new ApiError(503, 'logout_restriction_capacity');
             restore.operation({ operation_id: await restoreOperationID(actor.accountId, 'auth.logout-v1', 'session.logout:' + actor.sessionId),
                 input_hash: await digest(stable({ protocol: 'lovelies-auth-logout-v1', account_id: actor.accountId,
                     session_id: selected.session.id, device_id: selected.session.device_id, device_revision: selected.session.device_revision })), allocations: {} });
@@ -374,6 +379,9 @@ export async function handleAuth(request: Request, ctx: AppContext): Promise<Res
             // This terminal self-revocation cannot use a current-session postguard.
             // No private response or new credential is released by logout.
         }));
+        // The local revocation is already durable. Managed cleanup runs outside
+        // its transaction and remains explicitly pending if GoTrue is unavailable.
+        await maintainManagedAuth(ctx, 8, actor.accountId);
         return ok({ status: 'logged_out' });
     }
     return null;

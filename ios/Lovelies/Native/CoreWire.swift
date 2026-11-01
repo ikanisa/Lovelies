@@ -27,7 +27,7 @@ enum WireValue: Codable, Equatable, Sendable {
     var bool: Bool? { if case .bool(let value) = self { return value }; return nil }
     var object: [String: WireValue]? { if case .object(let value) = self { return value }; return nil }
     var array: [WireValue]? { if case .array(let value) = self { return value }; return nil }
-    var integer: Int? { if case .number(let value) = self, value.isFinite, value.rounded() == value, value >= 0, value <= Double(Int.max) { return Int(value) }; return nil }
+    var integer: Int? { if case .number(let value) = self, value.isFinite, value.rounded() == value, value >= 0, value < Double(Int.max) { return Int(value) }; return nil }
     subscript(_ key: String) -> WireValue { object?[key] ?? .null }
     static func integer(_ value: Int) -> WireValue { .number(Double(value)) }
     static func strings(_ values: [String]) -> WireValue { .array(values.map(WireValue.string)) }
@@ -55,9 +55,12 @@ enum NativeAPIError: Error, LocalizedError, Equatable {
         switch self {
         case .unavailable(let code): return String.localizedStringWithFormat(NSLocalizedString("Connection unavailable (%@). Try again.", comment: ""), code)
         case .denied(_, let code):
+            if code == "audience_operation_recovered_without_result" { return String(localized: "The saved permission change ended without a confirmed result after service recovery. Check current eligibility and confirm a fresh choice to continue.") }
+            if code == "operation_recovered_without_result" { return String(localized: "The saved change ended without a confirmed result after service recovery. Review current status before making a fresh choice.") }
             if code == "database_schema_not_ready" { return String(localized: "Lovelies is temporarily unavailable. Please try again later.") }
             if code == "age_not_supported" { return String(localized: "Lovelies is for ages 13 and over. You can still manage privacy and account deletion.") }
             if code == "audience_required" { return String(localized: "Confirm your age range before face setup or photos.") }
+            if code == "audience_review_required" || code == "audience_restricted" { return String(localized: "Your annual eligibility review is due. Face setup and photos stay paused until the required review is complete.") }
             if code == "guardian_approval_required" { return String(localized: "Current guardian approval and independent review are required before face setup or photos.") }
             if ["audience_version_changed", "guardian_revision_changed", "audience_policy_changed"].contains(code) { return String(localized: "Your age or guardian approval changed. Refresh its current status before continuing.") }
             if code == "audience_age_review_required" { return String(localized: "A minor account cannot change itself to an older age range. Contact support for independent review.") }
@@ -89,7 +92,12 @@ struct NativeCredentials: Codable, Sendable {
     let access_token: String, refresh_token: String, account_id: String, auth_method: String
     let expires_in: Int, roles: [String]
     let expiresAt: Date
+    /// Local-only provenance, stamped by the repository after a fenced HTTP response.
+    /// It is never sent as authentication input or inferred from a server claim.
+    let localAuthorityGeneration: Int?
     init(_ wire: WireValue, now: Date = Date(), deliveryRotationKey: String? = nil) throws {
+        localAuthorityGeneration = wire["_lovelies_local_authority_generation"].integer
+        guard localAuthorityGeneration == nil || localAuthorityGeneration! >= 0 else { throw NativeAPIError.invalidResponse }
         access_token = try wire.text("access_token"); refresh_token = try wire.text("refresh_token", maximum: 512)
         account_id = try wire.uuid("account_id"); auth_method = try wire.text("auth_method", maximum: 32)
         guard ["anonymous", "registered_face"].contains(auth_method), let seconds = wire["expires_in"].integer, (1...900).contains(seconds),
@@ -115,13 +123,15 @@ struct NativeCredentials: Codable, Sendable {
             guard expiresAt > now else { throw NativeAPIError.invalidResponse }
         }
     }
-    private enum CodingKeys: String, CodingKey { case access_token, refresh_token, account_id, auth_method, expires_in, roles, expiresAt }
+    private enum CodingKeys: String, CodingKey { case access_token, refresh_token, account_id, auth_method, expires_in, roles, expiresAt, localAuthorityGeneration }
     init(from decoder: any Decoder) throws {
         let values = try decoder.container(keyedBy: CodingKeys.self)
         access_token = try values.decode(String.self, forKey: .access_token); refresh_token = try values.decode(String.self, forKey: .refresh_token)
         account_id = try values.decode(String.self, forKey: .account_id); auth_method = try values.decode(String.self, forKey: .auth_method)
         expires_in = try values.decode(Int.self, forKey: .expires_in); roles = try values.decode([String].self, forKey: .roles)
         expiresAt = try values.decode(Date.self, forKey: .expiresAt)
+        localAuthorityGeneration = try values.decodeIfPresent(Int.self, forKey: .localAuthorityGeneration)
+        guard localAuthorityGeneration == nil || localAuthorityGeneration! >= 0 else { throw NativeAPIError.invalidResponse }
         if auth_method == "anonymous" { try validateAnonymousRecovery(accountID: account_id) }
         else { try validateRegisteredRecovery(accountID: account_id) }
     }
@@ -192,7 +202,10 @@ struct NativeSessionSummary: Sendable {
 /// Current durable-session binding for own audience/privacy controls only.
 /// A lifecycle-held registered identity is not a product-authenticated session.
 struct NativeAudienceSessionBinding: Sendable, Equatable {
-    let accountID: String, epoch: Int, registeredIdentity: Bool
+    let accountID: String, epoch: Int, registeredIdentity: Bool, deviceOnly: Bool
+    init(accountID: String, epoch: Int, registeredIdentity: Bool, deviceOnly: Bool = false) {
+        self.accountID = accountID; self.epoch = epoch; self.registeredIdentity = registeredIdentity; self.deviceOnly = deviceOnly
+    }
 }
 
 /// UI publication ownership is independent of backend/session authority.
@@ -200,6 +213,16 @@ struct NativeAudienceSessionBinding: Sendable, Equatable {
 struct NativePublicationFence: Sendable {
     let generation: Int
     func permits(currentGeneration: Int, cancelled: Bool) -> Bool { generation == currentGeneration && !cancelled }
+}
+
+/// A repository reply does not carry permission to publish into a later scene,
+/// account or session. Ordinary account screens capture this before their first
+/// suspension and check it on MainActor immediately before each publication.
+struct NativeAccountPublicationPermit: Sendable {
+    let generation: Int, accountID: String?, sessionEpoch: Int?
+    func permits(generation: Int, accountID: String?, sessionEpoch: Int?, foreground: Bool, cancelled: Bool) -> Bool {
+        self.generation == generation && self.accountID == accountID && self.sessionEpoch == sessionEpoch && foreground && !cancelled
+    }
 }
 
 enum NativeGuestDeletionPhase: String, Codable, Sendable {
@@ -376,41 +399,87 @@ struct NativeGuardianRequest: Equatable, Sendable {
     }
     var live: Bool { [.pending, .underReview, .approved].contains(state) && expiresAt > Date() }
 }
+/// Eligibility attributes and review metadata; an age-range label is derived only in memory.
+struct NativeAudienceDecision: Equatable, Sendable {
+    let atLeast13: Bool?, guardianRequired: Bool?, status: NativeAudienceStatus, version: Int
+    let policyVersion: String?, source: String?, ruleVersion: String?, territory: String?
+    let declaredAt: Date?, nextReviewAt: Date?, reviewRequired: Bool, legacyReceipt: Bool
+    var ageBand: NativeAgeBand { atLeast13 == nil ? .unknown : atLeast13 == false ? .under13 : guardianRequired == true ? .teen : .adult }
+    init(_ wire: WireValue, legacyReceipt: Bool = false) throws {
+        self.legacyReceipt = legacyReceipt
+        if legacyReceipt {
+            try NativeAudienceProjection.keys(wire, ["age_band", "status", "version", "policy_version", "next_review_at"])
+            guard let band = wire["age_band"].string.flatMap(NativeAgeBand.init(rawValue:)) else { throw NativeAPIError.invalidResponse }
+            atLeast13 = band == .unknown ? nil : band != .under13; guardianRequired = band == .unknown ? nil : band == .teen
+            source = nil; ruleVersion = nil; territory = nil; declaredAt = nil; reviewRequired = false
+        } else {
+            try NativeAudienceProjection.keys(wire, ["at_least_13", "guardian_required", "status", "version", "policy_version", "source", "rule_version", "territory", "declared_at", "next_review_at", "review_required"])
+            guard wire["at_least_13"] == .null || wire["at_least_13"].bool != nil,
+                  wire["guardian_required"] == .null || wire["guardian_required"].bool != nil,
+                  let required = wire["review_required"].bool else { throw NativeAPIError.invalidResponse }
+            atLeast13 = wire["at_least_13"].bool; guardianRequired = wire["guardian_required"].bool; reviewRequired = required
+            source = wire["source"] == .null ? nil : try wire.text("source", maximum: 64)
+            ruleVersion = wire["rule_version"] == .null ? nil : try wire.text("rule_version", maximum: 128)
+            territory = wire["territory"] == .null ? nil : try wire.text("territory", maximum: 64)
+            declaredAt = wire["declared_at"] == .null ? nil : try NativeRefreshDeliveryRecord.date(wire["declared_at"])
+        }
+        guard (atLeast13 == nil) == (guardianRequired == nil), !(atLeast13 == false && guardianRequired == true),
+              let status = wire["status"].string.flatMap(NativeAudienceStatus.init(rawValue:)), let version = wire["version"].integer else { throw NativeAPIError.invalidResponse }
+        self.status = status; self.version = version
+        policyVersion = wire["policy_version"] == .null ? nil : try wire.text("policy_version", maximum: 128)
+        nextReviewAt = wire["next_review_at"] == .null ? nil : try NativeRefreshDeliveryRecord.date(wire["next_review_at"])
+        if atLeast13 == nil {
+            guard status == .unknown, version == 0, policyVersion == nil, nextReviewAt == nil, declaredAt == nil,
+                  source == nil, ruleVersion == nil, territory == nil, !reviewRequired else { throw NativeAPIError.invalidResponse }
+        } else {
+            guard version > 0, policyVersion == NativeAudienceProjection.policy, status != .unknown else { throw NativeAPIError.invalidResponse }
+            if atLeast13 == false { guard status == .blocked else { throw NativeAPIError.invalidResponse } }
+            if atLeast13 == true, guardianRequired == false {
+                guard status == .eligible || status == .suspended, !reviewRequired || status == .suspended else { throw NativeAPIError.invalidResponse }
+            }
+            if !legacyReceipt {
+                guard ["self_declaration", "independent_review", "legacy_declaration"].contains(source ?? ""),
+                      ruleVersion == "audience-13-plus-guardian-v1", territory == "global", let declaredAt, let nextReviewAt,
+                      nextReviewAt > declaredAt, nextReviewAt.timeIntervalSince(declaredAt) <= 365 * 24 * 60 * 60 else { throw NativeAPIError.invalidResponse }
+            }
+        }
+    }
+    func needsReview(now: Date = Date()) -> Bool { reviewRequired || nextReviewAt.map { $0 <= now } == true }
+}
 struct NativeAudienceProjection: Equatable, Sendable {
-    static let protocolName = "lovelies-audience-v1", policy = "audience-2026-10-24-v1"
-    let accountID: String, ageBand: NativeAgeBand, status: NativeAudienceStatus, version: Int
-    let policyVersion: String?, nextReviewAt: Date?, guardianRequest: NativeGuardianRequest?, capabilities: NativeAudienceCapabilities
-    init(_ wire: WireValue, account expectedAccount: String) throws {
-        try Self.keys(wire, ["protocol", "policy_version", "account_id", "audience", "guardian_request", "capabilities"])
-        guard wire["protocol"].string == Self.protocolName, wire["policy_version"].string == Self.policy,
-              try wire.uuid("account_id") == expectedAccount else { throw NativeAPIError.invalidResponse }
-        accountID = expectedAccount
-        let audience = wire["audience"]
-        try Self.keys(audience, ["age_band", "status", "version", "policy_version", "next_review_at"])
-        guard let band = audience["age_band"].string.flatMap(NativeAgeBand.init(rawValue:)),
-              let status = audience["status"].string.flatMap(NativeAudienceStatus.init(rawValue:)),
-              let version = audience["version"].integer else { throw NativeAPIError.invalidResponse }
-        ageBand = band; self.status = status; self.version = version
-        policyVersion = audience["policy_version"] == .null ? nil : try audience.text("policy_version", maximum: 128)
-        nextReviewAt = audience["next_review_at"] == .null ? nil : try NativeRefreshDeliveryRecord.date(audience["next_review_at"])
+    static let protocolName = "lovelies-audience-v2", legacyProtocolName = "lovelies-audience-v1", policy = "audience-2026-10-24-v1"
+    let accountID: String, decision: NativeAudienceDecision, guardianRequest: NativeGuardianRequest?, capabilities: NativeAudienceCapabilities
+    let authorityExpiry: Date?
+    var renewalNextStep: String? = nil
+    var ageBand: NativeAgeBand { decision.ageBand }
+    var status: NativeAudienceStatus { decision.status }
+    var version: Int { decision.version }
+    var policyVersion: String? { decision.policyVersion }
+    var nextReviewAt: Date? { decision.nextReviewAt }
+    init(_ wire: WireValue, account expectedAccount: String, allowLegacyReceipt: Bool = false) throws {
+        let legacy = allowLegacyReceipt && wire["protocol"].string == Self.legacyProtocolName
+        var fields: Set<String> = ["protocol", "policy_version", "account_id", "audience", "guardian_request", "capabilities"]
+        if !legacy { fields.insert("authority_expires_at") }; try Self.keys(wire, fields)
+        guard legacy || wire["protocol"].string == Self.protocolName,
+              wire["policy_version"].string == Self.policy, try wire.uuid("account_id") == expectedAccount else { throw NativeAPIError.invalidResponse }
+        accountID = expectedAccount; decision = try NativeAudienceDecision(wire["audience"], legacyReceipt: legacy)
         guardianRequest = wire["guardian_request"] == .null ? nil : try NativeGuardianRequest(wire["guardian_request"], child: expectedAccount)
         capabilities = try NativeAudienceCapabilities(wire["capabilities"])
-        if band == .unknown {
-            guard status == .unknown, version == 0, policyVersion == nil, nextReviewAt == nil, guardianRequest == nil, !capabilities.any else { throw NativeAPIError.invalidResponse }
-        } else {
-            guard version > 0, policyVersion == Self.policy else { throw NativeAPIError.invalidResponse }
-            if band == .under13 { guard status == .blocked, !capabilities.any else { throw NativeAPIError.invalidResponse } }
-            if band == .adult { guard status == .eligible || status == .suspended else { throw NativeAPIError.invalidResponse } }
-            if status == .suspended || status == .blocked { guard !capabilities.any else { throw NativeAPIError.invalidResponse } }
-            if band == .teen {
-                guard status == .guardianPending || status == .eligible || status == .suspended else { throw NativeAPIError.invalidResponse }
-                if status == .eligible || capabilities.any {
-                    guard let request = guardianRequest, request.state == .approved, let nextReviewAt,
-                          nextReviewAt <= request.expiresAt,
-                          (!capabilities.faceAuthentication || request.purposes.faceAuthentication),
-                          (!capabilities.photoMatching || request.purposes.photoMatching),
-                          (!capabilities.photoProcessing || request.purposes.photoProcessing) else { throw NativeAPIError.invalidResponse }
-                } else { guard !capabilities.any else { throw NativeAPIError.invalidResponse } }
+        authorityExpiry = legacy || wire["authority_expires_at"] == .null ? nil : try NativeRefreshDeliveryRecord.date(wire["authority_expires_at"])
+        if !legacy {
+            guard capabilities.any == (authorityExpiry != nil) else { throw NativeAPIError.invalidResponse }
+            if let authorityExpiry { guard let nextReviewAt, authorityExpiry <= nextReviewAt else { throw NativeAPIError.invalidResponse } }
+        }
+        if ageBand == .unknown { guard guardianRequest == nil, !capabilities.any else { throw NativeAPIError.invalidResponse } }
+        if status != .eligible || decision.reviewRequired { guard !capabilities.any else { throw NativeAPIError.invalidResponse } }
+        if ageBand == .teen {
+            guard status == .guardianPending || status == .eligible || status == .suspended else { throw NativeAPIError.invalidResponse }
+            if status == .eligible || capabilities.any {
+                guard let request = guardianRequest, request.state == .approved,
+                      authorityExpiry == nil || authorityExpiry! <= request.expiresAt,
+                      (!capabilities.faceAuthentication || request.purposes.faceAuthentication),
+                      (!capabilities.photoMatching || request.purposes.photoMatching),
+                      (!capabilities.photoProcessing || request.purposes.photoProcessing) else { throw NativeAPIError.invalidResponse }
             }
         }
     }
@@ -418,9 +487,98 @@ struct NativeAudienceProjection: Equatable, Sendable {
         guard let object = wire.object, Set(object.keys) == expected else { throw NativeAPIError.invalidResponse }
     }
     func require(_ purpose: NativeAudiencePurpose, now: Date = Date()) throws {
-        guard status == .eligible, policyVersion == Self.policy, capabilities.allows(purpose),
-              ageBand == .adult || (ageBand == .teen && guardianRequest?.state == .approved && (guardianRequest?.expiresAt ?? .distantPast) > now && (nextReviewAt ?? .distantPast) > now)
-        else { throw NativeAPIError.denied(403, ageBand == .under13 ? "age_not_supported" : ageBand == .teen ? "guardian_approval_required" : "audience_required") }
+        guard !decision.legacyReceipt, status == .eligible, policyVersion == Self.policy, capabilities.allows(purpose),
+              let nextReviewAt, nextReviewAt > now, let authorityExpiry, authorityExpiry > now, !decision.reviewRequired,
+              ageBand == .adult || (ageBand == .teen && guardianRequest?.state == .approved && (guardianRequest?.expiresAt ?? .distantPast) > now)
+        else { throw NativeAPIError.denied(403, ageBand == .under13 ? "age_not_supported" : decision.needsReview(now: now) && ageBand == .adult ? "audience_review_required" : ageBand == .teen ? "guardian_approval_required" : "audience_required") }
+    }
+    func authorityExpiresAt(sessionExpiresAt: Date, purpose: NativeAudiencePurpose, now: Date = Date()) throws -> Date {
+        try require(purpose, now: now)
+        guard sessionExpiresAt > now, let nextReviewAt, let authorityExpiry else { throw NativeAPIError.authenticationRequired }
+        var deadline = min(sessionExpiresAt, min(nextReviewAt, authorityExpiry))
+        if ageBand == .teen {
+            guard let guardianRequest, guardianRequest.purposes.allows(purpose) else { throw NativeAPIError.denied(403, "guardian_approval_required") }
+            deadline = min(deadline, guardianRequest.expiresAt)
+        }
+        return deadline
+    }
+}
+struct NativeAudienceDeviceGuardianRequest: Equatable, Sendable {
+    let id: String, state: NativeGuardianRequest.State, revision: Int, expiresAt: Date
+    init(_ wire: WireValue) throws {
+        try NativeAudienceProjection.keys(wire, ["id", "state", "revision", "policy_version", "expires_at"])
+        id = try wire.uuid("id")
+        guard let state = wire["state"].string.flatMap(NativeGuardianRequest.State.init(rawValue:)),
+              let revision = wire["revision"].integer, revision > 0, wire["policy_version"].string == NativeAudienceProjection.policy else { throw NativeAPIError.invalidResponse }
+        self.state = state; self.revision = revision; expiresAt = try NativeRefreshDeliveryRecord.date(wire["expires_at"])
+    }
+}
+/// Signed-device eligibility status carries no product, biometric or session authority.
+struct NativeAudienceDeviceStatus: Equatable, Sendable {
+    let accountID: String, deviceID: String, decision: NativeAudienceDecision, renewalAvailable: Bool, guardianReviewAvailable: Bool, nextStep: String
+    let guardianRequest: NativeAudienceDeviceGuardianRequest?, renewalNextStep: String?
+    let authorityExpiry: Date?
+    init(_ wire: WireValue, account: String, device: String, nonce: String, operation: NativeAudienceDeviceRenewalRecord? = nil) throws {
+        var fields: Set<String> = ["protocol", "account_id", "device_id", "request_nonce", "audience", "renewal_available", "guardian_review_available", "next_step", "guardian_request", "authority_expires_at"]
+        if operation != nil { fields.insert("renewal") }
+        try NativeAudienceProjection.keys(wire, fields)
+        guard wire["protocol"].string == "lovelies-audience-device-v1", try wire.uuid("account_id") == account,
+              try wire.uuid("device_id") == device, try wire.uuid("request_nonce") == nonce,
+              let available = wire["renewal_available"].bool, let guardianAvailable = wire["guardian_review_available"].bool, let next = wire["next_step"].string,
+              ["face_login", "profile_recovery", "guardian_review", "audience_review"].contains(next) else { throw NativeAPIError.invalidResponse }
+        accountID = account; deviceID = device; decision = try NativeAudienceDecision(wire["audience"]); renewalAvailable = available; guardianReviewAvailable = guardianAvailable; nextStep = next
+        guardianRequest = wire["guardian_request"] == .null ? nil : try NativeAudienceDeviceGuardianRequest(wire["guardian_request"])
+        authorityExpiry = wire["authority_expires_at"] == .null ? nil : try NativeRefreshDeliveryRecord.date(wire["authority_expires_at"])
+        if let authorityExpiry {
+            guard decision.status == .eligible, !decision.reviewRequired, let nextReviewAt = decision.nextReviewAt,
+                  authorityExpiry <= nextReviewAt else { throw NativeAPIError.invalidResponse }
+            if decision.guardianRequired == true { guard let guardianRequest, guardianRequest.state == .approved, authorityExpiry <= guardianRequest.expiresAt else { throw NativeAPIError.invalidResponse } }
+        }
+        guard !available || decision.atLeast13 == true && decision.guardianRequired == false,
+              !guardianAvailable || decision.atLeast13 == true && decision.guardianRequired == true, decision.guardianRequired == true || guardianRequest == nil else { throw NativeAPIError.invalidResponse }
+        if let operation {
+            renewalNextStep = try Self.validateReceipt(wire["renewal"], key: operation.operationKey, expectedVersion: operation.expectedVersion,
+                currentVersion: decision.version, guardianRequired: operation.guardianRequired)
+            if operation.guardianRequired, decision.version == operation.expectedVersion + 1 {
+                guard guardianRequest?.id == (try wire["renewal"].uuid("guardian_request_id")) else { throw NativeAPIError.invalidResponse }
+            }
+        } else { renewalNextStep = nil }
+    }
+    @discardableResult static func validateReceipt(_ wire: WireValue, key: String, expectedVersion: Int, currentVersion: Int, guardianRequired: Bool = false) throws -> String {
+        var fields: Set<String> = ["operation_key", "from_version", "to_version", "next_step"]
+        if guardianRequired { fields.insert("guardian_request_id") }
+        try NativeAudienceProjection.keys(wire, fields)
+        guard wire["operation_key"].string == key, wire["from_version"].integer == expectedVersion,
+              wire["to_version"].integer == expectedVersion + 1, currentVersion >= expectedVersion + 1,
+              let next = wire["next_step"].string, (guardianRequired ? ["guardian_review"] : ["face_login", "profile_recovery"]).contains(next) else { throw NativeAPIError.invalidResponse }
+        if guardianRequired { _ = try wire.uuid("guardian_request_id") }
+        return next
+    }
+}
+/// Durable original device-renewal intent. Nonces/signatures are request-local;
+/// retries preserve the exact account, device, decision, consent, version and key.
+struct NativeAudienceDeviceRenewalRecord: Codable, Equatable, Sendable {
+    let apiOrigin: String, accountID: String, deviceID: String, keyAlias: String, faceHandle: String, consentPolicy: String?
+    let operationKey: String, expectedVersion: Int, preparedAt: Date, guardianRequired: Bool
+    init(origin: URL, device: RegisteredDevice, expectedVersion: Int, consentPolicy: String?, guardianRequired: Bool = false) throws {
+        apiOrigin = origin.absoluteString; accountID = device.accountID; deviceID = device.deviceID
+        keyAlias = device.keyAlias ?? NativeEnrollmentRecord.keyAlias; faceHandle = device.faceHandle; self.consentPolicy = consentPolicy; self.guardianRequired = guardianRequired
+        operationKey = UUID().uuidString.lowercased(); self.expectedVersion = expectedVersion; preparedAt = Date()
+        try validate(origin: origin, device: device)
+    }
+    func validate(origin: URL, device: RegisteredDevice) throws {
+        guard apiOrigin == origin.absoluteString, accountID == device.accountID, deviceID == device.deviceID,
+              keyAlias == (device.keyAlias ?? NativeEnrollmentRecord.keyAlias), faceHandle == device.faceHandle,
+              (guardianRequired ? consentPolicy == nil : consentPolicy?.isEmpty == false && (consentPolicy?.utf8.count ?? 129) <= 128),
+              UUID(uuidString: accountID) != nil, UUID(uuidString: deviceID) != nil,
+              NativeAccountRecoveryRecord.validAlias(keyAlias), NativeAccountRecoveryRecord.validSecret(faceHandle, prefix: "lfh_"),
+              expectedVersion > 0, expectedVersion < Int.max, UUID(uuidString: operationKey) != nil else { throw NativeAPIError.invalidResponse }
+    }
+    var decisionBody: [String: WireValue] {
+        var fields: [String: WireValue] = ["at_least_13": .bool(true), "guardian_required": .bool(guardianRequired),
+            "policy_version": .string(NativeAudienceProjection.policy), "expected_version": .integer(expectedVersion), "operation_key": .string(operationKey)]
+        if let consentPolicy { fields["consent"] = .object(["purpose": .string("face_authentication"), "policy_version": .string(consentPolicy), "granted": .bool(true)]) }
+        return fields
     }
 }
 /// Server-issued HTTPS presentation authority for one exact known-account
@@ -450,18 +608,31 @@ struct NativeAudienceMutationRecord: Codable, Equatable, Sendable {
     init(origin: URL, accountID: String, path: String, method: String, body: WireValue, operationKey: String = UUID().uuidString.lowercased()) throws {
         apiOrigin = origin.absoluteString; self.accountID = accountID; self.path = path; self.method = method; self.operationKey = operationKey; preparedAt = Date()
         var fields = body.object ?? [:]; fields["operation_key"] = .string(operationKey); self.body = .object(fields)
-        try validate(origin: origin)
+        try validate(origin: origin, allowLegacy: false)
     }
-    func validate(origin: URL) throws {
+    func validate(origin: URL, allowLegacy: Bool = true) throws {
         guard apiOrigin == origin.absoluteString, UUID(uuidString: accountID) != nil, (16...128).contains(operationKey.count),
               operationKey.allSatisfy({ $0.isASCII && ($0.isLetter || $0.isNumber || "._:-".contains($0)) }),
               body["operation_key"].string == operationKey, method == (path == "/me/audience" ? "PUT" : "POST"),
               try body.encoded().count <= 4096 else { throw NativeAPIError.invalidResponse }
         let fields = Set(body.object?.keys.map { $0 } ?? [])
-        if path == "/me/audience" {
-            guard fields == ["age_band", "policy_version", "expected_version", "operation_key"],
-                  let band = body["age_band"].string.flatMap(NativeAgeBand.init(rawValue:)), band != .unknown,
-                  body["policy_version"].string == NativeAudienceProjection.policy, body["expected_version"].integer != nil else { throw NativeAPIError.invalidResponse }
+        if path == "/me/audience" || path == "/me/audience/renew" {
+            if fields.contains("age_band") {
+                guard allowLegacy, path == "/me/audience", fields == ["age_band", "policy_version", "expected_version", "operation_key"],
+                      let band = body["age_band"].string.flatMap(NativeAgeBand.init(rawValue:)), band != .unknown else { throw NativeAPIError.invalidResponse }
+            } else {
+                let expected: Set<String> = ["at_least_13", "guardian_required", "policy_version", "expected_version", "operation_key"]
+                guard fields == (path == "/me/audience/renew" ? expected.union(["consent"]) : expected),
+                      let atLeast13 = body["at_least_13"].bool, let guardianRequired = body["guardian_required"].bool,
+                      atLeast13 || !guardianRequired, path != "/me/audience/renew" || atLeast13 && !guardianRequired else { throw NativeAPIError.invalidResponse }
+            }
+            guard body["policy_version"].string == NativeAudienceProjection.policy, let version = body["expected_version"].integer,
+                  version >= (path == "/me/audience/renew" ? 1 : 0) else { throw NativeAPIError.invalidResponse }
+            if path == "/me/audience/renew" {
+                try NativeAudienceProjection.keys(body["consent"], ["purpose", "policy_version", "granted"])
+                guard body["consent"]["purpose"].string == "face_authentication", body["consent"]["granted"].bool == true,
+                      !(try body["consent"].text("policy_version", maximum: 128)).isEmpty else { throw NativeAPIError.invalidResponse }
+            }
         } else if path == "/me/guardian-requests" {
             guard fields == ["expected_version", "policy_version", "operation_key"], body["expected_version"].integer != nil,
                   body["policy_version"].string == NativeAudienceProjection.policy else { throw NativeAPIError.invalidResponse }
@@ -771,15 +942,261 @@ struct NativePreview: Sendable {
               wire["totals"]["recipients"].integer == expected.count, wire["totals"]["pairs"].integer == pairs.count else { throw NativeAPIError.invalidResponse }
     }
 }
-struct NativeOperationIntent: Codable, Sendable {
+struct NativeOperationIntent: Codable, Sendable, Equatable {
     let key: String, accountID: String, source: String, action: String, payload: WireValue
     let approvedPairs: Set<NativePair>?
     var path: String? = nil
     var method: String? = nil
 }
+/// Negative recovery evidence contains no provider token or raw mutation body.
+/// A fresh explicit decision may name its replacement; the original remains.
+struct NativeOperationRetirementRecord: Codable, Sendable, Equatable {
+    var schema = 1
+    let apiOrigin: String, accountID: String, operationKey: String, action: String, path: String, method: String, inputSHA256: String
+    let status: String, sourceStatus: Int, sourceCode: String, observedAt: Date
+    var replacementOperationKey: String?
+    init(origin: URL, account: String, key: String, action: String, path: String, method: String, inputSHA256: String, sourceStatus: Int, sourceCode: String) throws {
+        apiOrigin = origin.absoluteString; accountID = account; operationKey = key; self.action = action; self.path = path; self.method = method
+        self.inputSHA256 = inputSHA256; status = "operation_recovered_without_result"; self.sourceStatus = sourceStatus; self.sourceCode = sourceCode; observedAt = Date()
+        try validate(origin: origin)
+    }
+    static func isTerminal(status: Int, code: String) -> Bool {
+        status == 409 && code == "operation_recovered_without_result" || status == 410 && code == "operation_retired_by_recovery"
+    }
+    var isPush: Bool { path == "/me/push-devices" || path.hasPrefix("/me/push-devices/") }
+    func validate(origin: URL) throws {
+        func key(_ value: String) -> Bool { value.range(of: "^[A-Za-z0-9._:-]{16,128}$", options: .regularExpression) != nil }
+        guard schema == 1, apiOrigin == origin.absoluteString, UUID(uuidString: accountID) != nil, key(operationKey),
+              !action.isEmpty, action.utf8.count <= 256, path.hasPrefix("/"), path.utf8.count <= 512,
+              ["POST", "PUT", "PATCH", "DELETE"].contains(method), inputSHA256.range(of: "^[0-9a-f]{64}$", options: .regularExpression) != nil,
+              status == "operation_recovered_without_result", Self.isTerminal(status: sourceStatus, code: sourceCode),
+              observedAt.timeIntervalSince1970 > 0, observedAt <= Date().addingTimeInterval(120),
+              replacementOperationKey.map({ key($0) && $0 != operationKey }) ?? true else { throw NativeAPIError.invalidResponse }
+    }
+}
 struct NativeUploadRecord: Codable, Sendable {
     let accountID: String, localID: String, sha256: String, assetID: String
     var status: String
+}
+
+/// Exact StoreKit input and historical verification evidence. This protected
+/// record never grants current entitlement and never becomes a UI/diagnostic
+/// value. Each account/transaction has its own slot, so a retired account or an
+/// uncertain purchase does not block unrelated product mutations.
+struct NativeAppleStoreJournal: Codable, Sendable, Equatable {
+    enum Phase: String, Codable, Sendable { case prepared, dispatched, verified, finishPending, finished }
+    let apiOrigin: String, accountID: String, operationKey: String
+    let productID: String, transactionID: String, originalTransactionID: String, environment: String
+    let signedTransaction: String, preparedAt: Date
+    var phase: Phase = .prepared
+    var receipt: WireValue?
+    var directResult: WireValue?
+
+    init(origin: URL, account: String, product: String, transaction: String, original: String,
+         signedTransaction: String, operationKey: String = UUID().uuidString.lowercased()) throws {
+        apiOrigin = origin.absoluteString; accountID = account; self.operationKey = operationKey
+        productID = product; transactionID = transaction; originalTransactionID = original
+        self.signedTransaction = signedTransaction; preparedAt = Date()
+        environment = try Self.submissionClaims(signedTransaction).text("environment", maximum: 32).lowercased()
+        try validate(origin: origin)
+    }
+    static func submissionClaims(_ signed: String) throws -> WireValue {
+        let parts = signed.split(separator: ".", omittingEmptySubsequences: false)
+        guard parts.count == 3, let bytes = Data(base64URL: String(parts[1])), bytes.count <= 24000 else { throw NativeAPIError.invalidResponse }
+        return try WireValue.decoded(bytes)
+    }
+    static func digest(_ data: Data) -> String { SHA256.hash(data: data).map { String(format: "%02x", $0) }.joined() }
+    var credentialHash: String { Self.digest(Data(signedTransaction.utf8)) }
+    var request: WireValue { .object(["operation_key": .string(operationKey), "product_id": .string(productID), "signed_transaction": .string(signedTransaction)]) }
+    var slot: String { "store-apple-" + Self.digest(Data((apiOrigin + "|" + accountID + "|" + transactionID).utf8)) }
+    func validate(origin: URL) throws {
+        guard apiOrigin == origin.absoluteString, UUID(uuidString: accountID) != nil,
+              operationKey.range(of: "^[A-Za-z0-9._:-]{16,128}$", options: .regularExpression) != nil,
+              !operationKey.contains(signedTransaction), (1...160).contains(productID.count),
+              (1...160).contains(transactionID.count), (1...160).contains(originalTransactionID.count),
+              signedTransaction.utf8.count <= 32768, !signedTransaction.isEmpty,
+              [productID, transactionID, originalTransactionID, signedTransaction].allSatisfy({ !$0.unicodeScalars.contains(where: { $0.value <= 32 }) }),
+              ["production", "sandbox"].contains(environment), preparedAt <= Date().addingTimeInterval(120) else { throw NativeAPIError.invalidResponse }
+        let claims = try Self.submissionClaims(signedTransaction)
+        // Claims are used only to bind a verified StoreKit submission to this
+        // journal. The backend independently verifies the signed credential.
+        guard claims["productId"].string == productID, claims["transactionId"].string == transactionID,
+              claims["originalTransactionId"].string == originalTransactionID,
+              claims["environment"].string?.lowercased() == environment,
+              claims["appAccountToken"].string?.lowercased() == accountID else { throw NativeAPIError.invalidResponse }
+        if let directResult { try validateResult(directResult) }
+        if let receipt { guard try receiptResult(receipt) != nil else { throw NativeAPIError.invalidResponse } }
+        if [.verified, .finishPending, .finished].contains(phase), receipt == nil { throw NativeAPIError.invalidResponse }
+    }
+    func inputHash(scheme: String) throws -> String {
+        let payload: WireValue
+        switch scheme {
+        case "legacy-raw-v0": payload = request
+        case "digest-v1": payload = .object(["protocol": .string("lovelies-store-operation-input-v1"), "operation_key": .string(operationKey),
+            "product_id": .string(productID), "credential_sha256": .string(credentialHash)])
+        default: throw NativeAPIError.invalidResponse
+        }
+        return Self.digest(try WireValue.object(["action": .string("store.apple"), "source": .string("store"), "payload": payload]).canonical())
+    }
+    func validateResult(_ value: WireValue) throws {
+        let base: Set<String> = ["active", "billing_environment", "expires_at", "financial_eligible", "original_transaction_id", "product_id", "provider", "stale", "transaction_id"]
+        let keys = Set(value.object?.keys.map { $0 } ?? [])
+        guard keys == base || keys == base.union(["verified_submission"]), value["provider"].string == "apple_app_store",
+              value["product_id"].string == productID, value["original_transaction_id"].string == originalTransactionID,
+              value["billing_environment"].string == environment, value["active"].bool != nil, value["stale"].bool != nil,
+              value["financial_eligible"].bool == (environment == "production") else { throw NativeAPIError.invalidResponse }
+        _ = try value.text("transaction_id", maximum: 160)
+        _ = try NativeRefreshDeliveryRecord.date(value["expires_at"])
+        if let submission = value["verified_submission"].object {
+            guard Set(submission.keys) == ["protocol", "product_id", "transaction_id", "original_transaction_id", "billing_environment", "credential_sha256"],
+                  submission["protocol"]?.string == "lovelies-apple-submission-v2", submission["product_id"]?.string == productID,
+                  submission["transaction_id"]?.string == transactionID, submission["original_transaction_id"]?.string == originalTransactionID,
+                  submission["billing_environment"]?.string == environment, submission["credential_sha256"]?.string == credentialHash else { throw NativeAPIError.invalidResponse }
+        } else {
+            // A legacy flat receipt is usable only when it identifies this exact
+            // submitted transaction. A newer current transaction is not proof.
+            guard value["transaction_id"].string == transactionID else { throw NativeAPIError.invalidResponse }
+        }
+    }
+    func receiptResult(_ value: WireValue) throws -> WireValue? {
+        guard value["protocol"].string == "lovelies-store-operation-receipt-v1", value["actor_id"].string == accountID,
+              value["operation_key"].string == operationKey else { throw NativeAPIError.invalidResponse }
+        if value["status"].string == "unknown" {
+            guard Set(value.object?.keys.map { $0 } ?? []) == ["protocol", "actor_id", "operation_key", "status"] else { throw NativeAPIError.invalidResponse }
+            return nil
+        }
+        guard Set(value.object?.keys.map { $0 } ?? []) == ["protocol", "actor_id", "operation_key", "status", "action", "source", "payload_hash", "result", "input_scheme", "credential_sha256", "receipt_scope"],
+              value["status"].string == "committed", value["action"].string == "store.apple", value["source"].string == "store",
+              value["receipt_scope"].string == "historical", value["credential_sha256"].string == credentialHash,
+              value["payload_hash"].string == (try inputHash(scheme: value.text("input_scheme", maximum: 32))) else { throw NativeAPIError.invalidResponse }
+        let result = value["result"]; try validateResult(result)
+        if let directResult, directResult != result { throw NativeAPIError.invalidResponse }
+        return result
+    }
+    static func legacy(_ intent: NativeOperationIntent, origin: URL) throws -> NativeAppleStoreJournal {
+        guard intent.action == "store.apple", ["personal", "store"].contains(intent.source),
+              intent.path == "/subscriptions/apple/transactions", intent.method == "POST", intent.payload["operation_key"].string == intent.key,
+              Set(intent.payload.object?.keys.map { $0 } ?? []) == ["operation_key", "product_id", "signed_transaction"] else { throw NativeAPIError.invalidResponse }
+        let signed = try intent.payload.text("signed_transaction", maximum: 32768), claims = try submissionClaims(signed)
+        var journal = try Self(origin: origin, account: intent.accountID, product: intent.payload.text("product_id", maximum: 160),
+                               transaction: claims.text("transactionId", maximum: 160), original: claims.text("originalTransactionId", maximum: 160),
+                               signedTransaction: signed, operationKey: intent.key)
+        journal.phase = .dispatched; return journal
+    }
+}
+
+struct NativeExportDeliveryJournal: Codable, Sendable, Equatable {
+    let apiOrigin: String, accountID: String, sessionID: String, requestID: String, operationKey: String, acknowledgementKey: String, fileID: String
+    let preparedAt: Date
+    var delivery: WireValue?
+    var staged = false
+    var acknowledged = false
+    var chunked: Bool { delivery?["protocol"].string == "lovelies-privacy-export-delivery-v3" }
+    init(origin: URL, account: String, session: String, request: String) {
+        apiOrigin = origin.absoluteString; accountID = account; sessionID = session; requestID = request
+        operationKey = UUID().uuidString.lowercased(); acknowledgementKey = UUID().uuidString.lowercased(); fileID = UUID().uuidString.lowercased(); preparedAt = Date()
+    }
+    func validate(origin: URL) throws {
+        guard apiOrigin == origin.absoluteString, [accountID, sessionID, requestID, operationKey, acknowledgementKey, fileID].allSatisfy({ UUID(uuidString: $0) != nil }),
+              operationKey != acknowledgementKey,
+              preparedAt <= Date().addingTimeInterval(120), !acknowledged || staged else { throw NativeAPIError.invalidResponse }
+        if let delivery { try validateDelivery(delivery) }
+        else if staged || acknowledged { throw NativeAPIError.invalidResponse }
+    }
+    func validateDelivery(_ value: WireValue) throws {
+        let chunked = value["protocol"].string == "lovelies-privacy-export-delivery-v3"
+        let fields: Set<String> = ["protocol", "operation_key", "request_id", "delivery_id", "account_id", "session_id", "state", "expires_at", "sha256", "bytes", "retrieve_path", "ack_path"]
+        let chunkFields: Set<String> = chunked ? ["publication_id", "chunk_count", "chunk_bytes", "manifest_sha256"] : []
+        guard Set(value.object?.keys.map { $0 } ?? []) == fields.union(chunkFields),
+              ["lovelies-privacy-export-delivery-v2", "lovelies-privacy-export-delivery-v3"].contains(value["protocol"].string ?? ""), value["operation_key"].string == operationKey,
+              value["request_id"].string == requestID, value["account_id"].string == accountID, value["session_id"].string == sessionID,
+              ["available", "acknowledged"].contains(value["state"].string ?? ""), let count = value["bytes"].integer, (1...(chunked ? 9_007_199_254_740_991 : 20 * 1024 * 1024)).contains(count),
+              let hash = value["sha256"].string, hash.count == 64, hash.allSatisfy({ $0.isHexDigit && !$0.isUppercase }) else { throw NativeAPIError.invalidResponse }
+        let id = try value.uuid("delivery_id")
+        guard value["retrieve_path"].string == "/privacy-exports/deliveries/" + id + (chunked ? "/manifest?offset=0" : ""),
+              value["ack_path"].string == "/privacy-exports/deliveries/" + id + "/ack" else { throw NativeAPIError.invalidResponse }
+        if chunked {
+            _ = try value.uuid("publication_id")
+            guard value["chunk_bytes"].integer == NativeExportManifestPage.chunkBytes,
+                  let chunks = value["chunk_count"].integer, (1...Int(Int32.max)).contains(chunks),
+                  chunks == count / NativeExportManifestPage.chunkBytes + (count % NativeExportManifestPage.chunkBytes == 0 ? 0 : 1),
+                  NativeExportManifestPage.validHash(value["manifest_sha256"].string) else { throw NativeAPIError.invalidResponse }
+        }
+        let expires = try NativeRefreshDeliveryRecord.date(value["expires_at"])
+        guard expires > preparedAt.addingTimeInterval(-120), expires <= preparedAt.addingTimeInterval(chunked ? 3720 : 420) else { throw NativeAPIError.invalidResponse }
+        if acknowledged, value["state"].string != "acknowledged" { throw NativeAPIError.invalidResponse }
+        if let previous = delivery {
+            for field in ["protocol", "delivery_id", "sha256", "bytes", "expires_at", "retrieve_path", "ack_path", "publication_id", "chunk_count", "chunk_bytes", "manifest_sha256"] {
+                guard value[field] == previous[field] else { throw NativeAPIError.invalidResponse }
+            }
+            if previous["state"].string == "acknowledged", value["state"].string != "acknowledged" { throw NativeAPIError.invalidResponse }
+        }
+    }
+    func validateBytes(_ bytes: Data) throws {
+        guard !chunked, let delivery, bytes.count == delivery["bytes"].integer,
+              NativeAppleStoreJournal.digest(bytes) == delivery["sha256"].string else { throw NativeAPIError.invalidResponse }
+    }
+    func requireLive(now: Date = Date()) throws {
+        guard now >= preparedAt.addingTimeInterval(-120), now < preparedAt.addingTimeInterval(chunked ? 3600 : 300),
+              let delivery, try NativeRefreshDeliveryRecord.date(delivery["expires_at"]) > now else {
+            throw NativeAPIError.unsupported(String(localized: "This export delivery expired. Request a new export from the privacy center."))
+        }
+    }
+    func childFileID(kind: String, index: Int) throws -> String {
+        guard ["manifest", "chunk"].contains(kind), index >= 0 else { throw NativeAPIError.invalidResponse }
+        let value: WireValue = .object(["protocol": .string("lovelies-local-export-chunk-v1"), "file": .string(fileID), "kind": .string(kind), "index": .integer(index)])
+        var chars = Array(NativeAppleStoreJournal.digest(try value.canonical()).prefix(32))
+        chars[12] = "8"; chars[16] = Array("89ab")[Int(String(chars[16]), radix: 16)! & 3]
+        return String(chars[0..<8]) + "-" + String(chars[8..<12]) + "-" + String(chars[12..<16]) + "-" + String(chars[16..<20]) + "-" + String(chars[20..<32])
+    }
+}
+
+/// A manifest page is bounded independently from the full export. The chain
+/// authenticates ordering and every raw chunk; UTF-8 may span chunk boundaries.
+struct NativeExportChunk: Sendable {
+    let index: Int, bytes: Int, hash: String, root: String, path: String
+    func validate(_ data: Data) throws {
+        guard data.count == bytes, NativeAppleStoreJournal.digest(data) == hash else { throw NativeAPIError.invalidResponse }
+    }
+}
+struct NativeExportManifestPage: Sendable {
+    static let chunkBytes = 1024 * 1024, pageSize = 128
+    let offset: Int, next: Int?, previous: String, chunks: [NativeExportChunk]
+    static func validHash(_ value: String?) -> Bool { value.map { $0.count == 64 && $0.allSatisfy { $0.isHexDigit && !$0.isUppercase } } ?? false }
+    static func seed(_ delivery: WireValue) throws -> String {
+        let value: WireValue = .object(["protocol": .string("lovelies-privacy-export-chunks-v1"), "publication_id": .string(try delivery.uuid("publication_id"))])
+        return NativeAppleStoreJournal.digest(try value.canonical())
+    }
+    static func nextRoot(_ previous: String, index: Int, bytes: Int, hash: String) throws -> String {
+        let value: WireValue = .object(["previous_sha256": .string(previous), "index": .integer(index), "bytes": .integer(bytes), "sha256": .string(hash)])
+        return NativeAppleStoreJournal.digest(try value.canonical())
+    }
+    init(_ value: WireValue, delivery: WireValue, offset: Int, previous: String) throws {
+        guard delivery["protocol"].string == "lovelies-privacy-export-delivery-v3",
+              Set(value.object?.keys.map { $0 } ?? []) == ["protocol", "publication_id", "total_bytes", "sha256", "chunk_count", "chunk_bytes", "manifest_sha256", "offset", "next_offset", "previous_root", "chunks"],
+              value["protocol"].string == "lovelies-privacy-export-manifest-v1", value["publication_id"] == delivery["publication_id"],
+              value["total_bytes"] == delivery["bytes"], value["sha256"] == delivery["sha256"], value["chunk_count"] == delivery["chunk_count"],
+              value["chunk_bytes"].integer == Self.chunkBytes, value["manifest_sha256"] == delivery["manifest_sha256"],
+              let count = delivery["chunk_count"].integer, let total = delivery["bytes"].integer,
+              offset >= 0, offset < count, offset % Self.pageSize == 0, value["offset"].integer == offset, value["previous_root"].string == previous,
+              let rows = value["chunks"].array, rows.count == min(Self.pageSize, count - offset) else { throw NativeAPIError.invalidResponse }
+        let id = try delivery.uuid("delivery_id")
+        var root = previous, parsed: [NativeExportChunk] = []
+        for (slot, row) in rows.enumerated() {
+            let index = offset + slot, bytes = index == count - 1 ? total - index * Self.chunkBytes : Self.chunkBytes
+            let path = "/privacy-exports/deliveries/\(id)/chunks/\(index)"
+            guard Set(row.object?.keys.map { $0 } ?? []) == ["index", "bytes", "sha256", "root_sha256", "retrieve_path"],
+                  row["index"].integer == index, row["bytes"].integer == bytes, (1...Self.chunkBytes).contains(bytes),
+                  let hash = row["sha256"].string, Self.validHash(hash), row["retrieve_path"].string == path else { throw NativeAPIError.invalidResponse }
+            root = try Self.nextRoot(root, index: index, bytes: bytes, hash: hash)
+            guard row["root_sha256"].string == root else { throw NativeAPIError.invalidResponse }
+            parsed.append(.init(index: index, bytes: bytes, hash: hash, root: root, path: path))
+        }
+        let expectedNext = offset + rows.count < count ? offset + rows.count : nil
+        guard (expectedNext == nil ? value["next_offset"] == .null : value["next_offset"].integer == expectedNext),
+              expectedNext != nil || root == delivery["manifest_sha256"].string else { throw NativeAPIError.invalidResponse }
+        self.offset = offset; next = expectedNext; self.previous = previous; chunks = parsed
+    }
 }
 
 extension Data {
@@ -899,12 +1316,41 @@ enum NativeFaceProfileAction: String, Codable, Sendable, CaseIterable {
     var captures: Bool { [.replace, .restoreAuthentication, .enroll].contains(self) }
     var purpose: String { self == .replace ? "replacement" : "registration" }
 }
+struct NativeFaceControlRecovery: Equatable, Sendable {
+    let binding: String, expiresAt: Date
+    init(_ value: WireValue) throws {
+        try NativeAudienceProjection.keys(value, ["binding", "expires_at"])
+        binding = try value.text("binding", maximum: 64)
+        guard binding.range(of: "^[0-9a-f]{64}$", options: .regularExpression) != nil else { throw NativeAPIError.invalidResponse }
+        expiresAt = try NativeRefreshDeliveryRecord.date(value["expires_at"])
+    }
+}
+struct NativeFaceControlRecoveryRenewal: Codable, Sendable {
+    let operationKey: String, expectedVersion: Int, expectedBinding: String, consentPolicy: String, fromExpiresAt: Date
+    init(metadata: NativeFaceProfileMetadata, consentPolicy: String) throws {
+        guard let review = metadata.controlRecovery, consentPolicy == metadata.authPolicy else { throw NativeAPIError.invalidResponse }
+        operationKey = UUID().uuidString.lowercased(); expectedVersion = metadata.version; expectedBinding = review.binding
+        self.consentPolicy = consentPolicy; fromExpiresAt = review.expiresAt; try validate()
+    }
+    var fields: [String: WireValue] { ["operation_key": .string(operationKey), "expected_version": .integer(expectedVersion),
+        "expected_binding": .string(expectedBinding), "consent": .object(["purpose": .string("face_authentication"), "policy_version": .string(consentPolicy), "granted": .bool(true)])] }
+    func validate() throws {
+        guard UUID(uuidString: operationKey) != nil, expectedVersion > 0, !consentPolicy.isEmpty, consentPolicy.utf8.count <= 128,
+              expectedBinding.range(of: "^[0-9a-f]{64}$", options: .regularExpression) != nil, fromExpiresAt.timeIntervalSince1970.isFinite else { throw NativeAPIError.invalidResponse }
+    }
+    func receipt(_ value: WireValue, current: NativeFaceControlRecovery) throws {
+        try NativeAudienceProjection.keys(value, ["operation_key", "from_expires_at", "to_expires_at"])
+        let from = try NativeRefreshDeliveryRecord.date(value["from_expires_at"]), to = try NativeRefreshDeliveryRecord.date(value["to_expires_at"])
+        guard value["operation_key"].string == operationKey, from == fromExpiresAt, to > fromExpiresAt, current.expiresAt >= to else { throw NativeAPIError.invalidResponse }
+    }
+}
 struct NativeFaceProfileMetadata: Codable, Sendable {
     let wire: WireValue, version: Int
     let accountID: String, deviceID: String, deviceRevision: String, publicKeyDigest: String, authPolicy: String, photoPolicy: String
     let profile: NativeEnrollmentProfile?
     let authenticationEnabled: Bool, matchingEnabled: Bool, processingEnabled: Bool, receiveMatches: Bool, matchingPaused: Bool
     let removalState: String
+    var controlRecovery: NativeFaceControlRecovery? { wire["control_recovery"] == .null ? nil : try? NativeFaceControlRecovery(wire["control_recovery"]) }
     init(_ value: WireValue, account: String, device: String, digest: String, nonce: String? = nil) throws {
         guard value["protocol"].string == "lovelies-face-profile-v1", value["authenticated"].bool == false,
               value["account_id"].string == account, value["device_id"].string == device, value["public_key_digest"].string == digest,
@@ -914,6 +1360,7 @@ struct NativeFaceProfileMetadata: Codable, Sendable {
               let removal = value["removal_state"].string, ["none", "pending", "failed", "blocked", "completed"].contains(removal),
               ["access_token", "refresh_token", "face_handle", "device_public_jwk", "control_key", "template_key", "template_digest"].allSatisfy({ value[$0] == .null }) else { throw NativeAPIError.invalidResponse }
         if let nonce { guard value["request_nonce"].string == nonce else { throw NativeAPIError.invalidResponse } }
+        if value["control_recovery"] != .null { _ = try NativeFaceControlRecovery(value["control_recovery"]) }
         wire = value; self.version = version; accountID = account; deviceID = device; publicKeyDigest = digest; deviceRevision = try value.uuid("device_revision")
         authPolicy = try value.text("auth_policy_version", maximum: 128); photoPolicy = try value.text("photo_policy_version", maximum: 128)
         profile = value["profile"] == .null ? nil : try NativeEnrollmentProfile(value["profile"])
@@ -967,6 +1414,7 @@ struct NativeFaceLifecycleRecord: Codable, Sendable {
     let accountID: String, apiOrigin: String, originalDevice: RegisteredDevice, keyAlias: String, publicJWK: WireValue, publicKeyDigest: String
     var controlKey: String, controlOperationKey: String, controlSignature: String, createdAt: Date
     var previousControlOperationKey: String?, renewal: NativeFaceControlBinding?
+    var controlRecoveryRenewal: NativeFaceControlRecoveryRenewal?
     var controlHistory: [NativeFaceControlBinding] = []
     var schema = 1, controlReady = false, authorityUnavailable = false
     var authorityFailure: String?
@@ -982,7 +1430,7 @@ struct NativeFaceLifecycleRecord: Codable, Sendable {
     var controlEnvelope: WireValue { var body = controlBinding.body(account: accountID, device: originalDevice.deviceID); body["protocol"] = .string("lovelies-face-profile-device-v1"); body["step"] = .string("control"); return .object(body) }
     var controlBody: WireValue { var body = controlBinding.body(account: accountID, device: originalDevice.deviceID); body["device_signature"] = .string(controlSignature); return .object(body) }
     var blocksAlternateRecovery: Bool {
-        if renewal != nil || !controlReady || authorityUnavailable || !metadata.authenticationEnabled || promotionCredentials != nil || ["pending", "failed", "blocked"].contains(metadata.removalState) { return true }
+        if renewal != nil || controlRecoveryRenewal != nil || !controlReady || authorityUnavailable || metadata.controlRecovery.map({ $0.expiresAt <= Date() }) == true || !metadata.authenticationEnabled || promotionCredentials != nil || ["pending", "failed", "blocked"].contains(metadata.removalState) { return true }
         if let pending { return !["applied", "completed", "cancelled"].contains(pending.serverState ?? "") }
         return false
     }
@@ -995,6 +1443,7 @@ struct NativeFaceLifecycleRecord: Codable, Sendable {
         return try P256.Signing.PublicKey(x963Representation: Data([4]) + x + y)
     }
     func validate(origin: URL) throws {
+        try controlRecoveryRenewal?.validate()
         guard loginTerminalCode == nil || NativeFaceTerminalFailure.known(loginTerminalCode) else { throw NativeAPIError.invalidResponse }
         guard schema == 1, accountID == originalDevice.accountID, UUID(uuidString: accountID) != nil, apiOrigin == origin.absoluteString,
               UUID(uuidString: originalDevice.deviceID) != nil, NativeAccountRecoveryRecord.validSecret(originalDevice.faceHandle, prefix: "lfh_"), NativeAccountRecoveryRecord.validAlias(keyAlias), keyAlias == (originalDevice.keyAlias ?? NativeEnrollmentRecord.keyAlias),
@@ -1036,6 +1485,7 @@ struct NativeFaceLifecycleRecord: Codable, Sendable {
 struct NativeFaceLifecycleSummary: Sendable {
     let metadata: NativeFaceProfileMetadata, operation: NativeFaceLifecycleIntent?, challenge: NativeFaceChallenge?, receipts: [WireValue]
     let authorityUnavailable: Bool, authenticated: Bool, canRenewControl: Bool
+    var retainedControlRenewalPending = false
     var awaitingServer: Bool { operation?.awaitingServer == true }
     var cleanupPending: Bool { ["pending", "failed", "blocked"].contains(metadata.removalState) || ["pending", "failed", "blocked"].contains(operation?.cleanupState ?? "none") }
 }
@@ -1073,16 +1523,67 @@ struct NativeLibraryState: Codable, Sendable {
     var reviewAssetIDs: [String] = []
 }
 
+/// A cursor belongs to the entire query, including the local favorite ID set.
+/// It must never be reused when any part of that identity changes.
+struct NativeGalleryQuery: Equatable, Sendable {
+    let source: String, query: String, category: String
+    let favorites: [String]?
+}
 
+struct NativeAccountPage: Sendable {
+    let items: [WireValue], nextCursor: String?
+    init(_ value: WireValue, key: String = "items", personalOnly: Bool = false) throws {
+        guard let rows = value[key].array, rows.count <= 100,
+              !personalOnly || rows.allSatisfy({ $0["source"].string == "personal" }) else { throw NativeAPIError.invalidResponse }
+        let ids = try rows.map { try $0.uuid("id") }
+        guard Set(ids).count == ids.count else { throw NativeAPIError.invalidResponse }
+        items = rows
+        if value["page"] == .null {
+            // Older short responses remain readable; a capped legacy page is
+            // never silently represented as complete history.
+            guard rows.count < 100 else { throw NativeAPIError.invalidResponse }; nextCursor = nil
+        } else {
+            guard let limit = value["page"]["limit"].integer, (1...100).contains(limit), rows.count <= limit,
+                  let total = value["page"]["total"].integer, total >= rows.count else { throw NativeAPIError.invalidResponse }
+            if value["page"]["next_cursor"] == .null { nextCursor = nil }
+            else { nextCursor = try value["page"].text("next_cursor", maximum: 2048); guard !rows.isEmpty else { throw NativeAPIError.invalidResponse } }
+        }
+    }
+    func appending(to previous: [WireValue]) -> [WireValue] {
+        var seen = Set(previous.compactMap { $0["id"].string })
+        return previous + items.filter { seen.insert($0["id"].string!).inserted }
+    }
+    static func path(_ path: String, cursor: String?) throws -> String {
+        guard !path.contains("?") else { throw NativeAPIError.invalidResponse }
+        var components = URLComponents(); components.path = path
+        components.queryItems = [URLQueryItem(name: "limit", value: "25")]
+        if let cursor {
+            guard !cursor.isEmpty, cursor.count <= 2048 else { throw NativeAPIError.invalidResponse }
+            components.queryItems?.append(URLQueryItem(name: "cursor", value: cursor))
+        }
+        guard let result = components.string else { throw NativeAPIError.invalidResponse }; return result
+    }
+}
+
+
+struct NativeDeletedAccountKey: Codable, Sendable {
+    let alias: String, publicJWK: WireValue
+}
 struct NativeRegisteredDeletionRecord: Codable, Sendable {
+    static let maximumEncodedBytes = 128 * 1024
     let accountID: String, operationKey: String, statusToken: String, apiOrigin: String, preparedAt: Date
     var response: WireValue?
+    var cleanupKeys: [NativeDeletedAccountKey]?
+    var localCleanupComplete: Bool?
     var payload: WireValue { .object(["operation_key": .string(operationKey), "status_token": .string(statusToken)]) }
     var completed: Bool { response?["deletion_completed"].bool == true && response?["privacy_request"]["status"].string == "completed" }
     func validate(origin: URL) throws {
         guard apiOrigin == origin.absoluteString, UUID(uuidString: accountID) != nil, UUID(uuidString: operationKey) != nil,
               statusToken.hasPrefix("lvd_"), statusToken.count == 68,
               statusToken.dropFirst(4).allSatisfy({ $0.isHexDigit && !$0.isUppercase }), preparedAt <= Date().addingTimeInterval(120) else { throw NativeAPIError.invalidResponse }
+        guard (cleanupKeys?.count ?? 0) <= 256, cleanupKeys?.allSatisfy({ NativeAccountRecoveryRecord.validAlias($0.alias) && $0.publicJWK.object != nil }) != false,
+              localCleanupComplete != true || completed else { throw NativeAPIError.invalidResponse }
+        if let response { try validateResponse(response) }
     }
     func validateResponse(_ value: WireValue) throws {
         guard value["protocol"].string == "lovelies-account-deletion-v1", value["source"].string == "privacy",
@@ -1092,5 +1593,158 @@ struct NativeRegisteredDeletionRecord: Codable, Sendable {
         _ = try value["privacy_request"].uuid("id")
         if let response { guard value["privacy_request"]["id"] == response["privacy_request"]["id"] else { throw NativeAPIError.invalidResponse } }
         guard value["deletion_completed"].bool == (value["privacy_request"]["status"].string == "completed") else { throw NativeAPIError.invalidResponse }
+    }
+}
+
+enum NativeApplePurchasePhase: String, Codable, Sendable {
+    case pending, providerConfirmed, finishObserved, entitlementRefresh, complete, retired
+    case recoveredWithoutResult = "operation_recovered_without_result"
+}
+/// This journal is independent of ordinary UI mutations. After dispatch it
+/// retains the original operation and credential digest until a typed receipt
+/// proves the exact submitted StoreKit transaction. A historical receipt is
+/// never used as a current entitlement.
+struct NativeApplePurchaseRecord: Codable, Sendable, Equatable {
+    let accountID: String, productID: String, transactionID: String, originalTransactionID: String, environment: String
+    let operationKey: String, credentialSHA256: String, digestInputHash: String, legacyInputHash: String, createdAt: Date
+    var signedTransaction: String?
+    var phase: NativeApplePurchasePhase = .pending
+    var receipt: WireValue?
+    var directResultSHA256: String?
+    init(account: String, product: String, transaction: String, original: String, environment: String, signedTransaction: String,
+         operation: String = UUID().uuidString.lowercased(), createdAt: Date = Date()) throws {
+        accountID = account; productID = product; transactionID = transaction; originalTransactionID = original; self.environment = environment
+        operationKey = operation; credentialSHA256 = Self.hash(Data(signedTransaction.utf8)); self.createdAt = createdAt; self.signedTransaction = signedTransaction
+        digestInputHash = Self.hash(try WireValue.object(["action": .string("store.apple"), "source": .string("store"), "payload": .object([
+            "protocol": .string("lovelies-store-operation-input-v1"), "operation_key": .string(operation), "product_id": .string(product), "credential_sha256": .string(credentialSHA256)
+        ])]).canonical())
+        legacyInputHash = Self.hash(try WireValue.object(["action": .string("store.apple"), "source": .string("store"), "payload": .object([
+            "operation_key": .string(operation), "product_id": .string(product), "signed_transaction": .string(signedTransaction)
+        ])]).canonical())
+        try validate()
+    }
+    static func hash(_ data: Data) -> String { SHA256.hash(data: data).map { String(format: "%02x", $0) }.joined() }
+    private static func digest(_ value: String) -> Bool { value.range(of: "^[0-9a-f]{64}$", options: .regularExpression) != nil }
+    var dispatchPayload: WireValue? { signedTransaction.map { .object(["operation_key": .string(operationKey), "product_id": .string(productID), "signed_transaction": .string($0)]) } }
+    var finished: Bool { [.finishObserved, .entitlementRefresh, .complete].contains(phase) }
+    func validate() throws {
+        guard UUID(uuidString: accountID) != nil, accountID == accountID.lowercased(),
+              operationKey.range(of: "^[A-Za-z0-9._:-]{16,128}$", options: .regularExpression) != nil,
+              !productID.isEmpty, productID.utf8.count <= 160, !productID.contains(where: { $0.isWhitespace }),
+              [transactionID, originalTransactionID].allSatisfy({ $0.range(of: "^[0-9]{1,160}$", options: .regularExpression) != nil }),
+              ["production", "sandbox"].contains(environment), [credentialSHA256, digestInputHash, legacyInputHash].allSatisfy(Self.digest),
+              createdAt <= Date().addingTimeInterval(120) else { throw NativeAPIError.invalidResponse }
+        if let signedTransaction {
+            guard (1...32768).contains(signedTransaction.utf8.count), !signedTransaction.contains(where: { $0.isWhitespace }),
+                  !operationKey.contains(signedTransaction), Self.hash(Data(signedTransaction.utf8)) == credentialSHA256 else { throw NativeAPIError.invalidResponse }
+            let legacy = Self.hash(try WireValue.object(["action": .string("store.apple"), "source": .string("store"), "payload": .object([
+                "operation_key": .string(operationKey), "product_id": .string(productID), "signed_transaction": .string(signedTransaction)
+            ])]).canonical())
+            guard legacy == legacyInputHash else { throw NativeAPIError.invalidResponse }
+        }
+        let digest = Self.hash(try WireValue.object(["action": .string("store.apple"), "source": .string("store"), "payload": .object([
+            "protocol": .string("lovelies-store-operation-input-v1"), "operation_key": .string(operationKey), "product_id": .string(productID), "credential_sha256": .string(credentialSHA256)
+        ])]).canonical())
+        guard digest == digestInputHash else { throw NativeAPIError.invalidResponse }
+        if let directResultSHA256 { guard Self.digest(directResultSHA256) else { throw NativeAPIError.invalidResponse } }
+        if phase == .pending { guard signedTransaction != nil, receipt == nil else { throw NativeAPIError.invalidResponse } }
+        else if [.retired, .recoveredWithoutResult].contains(phase) { guard signedTransaction == nil, receipt == nil, directResultSHA256 == nil else { throw NativeAPIError.invalidResponse } }
+        else { guard let receipt, try result(from: receipt) != nil else { throw NativeAPIError.invalidResponse } }
+    }
+    /// A storage error can leave either version on disk. Never weaken the
+    /// exact operation's observed outcome while retrying protected storage.
+    func retaining(_ other: Self) throws -> Self {
+        try validate(); try other.validate()
+        guard accountID == other.accountID, productID == other.productID, transactionID == other.transactionID,
+              originalTransactionID == other.originalTransactionID, environment == other.environment,
+              operationKey == other.operationKey, credentialSHA256 == other.credentialSHA256,
+              digestInputHash == other.digestInputHash, legacyInputHash == other.legacyInputHash,
+              createdAt == other.createdAt else { throw NativeAPIError.invalidResponse }
+        // Account deletion erases all credentials/evidence and never dispatches.
+        if phase == .retired { return self }; if other.phase == .retired { return other }
+        if phase == .recoveredWithoutResult || other.phase == .recoveredWithoutResult {
+            guard receipt == nil, other.receipt == nil, directResultSHA256 == nil, other.directResultSHA256 == nil else { throw NativeAPIError.invalidResponse }
+            return phase == .recoveredWithoutResult ? self : other
+        }
+        if let receipt, let next = other.receipt { guard receipt == next else { throw NativeAPIError.invalidResponse } }
+        if let directResultSHA256, let next = other.directResultSHA256 { guard directResultSHA256 == next else { throw NativeAPIError.invalidResponse } }
+        let phases: [NativeApplePurchasePhase] = [.pending, .providerConfirmed, .finishObserved, .entitlementRefresh, .complete]
+        guard let ownRank = phases.firstIndex(of: phase), let otherRank = phases.firstIndex(of: other.phase) else { throw NativeAPIError.invalidResponse }
+        var value = ownRank >= otherRank ? self : other
+        value.receipt = receipt ?? other.receipt; value.directResultSHA256 = directResultSHA256 ?? other.directResultSHA256
+        if value.phase != .pending { value.signedTransaction = nil }
+        try value.validate(); return value
+    }
+    func validateResult(_ result: WireValue) throws {
+        let flat: Set<String> = ["active", "billing_environment", "expires_at", "financial_eligible", "original_transaction_id", "product_id", "provider", "stale", "transaction_id"]
+        guard let keys = result.object.map({ Set($0.keys) }), keys == flat || keys == flat.union(["verified_submission"]),
+              result["provider"].string == "apple_app_store", result["product_id"].string == productID,
+              result["active"].bool != nil, result["stale"].bool != nil, result["billing_environment"].string == environment,
+              result["financial_eligible"].bool == (environment == "production"), result["transaction_id"].string?.isEmpty == false,
+              result["original_transaction_id"].string == originalTransactionID else { throw NativeAPIError.invalidResponse }
+        _ = try NativeRefreshDeliveryRecord.date(result["expires_at"])
+        if result["verified_submission"] != .null {
+            let submitted = result["verified_submission"]
+            try NativeAudienceProjection.keys(submitted, ["protocol", "product_id", "transaction_id", "original_transaction_id", "billing_environment", "credential_sha256"])
+            guard submitted["protocol"].string == "lovelies-apple-submission-v2", submitted["product_id"].string == productID,
+                  submitted["transaction_id"].string == transactionID, submitted["original_transaction_id"].string == originalTransactionID,
+                  submitted["billing_environment"].string == environment, submitted["credential_sha256"].string == credentialSHA256 else { throw NativeAPIError.invalidResponse }
+        } else {
+            // Old receipts have no submitted-transaction projection. They can
+            // confirm only the exact top-level transaction they actually name.
+            guard result["transaction_id"].string == transactionID else { throw NativeAPIError.invalidResponse }
+        }
+    }
+    func result(from value: WireValue) throws -> WireValue? {
+        guard ![.retired, .recoveredWithoutResult].contains(phase),
+              value["protocol"].string == "lovelies-store-operation-receipt-v1", value["actor_id"].string == accountID,
+              value["operation_key"].string == operationKey else { throw NativeAPIError.invalidResponse }
+        if value["status"].string == "unknown" {
+            try NativeAudienceProjection.keys(value, ["protocol", "actor_id", "operation_key", "status"]); return nil
+        }
+        try NativeAudienceProjection.keys(value, ["protocol", "actor_id", "operation_key", "status", "action", "source", "payload_hash", "result", "input_scheme", "credential_sha256", "receipt_scope"])
+        let expected = value["input_scheme"].string == "digest-v1" ? digestInputHash : value["input_scheme"].string == "legacy-raw-v0" ? legacyInputHash : ""
+        guard value["status"].string == "committed", value["action"].string == "store.apple", value["source"].string == "store",
+              value["receipt_scope"].string == "historical", value["credential_sha256"].string == credentialSHA256,
+              !expected.isEmpty, value["payload_hash"].string == expected else { throw NativeAPIError.invalidResponse }
+        if value["result"]["verified_submission"] != .null, value["input_scheme"].string != "digest-v1" { throw NativeAPIError.invalidResponse }
+        try validateResult(value["result"])
+        if let directResultSHA256 { guard Self.hash(try value["result"].canonical()) == directResultSHA256 else { throw NativeAPIError.invalidResponse } }
+        return value["result"]
+    }
+}
+struct NativeApplePurchaseReservation: Codable, Sendable {
+    let accountID: String, productID: String, id: String
+}
+/// One explicit Restore purchases invocation may replace each independently
+/// verified transaction at most once across unfinished/history/current scans.
+final class NativeAppleRestoreAttempt: @unchecked Sendable {
+    private struct Identity: Hashable { let account: String, product: String, transaction: String, original: String, environment: String }
+    private let lock = NSLock()
+    private var claimed: Set<Identity> = []
+    func claim(account: String, product: String, transaction: String, original: String, environment: String) -> Bool {
+        lock.lock(); defer { lock.unlock() }
+        return claimed.insert(.init(account: account, product: product, transaction: transaction, original: original, environment: environment)).inserted
+    }
+}
+struct NativeApplePurchaseJournal: Codable, Sendable {
+    let apiOrigin: String
+    var records: [NativeApplePurchaseRecord] = []
+    var reservations: [NativeApplePurchaseReservation] = []
+    var disposableRecordIndex: Int? {
+        records.firstIndex { candidate in
+            if candidate.phase == .retired { return true }
+            guard candidate.phase == .complete else { return false }
+            // A completed explicit successor is the proof that an earlier
+            // terminal marker no longer blocks this transaction's lineage.
+            return !records.contains { $0.phase == .recoveredWithoutResult && $0.accountID == candidate.accountID && $0.productID == candidate.productID &&
+                $0.transactionID == candidate.transactionID && $0.originalTransactionID == candidate.originalTransactionID && $0.environment == candidate.environment }
+        }
+    }
+    func validate(origin: URL) throws {
+        guard apiOrigin == origin.absoluteString, records.count + reservations.count <= 64,
+              Set(records.map(\.operationKey)).count == records.count, Set(reservations.map(\.id)).count == reservations.count,
+              reservations.allSatisfy({ UUID(uuidString: $0.accountID) != nil && UUID(uuidString: $0.id) != nil && !$0.productID.isEmpty && $0.productID.utf8.count <= 160 }) else { throw NativeAPIError.invalidResponse }
+        for record in records { try record.validate() }
     }
 }

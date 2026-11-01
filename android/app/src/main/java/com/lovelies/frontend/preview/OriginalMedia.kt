@@ -13,6 +13,10 @@ import android.provider.MediaStore
 import androidx.core.content.ContextCompat
 import androidx.core.content.FileProvider
 import java.io.File
+import java.io.DataInputStream
+import java.io.DataOutputStream
+import java.nio.channels.Channels
+import java.nio.channels.FileChannel
 import java.nio.file.Files
 import java.nio.file.LinkOption
 import java.nio.file.Path
@@ -68,6 +72,9 @@ internal object PrivateTemporaryMedia {
     private val uuid="[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}"
     enum class Kind(val directory: String,val age: Long) { CAMERA("camera",CAMERA_AGE_MS),SHARED("shared-originals",SHARE_AGE_MS) }
     data class Sweep(val removed: Set<String>,val nextDelay: Long?,val failed: Boolean)
+    data class Owned internal constructor(val file: File,internal val kind: Kind,internal val nonce: String,internal val identity: String)
+    private data class Ownership(val nonce: String,val identity: String,val created: Long)
+    private const val OWNERS="private-media-ownership-v1"
     private fun owns(kind: Kind,name: String)=when(kind) {
         Kind.CAMERA->Regex("$uuid\\.jpg",RegexOption.IGNORE_CASE).matches(name)
         Kind.SHARED->Regex("lovelies-$uuid-$uuid\\.(jpg|png|webp|gif)",RegexOption.IGNORE_CASE).matches(name)
@@ -80,6 +87,77 @@ internal object PrivateTemporaryMedia {
             owned.takeIf { Files.isDirectory(it,LinkOption.NOFOLLOW_LINKS) && !Files.isSymbolicLink(it) && it.toRealPath()==it }
         }
     } catch(_: Exception) { null }
+    private fun ownershipPath(cache: File,kind: Kind,name: String,create: Boolean=false): Path? = try {
+        if(!owns(kind,name))null else {
+            val root=cache.toPath()
+            if(Files.isSymbolicLink(root) || !Files.isDirectory(root,LinkOption.NOFOLLOW_LINKS))null else {
+                val folder=root.toRealPath().resolve(OWNERS)
+                if(create && !Files.exists(folder,LinkOption.NOFOLLOW_LINKS))Files.createDirectory(folder)
+                if(Files.isSymbolicLink(folder) || !Files.isDirectory(folder,LinkOption.NOFOLLOW_LINKS) || folder.toRealPath()!=folder)null
+                else folder.resolve("${kind.name.lowercase()}-$name.owner")
+            }
+        }
+    } catch(_: Exception) { null }
+    private fun identity(path: Path): String? = try {
+        val attributes=Files.readAttributes(path,BasicFileAttributes::class.java,LinkOption.NOFOLLOW_LINKS)
+        if(!attributes.isRegularFile || attributes.isSymbolicLink)null
+        else attributes.fileKey()?.toString()?.takeIf { it.length in 1..256 }
+    } catch(_: Exception) { null }
+    private fun ownership(cache: File,kind: Kind,name: String): Ownership? { return try {
+        val path=ownershipPath(cache,kind,name) ?: return null
+        if(Files.isSymbolicLink(path) || !Files.isRegularFile(path,LinkOption.NOFOLLOW_LINKS) || Files.size(path)>1024)return null
+        Files.newInputStream(path,LinkOption.NOFOLLOW_LINKS).use { raw -> DataInputStream(raw).use { input ->
+            if(input.readUTF()!="lovelies-private-media-v1" || input.readUTF()!=kind.name || input.readUTF()!=name)return null
+            val result=Ownership(input.readUTF(),input.readUTF(),input.readLong())
+            if(!Regex(uuid,RegexOption.IGNORE_CASE).matches(result.nonce) || result.identity.length !in 1..300 || result.created<=0 || input.read()!=-1)null else result
+        } }
+    } catch(_: Exception) { null } }
+    private fun syncDirectory(path: Path) {
+        // Android's desugared FileChannel rejects directory opens on API 24.
+        // Public API-21 flags reject final symlinks and avoid blocking if a
+        // replaced path is a FIFO; verify the opened descriptor is a directory.
+        val descriptor=android.system.Os.open(path.toString(),android.system.OsConstants.O_RDONLY or
+            android.system.OsConstants.O_NOFOLLOW or android.system.OsConstants.O_NONBLOCK,0)
+        try {
+            if(!android.system.OsConstants.S_ISDIR(android.system.Os.fstat(descriptor).st_mode))throw LiveFailure("save_failed")
+            android.system.Os.fsync(descriptor)
+        }
+        catch(problem: Throwable) {
+            try { android.system.Os.close(descriptor) } catch(closeProblem: Throwable) { problem.addSuppressed(closeProblem) }
+            throw problem
+        }
+        android.system.Os.close(descriptor)
+    }
+    private fun recordOwnership(cache: File,kind: Kind,name: String,value: Ownership,directorySync: (Path)->Unit) {
+        val path=ownershipPath(cache,kind,name,true) ?: throw LiveFailure("save_failed")
+        FileChannel.open(path,StandardOpenOption.CREATE_NEW,StandardOpenOption.WRITE,LinkOption.NOFOLLOW_LINKS).use { channel ->
+            val output=DataOutputStream(Channels.newOutputStream(channel))
+            output.writeUTF("lovelies-private-media-v1");output.writeUTF(kind.name);output.writeUTF(name)
+            output.writeUTF(value.nonce);output.writeUTF(value.identity);output.writeLong(value.created);output.flush();channel.force(true)
+        }
+        // The ownership filename (and a newly-created metadata directory) must survive before private bytes are written.
+        directorySync(path.parent)
+        directorySync(cache.toPath().toRealPath())
+    }
+    /** All app writers and cleanup use this monitor. FileProvider only receives read grants.
+     * A filename never proves ownership: a durable creation record and the same file identity are required.
+     * Legacy or replaced files without that proof remain untouched. */
+    @Synchronized fun owned(cache: File,kind: Kind,file: File): Owned? {
+        val folder=directory(cache,kind) ?: return null
+        if(file.toPath().parent!=folder)return null
+        val record=ownership(cache,kind,file.name) ?: return null
+        if(identity(file.toPath())!=record.identity)return null
+        return Owned(file,kind,record.nonce,record.identity)
+    }
+    @Synchronized fun discard(cache: File,value: Owned): Boolean {
+        val current=owned(cache,value.kind,value.file) ?: return false
+        if(current.nonce!=value.nonce || current.identity!=value.identity)return false
+        return try {
+            val removed=Files.deleteIfExists(value.file.toPath())
+            if(removed)ownershipPath(cache,value.kind,value.file.name)?.let { Files.deleteIfExists(it) }
+            removed
+        } catch(_: Exception) { false }
+    }
     fun cameraNames(uris: Collection<String>,authority: String): Set<String> = uris.mapNotNull { raw ->
         runCatching {
             val uri=java.net.URI(raw);val name=uri.path?.removePrefix("/camera/")
@@ -110,21 +188,35 @@ internal object PrivateTemporaryMedia {
         }
         cameraNames(references,authority)
     } catch(_: Exception) { null }
-    fun write(cache: File,kind: Kind,name: String,bytes: ByteArray,createdAt: Long=System.currentTimeMillis()): File {
+    @Synchronized fun write(cache: File,kind: Kind,name: String,bytes: ByteArray,createdAt: Long=System.currentTimeMillis(),
+        directorySync: (Path)->Unit=::syncDirectory): File {
         if(!owns(kind,name) || createdAt<=0)throw LiveFailure("save_failed")
         val folder=directory(cache,kind,true) ?: throw LiveFailure("save_failed")
         val target=folder.resolve(name)
-        var created=false
+        var createdIdentity: String?=null
+        val nonce=java.util.UUID.randomUUID().toString()
         try {
-            Files.newOutputStream(target,StandardOpenOption.CREATE_NEW,StandardOpenOption.WRITE,LinkOption.NOFOLLOW_LINKS).use { created=true;it.write(bytes);it.flush() }
+            FileChannel.open(target,StandardOpenOption.CREATE_NEW,StandardOpenOption.WRITE,LinkOption.NOFOLLOW_LINKS).use { channel ->
+                val key=identity(target) ?: throw LiveFailure("save_failed");createdIdentity=key
+                // Persist ownership before any private bytes. An interrupted writer can be retired using this exact identity.
+                recordOwnership(cache,kind,name,Ownership(nonce,key,createdAt),directorySync)
+                val output=Channels.newOutputStream(channel);output.write(bytes);output.flush();channel.force(true)
+            }
             // These files are written once. The persisted stamp records creation,
             // rather than extending their life whenever they are read/shared.
             if(directory(cache,kind)!=folder)throw LiveFailure("save_failed")
             Files.getFileAttributeView(target,BasicFileAttributeView::class.java,LinkOption.NOFOLLOW_LINKS).setTimes(FileTime.fromMillis(createdAt),null,null)
+            directorySync(folder)
             return target.toFile()
-        } catch(problem: Exception) { if(created && directory(cache,kind)==folder)runCatching { Files.deleteIfExists(target) };throw problem }
+        } catch(problem: Exception) {
+            if(createdIdentity!=null && directory(cache,kind)==folder && identity(target)==createdIdentity) {
+                runCatching { Files.deleteIfExists(target) }
+                if(ownership(cache,kind,name)?.nonce==nonce)ownershipPath(cache,kind,name)?.let { path->runCatching { Files.deleteIfExists(path) } }
+            }
+            throw problem
+        }
     }
-    fun sweep(cache: File,kind: Kind,now: Long,preserved: Set<String> = emptySet(),all: Boolean=false,
+    @Synchronized fun sweep(cache: File,kind: Kind,now: Long,preserved: Set<String> = emptySet(),all: Boolean=false,
         remove: (Path)->Boolean={ Files.deleteIfExists(it) }): Sweep {
         val folder=directory(cache,kind) ?: return Sweep(emptySet(),null,false)
         val removed=mutableSetOf<String>();var next: Long?=null;var failed=false
@@ -134,15 +226,20 @@ internal object PrivateTemporaryMedia {
                 val name=entry.fileName.toString()
                 if(!owns(kind,name) || name in preserved)return@forEach
                 try {
+                    val proof=owned(cache,kind,entry.toFile()) ?: return@forEach
+                    val record=ownership(cache,kind,name) ?: return@forEach
                     val attributes=Files.readAttributes(entry,BasicFileAttributes::class.java,LinkOption.NOFOLLOW_LINKS)
                     if(!attributes.isRegularFile || attributes.isSymbolicLink)return@forEach
-                    val created=attributes.lastModifiedTime().toMillis()
+                    val stamp=attributes.lastModifiedTime().toMillis()
+                    val created=if(stamp>now)stamp else minOf(stamp,record.created)
                     val remaining=if(created<=0 || now<created)0 else (kind.age-(now-created)).coerceAtLeast(0)
                     if(all || remaining==0L) {
                         // Recheck the owned parent before unlinking; never recurse
                         // through a nested directory or a symbolic link.
-                        if(directory(cache,kind)!=folder) { retry();return@forEach }
-                        if(remove(entry))removed.add(name) else if(Files.exists(entry,LinkOption.NOFOLLOW_LINKS))retry()
+                        if(directory(cache,kind)!=folder || owned(cache,kind,entry.toFile())!=proof) { retry();return@forEach }
+                        if(remove(entry)) {
+                            removed.add(name);ownershipPath(cache,kind,name)?.let { Files.deleteIfExists(it) }
+                        } else if(Files.exists(entry,LinkOption.NOFOLLOW_LINKS))retry()
                     } else next=minOf(next ?: remaining,remaining)
                 } catch(_: Exception) { retry() }
             } }
@@ -154,6 +251,7 @@ internal object PrivateTemporaryMedia {
 /** No re-encoding: the server-authorized original is written verbatim. */
 internal object OriginalMedia {
     data class Format(val mime: String,val extension: String)
+    data class Share(val intent: Intent,val file: PrivateTemporaryMedia.Owned)
     fun format(bytes: ByteArray): Format {
         fun starts(vararg signature: Int)=bytes.size>=signature.size && signature.indices.all { (bytes[it].toInt() and 255)==signature[it] }
         return when {
@@ -181,23 +279,25 @@ internal object OriginalMedia {
             current();return uri
         } catch(problem: Exception) { runCatching { context.contentResolver.delete(uri,null,null) };throw problem }
     }
-    fun share(context: Context,id: String,bytes: ByteArray,current: ()->Unit): Intent {
+    fun share(context: Context,id: String,bytes: ByteArray,current: ()->Unit): Share {
         prune(context)
         val format=format(bytes)
         val target=PrivateTemporaryMedia.write(context.cacheDir,PrivateTemporaryMedia.Kind.SHARED,
             "lovelies-${NativeProtocol.id(id)}-${java.util.UUID.randomUUID()}.${format.extension}",bytes)
+        val owned=PrivateTemporaryMedia.owned(context.cacheDir,PrivateTemporaryMedia.Kind.SHARED,target) ?: throw LiveFailure("save_failed")
         try {
             current()
             val uri=FileProvider.getUriForFile(context,"${context.packageName}.camera-files",target)
-            return Intent(Intent.ACTION_SEND).setType(format.mime).putExtra(Intent.EXTRA_STREAM,uri)
+            val intent=Intent(Intent.ACTION_SEND).setType(format.mime).putExtra(Intent.EXTRA_STREAM,uri)
                 .apply { clipData=ClipData.newUri(context.contentResolver,context.getString(R.string.controller_f72a6f212afb),uri);addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION) }
-        } catch(problem: Exception) { target.delete();throw problem }
+            return Share(intent,owned)
+        } catch(problem: Exception) { PrivateTemporaryMedia.discard(context.cacheDir,owned);throw problem }
     }
     fun prune(context: Context,all: Boolean=false) { PrivateTemporaryMedia.sweep(context.cacheDir,PrivateTemporaryMedia.Kind.SHARED,System.currentTimeMillis(),all=all) }
     fun pruneCamera(context: Context,all: Boolean=false) { PrivateTemporaryMedia.sweep(context.cacheDir,PrivateTemporaryMedia.Kind.CAMERA,System.currentTimeMillis(),all=all) }
     fun camera(context: Context,bytes: ByteArray): Uri {
         val target=PrivateTemporaryMedia.write(context.cacheDir,PrivateTemporaryMedia.Kind.CAMERA,"${java.util.UUID.randomUUID()}.jpg",bytes)
         return try { FileProvider.getUriForFile(context,"${context.packageName}.camera-files",target) }
-        catch(problem: Exception) { target.delete();throw problem }
+        catch(problem: Exception) { PrivateTemporaryMedia.owned(context.cacheDir,PrivateTemporaryMedia.Kind.CAMERA,target)?.let { PrivateTemporaryMedia.discard(context.cacheDir,it) };throw problem }
     }
 }

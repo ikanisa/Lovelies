@@ -11,9 +11,9 @@ import kotlin.coroutines.resume
 import kotlin.coroutines.resumeWithException
 
 /** Play supplies purchase state; only the backend supplies entitlement and acknowledgement. */
-class PlayPurchases(context: Context,private val repository: CloudflareRepository,private val verified: suspend ()->Unit) {
+class PlayPurchases(context: Context,private val repository: CloudflareRepository,dispatcher:CoroutineDispatcher=Dispatchers.Main.immediate,private val verified: suspend ()->Unit) {
     private val context=context.applicationContext
-    private val scope=CoroutineScope(SupervisorJob()+Dispatchers.Main.immediate)
+    private val scope=CoroutineScope(SupervisorJob()+dispatcher)
     private val verification=Mutex()
     private var sheetInFlight=false
     private val client=BillingClient.newBuilder(context.applicationContext)
@@ -63,7 +63,7 @@ class PlayPurchases(context: Context,private val repository: CloudflareRepositor
                 plans.clear();plans.addAll(product.subscriptionOfferDetails.orEmpty().map { offer -> Plan(offer.offerToken,product.name,
                     offer.pricingPhases.pricingPhaseList.joinToString(context.getString(R.string.controller_43a45b864afc)) { phase -> "${phase.formattedPrice} / ${phase.billingPeriod}"+(if(phase.billingCycleCount>0)" × ${phase.billingCycleCount}" else "") }) })
                 status=if(plans.isEmpty())context.getString(R.string.controller_2d3b500866f8) else context.getString(R.string.controller_c5dd9ec980ef)
-            } catch(problem: LiveFailure) { status=readableError(problem.code,context) }
+            } catch(problem: LiveFailure) { status=verificationMessage(problem) }
             finally { busy=false }
         }
     }
@@ -88,7 +88,7 @@ class PlayPurchases(context: Context,private val repository: CloudflareRepositor
                 val result=client.launchBillingFlow(activity,flow)
                 sheetInFlight=result.responseCode==BillingClient.BillingResponseCode.OK
                 status=if(result.responseCode==BillingClient.BillingResponseCode.OK)context.getString(R.string.controller_0d9613931369) else billingMessage(result.responseCode,context)
-            } catch(problem: LiveFailure) { status=readableError(problem.code,context) }
+            } catch(problem: LiveFailure) { status=verificationMessage(problem) }
             finally { busy=false }
         }
     }
@@ -103,38 +103,60 @@ class PlayPurchases(context: Context,private val repository: CloudflareRepositor
     fun restore() {
         if(busy)return
         val account=repository.credentials?.takeIf { it.method=="registered_face" }?.account ?: return
+        val restoreScope=repository.currentScope()
         owner=account;busy=true;status=context.getString(R.string.controller_ca350dda4dc7)
+        val restoreAttempt=StoreRestoreAttempt()
         scope.launch {
             try {
-                val recovered=repository.recoverGooglePurchase()
+                repository.fence.assert(restoreScope)
+                val recovered=try { repository.recoverGooglePurchase(expectedScope=restoreScope) }
+                catch(problem:LiveFailure) {
+                    if(problem.status!=409 || problem.code!="operation_recovered_without_result")throw problem
+                    null // Durable terminal proof permits SDK enumeration, never a purchase sheet.
+                }
+                repository.fence.assert(restoreScope)
                 if(account!=repository.credentials?.account || owner!=account)throw LiveFailure("session_changed")
                 if(recovered!=null)verified()
+                repository.fence.assert(restoreScope)
                 if(!connection())throw LiveFailure("store_unavailable")
                 val purchases=existingPurchases()
+                repository.fence.assert(restoreScope)
                 if(account!=repository.credentials?.account || owner!=account)throw LiveFailure("session_changed")
                 if(purchases.isEmpty()) { verified();status=context.getString(R.string.controller_7bc8522e0cb4) }
-                else verify(purchases)
-            } catch(problem: LiveFailure) { status=readableError(problem.code,context) }
+                else verify(purchases,restoreAttempt,restoreScope)
+            } catch(problem: LiveFailure) { if(repository.currentScope()==restoreScope && owner==account)status=verificationMessage(problem) }
             finally { busy=false }
         }
     }
-    private suspend fun verify(rows: List<Purchase>)=verification.withLock {
-        val account=owner ?: return@withLock
+    private suspend fun verify(rows: List<Purchase>,restoreAttempt:StoreRestoreAttempt?=null,restoreScope:SessionScope?=null)=verification.withLock {
+        val owned=restoreScope ?: repository.currentScope()
+        val account=owned.accountId ?: return@withLock
+        if(restoreAttempt!=null && restoreScope==null)throw LiveFailure("session_changed")
+        if(repository.currentScope()!=owned || owner!=account)return@withLock
         for(purchase in rows) {
             if(repository.credentials?.account!=account || repository.credentials?.method!="registered_face") { status=context.getString(R.string.controller_4f6eed6a9fe6);return@withLock }
             if(BuildConfig.PLAY_SUBSCRIPTION_PRODUCT !in purchase.products)continue
             if(purchase.purchaseState==Purchase.PurchaseState.PENDING) { status=context.getString(R.string.controller_04a714d06d40);continue }
             if(purchase.purchaseState!=Purchase.PurchaseState.PURCHASED)continue
             if(purchase.accountIdentifiers?.obfuscatedAccountId!=NativeProtocol.sha256(account.toByteArray())) { status=context.getString(R.string.controller_04cb36080a3e);continue }
+            if(restoreAttempt!=null && !restoreAttempt.claim(account,BuildConfig.PLAY_SUBSCRIPTION_PRODUCT,purchase.purchaseToken))continue
             status=context.getString(R.string.controller_e5581cbfef39)
             try {
-                val result=repository.verifyGooglePurchase(BuildConfig.PLAY_SUBSCRIPTION_PRODUCT,purchase.purchaseToken)
-                if(repository.credentials?.account!=account)throw LiveFailure("session_changed")
+                repository.fence.assert(owned)
+                val result=repository.verifyGooglePurchase(BuildConfig.PLAY_SUBSCRIPTION_PRODUCT,purchase.purchaseToken,allowTerminalReplacement=restoreAttempt!=null,expectedScope=owned)
+                repository.fence.assert(owned)
+                if(repository.credentials?.account!=account || owner!=account)throw LiveFailure("session_changed")
                 verified()
+                repository.fence.assert(owned)
                 status=if(result["billing_environment"]=="sandbox")context.getString(R.string.controller_7baa8299b4a7) else context.getString(R.string.controller_846e2c78f9fc)
-            } catch(problem: LiveFailure) { status=readableError(problem.code,context)+context.getString(R.string.controller_d5bc59f2366c) }
+            } catch(problem: LiveFailure) {
+                if(repository.currentScope()!=owned || owner!=account)return@withLock
+                status=verificationMessage(problem)+(if(problem.code=="operation_recovered_without_result")"" else context.getString(R.string.controller_d5bc59f2366c))
+            }
         }
     }
+    private fun verificationMessage(problem:LiveFailure)=if(problem.status==409 && problem.code=="operation_recovered_without_result")
+        context.getString(R.string.store_verification_ended_restore) else readableError(problem.code,context)
     fun clearAccount() { sheetInFlight=false;owner=null;plans.clear();status="" }
     fun dispose() { sheetInFlight=false;owner=null;scope.cancel();client.endConnection() }
 }

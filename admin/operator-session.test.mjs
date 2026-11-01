@@ -23,13 +23,21 @@ test('operator URL confinement and guarded review body reject malformed inputs',
  for(const path of ['/../secret','/%2e%2e/secret','/auth/../secret','//evil.com','/health#fragment','/a%2fb'])await assert.rejects(s.request(path),{code:'invalid_api_path'});
  assert.equal(calls,0);assert.throws(()=>operationBody('disable',{id:'invalid',revision:1},'reason',crypto.randomUUID()),{code:'invalid_review'});
 });
+test('a terminal restrictive recovery retires only its original action and never auto-submits a replacement',async()=>{
+ const vault=new Vault();let sends=0;
+ const session=new OperatorSession({baseUrl:'http://localhost',vault,fetch:async()=>{sends++;return Response.json({error:{code:'operation_recovered_without_result'}},{status:409});}});
+ session.state=await vault.create();session.operator={user_id:crypto.randomUUID(),roles:['admin']};session.credentials={access_token:'synthetic-token'};
+ const body={operation_key:crypto.randomUUID(),reason:'Review the original request'};
+ await assert.rejects(session.action('/privacy-requests/'+crypto.randomUUID()+'/reject',body),{code:'operation_recovered_without_result',status:409});
+ assert.equal(sends,1);assert.equal(session.state.pendingAction,null);assert.equal(vault.value.pendingAction,null);
+});
 test('three signed captures enroll same account; admin role is never self-granted',async()=>{
- const {h,session}=await fixture();await session.startEnrollment(true,true);const account=session.state.anonymous.account_id;await captures(session);
+ const {h,session}=await fixture();await session.startEnrollment(true,'18_plus',true);const account=session.state.anonymous.account_id;await captures(session);
  await assert.rejects(session.complete(),{code:'operator_provisioning_required'});assert.equal(session.credentials,null);assert.equal(session.operator,null);
  assert.equal(session.state.reference.accountId,account);const row=await h.db.one('SELECT roles_json FROM accounts WHERE id=?',account);assert.deepEqual(JSON.parse(row.roles_json),['user']);await h.close();
 });
 test('lost capture reply recovers durable manifest and registered authority without bootstrap',async()=>{
- const {h,vault,session}=await fixture();await session.startEnrollment(true,true);await session.useCapture(new Uint8Array([0xff,0xd8,0xff,0xe0,7]));
+ const {h,vault,session}=await fixture();await session.startEnrollment(true,'18_plus',true);await session.useCapture(new Uint8Array([0xff,0xd8,0xff,0xe0,7]));
  const restored=new OperatorSession({baseUrl:session.base,policyVersion:h.env.FACE_AUTH_POLICY_VERSION,vault,fetch:session.fetch});
  assert.deepEqual(await restored.restore(),{registered:false,pending:true});await restored.recoverEnrollment();assert.equal(restored.captures.length,1);
  for(let i=1;i<3;i++)await restored.useCapture(new Uint8Array([0xff,0xd8,0xff,0xe0,7+i]));
@@ -40,7 +48,7 @@ test('lost capture reply recovers durable manifest and registered authority with
  await restored.logout();assert.equal(restored.operator,null);await restored.startLogin();await restored.useCapture(new Uint8Array([0xff,0xd8,0xff,0xe0,11]));await restored.complete();assert.equal(restored.operator.user_id,id);await h.close();
 });
 test('logout during device signing prevents subsequent capture dispatch',async()=>{
- const {h,vault,session}=await fixture();await session.startEnrollment(true,true);let release,entered;
+ const {h,vault,session}=await fixture();await session.startEnrollment(true,'18_plus',true);let release,entered;
  const waiting=new Promise(resolve=>entered=resolve);const sign=vault.sign.bind(vault);vault.sign=async value=>{entered();await new Promise(resolve=>release=resolve);return sign(value);};
  const upload=session.useCapture(new Uint8Array([0xff,0xd8,0xff,0xe0,9]));await waiting;await session.logout();release();await assert.rejects(upload,{code:'session_changed'});
  assert.equal((await h.db.one('SELECT count(*) n FROM auth_capture_proofs')).n,0);await h.close();
@@ -53,12 +61,12 @@ test('uncertain operator action retains original key and blocks a conflicting re
 });
 test('lost guardian review reply replays the exact operator intent without restoring withdrawn authority',async()=>{
  const {h,session,vault}=await fixture();try{
-  await session.startEnrollment(true,true);await captures(session);
+  await session.startEnrollment(true,'18_plus',true);await captures(session);
   await assert.rejects(session.complete(),{code:'operator_provisioning_required'});
   const operator=session.state.reference.accountId;await h.db.run('UPDATE accounts SET roles_json=? WHERE id=?','["user","admin"]',operator);
   await session.startLogin();await session.useCapture(new Uint8Array([0xff,0xd8,0xff,0xe0,92]));await session.complete();
   const child=await h.anonymous(),key=()=>crypto.randomUUID();
-  await h.json('/me/audience',{method:'PUT',token:child.access_token,body:{age_band:'13_17',policy_version:AUDIENCE_POLICY,expected_version:0,operation_key:key()}});
+  await h.json('/me/audience',{method:'PUT',token:child.access_token,body:{at_least_13:true,guardian_required:true,policy_version:AUDIENCE_POLICY,expected_version:0,operation_key:key()}});
   const created=await h.json('/me/guardian-requests',{token:child.access_token,body:{policy_version:AUDIENCE_POLICY,expected_version:1,operation_key:key()}},201);
   const guardian=await enroll(h);await h.json(`/guardian-requests/${created.guardian_request.id}/claim`,{token:guardian.token,body:{expected_revision:1,policy_version:AUDIENCE_POLICY,relationship_attested:true,purposes:['face_authentication'],operation_key:key()}});
   const row=(await session.request('/admin/guardian-requests')).guardian_requests.find(row=>row.id===created.guardian_request.id);
@@ -82,7 +90,7 @@ test('lost committed enrollment renewal replays its saved key and original succe
    if(path==='/auth/face/registration/resume'&&reply.ok&&loseReply){loseReply=false;await reply.body.cancel();throw new Error('lost_committed_resume_reply');}return reply;
  };
  const original=new OperatorSession({baseUrl:base,policyVersion:h.env.FACE_AUTH_POLICY_VERSION,vault:new OperatorVault(base,idb),fetch});
- await original.startEnrollment(true,true);const predecessor=original.challenge.challenge_id;
+ await original.startEnrollment(true,'18_plus',true);const predecessor=original.challenge.challenge_id;
  await h.db.run('UPDATE auth_challenges SET created_at=?,expires_at=? WHERE id=?',Date.now()-130000,Date.now()-1000,predecessor);
  await assert.rejects(original.restartEnrollment(),/lost_committed_resume_reply/);
  const intent=await h.db.one('SELECT * FROM face_enrollment_intents WHERE account_id=?',original.state.anonymous.account_id);assert.equal(intent.generation,2);
@@ -96,7 +104,7 @@ test('lost committed refresh reply survives encrypted vault reload without a sec
  const fetch=async(url,init)=>{const path=new URL(url).pathname;const reply=await h.request(path,{method:init.method,raw:init.body,headers:init.headers});
    if(path==='/auth/session/refresh'){refreshPosts++;if(lose&&reply.ok){lose=false;await reply.body.cancel();throw new Error('lost_committed_refresh_reply');}}return reply;};
  const original=new OperatorSession({baseUrl:base,policyVersion:h.env.FACE_AUTH_POLICY_VERSION,vault:new OperatorVault(base,idb),fetch});
- await original.startEnrollment(true,true);const account=original.state.anonymous.account_id;
+ await original.startEnrollment(true,'18_plus',true);const account=original.state.anonymous.account_id;
  await h.db.run('UPDATE auth_challenges SET created_at=?,expires_at=? WHERE id=?',Date.now()-130000,Date.now()-1000,original.challenge.challenge_id);
  await assert.rejects(original.restartEnrollment(),/lost_committed_refresh_reply/);const key=original.state.refreshDelivery.rotation_key;
  const restored=new OperatorSession({baseUrl:base,policyVersion:h.env.FACE_AUTH_POLICY_VERSION,vault:new OperatorVault(base,idb),fetch});
@@ -111,7 +119,7 @@ test('logout cancels a prepared refresh before its delayed first dispatch and ne
    if(path==='/auth/session/refresh'){entered();await new Promise(resolve=>release=resolve);}
    return h.request(path,{method:init.method,raw:init.body,headers:init.headers});};
  const session=new OperatorSession({baseUrl:base,policyVersion:h.env.FACE_AUTH_POLICY_VERSION,vault:new OperatorVault(base,idb),fetch});
- await session.startEnrollment(true,true);const rotating=session.refreshAnonymous();await ready;await session.logout();release();await assert.rejects(rotating,{code:'session_changed'});
+ await session.startEnrollment(true,'18_plus',true);const rotating=session.refreshAnonymous();await ready;await session.logout();release();await assert.rejects(rotating,{code:'session_changed'});
  assert.equal(session.credentials,null);assert.equal(session.operator,null);assert.equal(session.state.refreshDelivery.retired,true);assert.equal(session.state.refreshDelivery.cancelled,true);
  const restored=new OperatorSession({baseUrl:base,policyVersion:h.env.FACE_AUTH_POLICY_VERSION,vault:new OperatorVault(base,idb),fetch});await restored.restore();
  await assert.rejects(restored.refreshAnonymous(),{code:'refresh_delivery_scope_changed'});assert.equal((await h.db.one('SELECT count(*) n FROM sessions WHERE account_id=?',session.state.anonymous.account_id)).n,1);await h.close();
@@ -121,7 +129,7 @@ test('logout during successor vault encryption retires the visible attempt and r
  const fetch=async(url,init)=>{const path=new URL(url).pathname;if(path.endsWith('/refresh/cancel'))cancels++;
    const response=await h.request(path,{method:init.method,raw:init.body,headers:init.headers});
    if(path==='/auth/session/refresh'&&response.ok)successor=await response.clone().json();return response;};
- const session=new OperatorSession({baseUrl:base,policyVersion:h.env.FACE_AUTH_POLICY_VERSION,vault:new OperatorVault(base,idb),fetch});await session.startEnrollment(true,true);
+ const session=new OperatorSession({baseUrl:base,policyVersion:h.env.FACE_AUTH_POLICY_VERSION,vault:new OperatorVault(base,idb),fetch});await session.startEnrollment(true,'18_plus',true);
  const ready=new Promise(resolve=>entered=resolve),encrypt=crypto.subtle.encrypt.bind(crypto.subtle);
  crypto.subtle.encrypt=async(...args)=>{let value;try{value=JSON.parse(new TextDecoder().decode(args[2]));}catch{}
    if(gate&&value?.refreshDelivery===null&&value?.anonymous?.protocol==='lovelies-refresh-delivery-v1'){gate=false;entered();await new Promise(resolve=>release=resolve);}return encrypt(...args);};
@@ -135,7 +143,7 @@ test('logout during successor vault encryption retires the visible attempt and r
 test('stale logout and later signed recovery preserve a newer tab session and enrollment generation',async()=>{
  const h=await startHarness({faceVerifier:faceVerifierFixture,consumeQueue:false}),base='http://localhost',idb=new IDBFactory();let release,entered,gate=true;
  const fetch=(url,init)=>h.request(new URL(url).pathname,{method:init.method,raw:init.body,headers:init.headers});
- const original=new OperatorSession({baseUrl:base,policyVersion:h.env.FACE_AUTH_POLICY_VERSION,vault:new OperatorVault(base,idb),fetch});await original.startEnrollment(true,true);
+ const original=new OperatorSession({baseUrl:base,policyVersion:h.env.FACE_AUTH_POLICY_VERSION,vault:new OperatorVault(base,idb),fetch});await original.startEnrollment(true,'18_plus',true);
  await h.db.run('UPDATE auth_challenges SET created_at=?,expires_at=? WHERE id=?',Date.now()-130000,Date.now()-1000,original.challenge.challenge_id);
  const ready=new Promise(resolve=>entered=resolve),encrypt=crypto.subtle.encrypt.bind(crypto.subtle);
  crypto.subtle.encrypt=async(...args)=>{let value;try{value=JSON.parse(new TextDecoder().decode(args[2]));}catch{}
@@ -151,4 +159,74 @@ test('stale logout and later signed recovery preserve a newer tab session and en
    assert.equal(saved.enrollment.challenge.enrollment_generation,2);assert.equal((await h.request('/me',{token:saved.anonymous.access_token})).status,200);
    assert.equal(original.credentials,null);assert.equal(original.operator,null);
  }finally{release?.();crypto.subtle.encrypt=encrypt;await h.close();}
+});
+
+async function actionStorageFixture({vault=new Vault(),status=200}={}) {
+ const state=await vault.create(),account=crypto.randomUUID(),calls=[];
+ state.reference={accountId:account,faceHandle:'lfh_'+'A'.repeat(43),deviceId:crypto.randomUUID(),profileId:crypto.randomUUID(),profileRevision:'fixture-v1',modelId:'fixture-model'};
+ await vault.save(state);
+ const session=new OperatorSession({baseUrl:state.base,policyVersion:'fixture-policy',vault,fetch:async(url,init)=>{
+  calls.push({path:new URL(url).pathname,body:init.body?JSON.parse(init.body):null});
+  if(new URL(url).pathname.endsWith('/auth/logout'))return Response.json({status:'logged_out'});
+  return Response.json(status===200?{status:'confirmed'}:{error:{code:'review_revision_changed'}},{status});
+ }});
+ session.state=state;session.operator={user_id:account};session.credentials={access_token:'action-storage-fixture'};
+ const operation={path:'/admin/support-requests/'+crypto.randomUUID()+'/start',body:{operation_key:crypto.randomUUID(),review_notes:'Reviewed current case',expected_revision:1},accountId:account};
+ return {session,vault,calls,operation};
+}
+for(const status of [200,409])test(`operator action keeps its exact intent when ${status} cleanup cannot be saved`,async()=>{
+ const {session,vault,calls,operation}=await actionStorageFixture({status}),save=vault.save.bind(vault);let failCleanup=true;
+ vault.save=async value=>{if(value.pendingAction===null&&failCleanup)throw Object.assign(new Error('private_write_failed'),{code:'private_write_failed'});return save(value);};
+ await assert.rejects(session.action(operation.path,operation.body),{code:'private_write_failed'});
+ assert.deepEqual(session.state.pendingAction,operation);assert.deepEqual((await vault.load()).pendingAction,operation);
+ await assert.rejects(session.action('/admin/another',{operation_key:crypto.randomUUID()}),{code:'reconcile_previous_action'});assert.equal(calls.length,1);
+ failCleanup=false;
+ if(status===200)assert.deepEqual(await session.action(operation.path,operation.body),{status:'confirmed'});
+ else await assert.rejects(session.action(operation.path,operation.body),{code:'review_revision_changed',status});
+ assert.deepEqual(calls.map(call=>call.body),[operation.body,operation.body]);
+ assert.equal(session.state.pendingAction,null);assert.equal((await vault.load()).pendingAction,null);
+});
+test('logout during operator-action cleanup prevents late state publication and concurrent replacement',async()=>{
+ const {session,vault,calls,operation}=await actionStorageFixture(),save=vault.save.bind(vault);let release,entered,gate=true;
+ const ready=new Promise(resolve=>entered=resolve);
+ vault.save=async value=>{if(gate&&value.pendingAction===null){gate=false;entered();await new Promise(resolve=>release=resolve);}return save(value);};
+ const pending=session.action(operation.path,operation.body).then(()=>null,error=>error);
+ try {
+  await ready;const originalState=session.state;assert.deepEqual(originalState.pendingAction,operation);
+  await assert.rejects(session.action('/admin/newer',{operation_key:crypto.randomUUID()}),{code:'operator_action_in_progress'});
+  await session.logout();release();assert.equal((await pending).code,'session_changed');
+  assert.equal(session.state,originalState);assert.deepEqual(session.state.pendingAction,operation);
+  assert.equal(session.credentials,null);assert.equal(session.operator,null);
+  assert.equal(calls.filter(call=>!call.path.endsWith('/auth/logout')).length,1);
+ }finally{release?.();}
+});
+for(const change of ['pending action','registered reference'])test(`late cleanup acknowledgement preserves a newer durable ${change}`,async()=>{
+ const base='https://operator-storage-fixture.invalid/functions/v1/lovelies-api',idb=new IDBFactory(),vault=new OperatorVault(base,idb);
+ const {session,calls,operation}=await actionStorageFixture({vault}),save=vault.save.bind(vault);let release,entered,gate=true;
+ const ready=new Promise(resolve=>entered=resolve);
+ vault.save=async value=>{await save(value);if(gate&&value.pendingAction===null){gate=false;entered();await new Promise(resolve=>release=resolve);}};
+ const pending=session.action(operation.path,operation.body).then(()=>null,error=>error);
+ try {
+  await ready;assert.deepEqual(session.state.pendingAction,operation);
+  const other=new OperatorVault(base,idb),newer=await other.load();
+  newer.pendingAction=structuredClone(operation);
+  if(change==='pending action')newer.pendingAction={...newer.pendingAction,body:{...newer.pendingAction.body,operation_key:crypto.randomUUID()}};
+  else newer.reference={...newer.reference,profileRevision:'fixture-v2'};
+  await other.save(newer);await session.restore();const currentState=session.state;
+  release();assert.equal((await pending).code,'private_state_changed');
+  assert.equal(session.state,currentState);assert.deepEqual(session.state,newer);
+  assert.deepEqual(await new OperatorVault(base,idb).load(),newer);assert.equal(calls.length,1);
+ }finally{release?.();}
+});
+test('mutation of a caller body during intent persistence cannot change the dispatched or recoverable action',async()=>{
+ const {session,vault,calls,operation}=await actionStorageFixture(),save=vault.save.bind(vault);let release,entered,gate=true;
+ const ready=new Promise(resolve=>entered=resolve),body=structuredClone(operation.body);
+ vault.save=async value=>{await save(value);if(gate&&value.pendingAction){gate=false;entered();await new Promise(resolve=>release=resolve);}};
+ session.fetch=async(url,init)=>{calls.push({path:new URL(url).pathname,body:JSON.parse(init.body)});throw new Error('reply_lost');};
+ const pending=session.action(operation.path,body).then(()=>null,error=>error);
+ try {
+  await ready;body.operation_key=crypto.randomUUID();body.review_notes='A different later form value';release();
+  assert.equal((await pending).message,'reply_lost');assert.deepEqual(calls[0].body,operation.body);
+  assert.deepEqual(session.state.pendingAction,operation);assert.deepEqual((await vault.load()).pendingAction,operation);
+ }finally{release?.();}
 });

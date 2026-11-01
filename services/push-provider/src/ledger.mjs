@@ -46,10 +46,13 @@ export class DispatchLedger {
     return row ?? null;
   }
 }
+export const PUSH_RECEIPT_PROTOCOL = 'lovelies-push-dispatch-receipt-v1';
 export function receipt(row, key, now = Date.now()) {
-  if (!row) return { operation_key: key, status: 'unknown' };
+  if (!row) return { protocol: PUSH_RECEIPT_PROTOCOL, operation_key: key, request_sha256: null, status: 'unknown' };
+  if (row.operation_key !== key || typeof row.request_sha256 !== 'string' || !/^[0-9a-f]{64}$/.test(row.request_sha256))
+    throw new Error('dispatch_receipt_binding_unavailable');
   const state = row.status === 'prepared' ? (Number(row.lease_until) > now ? 'preparing' : 'not_dispatched') : row.status;
-  return { operation_key: row.operation_key, status: state,
+  return { protocol: PUSH_RECEIPT_PROTOCOL, operation_key: row.operation_key, request_sha256: row.request_sha256, status: state,
     ...(state === 'accepted' ? { provider_message_id: row.provider_message_id } : {}),
     ...(row.provider_code ? { provider_code: row.provider_code } : {}),
     ...(state === 'rejected' ? { retryable: row.retryable === true, token_invalid: row.token_invalid === true } : {}) };

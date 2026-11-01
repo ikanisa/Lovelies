@@ -1,3 +1,9 @@
+import { managedAuthSchemaStatements } from './managed-auth.ts';
+import { processingMatchSchemaStatements } from './processing-match-schema.ts';
+import { pushRosterSchemaStatements } from './push-roster-schema.ts';
+import { restoreRecoverySchemaStatements } from './restore-schema.ts';
+import { chunkedExportSchemaStatements } from './privacy-export-schema.ts';
+import { operatorCapabilitySchemaStatements } from './operator-capabilities.ts';
 import { entitlementsSchemaStatements } from './entitlements.ts';
 import { operatorsSchemaStatements } from './operators.ts';
 import { notificationsSchemaStatements } from './notifications.ts';
@@ -5,9 +11,9 @@ import { retentionSchemaStatements } from './retention.ts';
 import { uploadSchemaStatements } from './upload-schema.ts';
 import { refreshDeliverySchemaStatements } from './refresh-delivery.ts';
 import { audienceSchemaStatements } from './audience.ts';
-export const currentSchemaVersion = 13;
+export const currentSchemaVersion = 19;
 export const extensionSchemaStatements: readonly string[] = [
-    ...entitlementsSchemaStatements, ...operatorsSchemaStatements, ...notificationsSchemaStatements, ...retentionSchemaStatements, ...refreshDeliverySchemaStatements, ...audienceSchemaStatements,
+    ...managedAuthSchemaStatements, ...processingMatchSchemaStatements, ...pushRosterSchemaStatements, ...restoreRecoverySchemaStatements, ...chunkedExportSchemaStatements, ...operatorCapabilitySchemaStatements, ...entitlementsSchemaStatements, ...operatorsSchemaStatements, ...notificationsSchemaStatements, ...retentionSchemaStatements, ...refreshDeliverySchemaStatements, ...audienceSchemaStatements,
 ];
 /** Logical engine schema used by the migration generator. Never execute these
  * source definitions at runtime: generate-schema emits reviewed PostgreSQL DDL. */
@@ -166,7 +172,7 @@ export const schemaStatements: readonly string[] = [
   )`,
     `CREATE TABLE IF NOT EXISTS blocks(
     blocker_id TEXT NOT NULL REFERENCES accounts(id), blocked_id TEXT NOT NULL REFERENCES accounts(id),
-    created_at INTEGER NOT NULL, PRIMARY KEY(blocker_id,blocked_id), CHECK(blocker_id<>blocked_id)
+    episode_id TEXT NOT NULL, created_at INTEGER NOT NULL, PRIMARY KEY(blocker_id,blocked_id), CHECK(blocker_id<>blocked_id)
   )`,
     `CREATE TABLE IF NOT EXISTS account_preferences(
     account_id TEXT PRIMARY KEY REFERENCES accounts(id), receive_matches INTEGER NOT NULL DEFAULT 0 CHECK(receive_matches IN(0,1)),
@@ -197,11 +203,16 @@ export const schemaStatements: readonly string[] = [
     profiles_json TEXT CHECK(profiles_json IS NULL OR json_valid(profiles_json)),
     matches_json TEXT CHECK(matches_json IS NULL OR json_valid(matches_json)), processor_nonce TEXT,
     completed_at INTEGER, error_code TEXT, owner_session_id TEXT, owner_auth_epoch INTEGER,
-    lease_token TEXT, lease_until INTEGER, engine_identity TEXT
+    lease_token TEXT, lease_until INTEGER, engine_identity TEXT, profile_batch_count INTEGER NOT NULL DEFAULT 0 CHECK(profile_batch_count>=0)
   )`,
+    `CREATE TABLE IF NOT EXISTS processing_profile_batches(
+    attempt_id TEXT NOT NULL REFERENCES processing_attempts(id) ON DELETE CASCADE,batch_index INTEGER NOT NULL CHECK(batch_index>=0),
+    profiles_json TEXT NOT NULL CHECK(json_valid(profiles_json)),status TEXT NOT NULL CHECK(status IN('pending','completed')),
+    matches_json TEXT CHECK(matches_json IS NULL OR json_valid(matches_json)),preview_sha256 TEXT,preview_content_type TEXT,
+    preview_width INTEGER,preview_height INTEGER,PRIMARY KEY(attempt_id,batch_index))`,
     `CREATE TABLE IF NOT EXISTS photo_job_outbox(
     id TEXT PRIMARY KEY, attempt_id TEXT NOT NULL UNIQUE REFERENCES processing_attempts(id), asset_id TEXT NOT NULL REFERENCES assets(id),
-    status TEXT NOT NULL, created_at INTEGER NOT NULL, dispatched_at INTEGER
+    status TEXT NOT NULL, created_at INTEGER NOT NULL, dispatched_at INTEGER,last_examined_at INTEGER
   )`,
     `CREATE TABLE IF NOT EXISTS match_origins(
     id TEXT PRIMARY KEY, asset_id TEXT NOT NULL REFERENCES assets(id), recipient_id TEXT NOT NULL REFERENCES accounts(id),
@@ -278,7 +289,7 @@ export const schemaStatements: readonly string[] = [
     `CREATE TABLE IF NOT EXISTS outbox(
     id TEXT PRIMARY KEY, account_id TEXT REFERENCES accounts(id), category TEXT NOT NULL,
     entity_id TEXT, event_key TEXT NOT NULL UNIQUE, payload_json TEXT NOT NULL CHECK(json_valid(payload_json)),
-    created_at INTEGER NOT NULL, delivered_at INTEGER, cancelled_at INTEGER
+    created_at INTEGER NOT NULL, delivered_at INTEGER, cancelled_at INTEGER,last_examined_at INTEGER
   )`,
     `CREATE TABLE IF NOT EXISTS privacy_requests(
     id TEXT PRIMARY KEY, subject_id TEXT NOT NULL REFERENCES accounts(id), requested_by TEXT NOT NULL REFERENCES accounts(id),
@@ -287,7 +298,7 @@ export const schemaStatements: readonly string[] = [
     reason TEXT, created_at INTEGER NOT NULL, reviewed_by TEXT REFERENCES accounts(id), reviewed_at INTEGER, review_reason TEXT,
     expires_at INTEGER NOT NULL, completed_at INTEGER, export_key TEXT, export_sha256 TEXT, export_bytes INTEGER,
     export_expires_at INTEGER, failure_code TEXT, legal_hold INTEGER NOT NULL DEFAULT 0 CHECK(legal_hold IN(0,1)),
-    execution_token TEXT, lease_until INTEGER, metadata_erased_at INTEGER
+    execution_token TEXT, lease_until INTEGER, metadata_erased_at INTEGER, restore_hold_episode_id TEXT,last_recovery_scan_at INTEGER
   )`,
     `CREATE INDEX IF NOT EXISTS privacy_subject ON privacy_requests(subject_id,created_at)`,
     `CREATE TABLE IF NOT EXISTS privacy_deletion_status_receipts(
@@ -299,13 +310,28 @@ export const schemaStatements: readonly string[] = [
     `CREATE TABLE IF NOT EXISTS privacy_exports(
     id TEXT PRIMARY KEY, request_id TEXT NOT NULL REFERENCES privacy_requests(id), subject_id TEXT NOT NULL REFERENCES accounts(id),
     object_key TEXT NOT NULL UNIQUE, sha256 TEXT NOT NULL, bytes INTEGER NOT NULL CHECK(bytes>0),
-    expires_at INTEGER NOT NULL, status TEXT NOT NULL CHECK(status IN('pending','published','retired')), created_at INTEGER NOT NULL
+    expires_at INTEGER NOT NULL, status TEXT NOT NULL CHECK(status IN('pending','published','retired')), created_at INTEGER NOT NULL,
+    content_format TEXT NOT NULL DEFAULT 'flat' CHECK(content_format IN('flat','chunked')),chunk_count INTEGER NOT NULL DEFAULT 0 CHECK(chunk_count>=0),
+    manifest_sha256 TEXT,manifest_object_sha256 TEXT,manifest_object_bytes INTEGER,
+    CHECK(content_format='flat' AND chunk_count=0 AND manifest_sha256 IS NULL AND manifest_object_sha256 IS NULL AND manifest_object_bytes IS NULL
+      OR content_format='chunked' AND chunk_count>0 AND manifest_sha256 IS NOT NULL AND manifest_object_sha256 IS NOT NULL AND manifest_object_bytes BETWEEN 1 AND 4096
+      AND bytes BETWEEN 1 AND 9007199254740991 AND chunk_count=(bytes+1048575)/1048576)
   )`,
     `CREATE TABLE IF NOT EXISTS privacy_export_grants(
     id TEXT PRIMARY KEY, request_id TEXT NOT NULL REFERENCES privacy_requests(id), subject_id TEXT NOT NULL REFERENCES accounts(id),
     session_id TEXT NOT NULL REFERENCES sessions(id), token_hash TEXT NOT NULL UNIQUE,
     expires_at INTEGER NOT NULL, consumed_at INTEGER, created_at INTEGER NOT NULL
   )`,
+    `CREATE TABLE IF NOT EXISTS privacy_export_deliveries(
+    id TEXT PRIMARY KEY,request_id TEXT NOT NULL REFERENCES privacy_requests(id),subject_id TEXT NOT NULL REFERENCES accounts(id),
+    session_id TEXT NOT NULL REFERENCES sessions(id),publication_id TEXT NOT NULL REFERENCES privacy_exports(id),operation_key TEXT NOT NULL,
+    sha256 TEXT NOT NULL,bytes INTEGER NOT NULL,expires_at INTEGER NOT NULL,created_at INTEGER NOT NULL,
+    acknowledged_at INTEGER,protocol_version INTEGER NOT NULL DEFAULT 2 CHECK(protocol_version IN(2,3)),chunk_count INTEGER NOT NULL DEFAULT 0,manifest_sha256 TEXT,
+    UNIQUE(subject_id,operation_key),CHECK(expires_at>created_at AND expires_at<=created_at+CASE WHEN protocol_version=2 THEN 300000 ELSE 3600000 END),
+    CHECK(protocol_version=2 AND bytes BETWEEN 1 AND 20971520 AND chunk_count=0 AND manifest_sha256 IS NULL
+      OR protocol_version=3 AND bytes BETWEEN 1 AND 9007199254740991 AND chunk_count=(bytes+1048575)/1048576 AND manifest_sha256 IS NOT NULL),
+    CHECK(acknowledged_at IS NULL OR acknowledged_at>=created_at))`,
+    `CREATE INDEX IF NOT EXISTS privacy_delivery_subject ON privacy_export_deliveries(subject_id,expires_at)`,
     `CREATE TABLE IF NOT EXISTS cleanup_intents(
     id TEXT PRIMARY KEY, request_id TEXT REFERENCES privacy_requests(id), subject_id TEXT REFERENCES accounts(id),
     bucket TEXT NOT NULL CHECK(bucket IN('PHOTOS','QUARANTINE','PRIVACY_EXPORTS')), object_key TEXT NOT NULL,
@@ -315,7 +341,8 @@ export const schemaStatements: readonly string[] = [
     `CREATE TABLE IF NOT EXISTS media_write_intents(
     id TEXT PRIMARY KEY, account_id TEXT NOT NULL REFERENCES accounts(id),
     bucket TEXT NOT NULL CHECK(bucket IN('PHOTOS','QUARANTINE','PRIVACY_EXPORTS')), object_key TEXT NOT NULL,
-    status TEXT NOT NULL CHECK(status IN('pending','settled')), created_at INTEGER NOT NULL, settled_at INTEGER
+    status TEXT NOT NULL CHECK(status IN('pending','settled')), created_at INTEGER NOT NULL, settled_at INTEGER,
+    restore_protocol_version INTEGER NOT NULL DEFAULT 1 CHECK(restore_protocol_version IN(1,2)), restore_incarnation_id TEXT
   )`,
     `CREATE INDEX IF NOT EXISTS media_write_account ON media_write_intents(account_id,status)`,
     `CREATE TABLE IF NOT EXISTS audit_events(

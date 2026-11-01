@@ -1,11 +1,14 @@
-import {AUDIENCE_POLICY,audienceProjection,audienceChallenge} from './audience.mjs';
+import {AUDIENCE_POLICY,AUDIENCE_DEVICE_PROTOCOL,audienceDecision,audienceDecisionFields,audienceProjection,
+  audienceDeviceStatus,audienceRenewalReceipt,audienceChallenge} from './audience.mjs';
+import {operatorCapabilities} from '../clients/backend/operator-capabilities.mjs';
 import { canonical, faceChallenge, faceSigningBytes, faceCapturePayload, faceCompletionPayload,
   faceCaptureDigest, toBase64url, publicDeviceKey } from '../clients/backend/face-contracts.mjs';
 
 const fail = (code, status = 0) => { throw Object.assign(new Error(code), {code,status}); };
 const uuid = value => typeof value === 'string' && /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value);
-const productDenials=new Set(['audience_required','age_not_supported','guardian_approval_required','audience_restricted','registered_face_required','admin_required']);
+const productDenials=new Set(['audience_required','audience_review_required','age_not_supported','guardian_approval_required','audience_restricted','registered_face_required','admin_required','operator_capability_required']);
 const productDenied=(status,code)=>(status===403&&productDenials.has(code))||(status===401&&code==='registered_face_session_invalid');
+const terminalRecovery=error=>(error.status===409&&error.code==='operation_recovered_without_result')||(error.status===410&&error.code==='operation_retired_by_recovery');
 const retainAction=error=>error.status===401||(error.status===403&&(productDenials.has(error.code)||['fresh_face_authentication_required','guardian_adult_required'].includes(error.code)));
 export function apiBase(value) {
   const url = new URL(value), loopback = ['127.0.0.1','localhost','[::1]'].includes(url.hostname);
@@ -65,7 +68,7 @@ export class OperatorVault {
     const keys={signingKey:pair.privateKey,encryptionKey:await crypto.subtle.generateKey({name:'AES-GCM',length:256},false,['encrypt','decrypt'])};
     const exported=await crypto.subtle.exportKey('jwk',pair.publicKey);
     const jwk=publicDeviceKey({kty:'EC',crv:'P-256',x:exported.x,y:exported.y,ext:true,key_ops:['verify']});
-    const value={version:1,base:this.base,devicePublicJwk:jwk,reference:null,enrollment:null,anonymous:null,pendingAction:null};
+    const value={version:1,base:this.base,devicePublicJwk:jwk,reference:null,enrollment:null,anonymous:null,pendingAudience:null,pendingAction:null};
     await this.save(value,{initialKeys:keys});return value;
     }finally{this.creating=false;}
   }
@@ -96,7 +99,7 @@ export class OperatorVault {
 export class OperatorSession {
   constructor({baseUrl,policyVersion,fetch=globalThis.fetch,vault,now=Date.now}) {
     this.base=apiBase(baseUrl);this.policy=policyVersion;this.fetch=fetch;this.vault=vault??new OperatorVault(this.base);this.now=now;
-    this.epoch=0;this.credentials=null;this.operator=null;this.challenge=null;this.state=null;this.captures=[];
+    this.epoch=0;this.credentials=null;this.operator=null;this.challenge=null;this.state=null;this.captures=[];this.actionOwner=null;this.audienceReview=null;this.audienceBusy=false;
   }
   check(epoch) { if(epoch!==this.epoch)fail('session_changed'); }
   captureAuthority(challenge,epoch) {
@@ -125,55 +128,200 @@ export class OperatorSession {
         const code=result.error?.code??'request_failed';
         // A strong product denial does not invalidate an otherwise current own
         // privacy/session credential. Fence concurrent product work separately.
-        if(productDenied(response.status,code)){this.operator=null;this.challenge=null;this.captures=[];this.epoch++;}
-        else if(response.status===401&&invalidateSessionOn401){this.credentials=null;this.operator=null;this.epoch++;}
+        if(productDenied(response.status,code)){this.operator=null;this.challenge=null;this.captures=[];this.audienceReview=null;this.epoch++;}
+        else if(response.status===401&&invalidateSessionOn401){this.credentials=null;this.operator=null;this.audienceReview=null;this.epoch++;}
         fail(code,response.status);
       }
       return result;
     } finally {clearTimeout(timer);}
   }
   async signed(payload) {const epoch=this.epoch;return {...payload,device_signature:await this.proof(payload,epoch)};}
-  async startEnrollment(consented,adultAttested=false) {
+  async startEnrollment(consented,selection,eligibilityConfirmed=false) {
     const epoch=this.epoch;
     if(consented!==true)fail('authentication_consent_required');
-    if(adultAttested!==true)fail('operator_adult_declaration_required');
+    if(eligibilityConfirmed!==true)fail('audience_confirmation_required');
+    const decision=audienceDecision(selection);
     this.state??=await this.checked(this.vault.load(),epoch);this.state??=await this.checked(this.vault.create(),epoch);
     if(this.state.reference) return this.startLogin();
     if(this.state.enrollment)return this.recoverEnrollment();
     if(!this.state.anonymous){const value=await this.request('/auth/anonymous',{method:'POST',body:{},token:null});
       if(!uuid(value.account_id)||value.auth_method!=='anonymous'||typeof value.access_token!=='string')fail('auth_response_invalid');
       this.state.anonymous=value;await this.checked(this.vault.save(this.state),epoch);}
-    await this.declareOperatorAudience();
+    const current=await this.declareOperatorAudience(decision);if(!current)return null;this.check(epoch);
     const journal={account_id:this.state.anonymous.account_id,enrollment_key:crypto.randomUUID(),face_handle:`lfh_${toBase64url(crypto.getRandomValues(new Uint8Array(32)))}`,
       policy_version:this.policy,device_public_jwk:this.state.devicePublicJwk,challenge:null,captures:[],resume:null};
     this.state.enrollment=journal;await this.checked(this.vault.save(this.state),epoch);return this.dispatchEnrollment();
   }
-  async declareOperatorAudience() {
-    const epoch=this.epoch,account=this.state?.anonymous?.account_id;
-    if(!uuid(account)||this.credentials||this.operator||this.state.reference)fail('original_session_recovery_required');
-    const send=async options=>{
-      const request=()=>this.request('/me/audience',{...options,token:this.state.anonymous.access_token,invalidateSessionOn401:false});
-      try{return await request();}catch(error){
-        if(error.status!==401)throw error;
-        this.check(epoch);await this.refreshAnonymous();this.check(epoch);
-        if(this.state.anonymous?.account_id!==account)fail('private_state_scope_changed');
-        return request();
-      }
-    };
-    let pending=this.state.pendingAudience;
-    if(pending&&(pending.accountId!==account||pending.body?.age_band!=='18_plus'||pending.body?.policy_version!==AUDIENCE_POLICY||!uuid(pending.body?.operation_key)))fail('private_state_scope_changed');
-    if(!pending){
-      const value=await send({});
-      const current=audienceProjection(value,account);
-      if(current.ageBand==='18_plus'&&current.status==='eligible'&&current.capabilities.face_authentication)return current;
-      if(current.ageBand!=='unknown')fail('operator_adult_required');
-      pending={accountId:account,body:{age_band:'18_plus',policy_version:AUDIENCE_POLICY,expected_version:current.version,operation_key:crypto.randomUUID()}};
-      this.state.pendingAudience=pending;await this.checked(this.vault.save(this.state),epoch);
+  audienceScope(kind) {
+    const reference=this.state?.reference,anonymous=this.state?.anonymous;
+    const scope={kind,epoch:this.epoch,accountId:kind==='device'?reference?.accountId:anonymous?.account_id,reference,
+      referenceBinding:reference?canonical(reference):null,anonymous,token:anonymous?.access_token,pending:null};
+    if(!uuid(scope.accountId)||(kind==='device'&&(!uuid(reference?.deviceId)||typeof reference.faceHandle!=='string'||this.credentials||this.operator))||
+        (kind==='anonymous'&&(reference||this.credentials||this.operator||typeof scope.token!=='string')))fail('original_session_recovery_required');
+    return scope;
+  }
+  checkAudienceScope(scope) {
+    this.check(scope.epoch);
+    if(scope.kind==='device'){
+      if(this.credentials||this.operator||this.state?.reference!==scope.reference||canonical(this.state.reference)!==scope.referenceBinding)fail('private_state_scope_changed');
+    }else if(this.state?.reference||this.credentials||this.operator||this.state?.anonymous!==scope.anonymous||
+        this.state.anonymous?.account_id!==scope.accountId||this.state.anonymous.access_token!==scope.token)fail('private_state_scope_changed');
+    if(scope.pending&&(this.state?.pendingAudience!==scope.pending||canonical(scope.pending)!==scope.pendingBinding))fail('private_state_scope_changed');
+  }
+  bindAudienceJournal(scope,pending) {
+    const body=pending?.body,legacy=body&&Object.hasOwn(body,'age_band');
+    if(pending?.accountId!==scope.accountId||!body||body.policy_version!==AUDIENCE_POLICY||!uuid(body.operation_key)||
+        !Number.isSafeInteger(body.expected_version)||body.expected_version<0)fail('private_state_scope_changed');
+    if(legacy){
+      // A pre-upgrade uncertain intent is replayed byte for byte. It is never
+      // converted into a new decision or silently assigned another key.
+      if(scope.kind!=='anonymous'||pending.version!=null||pending.kind!=null||body.age_band!=='18_plus'||
+          Object.keys(body).sort().join(',')!=='age_band,expected_version,operation_key,policy_version'||
+          Object.keys(pending).sort().join(',')!=='accountId,body')fail('private_state_scope_changed');
+    }else{
+      if(pending.version!==2||!['declaration','session-renewal','device-renewal'].includes(pending.kind))fail('private_state_scope_changed');
+      const journalKeys=['version','kind','accountId','body',...(pending.kind==='device-renewal'?['deviceId','faceHandle']:[])];
+      if(Object.keys(pending).sort().join(',')!==journalKeys.sort().join(','))fail('private_state_scope_changed');
+      audienceDecisionFields({at_least_13:body.at_least_13,guardian_required:body.guardian_required});
+      const renewal=pending.kind!=='declaration',keys=['at_least_13','guardian_required','policy_version','expected_version','operation_key',...(renewal?['consent']:[])];
+      if(Object.keys(body).sort().join(',')!==keys.sort().join(','))fail('private_state_scope_changed');
+      // A saved operation keeps its original consent policy after configuration
+      // changes. Only the server can prove whether those exact bytes committed;
+      // a new operation always uses this.policy when its journal is created.
+      const consent=body.consent;
+      if(renewal&&(body.at_least_13!==true||body.guardian_required!==false||!consent||
+          Object.keys(consent).sort().join(',')!=='granted,policy_version,purpose'||consent.purpose!=='face_authentication'||consent.granted!==true||
+          typeof consent.policy_version!=='string'||!consent.policy_version||consent.policy_version.length>160||/[\x00-\x1f\x7f]/.test(consent.policy_version)))fail('private_state_scope_changed');
+      if(scope.kind==='device'?(pending.kind!=='device-renewal'||pending.deviceId!==scope.reference.deviceId||pending.faceHandle!==scope.reference.faceHandle):pending.kind==='device-renewal')fail('private_state_scope_changed');
     }
-    const value=await send({method:'PUT',body:pending.body});
-    const current=audienceProjection(value,account);
-    if(current.ageBand!=='18_plus'||current.status!=='eligible'||!current.capabilities.face_authentication)fail('operator_adult_required');
-    this.check(epoch);this.state.pendingAudience=null;await this.checked(this.vault.save(this.state),epoch);return current;
+    scope.pending=pending;scope.pendingBinding=canonical(pending);this.checkAudienceScope(scope);return pending;
+  }
+  async saveAudienceJournal(scope,pending) {
+    this.checkAudienceScope(scope);if(this.state.pendingAudience)fail('reconcile_audience_operation');
+    // Retain the same intent in memory before awaiting storage: a committed
+    // write followed by cancellation must not make the next attempt invent a
+    // replacement key. Every new-format retry confirms durability again.
+    this.state.pendingAudience=pending;this.bindAudienceJournal(scope,pending);
+    await this.persistAudienceJournal(scope);return pending;
+  }
+  async persistAudienceJournal(scope) {
+    this.checkAudienceScope(scope);await this.checked(this.vault.save(this.state),scope.epoch);this.checkAudienceScope(scope);
+  }
+  async finishAudienceJournal(scope,current,receipt=null) {
+    this.checkAudienceScope(scope);
+    const recovery=scope.kind==='device'&&current.nextStep==='profile_recovery'?{
+      accountId:scope.accountId,deviceId:scope.reference.deviceId,faceHandle:scope.reference.faceHandle,
+      operationKey:receipt.operationKey,version:current.version,nextStep:'profile_recovery'}:null;
+    const candidate={...this.state,pendingAudience:null,...(this.state.audienceTerminal?{audienceTerminal:{...this.state.audienceTerminal,reconciledAt:this.now(),reconciledVersion:current.version,reconciledOperationKey:scope.pending.body.operation_key}}:{}),...(scope.kind==='device'?{audienceRecovery:recovery}:{})};
+    await this.checked(this.vault.save(candidate),scope.epoch);this.checkAudienceScope(scope);
+    this.state=candidate;scope.pending=null;this.audienceReview=null;
+  }
+  async retireAudienceJournal(scope,error) {
+    this.checkAudienceScope(scope);
+    const pending=this.state.pendingAudience,inputHash=await this.checked(faceCaptureDigest(new TextEncoder().encode(canonical(pending.body))),scope.epoch);
+    this.checkAudienceScope(scope);
+    const before=canonical(this.state),candidate=JSON.parse(before);candidate.pendingAudience=null;
+    candidate.audienceTerminal={version:1,accountId:scope.accountId,kind:pending.kind,operationKey:pending.body.operation_key,
+      inputSha256:inputHash,status:error.status,code:error.code,observedAt:this.now()};
+    await this.checked(this.vault.save(candidate),scope.epoch);this.checkAudienceScope(scope);
+    if(canonical(this.state)!==before)fail('private_state_changed');
+    this.state=candidate;scope.pending=null;this.audienceReview=null;
+  }
+  async audienceDispatch(scope,work) {
+    try{return await work();}
+    catch(error){if(terminalRecovery(error))await this.retireAudienceJournal(scope,error);throw error;}
+  }
+  async sendSessionAudience(scope,options={}) {
+    const path=options.path??'/me/audience',{path:ignored,...requestOptions}=options;
+    const request=async()=>{this.checkAudienceScope(scope);const value=await this.request(path,{...requestOptions,token:scope.token,invalidateSessionOn401:false});this.checkAudienceScope(scope);return value;};
+    try{return await request();}catch(error){
+      if(error.status!==401)throw error;
+      this.checkAudienceScope(scope);const refreshed=await this.refreshAnonymous();this.check(scope.epoch);
+      if(this.state?.anonymous!==refreshed||refreshed?.account_id!==scope.accountId)fail('private_state_scope_changed');
+      scope.anonymous=refreshed;scope.token=refreshed.access_token;this.checkAudienceScope(scope);return request();
+    }
+  }
+  async declareOperatorAudience(decision=null,{renewal=false,consented=false,review=null}={}) {
+    if(this.audienceBusy)fail('audience_operation_in_progress');this.audienceBusy=true;
+    try{
+      if(decision)decision=audienceDecisionFields(decision);
+      const scope=this.audienceScope('anonymous');let pending=this.state.pendingAudience;
+      if(pending){
+        this.bindAudienceJournal(scope,pending);
+        const original=pending.body.age_band?audienceDecision(pending.body.age_band):{at_least_13:pending.body.at_least_13,guardian_required:pending.body.guardian_required};
+        if(decision&&canonical(original)!==canonical(decision))fail('reconcile_audience_operation');
+        if(pending.version===2)await this.persistAudienceJournal(scope);
+      }else{
+        const current=audienceProjection(await this.sendSessionAudience(scope),scope.accountId,this.now());
+        if(renewal){
+          if(!review||review!==this.audienceReview||review.epoch!==scope.epoch||review.current.version!==current.version||review.current.accountId!==scope.accountId)fail('audience_record_changed');
+          if(!current.reviewRequired||current.atLeast13!==true||current.guardianRequired!==false)fail('operator_adult_required');
+          if(!decision||decision.at_least_13!==true||decision.guardian_required!==false)fail('operator_adult_required');
+          if(consented!==true)fail('authentication_consent_required');
+        }else if(current.reviewRequired){
+          this.checkAudienceScope(scope);this.audienceReview={kind:'anonymous',epoch:scope.epoch,current,
+            renewalAvailable:current.atLeast13===true&&current.guardianRequired===false};return null;
+        }else if(current.atLeast13===true&&current.guardianRequired===false&&current.status==='eligible'&&current.capabilities.face_authentication&&
+            (!decision||(decision.at_least_13===true&&decision.guardian_required===false)))return current;
+        if(!decision)fail(current.version===0?'audience_selection_required':'operator_adult_required');
+        const body={...decision,policy_version:AUDIENCE_POLICY,expected_version:current.version,operation_key:crypto.randomUUID(),
+          ...(renewal?{consent:{purpose:'face_authentication',policy_version:this.policy,granted:true}}:{})};
+        pending=await this.saveAudienceJournal(scope,{version:2,kind:renewal?'session-renewal':'declaration',accountId:scope.accountId,body});
+      }
+      const renewing=pending.kind==='session-renewal';
+      const value=await this.audienceDispatch(scope,()=>this.sendSessionAudience(scope,{path:renewing?'/me/audience/renew':'/me/audience',method:renewing?'POST':'PUT',body:pending.body}));
+      const current=audienceProjection(value,scope.accountId,this.now());
+      const receipt=renewing?audienceRenewalReceipt(value,pending.body,current.version):null;
+      await this.finishAudienceJournal(scope,current,receipt);
+      if(current.atLeast13===true&&current.guardianRequired===false&&current.reviewRequired){
+        this.audienceReview={kind:'anonymous',epoch:scope.epoch,current,renewalAvailable:true};return null;
+      }
+      if(current.atLeast13!==true||current.guardianRequired!==false||current.status!=='eligible'||current.reviewRequired||!current.capabilities.face_authentication)fail('operator_adult_required');
+      return current;
+    }finally{this.audienceBusy=false;}
+  }
+  async deviceAudience(scope,step,decisionBody=null) {
+    this.checkAudienceScope(scope);
+    const common={account_id:scope.accountId,device_id:scope.reference.deviceId,face_handle:scope.reference.faceHandle,
+      request_nonce:crypto.randomUUID(),request_expires_at:this.now()+45000};
+    const body={...common,...(decisionBody??{})},proof={protocol:AUDIENCE_DEVICE_PROTOCOL,step,...body};
+    const signature=await this.proof(proof,scope.epoch);this.checkAudienceScope(scope);
+    if(common.request_expires_at<=this.now())fail('audience_device_request_expired');
+    const value=await this.request('/auth/face/audience/'+step,{method:'POST',token:null,body:{...body,device_signature:signature}});
+    this.checkAudienceScope(scope);if(common.request_expires_at<=this.now())fail('audience_device_request_expired');
+    const current=audienceDeviceStatus(value,{accountId:scope.accountId,deviceId:scope.reference.deviceId,requestNonce:common.request_nonce},this.now());
+    return {value,current};
+  }
+  async renewOperatorAudience(selection,confirmed=false,consented=false) {
+    const pending=this.state?.pendingAudience,review=this.audienceReview;
+    if(!pending){
+      if(confirmed!==true)fail('audience_confirmation_required');
+      if(consented!==true)fail('authentication_consent_required');
+      const decision=audienceDecision(selection);if(!decision.at_least_13||decision.guardian_required)fail('operator_adult_required');
+      if(!review||review.epoch!==this.epoch||!review.current?.reviewRequired||!review.renewalAvailable)fail('audience_review_required');
+      if(review.kind==='anonymous')return this.declareOperatorAudience(decision,{renewal:true,consented:true,review});
+    }
+    if(this.audienceBusy)fail('audience_operation_in_progress');this.audienceBusy=true;
+    try{
+      const scope=this.audienceScope('device');
+      if(pending){this.bindAudienceJournal(scope,pending);await this.persistAudienceJournal(scope);}
+      else{
+        if(review.kind!=='device'||review.current.accountId!==scope.accountId||review.reference!==scope.reference||review.referenceBinding!==scope.referenceBinding)fail('private_state_scope_changed');
+        const body={at_least_13:true,guardian_required:false,policy_version:AUDIENCE_POLICY,expected_version:review.current.version,operation_key:crypto.randomUUID(),
+          consent:{purpose:'face_authentication',policy_version:this.policy,granted:true}};
+        await this.saveAudienceJournal(scope,{version:2,kind:'device-renewal',accountId:scope.accountId,deviceId:scope.reference.deviceId,faceHandle:scope.reference.faceHandle,body});
+      }
+      const {value,current}=await this.audienceDispatch(scope,()=>this.deviceAudience(scope,'renew',scope.pending.body)),receipt=audienceRenewalReceipt(value,scope.pending.body,current.version);
+      await this.finishAudienceJournal(scope,current,receipt);
+      if(current.nextStep==='profile_recovery')this.audienceReview={kind:'profile-recovery',epoch:scope.epoch,current};
+      else if(current.reviewRequired)this.audienceReview={kind:'device',epoch:scope.epoch,current,renewalAvailable:current.renewalAvailable,
+        reference:scope.reference,referenceBinding:scope.referenceBinding};
+      return current;
+    }finally{this.audienceBusy=false;}
+  }
+  async recoverOperatorAudience() {
+    if(!this.state?.pendingAudience)fail('audience_operation_missing');
+    return this.state.pendingAudience.kind==='device-renewal'?this.renewOperatorAudience():this.declareOperatorAudience();
   }
   async dispatchEnrollment() {
     const epoch=this.epoch;
@@ -254,12 +402,27 @@ export class OperatorSession {
     this.challenge=faceChallenge(audienceChallenge(value,this.now()),{purpose:'registration',accountId:j.account_id},this.now());j.challenge=value;j.captures=[];j.resume=null;this.captures=[];await this.checked(this.vault.save(this.state),epoch);return this.challenge;
   }
   async startLogin() {
+    if(this.audienceBusy)fail('audience_operation_in_progress');
     const startingEpoch=this.epoch;this.state??=await this.checked(this.vault.load(),startingEpoch);const r=this.state?.reference;if(!r)fail('registered_device_required');
-    this.credentials=null;this.operator=null;this.epoch++;
+    this.credentials=null;this.operator=null;this.challenge=null;this.captures=[];this.audienceReview=null;this.epoch++;
+    const scope=this.audienceScope('device');
+    if(this.state.pendingAudience){this.bindAudienceJournal(scope,this.state.pendingAudience);return null;}
+    const {current}=await this.deviceAudience(scope,'status');
+    if(current.atLeast13!==true||current.guardianRequired!==false)fail('operator_adult_required');
+    if(current.reviewRequired){
+      this.audienceReview={kind:'device',epoch:scope.epoch,current,renewalAvailable:current.renewalAvailable,
+        reference:scope.reference,referenceBinding:scope.referenceBinding};return null;
+    }
+    if(current.status!=='eligible')fail('operator_adult_required');
+    if(current.nextStep!=='face_login'){
+      this.audienceReview={kind:'profile-recovery',epoch:scope.epoch,current};return null;
+    }
     const value=await this.request('/auth/face/challenge',{method:'POST',token:null,body:{face_handle:r.faceHandle,device_id:r.deviceId}});
-    this.challenge=faceChallenge(audienceChallenge(value,this.now()),{purpose:'login',accountId:r.accountId,deviceId:r.deviceId},this.now());
+    this.checkAudienceScope(scope);
+    const challenge=faceChallenge(audienceChallenge(value,this.now()),{purpose:'login',accountId:r.accountId,deviceId:r.deviceId},this.now());
+    if(challenge.audience_authority.audience_version!==current.version||Date.parse(challenge.audience_authority.expires_at)>current.authorityExpiresAt)fail('audience_challenge_invalid');
     if(value.profile_id!==r.profileId || value.profile_revision!==r.profileRevision || value.model_id!==r.modelId || value.policy_version!==this.policy)fail('registered_reference_changed');
-    this.captures=[];return this.challenge;
+    this.challenge=challenge;this.captures=[];return this.challenge;
   }
   async useCapture(bytes,mime='image/jpeg') {
     if(this.captureBusy)fail('capture_in_progress');this.captureBusy=true;const epoch=this.epoch;
@@ -293,22 +456,46 @@ export class OperatorSession {
     this.check(epoch);this.credentials=value;this.challenge=null;this.captures=[];let me;
     try {me=await this.request('/me');
     if(me.user_id!==value.account_id||me.auth_method!=='registered_face'||me.authenticated!==true)fail('account_scope_changed');
-    if(!Array.isArray(me.roles)||!me.roles.includes('admin'))fail('operator_provisioning_required',403);
+    if(!Array.isArray(me.roles)||operatorCapabilities(me).length===0)fail('operator_provisioning_required',403);
     this.operator=me;return me;
     }catch(error){this.credentials=null;this.operator=null;throw error;}
     }finally{this.completing=false;}
   }
   async action(path,body) {
-    const epoch=this.epoch;
+    const epoch=this.epoch,credentials=this.credentials;
     if(!this.operator)fail('operator_authentication_required');
-    const operation={path,body,accountId:this.operator.user_id};this.state.pendingAction??=operation;
-    if(canonical(this.state.pendingAction)!==canonical(operation))fail('reconcile_previous_action');
-    await this.checked(this.vault.save(this.state),epoch);
-    try {const result=await this.request(path,{method:'POST',body});this.check(epoch);this.state.pendingAction=null;await this.checked(this.vault.save(this.state),epoch);return result;}
-    catch(error){if(error.status>=400&&error.status<500&&![408,429].includes(error.status)&&!retainAction(error)){this.check(epoch);this.state.pendingAction=null;await this.checked(this.vault.save(this.state),epoch);}throw error;}
+    if(this.actionOwner)fail('operator_action_in_progress');
+    // Capture the submitted intent separately from mutable form/caller objects.
+    const identity=canonical({path,body,accountId:this.operator.user_id}),operation=JSON.parse(identity);
+    this.state.pendingAction??=JSON.parse(identity);
+    if(canonical(this.state.pendingAction)!==identity)fail('reconcile_previous_action');
+    const owner={};this.actionOwner=owner;
+    const current=()=>{
+      this.check(epoch);
+      if(this.actionOwner!==owner||this.credentials!==credentials||this.operator?.user_id!==operation.accountId)fail('session_changed');
+      if(!this.state?.pendingAction||canonical(this.state.pendingAction)!==identity)fail('private_state_changed');
+    };
+    const clearPending=async()=>{
+      current();const before=canonical(this.state),candidate=JSON.parse(before);candidate.pendingAction=null;
+      // Keep the original intent visible and admission-blocking until durable
+      // cleanup is acknowledged. A failed save must not admit a replacement.
+      await this.checked(this.vault.save(candidate),epoch);current();
+      if(canonical(this.state)!==before)fail('private_state_changed');
+      this.state=candidate;
+    };
+    try {
+      await this.checked(this.vault.save(this.state),epoch);current();
+      let result;
+      try {result=await this.request(operation.path,{method:'POST',body:operation.body});}
+      catch(error){
+        if(error.status>=400&&error.status<500&&![408,429].includes(error.status)&&!retainAction(error))await clearPending();
+        throw error;
+      }
+      await clearPending();return result;
+    }finally{if(this.actionOwner===owner)this.actionOwner=null;}
   }
   async logout() {
-    const old=this.credentials,pending=this.state?.refreshDelivery;this.credentials=null;this.operator=null;this.challenge=null;this.captures=[];this.epoch++;
+    const old=this.credentials,pending=this.state?.refreshDelivery;this.credentials=null;this.operator=null;this.challenge=null;this.captures=[];this.audienceReview=null;this.epoch++;
     if(pending){
       const epoch=this.epoch,enrollment=this.state.enrollment?.enrollment_key;pending.retired=true;
       const persistRetirement=async()=>{
@@ -337,5 +524,5 @@ export class OperatorSession {
     }
     if(old)await this.request('/auth/logout',{method:'POST',token:old.access_token,body:old.refresh_token?{refresh_token:old.refresh_token}:undefined});
   }
-  cancelCapture() {this.epoch++;this.challenge=null;this.captures=[];}
+  cancelCapture() {this.epoch++;this.challenge=null;this.captures=[];this.audienceReview=null;}
 }

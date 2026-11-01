@@ -1,3 +1,4 @@
+import {planEvents} from './restore-plan-fixture.mjs';
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { randomUUID } from 'node:crypto';
@@ -17,7 +18,7 @@ const logicalID = (f, body) => restoreOperationID(f.person.accountId, 'account',
 const planFor = async (f, body) => f.journal.lookup(await logicalID(f, body));
 const consents = f => f.h.db.all('SELECT account_id,id,purpose,policy_version,status,revoked_at,expires_at FROM consents ORDER BY account_id,id');
 const requests = f => f.h.db.all('SELECT id,sender_id,recipient_id,status,updated_at FROM sharing_requests ORDER BY id');
-const grants = f => f.h.db.all('SELECT id,request_id,owner_id,recipient_id,active,revoked_at FROM media_grants ORDER BY id');
+const grants = f => f.h.db.all('SELECT id,request_id,owner_id,recipient_id,asset_id,active,revoked_at FROM media_grants ORDER BY id');
 const snapshot = async f => ({ consents: await consents(f), requests: await requests(f), grants: await grants(f),
   preferences: await f.h.db.all('SELECT * FROM account_preferences ORDER BY account_id'),
   profiles: await f.h.db.all('SELECT account_id,id,revision,status,auth_enabled,auth_epoch,consent_id,auth_consent_id FROM face_profiles ORDER BY account_id'),
@@ -74,18 +75,19 @@ async function expectedFacts(f, { purposes = [], recipient = false, owner = fals
   const cs = (await consents(f)).filter(c => c.account_id === f.person.accountId && purposes.includes(c.purpose) && c.status === 'granted');
   const rs = (await requests(f)).filter(r => r.status === 'accepted' &&
     (recipient && r.recipient_id === f.person.accountId || owner && r.sender_id === f.person.accountId));
-  return order([...cs.map(consentFact), ...rs.map(requestFact)]);
+  const gs=(await grants(f)).filter(g=>g.active===1&&(recipient&&g.recipient_id===f.person.accountId||owner&&g.owner_id===f.person.accountId));
+  return order([...cs.map(consentFact), ...rs.map(requestFact),...gs.map(g=>({kind:'media-grant-retired',scope:{grant_id:g.id,owner_id:g.owner_id,recipient_id:g.recipient_id,request_id:g.request_id,asset_id:g.asset_id}}))]);
 }
 async function assertPlan(f, body, facts, status = 'committed') {
   const saved = await planFor(f, body); assert(saved); assert.equal(saved.status, status);
   assert.deepEqual(saved.plan.allocations, {}, 'New grant allocations remain a separate readiness task');
-  assert.deepEqual(saved.plan.events.map(({ kind, scope }) => ({ kind, scope })), order(facts));
-  assert.equal(new Set(saved.plan.events.map(e => e.operation_id)).size, facts.length);
+  assert.deepEqual(order((await planEvents(f,saved)).map(({ kind, scope }) => ({ kind, scope }))), order(facts));
+  assert.equal(new Set((await planEvents(f,saved)).map(e => e.operation_id)).size, facts.length);
   const receipt = await f.h.db.one('SELECT payload_hash FROM operations WHERE actor_id=? AND source=? AND operation_key=?', f.person.accountId, 'account', body.operation_key);
   if (receipt) assert.equal(saved.plan.input_hash, receipt.payload_hash);
   const text = JSON.stringify(saved.plan);
   for (const privateValue of [f.person.token, f.person.faceHandle, 'PRIVATE PHOTO CAPTION']) assert(!text.includes(privateValue));
-  for (const name of ['asset_id', 'template_key', 'template_digest', 'access_token', 'refresh_token', 'active', 'payload_json'])
+  for (const name of ['template_key', 'template_digest', 'access_token', 'refresh_token', 'active', 'payload_json'])
     assert(!text.includes('"' + name + '"'));
   return saved;
 }
@@ -288,20 +290,13 @@ test('concurrent distinct keys withdraw the old episodes once while the later no
   assert.deepEqual(plans.map(p => p.plan.events.length).sort((a, b) => a - b), [0, facts.length]); assert.equal(await cursor(f), facts.length);
 });
 
-for (const count of [32, 33]) test(count + ' mixed consent/request facts are ' + (count === 32 ? 'atomic' : 'denied before domain writes'), async t => {
-  const f = await preferencesFixture(t), body = f.body({ processing_consent: false, photo_matching_consent: false });
-  let facts = await expectedFacts(f, { purposes: ['photo_processing', 'photo_matching'], recipient: true, owner: true });
-  for (let i = facts.length; i < count; i++) await f.h.db.run(`INSERT INTO consents(id,account_id,purpose,policy_version,status,created_at)
-    VALUES(?,?,'photo_processing',?,'granted',1)`, randomUUID(), f.person.accountId, PHOTO_POLICY);
-  facts = await expectedFacts(f, { purposes: ['photo_processing', 'photo_matching'], recipient: true, owner: true }); assert.equal(facts.length, count);
-  const before = await snapshot(f), run = f.db.run.bind(f.db), writes = [];
-  f.db.run = (sql, ...bindings) => { writes.push(sql); return run(sql, ...bindings); };
-  if (count === 32) { await f.apply(body); await assertPlan(f, body, facts); assert.equal(await cursor(f), 32); }
-  else {
-    assert.equal((await f.apply(body, 503)).error.code, 'photo_preference_restriction_capacity');
-    assert.deepEqual(await snapshot(f), before); assert.equal(await planFor(f, body), null);
-    assert(!writes.some(sql => /^(?:INSERT(?: OR IGNORE)? INTO (?:account_preferences|consents|operations|face_profile_states)|UPDATE (?:account_preferences|consents|candidates|media_grants|sharing_requests|face_profiles|face_profile_states|face_profile_operations|auth_challenges))/.test(sql)));
-  }
+for(const count of [32,33,65])test(count+' mixed consent/request facts commit the whole preference withdrawal',async t=>{
+ const f=await preferencesFixture(t),body=f.body({processing_consent:false,photo_matching_consent:false});
+ let facts=await expectedFacts(f,{purposes:['photo_processing','photo_matching'],recipient:true,owner:true});
+ for(let i=facts.length;i<count;i++)await f.h.db.run("INSERT INTO consents(id,account_id,purpose,policy_version,status,created_at) VALUES(?,?,'photo_processing',?,'granted',1)",randomUUID(),f.person.accountId,PHOTO_POLICY);
+ facts=await expectedFacts(f,{purposes:['photo_processing','photo_matching'],recipient:true,owner:true});assert.equal(facts.length,count);
+ await f.apply(body);await assertPlan(f,body,facts);assert.equal(await cursor(f),count);
+ const remaining=await f.h.db.all("SELECT id FROM consents WHERE account_id=? AND purpose IN('photo_processing','photo_matching') AND status='granted'",f.person.accountId);assert.deepEqual(remaining,[]);
 });
 
 for (const stage of ['planning', 'after-first-write']) test('consent expiry during ' + stage + ' cannot change an unrecorded branch', async t => {
@@ -354,8 +349,12 @@ for (const stage of ['before', 'after']) test('lost prepare reply ' + stage + ' 
   await f.uncertain(body); assert.equal(armed, false); assert.equal(f.faults.reply, undefined); assert.deepEqual(await snapshot(f), before);
   if (stage === 'before') { assert.equal(await planFor(f, body), null); await f.apply(body); await assertPlan(f, body, facts); }
   else {
-    const saved = await assertPlan(f, body, facts, 'pending'); await assert.rejects(() => f.db.one('SELECT id FROM accounts LIMIT 1'), unavailable);
-    await f.uncertain(body); assert.deepEqual(await planFor(f, body), saved);
+    const saved = await assertPlan(f, body, facts, 'pending');
+    await f.db.one('SELECT id FROM accounts LIMIT 1');
+    const recovered=await assertPlan(f,body,facts,'recovered');assert.deepEqual(recovered.plan,saved.plan);assert.equal(recovered.plan_hash,saved.plan_hash);
+    await f.apply(body,410);assert.equal(await f.h.db.one('SELECT operation_key FROM operations WHERE actor_id=? AND source=? AND operation_key=?',f.person.accountId,'account',body.operation_key),null);
+    assert.equal((await requests(f)).find(row=>row.id===f.outgoing.id).status,'revoked');
+    assert((await grants(f)).filter(row=>row.request_id===f.outgoing.id).every(row=>row.active===0));
   }
 });
 
@@ -368,14 +367,21 @@ test('callback failure rolls back preference/grant writes before independent pre
   await f.apply(body); await assertPlan(f, body, facts);
 });
 
-test('accepted prepare with rejected PostgreSQL COMMIT preserves pending restrictions and cannot replay the callback', async t => {
+test('accepted prepare with rejected PostgreSQL COMMIT recovers all restrictions without replaying the callback', async t => {
   const f = await preferencesFixture(t), before = await snapshot(f), body = f.body({ processing_consent: false }), id = await logicalID(f, body);
   const facts = await expectedFacts(f, { purposes: ['photo_processing'], owner: true }), prepare = f.journal.prepare.bind(f.journal); let armed = true;
   f.journal.prepare = async input => { const result = await prepare(input);
     if (armed && input.operation_id === id) { armed = false; f.faults.beforeCommit = true; } return result; };
-  await f.uncertain(body); assert.deepEqual(await snapshot(f), before); const saved = await assertPlan(f, body, facts, 'pending');
-  await assert.rejects(() => f.db.one('SELECT id FROM accounts LIMIT 1'), unavailable);
-  await f.uncertain(body); assert.deepEqual(await planFor(f, body), saved); assert.deepEqual(await snapshot(f), before);
+  await f.uncertain(body); const outcome=await planFor(f,body);assert(['pending','recovered'].includes(outcome.status));
+  const saved = await assertPlan(f, body, facts, outcome.status);
+  await f.db.one('SELECT id FROM accounts LIMIT 1');
+  const recovered=await assertPlan(f,body,facts,'recovered');assert.deepEqual(recovered.plan,saved.plan);assert.equal(recovered.plan_hash,saved.plan_hash);
+  await f.apply(body,410);
+  assert.equal(await f.h.db.one('SELECT operation_key FROM operations WHERE actor_id=? AND source=? AND operation_key=?',f.person.accountId,'account',body.operation_key),null);
+  const after=await snapshot(f);assert.deepEqual(after.preferences,before.preferences);assert.deepEqual(after.profiles,before.profiles);
+  assert(after.consents.filter(row=>row.account_id===f.person.accountId&&row.purpose==='photo_processing').every(row=>row.status==='revoked'));
+  assert.equal(after.requests.find(row=>row.id===f.outgoing.id).status,'revoked');
+  assert(after.grants.filter(row=>row.request_id===f.outgoing.id).every(row=>row.active===0));
 });
 
 for (const mode of ['commit', 'ack-before', 'ack-after']) test(mode + ' loss preserves actual committed preference effects and returns the original receipt without another withdrawal', async t => {

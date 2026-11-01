@@ -1,22 +1,25 @@
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
-import {AUDIENCE_POLICY,audienceProjection,audienceChallenge,guardianReviewIntent,adultReviewIntent} from './audience.mjs';
+import {AUDIENCE_POLICY,AUDIENCE_RULE,audienceProjection,audienceChallenge,guardianReviewIntent,adultReviewIntent} from './audience.mjs';
 const account='00000000-0000-4000-8000-000000000001';
 const id=n=>`00000000-0000-4000-8000-${String(n).padStart(12,'0')}`;
 const capabilities={face_authentication:true,photo_matching:false,photo_processing:false};
-const projection=()=>({protocol:'lovelies-audience-v1',policy_version:AUDIENCE_POLICY,account_id:account,
-  audience:{age_band:'18_plus',status:'eligible',version:1,policy_version:AUDIENCE_POLICY},capabilities:{...capabilities}});
+const projection=()=>({protocol:'lovelies-audience-v2',policy_version:AUDIENCE_POLICY,account_id:account,
+  authority_expires_at:new Date(Date.now()+3600000).toISOString(),audience:{at_least_13:true,guardian_required:false,status:'eligible',version:1,policy_version:AUDIENCE_POLICY,source:'self_declaration',
+    rule_version:AUDIENCE_RULE,territory:'global',declared_at:new Date(Date.now()-1000).toISOString(),next_review_at:new Date(Date.now()+86400000).toISOString(),review_required:false},capabilities:{...capabilities}});
 test('audience projection binds the account and denies contradictory pending capability',()=>{
   assert.equal(audienceProjection(projection(),account).capabilities.face_authentication,true);
   assert.throws(()=>audienceProjection(projection(),id(2)),{code:'audience_response_invalid'});
-  const pending=projection();pending.audience={...pending.audience,age_band:'13_17',status:'guardian_pending'};
+  const pending=projection();pending.audience={...pending.audience,guardian_required:true,status:'guardian_pending'};
   assert.throws(()=>audienceProjection(pending,account),{code:'audience_response_invalid'});
   pending.capabilities.face_authentication=false;
+  pending.authority_expires_at=null;
   assert.equal(audienceProjection(pending,account).capabilities.face_authentication,false);
 });
 test('unknown audience is explicit and cannot default to adulthood or an old policy',()=>{
-  const value=projection();value.audience={age_band:'unknown',status:'unknown',version:0,policy_version:null};value.capabilities.face_authentication=false;
-  assert.equal(audienceProjection(value,account).ageBand,'unknown');
+  const value=projection();value.audience={at_least_13:null,guardian_required:null,status:'unknown',version:0,policy_version:null,source:null,rule_version:null,territory:null,declared_at:null,next_review_at:null,review_required:false};value.capabilities.face_authentication=false;
+  value.authority_expires_at=null;
+  assert.equal(audienceProjection(value,account).atLeast13,null);
   value.audience.version=1;assert.throws(()=>audienceProjection(value,account),{code:'audience_response_invalid'});
   const old=projection();old.policy_version='older';assert.throws(()=>audienceProjection(old,account),{code:'audience_response_invalid'});
 });
@@ -56,7 +59,7 @@ test('guardian decision preserves exact request revision, purposes and minimized
   assert.equal(guardianReviewIntent(row,fields,id(7)).body.decision,'reject');
 });
 test('adulthood review uses current account version and independently verified minimized evidence',()=>{
-  const current={accountId:account,ageBand:'13_17',version:4};
+  const current={accountId:account,atLeast13:true,guardianRequired:true,version:4};
   const fields=new Map([['evidence_method','independent_live_review'],['evidence_reference','age-review-record-20261024'],['adult_verified','on']]);
   const intent=adultReviewIntent(current,fields,id(7));
   assert.equal(intent.path,`/admin/audience/${account}/adult-review`);assert.equal(intent.body.expected_version,4);
@@ -64,5 +67,5 @@ test('adulthood review uses current account version and independently verified m
   fields.delete('adult_verified');assert.throws(()=>adultReviewIntent(current,fields,id(7)),{code:'adult_evidence_required'});
   fields.set('adult_verified','on');fields.set('evidence_reference','https://private.example/identity');
   assert.throws(()=>adultReviewIntent(current,fields,id(7)),{code:'adult_evidence_required'});
-  assert.throws(()=>adultReviewIntent({...current,ageBand:'18_plus'},fields,id(7)),{code:'audience_record_changed'});
+  assert.throws(()=>adultReviewIntent({...current,guardianRequired:false},fields,id(7)),{code:'audience_record_changed'});
 });

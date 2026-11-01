@@ -244,21 +244,81 @@ class EnrollmentJournalTest {
         val before=fence.switch(account)
         failed("enrollment_scope_changed") { withEnrollmentPhase(fence,before,j,{j.copy(key=other)}) { error("Foreign enrollment reached publication") } }
     }
-    @Test fun credentialEpochAndStoragePublicationShareLogoutMonitor() {
-        val j=journal();val fence=SessionFence();val before=fence.switch(account)
-        val entered=CountDownLatch(1);val release=CountDownLatch(1);val attempted=CountDownLatch(1)
-        val owned=AtomicReference<SessionScope>();val failure=AtomicReference<Throwable>();val loggedOut=AtomicBoolean(false)
-        val writer=Thread { try { withEnrollmentPhase(fence,before,j,{j}) {
-            entered.countDown();check(release.await(5,TimeUnit.SECONDS));owned.set(fence.switch(account))
-        } } catch(problem: Throwable) { failure.set(problem) } }
-        val logout=Thread { attempted.countDown();fence.switch(null);loggedOut.set(true) }
+    @Test fun logoutRetiresImmediatelyAndRejectsLateEnrollmentCredentialPublication() {
+        val started=journal().let { it.withChallenge(challenge(it)) }
+        val j=started.reconcile(response(started,"registered"),nonce,now)
+        val anonymous=mapOf("account_id" to account,"auth_method" to "anonymous",
+            "access_token" to "guest-before","refresh_token" to "guest-refresh-before")
+        val registered=mapOf("account_id" to account,"auth_method" to "registered_face",
+            "access_token" to "late-registered","refresh_token" to "late-registered-refresh")
+        val pending=j.copy(state="credentials_pending",credentialResult=registered)
+        val deviceReference=mapOf("account" to account,"alias" to j.alias,"handle" to j.handle,"device" to device)
+        val initial: WireObject=mapOf("enrollment" to j.wire(),"credentials" to anonymous,"device" to deviceReference)
+        val candidate=initial+mapOf("enrollment" to pending.wire(),"credentials" to registered)
+        val durable=AtomicReference(initial);val authority=AtomicReference<WireObject?>()
+        val entered=CountDownLatch(1);val release=CountDownLatch(1);val retired=CountDownLatch(1);val finished=CountDownLatch(1)
+        val vault=object: RepositoryVault {
+            override fun load()=durable.get()
+            override fun save(value: WireObject) {
+                entered.countDown();check(release.await(15,TimeUnit.SECONDS));durable.set(value)
+            }
+            override fun loadAuthority()=authority.get()
+            override fun saveAuthority(value: WireObject) { authority.set(value) }
+        }
+        val coordinator=SessionStorageCoordinator();val fence=SessionFence(coordinator.generation)
+        val storage=SessionAuthorityStorage(vault,origin,coordinator,fence)
+        assertEquals(initial,storage.load())
+        val before=fence.switch(account);val visible=AtomicReference(j);val published=AtomicBoolean(false)
+        val owned=AtomicReference<SessionScope>();val retirementScope=AtomicReference<SessionScope>()
+        val failure=AtomicReference<Throwable>();val retirementFailure=AtomicReference<Throwable>();val writeFailure=AtomicReference<LiveFailure>()
+        val writer=Thread({
+            try { withEnrollmentPhase(fence,before,j,{visible.get()}) {
+                persistEnrollmentState(candidate,{ value ->
+                    try { storage.save(value,before,adoptingCredential=true) }
+                    catch(problem: LiveFailure) { writeFailure.set(problem);throw problem }
+                }) {
+                    published.set(true);owned.set(fence.publish(before,account));visible.set(pending)
+                }
+            } } catch(problem: Throwable) { failure.set(problem) }
+            finally { finished.countDown() }
+        },"EnrollmentBlockedWriterTest")
+        val logout=Thread({
+            try { retirementScope.set(storage.persistRetirement(fence.retire(before),initial)) }
+            catch(problem: Throwable) { retirementFailure.set(problem) }
+            finally { retired.countDown() }
+        },"EnrollmentImmediateRetirementTest")
         try {
-            writer.start();assertTrue(entered.await(5,TimeUnit.SECONDS));logout.start();assertTrue(attempted.await(5,TimeUnit.SECONDS))
-            val deadline=System.nanoTime()+TimeUnit.SECONDS.toNanos(2)
-            while(logout.state!=Thread.State.BLOCKED && !loggedOut.get() && System.nanoTime()<deadline)Thread.yield()
-            assertEquals(Thread.State.BLOCKED,logout.state);assertFalse(loggedOut.get())
-            release.countDown();writer.join(5000);logout.join(5000);failure.get()?.let { throw AssertionError(it) }
-            assertTrue(loggedOut.get());failed("session_changed") { fence.assert(requireNotNull(owned.get())) }
+            writer.start();assertTrue("Writer did not reach the vault",entered.await(5,TimeUnit.SECONDS))
+            logout.start();assertTrue("Retirement waited for the blocked credential write",retired.await(5,TimeUnit.SECONDS))
+            retirementFailure.get()?.let { throw AssertionError("Retirement failed",it) }
+            val current=requireNotNull(retirementScope.get())
+            assertEquals(1L,release.count);assertEquals(1L,finished.count)
+            assertNull(current.accountId);assertEquals(before.authorityGeneration+1,current.authorityGeneration)
+            assertEquals(current,fence.scope());assertEquals(initial,durable.get())
+            assertEquals(current.authorityGeneration,SessionAuthorityRecord.parse(requireNotNull(authority.get()),origin).generation)
+            failed("session_changed") { fence.assert(before) }
+            failed("session_changed") { fence.publish(before,account) }
+
+            release.countDown();assertTrue(finished.await(5,TimeUnit.SECONDS));writer.join(5000);logout.join(5000)
+            assertFalse(writer.isAlive);assertFalse(logout.isAlive)
+            assertEquals("session_changed",writeFailure.get()?.code)
+            assertEquals("enrollment_storage_unavailable",(failure.get() as? LiveFailure)?.code)
+            assertFalse(published.get());assertNull(owned.get());assertEquals(j,visible.get());assertEquals(current,fence.scope())
+            failed("session_changed") { withEnrollmentPhase(fence,before,j,{visible.get()}) { fail("Retired phase reached publication") } }
+            // The late physical write may finish, but its old generation cannot authorize a cold restart.
+            assertEquals(registered,durable.get()["credentials"])
+            assertEquals(pending,EnrollmentJournal.restore(durable.get()["enrollment"],origin))
+            assertEquals(before.authorityGeneration,NativeProtocol.obj(durable.get()[SessionAuthorityStorage.STAMP])["generation"])
+            val restartedCoordinator=SessionStorageCoordinator();val restartedFence=SessionFence(restartedCoordinator.generation)
+            val restartedStorage=SessionAuthorityStorage(vault,origin,restartedCoordinator,restartedFence)
+            val recovered=restartedStorage.load()
+            assertNull(recovered["credentials"]);assertEquals(j,EnrollmentJournal.restore(recovered["enrollment"],origin))
+            assertEquals(deviceReference,recovered["device"]);assertNull(restartedFence.scope().accountId)
+            assertEquals(current.authorityGeneration,restartedFence.scope().authorityGeneration)
+            val tombstone=SessionAuthorityRecord.parse(requireNotNull(authority.get()),origin)
+            assertFalse(tombstone.permits(registered));assertFalse(tombstone.permitsRequest(mapOf("challenge_id" to challengeId)))
+            failed("session_reauthentication_required") { restartedStorage.assertCredential(registered) }
+            failed("session_changed") { restartedFence.publish(before,account) }
         } finally { release.countDown();writer.join(5000);if(logout.state!=Thread.State.NEW)logout.join(5000) }
     }
     @Test fun deletionHoldsJournalUntilConfirmedOwnDeletionAndPreservesForeignKeyReference() {

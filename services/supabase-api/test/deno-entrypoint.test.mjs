@@ -1,3 +1,4 @@
+import {startManagedAuthHTTPFixture} from './managed-auth-http-fixture.mjs';
 import assert from 'node:assert/strict';
 import {test} from 'node:test';
 import {spawn} from 'node:child_process';
@@ -8,22 +9,27 @@ import {once} from 'node:events';
 import {isolatedPostgres} from './postgres-harness.mjs';
 import {startRestoreJournalHTTPSFixture} from './restore-journal-https-fixture.mjs';
 
-test('actual Deno Edge entrypoint uses PostgreSQL ALS and current anonymous/refresh/logout authority', {skip:!process.env.TEST_DATABASE_URL,timeout:60000},async()=>{
+test('actual Deno Edge entrypoint uses PostgreSQL ALS and managed Auth HTTP boundary with a synthetic provider', {skip:!process.env.TEST_DATABASE_URL,timeout:60000},async()=>{
  const local=await isolatedPostgres(process.env.TEST_DATABASE_URL),folder=path.resolve(import.meta.dirname,'../../../supabase/functions/lovelies-api');
- let reserve,child,closed,spawnError,failure,failed=false,journal;
+ let reserve,child,closed,spawnError,failure,failed=false,journal,managedAuth;
  try{
- const migrations=fs.readdirSync(new URL('../../../supabase/migrations/',import.meta.url)).filter(x=>/_lovelies_private_core\.sql$|_refresh_delivery\.sql$|_audience_retention\.sql$|_inference_generation\.sql$|_retention_scan_cursors\.sql$|_restore_control\.sql$|_lovelies_media_authority\.sql$/.test(x)).sort();
+ const migrations=fs.readdirSync(new URL('../../../supabase/migrations/',import.meta.url)).filter(x=>/_lovelies_private_core\.sql$|_refresh_delivery\.sql$|_audience_retention\.sql$|_inference_generation\.sql$|_retention_scan_cursors\.sql$|_restore_control\.sql$|_lovelies_media_authority\.sql$|_delivery_reliability\.sql$|_restore_recovery_protocol\.sql$|_chunked_privacy_exports\.sql$|_operator_capabilities\.sql$|_audience_and_delivery_reconciliation\.sql$|_managed_auth_session_custody\.sql$/.test(x)).sort();
+ assert.equal(migrations.length,13,'entrypoint fixture must install the coherent schema7–19 migration chain');
  for(const migration of migrations)await local.engine.exec(fs.readFileSync(new URL('../../../supabase/migrations/'+migration,import.meta.url),'utf8'));
+ assert.equal((await local.engine.query("SELECT count(*)::int n FROM pg_tables WHERE schemaname='lovelies_private'")).rows[0].n,87);
+ managedAuth=await startManagedAuthHTTPFixture(local.engine);
  journal=await startRestoreJournalHTTPSFixture();
  const initial=await journal.bootstrap();
  await local.engine.exec('SET ROLE lovelies_api');
+ assert.deepEqual((await local.engine.query('SELECT version FROM lovelies_private.schema_versions ORDER BY version')).rows.map(row=>Number(row.version)),Array.from({length:13},(_,index)=>index+7));
+ assert.equal(Number((await local.engine.query('SELECT count(*) n FROM lovelies_private.restore_control')).rows[0].n),0,'migrations must not bootstrap serving authority');
  await local.engine.query(`INSERT INTO lovelies_private.restore_control(singleton,project_id,database_id,incarnation_id,checkpoint_revision,checkpoint_hash,journal_sequence,journal_hash)
   VALUES(1,'ltqfplqevxztlswlzexn',$1,$2,$3,$4,$5,$6)`,[initial.database_id,initial.incarnation_id,initial.checkpoint.revision,initial.checkpoint.hash,initial.cursor.sequence,initial.cursor.hash]);
  await local.engine.exec('RESET ROLE');
  reserve=createServer();reserve.listen(0,'127.0.0.1');await once(reserve,'listening');const port=reserve.address().port;await new Promise((resolve,reject)=>reserve.close(error=>error?reject(error):resolve()));
  const base='http://127.0.0.1:'+port,fixtureSecret='synthetic-local-deno-only-'+crypto.randomUUID(),databasePort=new URL(local.url).port;
- child=spawn(process.env.LOVELIES_DENO_BIN??'deno',['run','--cached-only','--cert='+journal.caPath,'--allow-env','--allow-read','--allow-sys','--allow-net=127.0.0.1:'+port+',127.0.0.1:'+databasePort+',localhost:'+databasePort+',127.0.0.1:'+journal.port,'--config='+path.join(folder,'deno.json'),'--lock='+path.join(folder,'deno.lock'),path.join(folder,'index.ts')],{
-  cwd:folder,stdio:['ignore','pipe','pipe'],env:{PATH:process.env.PATH,HOME:process.env.HOME,...process.env.DENO_DIR?{DENO_DIR:process.env.DENO_DIR}:{},SUPABASE_URL:'http://127.0.0.1',LOVELIES_DATABASE_URL:local.url,LOVELIES_STORAGE_SECRET:fixtureSecret,AUTH_SIGNING_SECRET:fixtureSecret+'-auth',MEDIA_SIGNING_SECRET:fixtureSecret+'-media',INTERNAL_MAINTENANCE_SECRET:fixtureSecret+'-maintenance',FACE_AUTH_POLICY_VERSION:'synthetic-deno-face-policy',PHOTO_MODEL_VERSION:'synthetic-deno-model',RESTORE_JOURNAL_URL:journal.url,RESTORE_JOURNAL_TOKEN:journal.token,LOVELIES_BIND_HOST:'127.0.0.1',PORT:String(port),APP_ENV:'test'},
+ child=spawn(process.env.LOVELIES_DENO_BIN??'deno',['run','--cached-only','--cert='+journal.caPath,'--allow-env','--allow-read','--allow-sys','--allow-net=127.0.0.1:'+port+',127.0.0.1:'+databasePort+',localhost:'+databasePort+',127.0.0.1:'+journal.port+',127.0.0.1:'+managedAuth.port,'--config='+path.join(folder,'deno.json'),'--lock='+path.join(folder,'deno.lock'),path.join(folder,'index.ts')],{
+  cwd:folder,stdio:['ignore','pipe','pipe'],env:{PATH:process.env.PATH,HOME:process.env.HOME,...process.env.DENO_DIR?{DENO_DIR:process.env.DENO_DIR}:{},INTERNAL_SUPABASE_URL:managedAuth.url,PUBLIC_API_BASE_URL:base+'/functions/v1/lovelies-api',LOVELIES_DATABASE_URL:local.url,LOVELIES_DATABASE_TLS_MODE:'disable-internal',LOVELIES_DATABASE_PLAINTEXT_HOSTS:new URL(local.url).hostname,SUPABASE_SECRET_KEYS:'{"default":""}',SUPABASE_ANON_KEY:fixtureSecret+'-anon',SUPABASE_SERVICE_ROLE_KEY:fixtureSecret,MANAGED_AUTH_ENCRYPTION_KEY:Buffer.from(crypto.getRandomValues(new Uint8Array(32))).toString('base64url'),AUTH_SIGNING_SECRET:fixtureSecret+'-auth',MEDIA_SIGNING_SECRET:fixtureSecret+'-media',INTERNAL_MAINTENANCE_SECRET:fixtureSecret+'-maintenance',FACE_AUTH_POLICY_VERSION:'synthetic-deno-face-policy',PHOTO_MODEL_VERSION:'synthetic-deno-model',RESTORE_JOURNAL_URL:journal.url,RESTORE_JOURNAL_TOKEN:journal.token,LOVELIES_BIND_HOST:'127.0.0.1',PORT:String(port),APP_ENV:'test'},
  });
  closed=new Promise(resolve=>child.once('close',resolve));
  let output='';child.stdout.on('data',bytes=>output+=bytes);child.stderr.on('data',bytes=>output+=bytes);child.on('error',error=>spawnError=error);
@@ -34,9 +40,15 @@ test('actual Deno Edge entrypoint uses PostgreSQL ALS and current anonymous/refr
   const deadline=Date.now()+20000;let health;
   while(Date.now()<deadline){if(spawnError)throw spawnError;if(child.exitCode!==null)break;try{health=await request('/health');if(health.status===200)break;}catch{}await new Promise(resolve=>setTimeout(resolve,40));}
   assert.equal(health?.status,200,'Deno startup failed: '+output.replaceAll(local.url,'[private test DB]').replaceAll(fixtureSecret,'[fixture secret]'));
-  assert.equal(health.body.database,'supabase_postgresql');assert.equal(health.body.schema_version,13);
+  assert.equal(health.body.database,'supabase_postgresql');assert.equal(health.body.schema_version,19);
   assert.equal((await request('/ready')).status,503,'fixture has no Storage/model/provider qualification');
   const anonymous=await request('/auth/anonymous',{body:{}});assert.equal(anonymous.status,201);assert.equal(anonymous.body.auth_method,'anonymous');
+  const metadata=(await local.engine.query(`SELECT u.raw_user_meta_data metadata,jsonb_typeof(u.raw_user_meta_data) metadata_type,b.creation_marker
+   FROM auth.users u JOIN lovelies_private.managed_auth_bindings b ON u.id::text=b.auth_user_id
+   WHERE b.account_id=$1 AND b.state='bound'`,[anonymous.body.account_id])).rows;
+  assert.equal(metadata.length,1);
+  assert.equal(metadata[0].metadata_type,'object','Native fixture must store provider metadata as a JSON object, not an encoded JSON string');
+  assert.deepEqual(metadata[0].metadata,{lovelies_creation_marker:metadata[0].creation_marker});
   const account=await request('/me',{token:anonymous.body.access_token});assert.equal(account.status,200);assert.equal(account.body.user_id,anonymous.body.account_id);assert.equal(account.body.authenticated,false);
   assert.equal((await request('/me/gallery',{token:anonymous.body.access_token})).status,403);
   const renewed=await request('/auth/session/refresh',{body:{refresh_token:anonymous.body.refresh_token}});assert.equal(renewed.status,200);
@@ -91,6 +103,7 @@ test('actual Deno Edge entrypoint uses PostgreSQL ALS and current anonymous/refr
     if(!await waitForClose())throw new Error('Deno subprocess did not close after termination');
    }
   }catch(error){cleanupErrors.push(error);}
+  try{await managedAuth?.close();}catch(error){cleanupErrors.push(error);}
   try{await journal?.close();}catch(error){cleanupErrors.push(error);}
   try{await local.engine.close();}catch(error){cleanupErrors.push(error);}
   if(cleanupErrors.length){

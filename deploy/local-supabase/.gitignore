@@ -1,0 +1,6 @@
+runtime/
+public-site/
+backups/
+receipts/
+*.env
+!*.env.example

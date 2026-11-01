@@ -1,3 +1,4 @@
+import { pushReceipt, bindSeededDelivery } from './notification-receipt-fixture.mjs';
 import assert from 'node:assert/strict';
 import {after,test} from 'node:test';
 import {startHarness} from './runtime-harness.mjs';
@@ -16,6 +17,7 @@ async function setup(t){
  await h.db.run("INSERT INTO auth_devices(id,account_id,public_jwk,revision,status,created_at) VALUES(?,?,?,'synthetic','active',?)",auth,account,'{}',now);
  await h.db.run("INSERT INTO push_devices(id,account_id,auth_device_id,platform,token_hash,token_value,active,created_at,updated_at) VALUES(?,?,?,'android',?,'synthetic-token-0001',1,?,?)",device,account,auth,'a'.repeat(64),now,now);
  await h.db.run("INSERT INTO notification_deliveries(id,notification_id,device_id,operation_key,status,token_hash,attempts,created_at,updated_at) VALUES(?,?,?,?,'ambiguous',?,1,?,?)",delivery,note,device,'notification:'+note+':'+device,'a'.repeat(64),now,now);
+ h.syntheticDispatch = await bindSeededDelivery(h, delivery);
  return h;
 }
 for(const variant of ['status302','redirected','cancel_rejects','cancel_never_resolves'])pgliteTest(`redirect response body is cancelled and denial preserved: ${variant}`,{timeout:30000},async t=>{
@@ -40,7 +42,7 @@ pgliteTest('a redirect without a body still returns the existing denial',{timeou
 });
 
 pgliteTest('a nonredirect ambiguous reply keeps its existing reconciliation result',{timeout:30000},async t=>{
- const h=await setup(t);h.env.PUSH_SERVICE={fetch:async(_url,init)=>{assert.equal(init?.method??'GET','GET');return Response.json({operation_key:'notification:'+note+':'+device,status:'ambiguous'})}};
+ const h=await setup(t);h.env.PUSH_SERVICE={fetch:async(_url,init)=>{assert.equal(init?.method??'GET','GET');return Response.json(pushReceipt(h.syntheticDispatch,{status:'ambiguous'}))}};
  await assert.rejects(()=>processNotificationJob({notification_id:note},createApp(h.db,h.env,()=>now)),e=>e?.status===503&&e.code==='push_reconciliation_required');
  assert.equal((await h.db.one('SELECT status FROM notification_jobs WHERE notification_id=?',note)).status,'ambiguous');
 });

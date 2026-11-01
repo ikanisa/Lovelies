@@ -1,5 +1,13 @@
-import { createPrivateKey, sign } from 'node:crypto';
+import { createHash, createPrivateKey, createPublicKey, sign } from 'node:crypto';
 import { connect, constants } from 'node:http2';
+import {canonical,PUSH_GENERATION_PROTOCOL,PUSH_DISPATCH_PROTOCOL} from './push-plan.mjs';
+const keyFingerprint=key=>createHash('sha256').update(createPublicKey(key).export({type:'spki',format:'der'})).digest('hex');
+export function providerGeneration(providers){
+  if(!providers||typeof providers!=='object'||Array.isArray(providers)||Object.keys(providers).some(key=>!['ios','android'].includes(key)))throw new Error('provider_configuration_invalid');
+  const identity={protocol:PUSH_GENERATION_PROTOCOL,dispatch_protocol:PUSH_DISPATCH_PROTOCOL,
+    ios:providers.ios?.configuration()??null,android:providers.android?.configuration()??null};
+  return createHash('sha256').update(canonical(identity)).digest('hex');
+}
 const json64 = value => Buffer.from(JSON.stringify(value)).toString('base64url');
 export function signedJWT(header, claims, key, algorithm) {
   const content = json64(header) + '.' + json64(claims);
@@ -27,6 +35,7 @@ export class ApnsAuthorization {
     }
     return this.cached;
   }
+  configuration(){return {team_id:this.teamID,key_id:this.keyID,public_key_sha256:keyFingerprint(this.key)};}
 }
 export class FcmAuthorization {
   constructor({ serviceAccount, projectID, fetcher = fetch, now = Date.now }) {
@@ -52,6 +61,7 @@ export class FcmAuthorization {
         !Number.isInteger(value.expires_in) || value.expires_in < 120 || value.expires_in > 3600) throw new Error('oauth_token_unavailable');
     this.cached = value.access_token; this.issuedAt = issuedAt; this.expiresAt = issuedAt + value.expires_in * 1000; return this.cached;
   }
+  configuration(){return {service_account:this.email,project_id:this.projectID,public_key_sha256:keyFingerprint(this.key)};}
 }
 const apnsCodes = new Set(['BadDeviceToken', 'DeviceTokenNotForTopic', 'Unregistered', 'BadTopic', 'TopicDisallowed', 'PayloadTooLarge', 'ExpiredProviderToken', 'InvalidProviderToken', 'TooManyProviderTokenUpdates', 'TooManyRequests', 'InternalServerError', 'ServiceUnavailable', 'Shutdown', 'Forbidden', 'MissingTopic', 'BadPriority', 'BadExpirationDate']);
 const fcmCodes = new Set(['UNREGISTERED', 'SENDER_ID_MISMATCH', 'INVALID_ARGUMENT', 'QUOTA_EXCEEDED', 'UNAVAILABLE', 'INTERNAL', 'THIRD_PARTY_AUTH_ERROR', 'UNAUTHENTICATED', 'PERMISSION_DENIED', 'NOT_FOUND', 'RESOURCE_EXHAUSTED']);
@@ -68,6 +78,8 @@ export class ApnsProvider {
       'apns-expiration': String(Math.floor(this.now() / 1000) + 86_400), 'content-type': 'application/json' },
       body: JSON.stringify({ aps: { alert: { title: 'Lovelies', body: input.notification.title }, sound: 'default' }, id: input.notification.id, kind: input.notification.kind, entity_id: input.notification.entity_id }) };
   }
+  configuration(){return {provider:'apns',origin:this.origin,topic:this.topic,authorization:this.authorization.configuration(),
+    push_type:'alert',priority:'10',expiration_seconds:86400,alert_title:'Lovelies',sound:'default'};}
   session() {
     if (this.connection && !this.connection.closed && !this.connection.destroyed) return this.connection;
     const session = this.sessionFactory(this.origin, { rejectUnauthorized: true });
@@ -104,6 +116,7 @@ export class FcmProvider {
       body: JSON.stringify({ message: { token: input.token, data: { id: input.notification.id, kind: input.notification.kind, entity_id: input.notification.entity_id },
         android: { restricted_package_name: this.packageName, priority: 'NORMAL', ttl: '86400s' } } }) };
   }
+  configuration(){return {provider:'fcm',project_id:this.projectID,package_name:this.packageName,authorization:this.authorization.configuration(),priority:'NORMAL',ttl:'86400s'};}
   async send(prepared) {
     const reply = await this.fetcher(prepared.url, { method: 'POST', redirect: 'manual', signal: AbortSignal.timeout(15_000), headers: { 'content-type': 'application/json', authorization: 'Bearer ' + prepared.token }, body: prepared.body });
     const text = await boundedResponse(reply); let value; try { value = JSON.parse(text); } catch { return ambiguous(); }

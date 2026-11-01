@@ -140,25 +140,9 @@ def match_candidates(
         1.0,
         "review margin",
     )
-    owners: dict[str, str] = {}
-    for candidate in request.candidates:
-        owner = owners.setdefault(candidate.face_profile_id, candidate.user_id)
-        if owner != candidate.user_id:
-            raise ValueError("Conflicting candidate profile identity")
-    matcher = matcher if matcher is not None else CosineVectorMatcher()
+    scored = rank_candidate_distances(request, matcher=matcher)
     decision_engine = decision_engine if decision_engine is not None else ThresholdDecisionEngine()
-    query = normalize(np.array(request.embedding, dtype=np.float32))
-    best_per_user: dict[str, tuple[float, CandidateEmbedding]] = {}
-    for candidate in request.candidates:
-        candidate_vector = normalize(np.array(candidate.embedding, dtype=np.float32))
-        distance = _bounded_number(matcher.distance(query, candidate_vector), 2.0, "match distance")
-        previous = best_per_user.get(candidate.user_id)
-        if previous is None or (distance, candidate.face_profile_id) < (
-            previous[0],
-            previous[1].face_profile_id,
-        ):
-            best_per_user[candidate.user_id] = (distance, candidate)
-    if not best_per_user:
+    if not scored:
         return MatchResult(
             user_id=None,
             face_profile_id=None,
@@ -168,9 +152,6 @@ def match_candidates(
             decision=MatchDecision.REJECTED,
             event_scope=request.event_id,
         )
-    scored = sorted(
-        best_per_user.values(), key=lambda item: (item[0], item[1].user_id, item[1].face_profile_id)
-    )
     best_distance, best = scored[0]
     second_distance = scored[1][0] if len(scored) > 1 else 1.0
     score = min(1.0, max(0.0, 1.0 - best_distance))
@@ -195,6 +176,40 @@ def match_candidates(
         decision=decision,
         event_scope=request.event_id,
     )
+
+
+def rank_candidate_distances(
+    request: MatchRequest,
+    *,
+    matcher: CosineVectorMatcher | None = None,
+) -> list[tuple[float, CandidateEmbedding]]:
+    """Return a bounded page's two nearest distinct identities, without deciding.
+
+    The complete-set consumer must merge the top two from every sealed page
+    before applying the distance/margin policy. Discarding page-local losers
+    after an acceptance decision would miss a runner-up in another page.
+    """
+    request = _snapshot_request(request)
+    owners: dict[str, str] = {}
+    for candidate in request.candidates:
+        owner = owners.setdefault(candidate.face_profile_id, candidate.user_id)
+        if owner != candidate.user_id:
+            raise ValueError("Conflicting candidate profile identity")
+    matcher = matcher if matcher is not None else CosineVectorMatcher()
+    query = normalize(np.array(request.embedding, dtype=np.float32))
+    best_per_user: dict[str, tuple[float, CandidateEmbedding]] = {}
+    for candidate in request.candidates:
+        candidate_vector = normalize(np.array(candidate.embedding, dtype=np.float32))
+        distance = _bounded_number(matcher.distance(query, candidate_vector), 2.0, "match distance")
+        previous = best_per_user.get(candidate.user_id)
+        if previous is None or (distance, candidate.face_profile_id) < (
+            previous[0],
+            previous[1].face_profile_id,
+        ):
+            best_per_user[candidate.user_id] = (distance, candidate)
+    return sorted(
+        best_per_user.values(), key=lambda item: (item[0], item[1].user_id, item[1].face_profile_id)
+    )[:2]
 
 
 def rank_face_candidates(

@@ -144,9 +144,22 @@ async function fenced(t){
  const f=await fencedFixture(t),h=f.h;h.env.FACE_AUTH_VERIFIER={fetch:async request=>{const form=await request.formData();return Response.json(await faceVerifierFixture(JSON.parse(String(form.get('envelope'))),form));}};
  const owner=await enroll(h),exp=await seedExport(h,owner),key=randomUUID(),handler=createHandler(createApp(f.db,h.env,h.app.now));
  const request=(path,method,body)=>handler(new Request('https://api.invalid'+path,{method,headers:{authorization:'Bearer '+owner.token,...(body?{'content-type':'application/json'}:{})},...(body?{body:JSON.stringify(body)}:{})}));
- return {...f,h,owner,exp,key,grant:()=>request(`/privacy-exports/${exp.id}/grant`,'POST',{operation_key:key}),lookup:()=>request(`/privacy/operations/${key}`,'GET'),
+ return {...f,h,owner,exp,key,grant:(requestID=exp.id)=>request(`/privacy-exports/${requestID}/grant`,'POST',{operation_key:key}),lookup:()=>request(`/privacy/operations/${key}`,'GET'),
   row:()=>h.db.one("SELECT action,payload_hash,payload_json,response_json FROM operations WHERE actor_id=? AND source='privacy' AND operation_key=?",owner.accountId,key),
   grants:()=>h.db.all('SELECT * FROM privacy_export_grants WHERE subject_id=?',owner.accountId)};
+}
+
+async function assertRecoveredGrant(f,id,accepted){
+ const session=JSON.parse(Buffer.from(f.owner.token.split('.')[1],'base64url').toString()).jti;
+ const payload={protocol:'lovelies-privacy-export-grant-input-v1',operation_key:f.key,request_id:f.exp.id,session_id:session};
+ const inputHash=await sha256(new TextEncoder().encode(stable({action:'privacy.export.grant',source:'privacy',payload})));
+ assert.equal(accepted.plan.operation_id,id);assert.equal(accepted.plan.input_hash,inputHash);
+ assert.deepEqual(accepted.plan.allocations,{});assert.deepEqual(accepted.plan.events,[]);
+ const recovered=await f.journal.lookup(id);assert.equal(recovered.status,'recovered');assert.equal(recovered.plan_hash,accepted.plan_hash);assert.deepEqual(recovered.plan,accepted.plan);
+ assert.deepEqual(await f.h.db.one('SELECT operation_id,input_hash,plan_hash,outcome FROM restore_recovered_operations WHERE operation_id=?',id),
+  {operation_id:id,input_hash:inputHash,plan_hash:accepted.plan_hash,outcome:'restricted-abort'});
+ assert.equal(await f.row(),null);assert.equal((await f.grants()).length,0);
+ return recovered;
 }
 
 test('lost fenced COMMIT reply reconciles the exact grant without redispatch',{timeout:30000},async t=>{
@@ -157,12 +170,21 @@ test('lost fenced COMMIT reply reconciles the exact grant without redispatch',{t
  assert.equal((await f.journal.lookup(id)).status,'committed');
 });
 
-test('lost independent prepare reply fences retries without issuing an additional grant',{timeout:30000},async t=>{
- const f=await fenced(t),id=await restoreOperationID(f.owner.accountId,'privacy',f.key),prepare=f.journal.prepare.bind(f.journal);let injected=false;
- f.journal.prepare=async value=>{if(!injected&&value.operation_id===id){injected=true;f.faults.reply={path:'/v1/operations/prepare',stage:'after'};}return prepare(value);};
+test('lost independent prepare reply recovers the exact operation without issuing an additional grant',{timeout:30000},async t=>{
+ const f=await fenced(t),id=await restoreOperationID(f.owner.accountId,'privacy',f.key),prepare=f.journal.prepare.bind(f.journal),run=f.db.run.bind(f.db);let injected=false,grantWrites=0,prepares=0;
+ f.db.run=async(sql,...args)=>{if(sql.startsWith('INSERT INTO privacy_export_grants('))grantWrites++;return run(sql,...args);};
+ f.journal.prepare=async value=>{if(value.operation_id===id)prepares++;if(!injected&&value.operation_id===id){injected=true;f.faults.reply={path:'/v1/operations/prepare',stage:'after'};}return prepare(value);};
  let r=await f.grant();assert(r.status>=500);await r.body?.cancel();assert(injected);assert.equal(await f.row(),null);assert.equal((await f.grants()).length,0);
- assert.equal((await f.journal.lookup(id)).status,'pending');r=await f.grant();assert(r.status>=500);await r.body?.cancel();
- assert.equal(await f.row(),null);assert.equal((await f.grants()).length,0);
+ const accepted=await f.journal.lookup(id);assert.equal(accepted.status,'pending');assert.equal(grantWrites,1);assert.equal(prepares,1);
+ assert.equal((await body(await f.grant(),410)).error.code,'operation_retired_by_recovery');
+ const recovered=await assertRecoveredGrant(f,id,accepted);
+ assert.equal((await body(await f.grant(randomUUID()),409)).error.code,'operation_key_conflict');
+ assert.deepEqual(await body(await f.lookup(),200),{status:'unknown'});
+ const session=JSON.parse(Buffer.from(f.owner.token.split('.')[1],'base64url').toString()).jti;
+ await f.h.db.run('UPDATE sessions SET revoked_at=? WHERE id=?',f.h.app.now(),session);
+ await body(await f.grant(),401);
+ assert.equal(grantWrites,1,'recovery and retries must not reenter the grant allocation callback');assert.equal(prepares,1);
+ assert.deepEqual(await assertRecoveredGrant(f,id,accepted),recovered);
 });
 
 test('partial grant tombstones fail before conflicts while intact retirement and genuine conflicts remain distinct',{timeout:30000},async t=>{
@@ -242,12 +264,17 @@ async function unresolvedGrant(response){
 }
 async function exactGrantPlan(f){return restoreOperationID(f.owner.accountId,'privacy',f.key);}
 
-test('privacy expiry after journal prepare leaves the accepted plan pending and no SQL grant',{timeout:30000},async t=>{
- const f=await authorityFixture(t),id=await exactGrantPlan(f),prepare=f.journal.prepare.bind(f.journal);let triggered=false;
- f.journal.prepare=async input=>{const saved=await prepare(input);if(input.operation_id===id){triggered=true;f.expire();}return saved;};
- await unresolvedGrant(await f.grant());assert(triggered);const plan=await f.journal.lookup(id);assert.equal(plan.status,'pending');assert.equal((await f.journal.control()).state,'pending');
- assert.equal(await f.row(),null);assert.equal((await f.grants()).length,0);f.restoreClock();
- const retry=await f.grant();assert.equal(retry.status,503);await retry.body?.cancel();assert.deepEqual(await f.journal.lookup(id),plan);assert.equal(await f.row(),null);
+test('privacy expiry after journal prepare recovers the exact operation after current authority is restored',{timeout:30000},async t=>{
+ const f=await authorityFixture(t),id=await exactGrantPlan(f),prepare=f.journal.prepare.bind(f.journal),run=f.db.run.bind(f.db);let prepares=0,grantWrites=0;
+ f.db.run=async(sql,...args)=>{if(sql.startsWith('INSERT INTO privacy_export_grants('))grantWrites++;return run(sql,...args);};
+ f.journal.prepare=async input=>{const saved=await prepare(input);if(input.operation_id===id){prepares++;f.expire();}return saved;};
+ await unresolvedGrant(await f.grant());assert.equal(prepares,1);const plan=await f.journal.lookup(id);assert.equal(plan.status,'pending');assert.equal((await f.journal.control()).state,'pending');
+ assert.equal(await f.row(),null);assert.equal((await f.grants()).length,0);assert.equal(grantWrites,1);
+ await body(await f.grant(),401);assert.equal(grantWrites,1,'expired current authority cannot allocate or disclose a terminal grant');f.restoreClock();
+ assert.equal((await body(await f.grant(),410)).error.code,'operation_retired_by_recovery');
+ const recovered=await assertRecoveredGrant(f,id,plan);
+ assert.equal((await body(await f.request(`/privacy-exports/${randomUUID()}/grant`,{method:'POST',body:{operation_key:f.key}}),409)).error.code,'operation_key_conflict');
+ assert.equal(grantWrites,1);assert.equal(prepares,1);assert.deepEqual(await assertRecoveredGrant(f,id,plan),recovered);
 });
 
 test('privacy session revocation after journal prepare rolls back SQL and leaves a pending plan',{timeout:30000},async t=>{

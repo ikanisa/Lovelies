@@ -3,7 +3,9 @@
 Draft; validate on the exact signed candidate and keep the qualified backend
 available before submission. Use the existing Lovelies/Memories store records,
 not a new listing. Explain the native rewrite and selected Supabase backend in
-review notes. No real legacy customers, photos or subscriptions are being imported.
+review notes, identifying the selected locally hosted Supabase deployment and
+its verified public HTTPS origin. No real legacy customers, photos or
+subscriptions are being imported.
 
 Start a fresh anonymous account. Read the separate face-authentication purpose
 notice and register with your own three guided profile captures. The backend

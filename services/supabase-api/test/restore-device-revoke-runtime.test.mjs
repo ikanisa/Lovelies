@@ -1,3 +1,5 @@
+import {planEvents} from './restore-plan-fixture.mjs';
+import {assertRestrictedAbort} from './restore-restricted-abort.fixture.mjs';
 /** External, prepared and unexecuted. Root copies this file into the API test
  * folder only after candidate review/apply. Existing actual-PG restore/fault
  * harness is reused; no provider/recognition or serving recovery is claimed. */
@@ -9,7 +11,7 @@ import {restoreOperationID,restoreAllocationID} from '../src/restore-transaction
 import {insertPreparedSession,prepareSession} from '../src/auth.ts';
 import {sessionRetirementScope} from '../src/session-retirement.ts';
 import {enroll,prepareEnrollment,captureProofs,faceVerifierFixture,sign,encode,stable} from './runtime-harness.mjs';
-import {fixture,digest,unavailable} from './restore-database-fixture.mjs';
+import {fixture,digest} from './restore-database-fixture.mjs';
 const POLICY='face-policy-fixture-v1',DEVICE_PROTOCOL='lovelies-face-profile-device-v1';
 const sessionID=token=>JSON.parse(Buffer.from(token.split('.')[1],'base64url').toString()).jti;
 const ordered=facts=>[...new Map(facts.map(fact=>[stable(fact),fact])).entries()].sort(([a],[b])=>a<b?-1:a>b?1:0).map(([,fact])=>fact);
@@ -123,9 +125,10 @@ async function assertPlan(f,facts,status='committed'){
   assert.deepEqual(saved.plan.allocations,{id_0:await restoreAllocationID(id,'id_0')});
   assert.equal(saved.plan.input_hash,digest(stable({protocol:'lovelies-own-device-revoke-v1',account_id:f.person.accountId,device_id:f.person.deviceId,
     device_revision:f.originalDevice.revision,device_created_at:f.originalDevice.created_at,auth_epoch:f.original.auth_epoch,identity_state:f.original.auth_method})));
-  assert.deepEqual(saved.plan.events.map(({kind,scope})=>({kind,scope})),ordered(facts));
-  assert.equal(new Set(saved.plan.events.map(row=>row.operation_id)).size,ordered(facts).length);
-  const raw=JSON.stringify(saved.plan);
+  const events=await planEvents(f,saved);
+  assert.deepEqual(events.map(({kind,scope})=>({kind,scope})),ordered(facts));
+  assert.equal(new Set(events.map(row=>row.operation_id)).size,ordered(facts).length);
+  const raw=JSON.stringify({plan:saved.plan,events});
   for(const field of ['access_token','refresh_token','refresh_hash','public_jwk','template_key','template_digest','control_key','token_value','face_handle'])assert(!raw.includes('"'+field+'"'));
   for(const value of [f.person.token,f.person.refresh_token,f.person.faceHandle,f.peer?.token,f.profile?.template_key,f.profile?.template_digest].filter(Boolean))assert(!raw.includes(value));
   return saved;
@@ -194,11 +197,9 @@ test('profile-bound and already-revoked pending consents are preserved without i
   const f=await deviceFixture(t);await f.pending({consentID:f.profile.auth_consent_id});await f.pending({status:'revoked'});const before=await f.h.db.all('SELECT * FROM consents ORDER BY id');
   await f.call();await expectRetired(f,[deviceFact(f),sessionFact(f)]);assert.deepEqual(await f.h.db.all('SELECT * FROM consents ORDER BY id'),before);
 });
-for(const count of [30,31])test((count+2)+' exact device/session/consent facts commit or refuse before every domain effect',async t=>{
-  const f=await deviceFixture(t),pending=[];for(let i=0;i<count;i++)pending.push(await f.pending());const before=await snapshot(f);f.trace.length=0;
-  if(count===30){await f.call();await expectRetired(f,[deviceFact(f),sessionFact(f),...pending.map(row=>consentFact(f,row.consentID))]);assert.equal(await cursor(f),32);}
-  else{assert.equal((await f.call(503)).error.code,'device_revoke_restriction_capacity');assert.deepEqual(await snapshot(f),before);assert.equal(await f.journal.lookup(await operationID(f)),null);
-    assert(!f.trace.some(row=>row.kind==='sql'&&/^(INSERT|UPDATE|DELETE) /.test(row.sql)&&!row.sql.startsWith('UPDATE restore_control ')));}
+for(const count of [30,31,63])test((count+2)+' exact device/session/consent facts commit with the complete retirement',async t=>{
+ const f=await deviceFixture(t),pending=[];for(let i=0;i<count;i++)pending.push(await f.pending());
+ await f.call();await expectRetired(f,[deviceFact(f),sessionFact(f),...pending.map(row=>consentFact(f,row.consentID))]);assert.equal(await cursor(f),count+2);
 });
 for(const malformed of ['cross-account','other-purpose'])test('malformed pending '+malformed+' rolls back before device retirement',async t=>{
   const f=await deviceFixture(t);await f.pending({consentOwner:malformed==='cross-account'?f.foreign.account_id:f.person.accountId,purpose:malformed==='other-purpose'?'photo_matching':'face_authentication'});const before=await snapshot(f);
@@ -281,12 +282,16 @@ for(const self of [true,false])test('concurrent '+(self?'self':'other-device')+'
   const f=await deviceFixture(t),options=self?{}:peerCall(f),responses=await Promise.all([f.request(options),f.request(options)]);
   assert.deepEqual(responses.map(row=>row.status).sort(),self?[200,401]:[200,200]);for(const response of responses)await response.body?.cancel();await expectRetired(f,[deviceFact(f),sessionFact(f)]);assert.equal(await cursor(f),2);
 });
-test('accepted device plan followed by rejected SQL commit remains pending and cannot replay the callback',async t=>{
+test('accepted device plan with rejected SQL commit recovers restrictions without allocating the successor revision',async t=>{
   const f=await deviceFixture(t),pending=await f.pending(),before=await snapshot(f),id=await operationID(f),prepare=f.journal.prepare.bind(f.journal);let armed=true;
   f.journal.prepare=async value=>{const saved=await prepare(value);if(armed&&value.operation_id===id){armed=false;f.faults.beforeCommit=true;}return saved;};
-  await f.uncertain();assert.equal(armed,false);assert.equal(f.faults.beforeCommit,false);assert.deepEqual(await snapshot(f),before);
-  const saved=await assertPlan(f,[deviceFact(f),sessionFact(f),consentFact(f,pending.consentID)],'pending');await assert.rejects(()=>f.db.one('SELECT id FROM accounts LIMIT 1'),unavailable);
-  await f.uncertain();assert.deepEqual(await snapshot(f),before);assert.deepEqual(await f.journal.lookup(id),saved);
+  await f.uncertain();assert.equal(armed,false);assert.equal(f.faults.beforeCommit,false);
+  const status=(await f.journal.lookup(id)).status;assert(['pending','recovered'].includes(status),'a rejected SQL commit must not create a committed action receipt');
+  const facts=[deviceFact(f),sessionFact(f),consentFact(f,pending.consentID)],saved=await assertPlan(f,facts,status);
+  const {recovered,after}=await assertRestrictedAbort(f,{saved,before,snapshot});
+  assert.equal((await target(f)).revision,f.originalDevice.revision);assert.notEqual((await target(f)).revision,saved.plan.allocations.id_0);
+  await f.call(401);await f.call(200,peerCall(f));assert.deepEqual(await snapshot(f),after);assert.deepEqual(await f.journal.lookup(id),recovered);
+  await assertPlan(f,facts,'recovered');assert.equal((await auditRows(f)).length,0);assert.equal(await cursor(f),facts.length);
 });
 for(const mode of ['outage','prepare-before','prepare-after','commit-result-loss','ack-before','ack-after'])test('device retirement '+mode+' retains exact allocation and actual commit boundary',async t=>{
   const f=await deviceFixture(t),pending=await f.pending(),before=await snapshot(f),id=await operationID(f),facts=[deviceFact(f),sessionFact(f),consentFact(f,pending.consentID)];let boundary;
@@ -296,7 +301,12 @@ for(const mode of ['outage','prepare-before','prepare-after','commit-result-loss
   else f.faults.reply={path:'/v1/operations/'+id+'/acknowledge',stage:mode.slice(4)};
   await f.uncertain();const saved=await f.journal.lookup(id);
   if(mode==='outage'||mode==='prepare-before'){assert.deepEqual(await snapshot(f),before);assert.equal(saved,null);f.faults.control=false;if(mode==='prepare-before')assert.equal(f.faults.reply,undefined);await f.call();await expectRetired(f,facts);return;}
-  if(mode==='prepare-after'){assert.equal(f.faults.reply,undefined);assert.deepEqual(await snapshot(f),before);await assertPlan(f,facts,'pending');await assert.rejects(()=>f.db.one('SELECT id FROM accounts LIMIT 1'),unavailable);await f.uncertain();assert.deepEqual(await snapshot(f),before);return;}
+  if(mode==='prepare-after'){
+   assert.equal(f.faults.reply,undefined);assert.deepEqual(await snapshot(f),before);await assertPlan(f,facts,'pending');
+   const {recovered,after}=await assertRestrictedAbort(f,{saved,before,snapshot});
+   await f.call(401);await f.call(200,peerCall(f));assert.deepEqual(await snapshot(f),after);assert.deepEqual(await f.journal.lookup(id),recovered);
+   await assertPlan(f,facts,'recovered');assert.equal((await auditRows(f)).length,0);return;
+  }
   assert.equal((await target(f)).status,'revoked');assert.equal((await f.h.db.one('SELECT status FROM consents WHERE id=?',pending.consentID)).status,'revoked');
   if(mode==='commit-result-loss'){assert(boundary);assert.equal(boundary.journal.status,'pending');assert.equal(boundary.device.status,'revoked');assert.equal(boundary.consent.status,'revoked');assert.equal(boundary.audit.length,1);assert.equal(f.faults.commitReply,false);assert.equal(f.faults.afterCommit,undefined);assert.equal(saved.status,'committed');}
   else{assert.equal(f.faults.reply,undefined);assert.equal(saved.status,mode==='ack-before'?'pending':'committed');}
@@ -339,7 +349,7 @@ test('anonymous owner can fence a pending registration device without inventing 
   const handler=createHandler(createApp(f.db,h.env)),reply=await handler(new Request('https://api.invalid/auth/device/revoke',{method:'POST',headers:{authorization:'Bearer '+person.anonymous.access_token,'content-type':'application/json'},body:JSON.stringify({device_id:id})}));
   assert.equal(reply.status,200);assert.deepEqual(await reply.json(),{status:'revoked',current_session_revoked:false,clear_device_identity:false});
   const saved=await f.journal.lookup(await operationFor(account,old));assert(saved&&saved.status==='committed');
-  assert.deepEqual(saved.plan.events.map(({kind,scope})=>({kind,scope})),[{kind:'device-retired',scope:{account_id:account,device_id:id,device_revision:old.revision}}]);
+  assert.deepEqual((await planEvents(f,saved)).map(({kind,scope})=>({kind,scope})),[{kind:'device-retired',scope:{account_id:account,device_id:id,device_revision:old.revision}}]);
   const retired=await h.db.one('SELECT * FROM auth_devices WHERE id=?',id);assert.equal(retired.status,'revoked');assert.equal(retired.revision,saved.plan.allocations.id_0);
   // The standalone challenge stays stored; its original device can no longer
   // pass the actual completion guard or create a profile/session.

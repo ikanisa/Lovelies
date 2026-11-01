@@ -2,12 +2,22 @@ import assert from 'node:assert/strict';
 import {test} from 'node:test';
 import {AuthenticatedService} from '../src/service-fetcher.ts';
 const secret='synthetic-private-service-secret-32-characters';
-test('private transport permits only HTTPS or explicit loopback HTTP and pins authorization/destination',async()=>{
- for(const url of ['ftp://localhost','ws://127.0.0.1','http://service.example','https://user:password@private.example','https://private.example?url=other'])assert.throws(()=>new AuthenticatedService(url,secret),/Private service requires/);
+test('private transport permits HTTPS, loopback or an exact configured private HTTP origin and pins authorization/destination',async()=>{
+ for(const url of ['ftp://localhost','ws://127.0.0.1','http://service.example','http://api-gw:8000'])
+  assert.throws(()=>new AuthenticatedService(url,secret),{message:'HTTPS or an explicitly trusted private HTTP origin required'});
+ for(const url of ['https://user:password@private.example','https://private.example?url=other','https://private.example#other'])
+  assert.throws(()=>new AuthenticatedService(url,secret),{message:'Endpoint credentials, query and fragment are forbidden'});
  let observed;
  const service=new AuthenticatedService('https://private.example/prefix',secret,async request=>{observed=request;return Response.json({ok:true});});
  const response=await service.fetch('https://untrusted.invalid/internal/face?query=bound',{headers:{Authorization:'Bearer caller'}});assert.deepEqual(await response.json(),{ok:true});
  assert.equal(observed.url,'https://private.example/prefix/internal/face?query=bound');assert.equal(observed.headers.get('authorization'),'Bearer '+secret);assert.equal(observed.redirect,'manual');
+ const policy={trustedHttpOrigins:['http://api-gw:8000']};
+ const privateService=url=>new AuthenticatedService(url,secret,async request=>{observed=request;return Response.json({ok:true});},undefined,undefined,undefined,policy);
+ for(const url of ['http://api-gw:8001','http://api-gw.evil:8000','http://service.example:8000'])
+  assert.throws(()=>privateService(url),{message:'HTTPS or an explicitly trusted private HTTP origin required'});
+ const privateResponse=await privateService('http://api-gw:8000/prefix').fetch('https://untrusted.invalid/internal/face',{headers:{Authorization:'Bearer caller'}});
+ assert.deepEqual(await privateResponse.json(),{ok:true});
+ assert.equal(observed.url,'http://api-gw:8000/prefix/internal/face');assert.equal(observed.headers.get('authorization'),'Bearer '+secret);assert.equal(observed.redirect,'manual');
 });
 test('private transport bounds missing response headers and late streaming bytes',async()=>{
  const never=new AuthenticatedService('http://127.0.0.1',secret,async()=>new Promise(()=>{}),20);

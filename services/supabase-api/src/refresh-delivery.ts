@@ -118,17 +118,29 @@ async function replay(row: Receipt, old: SessionRow, account: AccountRow, reques
  * establish this secret-bound receipt and its one exact successor. */
 export async function refreshWithDelivery(body: Record<string, unknown>, ctx: AppContext): Promise<Response> {
     const request=await input(body),hash=await digest(request.refresh_token),key=await encryptionKey(ctx);
-    return ctx.db.transaction(async()=>{
+    // Admit the exact original exchange before the managed Auth network call.
+    // Re-admit it after that call in the existing atomic local receipt commit.
+    const selected=await ctx.db.read(async()=>{
         const old=await ctx.db.one<SessionRow>('SELECT * FROM sessions WHERE refresh_hash=?',hash);
         const account=old&&await ctx.db.one<AccountRow>('SELECT * FROM accounts WHERE id=?',old.account_id);
         if(!old||!account)invalid();
         const prior=await ctx.db.one<Receipt>('SELECT * FROM refresh_delivery_receipts WHERE original_session_id=?',old.id);
-        if(prior)return replay(prior,old,account,request,key,ctx);
+        if(prior)return {response:await replay(prior,old,account,request,key,ctx)};
         if(old.refresh_consumed_at!==null || await ctx.db.one('SELECT original_session_id FROM refresh_delivery_receipts WHERE rotation_key=?',request.rotation_key))invalid();
         const authority=actor(old,account);await assertRefreshActor(authority,ctx,true);
-        const prepared=await prepareSession({accountId:account.id,roles:authority.roles,authEpoch:authority.authEpoch,authMethod:old.auth_method,
-            profileRevision:old.face_profile_revision??undefined,profileEpoch:old.face_profile_epoch??undefined,
-            consentId:old.face_consent_id??undefined,deviceId:old.device_id??undefined,deviceRevision:old.device_revision??undefined},ctx);
+        return {old,account,authority};
+    });
+    if(selected.response)return selected.response;
+    const {old,account,authority}=selected;
+    const prepared=await prepareSession({accountId:account.id,roles:authority.roles,authEpoch:authority.authEpoch,authMethod:old.auth_method,
+        profileRevision:old.face_profile_revision??undefined,profileEpoch:old.face_profile_epoch??undefined,
+        consentId:old.face_consent_id??undefined,deviceId:old.device_id??undefined,deviceRevision:old.device_revision??undefined,predecessorSessionId:old.id},ctx);
+    return ctx.db.transaction(async()=>{
+        const current=await ctx.db.one<SessionRow>('SELECT * FROM sessions WHERE id=? AND refresh_hash=?',old.id,hash);
+        const prior=await ctx.db.one<Receipt>('SELECT * FROM refresh_delivery_receipts WHERE original_session_id=?',old.id);
+        if(prior)return replay(prior,current??old,account,request,key,ctx);
+        if(!current||current.refresh_consumed_at!==null || await ctx.db.one('SELECT original_session_id FROM refresh_delivery_receipts WHERE rotation_key=?',request.rotation_key))invalid();
+        await assertRefreshActor(authority,ctx,true);
         const row={original_session_id:old.id,account_id:old.account_id,rotation_key:request.rotation_key,secret_hash:request.secretHash,
             successor_session_id:prepared.id,created_at:prepared.createdAt,expires_at:Math.min(prepared.createdAt+DELIVERY_MS,old.refresh_expires_at)};
         const value={...prepared.credentials,protocol:REFRESH_DELIVERY_PROTOCOL,rotation_key:request.rotation_key,
@@ -233,7 +245,6 @@ export async function cancelRefreshDelivery(body: Record<string, unknown>, ctx: 
     return ctx.db.transaction(async restore=>{
         const selected=await cancellationSelection(request,hash,ctx),{old,account,prior,next,retirement,mode}=selected;
         if(mode!=='already-cancelled'){
-            if(selected.facts.length>32)throw new ApiError(503,'refresh_cancel_restriction_capacity');
             const capability=await digest(stable({protocol:'lovelies-refresh-cancel-capability-v1',rotation_key:request.rotation_key,secret_hash:request.secretHash}));
             restore.operation({operation_id:await restoreOperationID(account.id,'auth.refresh-cancel-v1','refresh.cancel:'+old.id),
                 input_hash:await digest(stable({protocol:'lovelies-refresh-cancel-v1',account_id:account.id,original_session_id:old.id,

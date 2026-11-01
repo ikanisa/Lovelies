@@ -2,6 +2,7 @@ import postgres from 'postgres';
 import { AsyncLocalStorage } from 'node:async_hooks';
 import { ApiError, type Binding, type Database, type InvocationAuthorityOutcomeCode } from './types.ts';
 import { RestoreTransactionCollector, type RestoreTransactionScope } from './restore-transaction.ts';
+import { databaseTlsConfiguration, type DatabaseTlsPolicy } from './endpoint-configuration.ts';
 
 /** Only bound values cross this translator. SQL is static application source.
  * Quoted strings/comments/dollar strings never become parameter positions. */
@@ -44,7 +45,9 @@ export interface SqlConnection {
  * a missing database control row is never created by request handling. */
 export interface DatabaseFence {
   enter(connection:SqlConnection):Promise<unknown>;
+  checkIntent?(connection:SqlConnection,admission:unknown,intent:unknown):Promise<void>;
   lineage(admission:unknown):DatabaseLineage;
+  reconcile?(connection:SqlConnection):Promise<void>;
   prepare(connection:SqlConnection,admission:unknown,intent?:unknown):Promise<unknown>;
   committed(connection:SqlConnection,prepared:unknown):Promise<void>;
 }
@@ -64,6 +67,7 @@ export class PostgresDatabase implements Database {
   private readonly transactions=new AsyncLocalStorage<TransactionFrame>();
   private readonly invocations=new AsyncLocalStorage<InvocationFrame>();
   constructor(private readonly connection:SqlConnection,private readonly fence?:DatabaseFence){}
+  inTransaction():boolean{return this.transactions.getStore()!==undefined;}
   private unavailable(frame=this.invocations.getStore()):never {
     if(frame)frame.failed=true;
     throw new ApiError(503,frame?.failureCode??'restore_reconciliation_required');
@@ -89,7 +93,7 @@ export class PostgresDatabase implements Database {
   bindInvocationAuthority(check:()=>Promise<void>,fresh:()=>void,outcomeCode:InvocationAuthorityOutcomeCode='store_operation_outcome_unresolved'):void {
     const frame=this.assertInvocation();
     if(!frame||frame.authority||this.transactions.getStore()||typeof check!=='function'||typeof fresh!=='function'||
-      !['store_operation_outcome_unresolved','privacy_export_grant_outcome_unresolved'].includes(outcomeCode))
+      !['store_operation_outcome_unresolved','privacy_export_grant_outcome_unresolved','queue_repair_outcome_unresolved','audience_operation_outcome_unresolved'].includes(outcomeCode))
       throw new ApiError(500,'invocation_authority_invalid');
     frame.authority=Object.freeze({check,fresh,outcomeCode});
   }
@@ -106,6 +110,10 @@ export class PostgresDatabase implements Database {
       !lineageID.test(next.database_id)||!lineageID.test(next.incarnation_id))return this.unavailable(frame);
     if(frame.lineage&&(frame.lineage.database_id!==next.database_id||frame.lineage.incarnation_id!==next.incarnation_id))return this.unavailable(frame);
     frame.lineage??=Object.freeze({database_id:next.database_id,incarnation_id:next.incarnation_id});
+  }
+  currentRestoreLineage():DatabaseLineage {
+    const frame=this.assertInvocation();if(!frame?.lineage)return this.unavailable(frame);
+    return Object.freeze({...frame.lineage});
   }
   /** One logical request/job retains its first independently admitted lineage
    * across SQL transactions and awaited external work. Nested calls join it;
@@ -129,7 +137,7 @@ export class PostgresDatabase implements Database {
         // A privacy grant may have committed even when a subsequent handler read
         // raises session_invalid. Do not send a definitive failure that permits
         // the client to discard its exact recovery key.
-        if(frame.mayHaveCommitted&&frame.authority?.outcomeCode==='privacy_export_grant_outcome_unresolved'){
+        if(frame.mayHaveCommitted&&frame.authority&&['privacy_export_grant_outcome_unresolved','queue_repair_outcome_unresolved','audience_operation_outcome_unresolved'].includes(frame.authority.outcomeCode)){
           frame.failureCode=frame.authority.outcomeCode;return this.unavailable(frame);
         }
         throw error;
@@ -170,9 +178,9 @@ export class PostgresDatabase implements Database {
     }
     return this.execute(callback,false,intent);
   }
-  private async execute<T>(callback:(restore:RestoreTransactionScope)=>T|Promise<T>,readOnly:boolean,intent?:unknown):Promise<T>{
+  private async execute<T>(callback:(restore:RestoreTransactionScope)=>T|Promise<T>,readOnly:boolean,intent?:unknown,reconciled=false):Promise<T>{
     this.assertInvocation();
-    let prepared:unknown,commitDispatched=false,result:T;
+    let prepared:unknown,commitDispatched=false,callbackEntered=false,result:T;
     const collector=new RestoreTransactionCollector(readOnly,intent!==undefined),restore=collector.scope;
     try{result=await this.connection.begin(connection=>this.transactions.run({connection,readOnly,restore},async()=>{
       try{
@@ -182,9 +190,11 @@ export class PostgresDatabase implements Database {
         await connection.query('SELECT pg_advisory_xact_lock(704536419730718193::bigint)',[]);
         await connection.query('SET LOCAL ROLE lovelies_api',[]);
         await connection.query("SET LOCAL search_path TO lovelies_private, pg_catalog",[]);
+        if(this.fence)await connection.query("SELECT set_config('lovelies.writer_protocol','2',true)",[]);
         let admission:unknown;
-        try{admission=await this.fence?.enter(connection);this.admitInvocation(admission);}
-        catch(error){const frame=this.invocations.getStore();if(frame)frame.failed=true;throw error;}
+        try{admission=await this.fence?.enter(connection);this.admitInvocation(admission);if(intent!==undefined)await this.fence?.checkIntent?.(connection,admission,intent);}
+        catch(error){const frame=this.invocations.getStore();if(frame&&!(error instanceof ApiError&&error.code==='restore_pending_reconciliation'))frame.failed=true;throw error;}
+        callbackEntered=true;
         const value=await callback(restore);
         this.assertInvocation();
         const manifest=await collector.seal(intent);
@@ -212,6 +222,15 @@ export class PostgresDatabase implements Database {
         return value;
       }finally{collector.close();}
     }));}catch(error){
+      if(!reconciled&&!callbackEntered&&error instanceof ApiError&&error.code==='restore_pending_reconciliation'&&this.fence?.reconcile){
+        await this.connection.begin(async connection=>{
+          await connection.query('SELECT pg_advisory_xact_lock(704536419730718193::bigint)',[]);
+          await connection.query('SET LOCAL ROLE lovelies_api',[]);
+          await connection.query("SET LOCAL search_path TO lovelies_private, pg_catalog",[]);
+          await this.fence!.reconcile!(connection);
+        });
+        return this.execute(callback,readOnly,intent,true);
+      }
       const invocation=this.invocations.getStore();
       // Once the callback has returned for COMMIT, a lost reply cannot prove
       // that SQL rolled back. Preserve any accepted independent plan.
@@ -246,13 +265,11 @@ export class PostgresDatabase implements Database {
   async close():Promise<void>{await this.connection.close?.();}
 }
 
-export function connectPostgres(url:string,rootCertificate?:string,fence?:DatabaseFence):PostgresDatabase {
-  const target=new URL(url);
-  if(!['postgres:','postgresql:'].includes(target.protocol))throw new Error('PostgreSQL URL required');
-  const local=['127.0.0.1','localhost','::1','[::1]'].includes(target.hostname);
+export function connectPostgres(url:string,rootCertificate?:string,fence?:DatabaseFence,tlsPolicy:DatabaseTlsPolicy={}):PostgresDatabase {
+  const tls=databaseTlsConfiguration(url,rootCertificate,tlsPolicy);
   // Transaction-pooler safe: no named prepared statements/session state.
   const sql=postgres(url,{prepare:false,max:3,idle_timeout:20,connect_timeout:10,
-    ssl:local?false:rootCertificate?{rejectUnauthorized:true,ca:rootCertificate}:'verify-full',connection:{search_path:'lovelies_private,pg_catalog',application_name:'lovelies-supabase-api'},
+    ssl:tls,connection:{search_path:'lovelies_private,pg_catalog',application_name:'lovelies-supabase-api'},
     types:{bigint:{to:20,from:[20],serialize:(value:unknown)=>String(value),parse:(value:string)=>{
       const number=Number(value);if(!Number.isSafeInteger(number))throw new Error('Unsafe database integer');return number;
     }}},onnotice:()=>{}});

@@ -1,5 +1,5 @@
 import { ApiError, digest, stable } from './types.ts';
-import { RESTORE_PROJECT_ID, RESTORE_REQUEST_BYTES, validateRestoreRestrictionEvent,
+import { RESTORE_PROJECT_ID, validateRestoreRestrictionEvent,
   type RestoreOperationInput, type RestoreRestrictionEvent } from './restore-journal.ts';
 
 export type RestoreOperationIdentity = Readonly<Pick<RestoreOperationInput, 'operation_id' | 'input_hash' | 'allocations'>>;
@@ -47,6 +47,11 @@ function identity(value: unknown): RestoreOperationIdentity {
   if (new Set(Object.values(allocations)).size !== Object.keys(allocations).length) return invalid();
   return Object.freeze({ operation_id: value.operation_id, input_hash: value.input_hash, allocations: Object.freeze(allocations) });
 }
+/** Stable exact-fact identity for automatically captured SQL restrictions. */
+export async function restoreCapturedRestrictionID(operationID: string, kind: string, scope: Record<string,string>): Promise<string> {
+  if (!UUID.test(operationID)) return invalid();
+  return identifier('lovelies-database-captured-restriction-v1', {operation_id:operationID,kind,scope});
+}
 /** One collector belongs to one actual PostgreSQL transaction, including nested
  * callbacks. Invalid registration poisons that transaction even if a caller catches
  * the immediate error. This class performs no I/O or recovery/serving clearance. */
@@ -77,7 +82,7 @@ export class RestoreTransactionCollector implements RestoreTransactionScope {
   restrict(kind: RestoreRestrictionEvent['kind'], scope: Readonly<Record<string, string>>): Promise<void> {
     this.#open();
     try {
-      if (!this.#identity || this.#events.length >= 32) return invalid();
+      if (!this.#identity || this.#events.length >= Number.MAX_SAFE_INTEGER) return invalid();
       // Validate/copy before the first await; caller mutation cannot change scope.
       const value = validateRestoreRestrictionEvent({ version: 1, project_id: RESTORE_PROJECT_ID,
         operation_id: this.#identity.operation_id, kind, scope });
@@ -102,7 +107,6 @@ export class RestoreTransactionCollector implements RestoreTransactionScope {
     const events = await Promise.all(this.#events);
     if (this.#failed) return invalid();
     const manifest = Object.freeze({ ...this.#identity, events: Object.freeze(events) });
-    if (new TextEncoder().encode(stable(manifest)).byteLength > RESTORE_REQUEST_BYTES) return invalid();
     return manifest;
   }
 }

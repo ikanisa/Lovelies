@@ -172,6 +172,13 @@ for (const kind of ['request', 'global', 'asset', 'subject-moderation', 'asset-m
 
 test('ordinary completion minimizes tombstones only after absent-object evidence and records a stable erased fact once', async t => {
   const f = await queued(t), before = await cursor(f); let observed = false;
+  const beforeCursor=(await f.journal.control()).marker.cursor;
+  const account=await f.h.db.one('SELECT auth_epoch FROM accounts WHERE id=?',f.owner.accountId),asset=await f.h.db.one('SELECT version FROM assets WHERE id=?',f.ownedAsset);
+  const sessions=await f.h.db.all('SELECT id FROM sessions WHERE account_id=? AND revoked_at IS NULL ORDER BY id',f.owner.accountId);
+  const expected=[{kind:'account-erased',scope:{account_id:f.owner.accountId,deletion_request_id:f.deletion.id}},
+    {kind:'account-authority-retired',scope:{account_id:f.owner.accountId,auth_epoch:String(account.auth_epoch)}},
+    {kind:'asset-retired',scope:{owner_id:f.owner.accountId,asset_id:f.ownedAsset,asset_version:asset.version}},
+    ...sessions.map(row=>({kind:'session-retired',scope:{account_id:f.owner.accountId,session_id:row.id}}))].map(stable).sort();
   const remove = f.h.env.QUARANTINE.delete.bind(f.h.env.QUARANTINE);
   f.h.env.QUARANTINE.delete = async object => {
     if (object === f.objectKey) {
@@ -183,9 +190,11 @@ test('ordinary completion minimizes tombstones only after absent-object evidence
     }
     return remove(object);
   };
-  await f.process(); assert(observed); const saved = await assertErased(f); assert.equal(await cursor(f), before + 1);
+  await f.process(); assert(observed); const saved = await assertErased(f);assert.equal(await cursor(f),before+expected.length);
+  const captured=await f.journal.restrictionPage(beforeCursor,(await f.journal.control()).marker.cursor);
+  assert.deepEqual(captured.map(({event:{kind,scope}})=>stable({kind,scope})).sort(),expected);
   await f.process(); await f.db.invocation(() => processPrivacyJob({ request_id: f.deletion.id }, f.context));
-  assert.deepEqual(await f.journal.lookup(await erasedID(f)), saved); assert.equal(await cursor(f), before + 1);
+  assert.deepEqual(await f.journal.lookup(await erasedID(f)), saved);assert.equal(await cursor(f),before+expected.length);
 });
 
 for (const stage of ['delete', 'head']) test('a new active subject hold during Storage ' + stage + ' prevents verification/completion and preserves mapping', async t => {
@@ -293,7 +302,7 @@ test('verified cleanup cannot reach terminal commit if the metadata-erasure mark
   assert.equal(await f.journal.lookup(await erasedID(f)), null); assert(await f.h.db.one('SELECT id FROM assets WHERE id=?', f.ownedAsset));
 });
 
-test('accepted terminal prepare followed by SQL rollback retains the independent pending predecessor and all final evidence', async t => {
+test('accepted terminal prepare with SQL rollback preserves physical evidence and records a terminal restrictive outcome', async t => {
   const f = await queued(t), id = await erasedID(f), prepare = f.journal.prepare.bind(f.journal); let armed = true;
   f.journal.prepare = async value => {
     const result = await prepare(value);
@@ -301,11 +310,14 @@ test('accepted terminal prepare followed by SQL rollback retains the independent
     return result;
   };
   await f.uncertainProcess(); const saved = await f.journal.lookup(id);
-  assert.equal(saved.status, 'pending'); assert.equal(saved.plan.events[0].kind, 'account-erased');
+  assert(['pending','recovered'].includes(saved.status));assert.equal(saved.plan.events[0].kind, 'account-erased');
   assert.notEqual((await requestRow(f)).status, 'completed'); assert(await f.h.db.one('SELECT id FROM assets WHERE id=?', f.ownedAsset));
   assert(await f.h.db.one('SELECT asset_id FROM asset_retention WHERE asset_id=?', f.ownedAsset));
-  await assert.rejects(() => f.db.one('SELECT id FROM accounts LIMIT 1'), unavailable);
-  await f.uncertainProcess(); assert.deepEqual(await f.journal.lookup(id), saved);
+  await f.db.one('SELECT id FROM accounts LIMIT 1');const recovered=await f.journal.lookup(id);assert.equal(recovered.status,'recovered');assert.equal(recovered.plan_hash,saved.plan_hash);assert.deepEqual(recovered.plan,saved.plan);
+  assert.equal((await f.journal.control()).state,'serving');assert.equal((await requestRow(f)).metadata_erased_at,null);assert.notEqual((await requestRow(f)).status,'completed');
+  assert.notEqual((await f.h.db.one('SELECT disabled_at FROM accounts WHERE id=?',f.owner.accountId)).disabled_at,null);
+  for(const row of await cleanupRows(f)){assert.equal(row.status,'verified');assert.equal(await f.h.env[row.bucket].head(row.object_key),null);}
+  await f.uncertainProcess();assert.deepEqual(await f.journal.lookup(id),recovered);assert(await f.h.db.one('SELECT id FROM assets WHERE id=?',f.ownedAsset));
 });
 
 for (const mode of ['denial', 'prepare-after', 'commit', 'ack-before', 'ack-after'])
@@ -339,9 +351,10 @@ for (const mode of ['denial', 'prepare-after', 'commit', 'ack-before', 'ack-afte
       await f.db.invocation(() => processPrivacyJob({ request_id: f.deletion.id }, retry));
       await assertErased(f);
     } else if (mode === 'prepare-after') {
-      assert.equal(saved.status, 'pending'); assert.notEqual((await requestRow(f)).status, 'completed');
-      await assert.rejects(() => f.db.one('SELECT id FROM accounts LIMIT 1'), unavailable);
-      await f.uncertainProcess(); assert.deepEqual(await f.journal.lookup(id), saved);
+      assert(['pending','recovered'].includes(saved.status));assert.notEqual((await requestRow(f)).status, 'completed');
+      await f.db.one('SELECT id FROM accounts LIMIT 1');const recovered=await f.journal.lookup(id);assert.equal(recovered.status,'recovered');assert.equal(recovered.plan_hash,saved.plan_hash);assert.deepEqual(recovered.plan,saved.plan);
+      assert.equal((await f.journal.control()).state,'serving');assert.equal((await requestRow(f)).metadata_erased_at,null);
+      await f.uncertainProcess();assert.deepEqual(await f.journal.lookup(id),recovered);assert.notEqual((await requestRow(f)).status,'completed');
     } else {
       assert.equal((await requestRow(f)).status, 'completed');
       // A lost COMMIT reply is followed by the ordinary token-guarded failure

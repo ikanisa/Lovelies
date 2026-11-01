@@ -1,3 +1,6 @@
+import { isIP } from 'node:net';
+import { handleOperatorRecovery } from './operator-recovery.ts';
+import { handleOperatorAccess } from './operator-access.ts';
 import { handleAudience } from './audience.ts';
 import { authenticate, assertActor, handleAuth } from './auth.ts';
 import { handleFaceAuth } from './face-auth.ts';
@@ -16,6 +19,9 @@ import { handlePrivacy } from './privacy.ts';
 import { ApiError, digest, ok, type AppContext, type Database, type SupabaseEnv } from './types.ts';
 import { currentSchemaVersion } from './schema.ts';
 import { maintain } from './jobs.ts';
+import { uploadBudgetConfiguration } from './upload-budgets.ts';
+import { pushRosterReady } from './push-roster.ts';
+import { managedAuthEnabled,validateManagedAuthConfiguration,validateManagedAuthDatabase } from './managed-auth.ts';
 
 export function createApp(db:Database,env:SupabaseEnv,now=Date.now):AppContext {
   const app:AppContext={db,env,now,authenticate:request=>authenticate(request,app),assertActor:actor=>assertActor(actor,app)};return app;
@@ -35,13 +41,26 @@ function missingConfiguration(env:SupabaseEnv):string[]{
   for(const key of ['PHOTOS','QUARANTINE','PRIVACY_EXPORTS','PHOTO_JOBS','FACE_AUTH_VERIFIER','PHOTO_PROCESSOR','MODEL_SERVICE_READINESS'] as const)if(!env[key])missing.push(key);
   for(const key of ['AUTH_SIGNING_SECRET','MEDIA_SIGNING_SECRET','INTERNAL_MAINTENANCE_SECRET'] as const)if((env[key]?.length??0)<32)missing.push(key);
   for(const key of ['FACE_AUTH_POLICY_VERSION','PHOTO_MODEL_VERSION','PUBLIC_API_BASE_URL'] as const)if(!env[key]?.trim())missing.push(key);
+  if(env.APP_ENV!=='test'){
+    if(!env.MANAGED_AUTH)missing.push('MANAGED_AUTH');
+    if(!env.MANAGED_AUTH_ENCRYPTION_KEY)missing.push('MANAGED_AUTH_ENCRYPTION_KEY');
+  }
+  if(env.APP_ENV!=='test'||env.PUSH_PROVIDER_GENERATION||env.PUSH_LEDGER_ID||env.PUSH_LEDGER_BOOTSTRAP_ID){
+    if(!env.PUSH_SERVICE)missing.push('PUSH_SERVICE');
+    for(const key of ['PUSH_PROVIDER_GENERATION','PUSH_LEDGER_ID','PUSH_LEDGER_BOOTSTRAP_ID'] as const)if(!env[key])missing.push(key);
+  }
+  missing.push(...uploadBudgetConfiguration(env).missing);
   return missing;
 }
 async function limitAuth(request:Request,ctx:AppContext,lane:string):Promise<void>{
   const slot=Math.floor(ctx.now()/60000);
   // Validate the gateway's trusted proxy chain before relying on per-IP limits.
   // Raw addresses are never retained.
-  const address=(request.headers.get('x-forwarded-for')??'gateway-unavailable').split(',').at(-1)!.trim();
+  // The public reverse proxy strips and overwrites this dedicated header.
+  // Direct Edge/gateway access must remain private; arbitrary forwarded chains
+  // and caller-supplied X-Forwarded-For never select a rate-limit identity.
+  const supplied=request.headers.get('x-lovelies-client-ip')??'';
+  const address=isIP(supplied)?supplied:'gateway-unavailable';
   const key=await digest(`${lane}:${slot}:${address}`);
   await ctx.db.transaction(async()=>{
     await ctx.db.run('DELETE FROM request_limits WHERE expires_at<?',ctx.now());
@@ -94,13 +113,26 @@ export function createHandler(ctx:AppContext):(request:Request)=>Promise<Respons
           const version=await databaseVersion(ctx),ready=version===currentSchemaVersion;
           const missing=path==='/ready'?missingConfiguration(ctx.env):[];
           let inferenceReady:boolean|undefined;
+          let managedAuthReady:boolean|undefined,pushReady:boolean|undefined;
           if(path==='/ready'){
             inferenceReady=false;
             if(ready)try{inferenceReady=!!ctx.env.MODEL_SERVICE_READINESS&&await ctx.env.MODEL_SERVICE_READINESS(request.signal)===true;}catch{inferenceReady=false;}
+            managedAuthReady=false;pushReady=false;
+            if(ready){
+              try{
+                if(!managedAuthEnabled(ctx))managedAuthReady=true;
+                else {
+                  await validateManagedAuthConfiguration(ctx);
+                  await validateManagedAuthDatabase(ctx);
+                  managedAuthReady=await ctx.env.MANAGED_AUTH!.ready();
+                }
+              }catch{managedAuthReady=false;}
+              try{pushReady=await pushRosterReady(ctx);}catch{pushReady=false;}
+            }
           }
-          const available=ready&&!missing.length&&inferenceReady!==false;
+          const available=ready&&!missing.length&&inferenceReady!==false&&managedAuthReady!==false&&pushReady!==false;
           response=ok({status:available?'ok':'unavailable',service:'lovelies-supabase-api',database:'supabase_postgresql',database_ready:ready,schema_version:version,missing,
-            ...(path==='/ready'?{inference_ready:inferenceReady}:{}),verification:'registered_face_comparison',liveness_required:false,hosted_provider_acceptance:false},available?200:503);
+            ...(path==='/ready'?{inference_ready:inferenceReady,managed_auth_ready:managedAuthReady,push_roster_ready:pushReady}:{}),verification:'registered_face_comparison',liveness_required:false,hosted_provider_acceptance:false},available?200:503);
         }else if(path==='/_internal/maintenance'&&request.method==='POST'){
           if(!await maintenanceAuthorized(request,ctx.env))throw new ApiError(404,'route_not_found');
           await requireCurrentDatabase(ctx);
@@ -112,7 +144,7 @@ export function createHandler(ctx:AppContext):(request:Request)=>Promise<Respons
           if(path.startsWith('/auth/face/recovery/'))await limitAuth(request,ctx,'recovery');
           if(path.startsWith('/auth/face/profile/'))await limitAuth(request,ctx,'profile');
           let handled:Response|null=null;
-          for(const handler of [handleAuth,handleAudience,handleFaceProfile,handleFaceAuth,handleIdentity,handleProfile,handleProcessing,handleSharing,handleGallery,handleEntitlements,handleOperators,handleAdminUsers,handleNotifications,handleRetention,handlePrivacy]){
+          for(const handler of [handleAuth,handleAudience,handleFaceProfile,handleFaceAuth,handleIdentity,handleProfile,handleProcessing,handleSharing,handleGallery,handleEntitlements,handleOperators,handleOperatorAccess,handleOperatorRecovery,handleAdminUsers,handleNotifications,handleRetention,handlePrivacy]){
             handled=await handler(request,ctx);if(handled)break;
           }
           if(!handled)throw new ApiError(404,'route_not_found');response=handled;

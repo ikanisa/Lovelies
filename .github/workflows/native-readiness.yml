@@ -1,0 +1,116 @@
+name: Lovelies native source readiness
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: native-readiness-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  android-debug:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-java@b6effb05e454b25005698d916606bdc6ffcbf961
+        with:
+          distribution: temurin
+          java-version: '17'
+      - name: Install the declared Android platform and build tools
+        shell: bash
+        run: |
+          set -euo pipefail
+          "${ANDROID_HOME}/cmdline-tools/latest/bin/sdkmanager" 'platforms;android-36' 'build-tools;35.0.0' 'build-tools;36.0.0'
+      - name: Compile app and instrumentation APK, then run JVM regressions and lint
+        working-directory: android
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "${RUNNER_TEMP}/native-readiness"
+          ./gradlew --no-daemon --console=plain --max-workers=2 \
+            '-Dorg.gradle.jvmargs=-Xmx2048m -XX:MaxMetaspaceSize=768m -Dfile.encoding=UTF-8' \
+            -Pkotlin.compiler.execution.strategy=in-process \
+            :app:assembleDebug :app:testDebugUnitTest \
+            :app:assembleDebugAndroidTest :app:lintDebug \
+            2>&1 | tee "${RUNNER_TEMP}/native-readiness/android-build.log"
+      - name: Retain JVM and lint results
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: android-source-readiness-results
+          path: |
+            android/app/build/test-results/testDebugUnitTest/
+            android/app/build/reports/lint-results-debug.*
+            ${{ runner.temp }}/native-readiness/android-build.log
+          if-no-files-found: warn
+          retention-days: 14
+  ios-simulator-compile:
+    runs-on: macos-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+      - name: Compile application and XCTest target without signing or launch
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "${RUNNER_TEMP}/native-readiness"
+          xcodebuild -project ios/Lovelies.xcodeproj -scheme Lovelies \
+            -configuration Debug -sdk iphonesimulator -jobs 2 \
+            -destination 'generic/platform=iOS Simulator' \
+            -derivedDataPath "${RUNNER_TEMP}/lovelies-derived-debug" \
+            -resultBundlePath "${RUNNER_TEMP}/native-readiness/ios-debug.xcresult" \
+            CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO \
+            LOVELIES_API_ORIGIN=http://127.0.0.1:9 \
+            build-for-testing 2>&1 | tee "${RUNNER_TEMP}/native-readiness/ios-debug-build.log"
+      - name: Compile Release simulator with explicit API and approved policy inputs
+        if: ${{ !cancelled() }}
+        shell: bash
+        env:
+          LOVELIES_PRIVACY_POLICY_URL: ${{ vars.LOVELIES_PRIVACY_POLICY_URL }}
+          LOVELIES_TERMS_URL: ${{ vars.LOVELIES_TERMS_URL }}
+          LOVELIES_SUPPORT_URL: ${{ vars.LOVELIES_SUPPORT_URL }}
+          LOVELIES_ACCOUNT_DELETION_URL: ${{ vars.LOVELIES_ACCOUNT_DELETION_URL }}
+        run: |
+          set -euo pipefail
+          mkdir -p "${RUNNER_TEMP}/native-readiness"
+          # This reserved API host is a compile fixture. No connection, release
+          # signing or distribution is attempted. Policy inputs remain explicit:
+          # the existing Release guard rejects absent or unqualified URL values.
+          xcodebuild -project ios/Lovelies.xcodeproj -scheme Lovelies \
+            -configuration Release -sdk iphonesimulator -jobs 2 \
+            -destination 'generic/platform=iOS Simulator' \
+            -derivedDataPath "${RUNNER_TEMP}/lovelies-derived-release" \
+            -resultBundlePath "${RUNNER_TEMP}/native-readiness/ios-release.xcresult" \
+            CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO \
+            LOVELIES_API_ORIGIN=https://native-readiness.invalid/functions/v1/lovelies-api \
+            "LOVELIES_PRIVACY_POLICY_URL=${LOVELIES_PRIVACY_POLICY_URL}" \
+            "LOVELIES_TERMS_URL=${LOVELIES_TERMS_URL}" \
+            "LOVELIES_SUPPORT_URL=${LOVELIES_SUPPORT_URL}" \
+            "LOVELIES_ACCOUNT_DELETION_URL=${LOVELIES_ACCOUNT_DELETION_URL}" \
+            build 2>&1 | tee "${RUNNER_TEMP}/native-readiness/ios-release-build.log"
+      - name: Run isolated Foundation contract regressions
+        if: ${{ !cancelled() }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "${RUNNER_TEMP}/native-readiness"
+          bash ios/Tests/run-readiness-host-tests.sh \
+            2>&1 | tee "${RUNNER_TEMP}/native-readiness/ios-host-tests.log"
+      - name: Retain Apple build and host regression evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: ios-source-readiness-results
+          path: ${{ runner.temp }}/native-readiness/
+          if-no-files-found: warn
+          retention-days: 14
+# These lanes compile source and execute local fixtures only. They do not perform
+# release signing, upload to stores, deploy, exercise providers or establish device acceptance.
+# GitHub execution and repository required-check settings remain separate gates.

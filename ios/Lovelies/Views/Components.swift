@@ -77,10 +77,17 @@ struct Wordmark: View {
     @EnvironmentObject private var store: DemoStore
     var width: CGFloat = 180
     var body: some View {
+        if DemoStore.referenceReviewEnabled {
+            wordmark
+                .onLongPressGesture { store.showGallery = DemoStore.referenceReviewEnabled }
+                .accessibilityAction(named: "Screen gallery") { if DemoStore.referenceReviewEnabled { store.showGallery = true } }
+        } else {
+            wordmark
+        }
+    }
+    private var wordmark: some View {
         AssetImage(name: "wordmark").scaledToFit().frame(width: width)
             .accessibilityLabel("Lovelies")
-            .onLongPressGesture { store.showGallery = DemoStore.referenceReviewEnabled }
-            .accessibilityAction(named: "Screen gallery") { if DemoStore.referenceReviewEnabled { store.showGallery = true } }
     }
 }
 

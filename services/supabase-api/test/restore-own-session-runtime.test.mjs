@@ -1,3 +1,5 @@
+import {planEvents} from './restore-plan-fixture.mjs';
+import {assertRestrictedAbort} from './restore-restricted-abort.fixture.mjs';
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { randomUUID } from 'node:crypto';
@@ -7,7 +9,7 @@ import { insertPreparedSession, prepareSession } from '../src/auth.ts';
 import { sessionRetirementScope } from '../src/session-retirement.ts';
 import { addConsentReference, assertIsolatedReference, assertSurvivingSecuritySession, historicalRevokedNull, referenceRows } from './restore-consent-reference-fixtures.mjs';
 import { enroll, captureProofs, faceVerifierFixture, sign, encode, stable } from './runtime-harness.mjs';
-import { fixture, digest, unavailable } from './restore-database-fixture.mjs';
+import { fixture, digest } from './restore-database-fixture.mjs';
 
 const POLICY = 'face-policy-fixture-v1', DEVICE_PROTOCOL = 'lovelies-face-profile-device-v1';
 const sessionID = token => JSON.parse(Buffer.from(token.split('.')[1], 'base64url').toString()).jti;
@@ -127,14 +129,15 @@ async function assertPlan(f, facts, status = 'committed') {
   const saved = await f.journal.lookup(await operationID(f)); assert(saved); assert.equal(saved.status, status); assert.deepEqual(saved.plan.allocations, {});
   assert.equal(saved.plan.input_hash, digest(stable({ protocol: 'lovelies-own-session-revoke-v1', account_id: f.person.accountId, session_id: f.targetID, auth_method: f.original.auth_method, auth_epoch: f.original.auth_epoch, created_at: f.original.created_at,
     device_id: f.original.device_id, device_revision: f.original.device_revision })));
-  assert.deepEqual(saved.plan.events.map(({ kind, scope }) => ({ kind, scope })), ordered(facts));
-  assert.equal(new Set(saved.plan.events.map(row => row.operation_id)).size, ordered(facts).length);
-  const encoded = JSON.stringify(saved.plan);
+  const events=await planEvents(f,saved);
+  assert.deepEqual(events.map(({ kind, scope }) => ({ kind, scope })), ordered(facts));
+  assert.equal(new Set(events.map(row => row.operation_id)).size, ordered(facts).length);
+  const encoded = JSON.stringify({plan:saved.plan,events});
   for (const field of ['access_token', 'refresh_token', 'refresh_hash', 'public_jwk', 'template_key', 'template_digest', 'control_key', 'token_value']) assert(!encoded.includes('"' + field + '"'));
   for (const value of [f.person.token, f.person.refresh_token, f.person.faceHandle, f.peer?.token, f.profile?.template_key, f.profile?.template_digest].filter(Boolean)) assert(!encoded.includes(value)); return saved;
 }
 
-// Prepared for root-owned native PostgreSQL execution; no pass is claimed here.
+// The complete independent manifest is checked along with domain invariants.
 test('anonymous self-retirement accepts the native keyless request and records only its session', async t => {
   const f = await ownFixture(t, { registered: false }), unrelated = await f.pending({ deviceID: await f.otherDevice() }), before = await snapshot(f);
   assert.deepEqual(await f.call(), { status: 'revoked', current_session_revoked: true, clear_device_identity: false }); await assertPlan(f, [sessionFact(f)]);
@@ -343,11 +346,9 @@ for (const changed of ['session-device', 'pending-consent']) test('selected ' + 
   assert.deepEqual(await snapshot(f), before); assert.equal(await f.journal.lookup(await operationID(f)), null);
 });
 
-for (const pendingCount of [31, 32]) test((pendingCount + 1) + ' own-session facts atomically commit or refuse before writes', async t => {
-  const f = await ownFixture(t), pending = []; await f.seedPush(); for (let i = 0; i < pendingCount; i++) pending.push(await f.pending()); await exclusiveScope(f, true); const before = await snapshot(f); f.trace.length = 0;
-  if (pendingCount === 31) { await f.call(); await assertPlan(f, [sessionFact(f), ...pending.map(row => consentFact(f, row.consentID))]); assert.equal(await cursor(f), 32); }
-  else { assert.equal((await f.call(503)).error.code, 'session_revoke_restriction_capacity'); assert.deepEqual(await snapshot(f), before); assert.equal(await f.journal.lookup(await operationID(f)), null);
-    assert(!f.trace.some(value => value.kind === 'sql' && /^(INSERT|UPDATE|DELETE) /.test(value.sql) && !value.sql.startsWith('UPDATE restore_control '))); }
+for(const pendingCount of [31,32,64])test((pendingCount+1)+' own-session facts commit atomically across manifest pages',async t=>{
+ const f=await ownFixture(t),pending=[];await f.seedPush();for(let i=0;i<pendingCount;i++)pending.push(await f.pending());await exclusiveScope(f,true);
+ await f.call();await assertPlan(f,[sessionFact(f),...pending.map(row=>consentFact(f,row.consentID))]);assert.equal(await cursor(f),pendingCount+1);
 });
 
 for (const malformed of ['cross-account', 'other-purpose']) test('malformed pending ' + malformed + ' preserves every domain row', async t => {
@@ -371,11 +372,15 @@ for (const self of [true, false]) test('concurrent ' + (self ? 'self' : 'survivi
   await assertPlan(f, [sessionFact(f)]); assert.equal((await auditRows(f)).length, 1); assert.equal(await cursor(f), 1);
 });
 
-test('accepted plan followed by rejected SQL COMMIT preserves pending exact facts and refuses callback replay', async t => {
+test('accepted own-session plan with rejected SQL COMMIT recovers restrictions without a successful action audit', async t => {
   const f = await ownFixture(t), pending = await f.pending(), before = await snapshot(f), id = await operationID(f), prepare = f.journal.prepare.bind(f.journal); let armed = true;
   f.journal.prepare = async value => { const saved = await prepare(value); if (armed && value.operation_id === id) { armed = false; f.faults.beforeCommit = true; } return saved; };
-  await f.uncertain(); assert.equal(armed, false); assert.equal(f.faults.beforeCommit, false); assert.deepEqual(await snapshot(f), before); const saved = await assertPlan(f, [sessionFact(f), consentFact(f, pending.consentID)], 'pending');
-  await assert.rejects(() => f.db.one('SELECT id FROM accounts LIMIT 1'), unavailable); await f.uncertain(); assert.deepEqual(await snapshot(f), before); assert.deepEqual(await f.journal.lookup(id), saved);
+  await f.uncertain(); assert.equal(armed, false); assert.equal(f.faults.beforeCommit, false);
+  const status=(await f.journal.lookup(id)).status;assert(['pending','recovered'].includes(status),'a rejected SQL commit must not create a committed action receipt');
+  const saved = await assertPlan(f, [sessionFact(f), consentFact(f, pending.consentID)], status);
+  const {recovered,after}=await assertRestrictedAbort(f,{saved,before,snapshot});
+  await f.call(401);await f.call(200,{token:f.peer.token});assert.deepEqual(await snapshot(f),after);assert.deepEqual(await f.journal.lookup(id),recovered);
+  await assertPlan(f,[sessionFact(f),consentFact(f,pending.consentID)],'recovered');assert.equal((await auditRows(f)).length,0);
 });
 
 for (const mode of ['outage', 'prepare-before', 'prepare-after', 'commit-result-loss', 'ack-before', 'ack-after']) test('own-session ' + mode + ' distinguishes response loss from restored authority', async t => {
@@ -391,7 +396,8 @@ for (const mode of ['outage', 'prepare-before', 'prepare-after', 'commit-result-
   if (mode === 'outage' || mode === 'prepare-before') { assert.deepEqual(await snapshot(f), before); assert.equal(saved, null); f.faults.control = false;
     if (mode === 'prepare-before') assert.equal(f.faults.reply, undefined); await f.call(); await assertPlan(f, facts); return; }
   if (mode === 'prepare-after') { assert.equal(f.faults.reply, undefined); assert.deepEqual(await snapshot(f), before); await assertPlan(f, facts, 'pending');
-    await assert.rejects(() => f.db.one('SELECT id FROM accounts LIMIT 1'), unavailable); await f.uncertain(); assert.deepEqual(await snapshot(f), before); assert.deepEqual(await f.journal.lookup(id), saved); return; }
+    const {recovered,after}=await assertRestrictedAbort(f,{saved,before,snapshot});await f.call(401);await f.call(200,{token:f.peer.token});
+    assert.deepEqual(await snapshot(f),after);assert.deepEqual(await f.journal.lookup(id),recovered);await assertPlan(f,facts,'recovered');assert.equal((await auditRows(f)).length,0);return; }
   assert.notEqual((await target(f)).revoked_at, null); assert.equal((await f.h.db.one('SELECT status FROM consents WHERE id=?', pending.consentID)).status, 'revoked');
   if (mode === 'commit-result-loss') { assert(boundary); assert.equal(boundary.journal.status, 'pending'); assert.notEqual(boundary.session.revoked_at, null); assert.equal(boundary.consent.status, 'revoked'); assert.equal(boundary.audit.length, 1);
     assert.equal(f.faults.afterCommit, undefined); assert.equal(f.faults.commitReply, false); assert.equal(saved.status, 'committed'); assert.equal(saved.plan_hash, boundary.journal.plan_hash); }
@@ -403,7 +409,7 @@ for (const mode of ['outage', 'prepare-before', 'prepare-after', 'commit-result-
 });
 
 
-// Additional v4 requirements for the finalized shared helper. None has run.
+// Exact isolated-consent and challenge-device references remain separate scopes.
 for (const binding of ['owned', 'foreign', 'missing', 'revision', 'active-device']) test('guest own-session retirement checks the ' + binding + ' enrollment challenge device', async t => {
   const f = await ownFixture(t, { registered: false });
   const keys = await crypto.subtle.generateKey({ name: 'ECDSA', namedCurve: 'P-256' }, true, ['sign', 'verify']);

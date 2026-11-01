@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="audience_annual_review_title">Ongera usuzume uburenganzira bwo gukoresha</string>
+    <string name="audience_annual_review_required">Igihe cyo gusuzuma uburenganzira bwa buri mwaka cyageze. Kwandikisha isura n’amafoto birahagaritswe kugeza isuzuma rirangiye.</string>
+    <string name="audience_annual_review_detail">Isuzuma risabwa nibura rimwe mu mwaka. Kuvugurura uburenganzira ntibisubizaho kugereranya amafoto, kuyatunganya cyangwa uburenganzira bwo gusangiza bwa mbere.</string>
+    <string name="audience_confirm_adult">Ndemeza ko mfite imyaka 18 cyangwa irenga.</string>
+    <string name="audience_confirm_auth">Nemeye ku buryo bweruye ko amakuru y’isura yanjye yanditswe akoreshwa mu kwinjira nkurikije politiki yerekanwe.</string>
+    <string name="audience_confirm_guardian">Ndemeza ko ngikeneye uruhushya rw’umubyeyi cyangwa umurera wemewe n’amategeko.</string>
+    <string name="audience_review_policy">Politiki y’isura: %1$s</string>
+    <string name="audience_review_due">Isuzuma rikurikira: %1$s</string>
+    <string name="audience_renew_eligibility">Vugurura uburenganzira bwo gukoresha</string>
+    <string name="audience_renew_guardian">Vugurura uburenganzira usabe isuzuma ry’umubyeyi</string>
+    <string name="audience_device_status_only">Iri suzuma ry’igikoresho ntirikwinjiza kandi ntirikwemerera kamera cyangwa amafoto.</string>
+    <string name="audience_check_device_review">Suzuma uburenganzira bw’iki gikoresho</string>
+    <string name="audience_continue_sign_in">Komeza kwinjira ukoresheje isura</string>
+    <string name="audience_profile_recovery">Igikoresho cyabitswe ntigishobora cyonyine gusubizaho amakuru y’isura yakuweho. Koresha uburyo bwo kugarura umwirondoro cyangwa kopi yo kugarura konti, cyangwa ubaze ubufasha. Bika iyi konti n’ibisabwa byayo byabitswe.</string>
+    <string name="audience_open_profile_recovery">Fungura uburyo bwo kugarura umwirondoro w’isura</string>
+    <string name="audience_use_recovery_backup">Koresha kopi yo kugarura konti</string>
+    <string name="audience_check_retained_control">Reba uburenganzira bwo gucunga bwabitswe</string>
+    <string name="audience_retained_control_pending">Icyifuzo cyawe cya mbere cyo kuvugurura uburenganzira kirabitswe. Ongera ugerageze icyo cyifuzo; ntigishobora gusimbuzwa indi konti cyangwa irindi hitamo.</string>
+    <string name="audience_retry_retained_control">Ongera ugerageze ivugurura ryabitswe</string>
+    <string name="audience_retained_control_detail">Hitamo bundi bushya kwemera kwinjira ukoresheje isura kugira ngo uvugurure ubu burenganzira bwo gucunga bwabitswe. Ibi ntibikwinjiza muri konti kandi ntibyemerera guhuza amafoto. Nyuma komeza inzira yihariye yo kugarura isura yawe.</string>
+    <string name="audience_renew_retained_control">Vugurura uburenganzira bwo gucunga bwabitswe</string>
+</resources>

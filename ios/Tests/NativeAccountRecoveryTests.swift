@@ -4,6 +4,7 @@ import CryptoKit
 // Controlled production-client lifecycle proof; no server/model/Keychain/device
 // or iOS SDK qualification. Exact signatures are validated with software P256.
 private final class AccountSecrets: NativeSecretStore, @unchecked Sendable {
+    let authorityNamespace = "fixture-" + UUID().uuidString.lowercased()
     private let lock = NSLock(); private var data: [String: Data] = [:]
     private var failed: String?, removing = false
     func fail(_ name: String, removal: Bool = false) { lock.lock(); defer { lock.unlock() }; failed = name; removing = removal }
@@ -103,8 +104,8 @@ private actor AccountFixture: NativeTransport {
     // These named software actors are explicitly declared synthetic adults in
     // this fixture setup. This is neither a production default nor age proof.
     private func declaredAdultAudience(account: String) -> WireValue {
-        .object(["protocol": .string("lovelies-audience-v1"), "policy_version": .string("audience-2026-10-24-v1"), "account_id": .string(account),
-            "audience": .object(["age_band": .string("18_plus"), "status": .string("eligible"), "version": .integer(1), "policy_version": .string("audience-2026-10-24-v1"), "next_review_at": .null]),
+        .object(["protocol": .string("lovelies-audience-v2"), "policy_version": .string("audience-2026-10-24-v1"), "account_id": .string(account),
+            "audience": .object(["at_least_13": .bool(true), "guardian_required": .bool(false), "status": .string("eligible"), "version": .integer(1), "policy_version": .string("audience-2026-10-24-v1"), "source": .string("self_declaration"), "rule_version": .string("audience-13-plus-guardian-v1"), "territory": .string("global"), "declared_at": .string(ISO8601DateFormatter().string(from: Date().addingTimeInterval(-60))), "next_review_at": .string(ISO8601DateFormatter().string(from: Date().addingTimeInterval(3600))), "review_required": .bool(false)]), "authority_expires_at": .string(ISO8601DateFormatter().string(from: Date().addingTimeInterval(3500))),
             "guardian_request": .null, "capabilities": .object(["face_authentication": .bool(true), "photo_matching": .bool(true), "photo_processing": .bool(true)])])
     }
     private func audienceBoundChallenge(_ wire: WireValue) -> WireValue {

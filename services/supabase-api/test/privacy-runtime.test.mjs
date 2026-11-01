@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { after, test } from 'node:test';
 import { startHarness, enroll, prepareEnrollment, captureProofs, faceVerifierFixture, fixturePng, closeHarnesses } from './runtime-harness.mjs';
+import { flushPrivacyCleanup } from '../src/privacy.ts';
 
 after(closeHarnesses);
 const key=prefix=>`${prefix}-${crypto.randomUUID()}`;
@@ -99,12 +100,36 @@ test('tampered or expired actual R2 export cannot release private bytes and reta
     const grant=await h.json(`/privacy-exports/${request.id}/grant`,{token:owner.token,body:{}});
     await (await h.mf.getR2Bucket('PRIVACY_EXPORTS')).put(publication.export_key,'tampered-private-object');
     const denied=await h.json(grant.grant_path,{token:owner.token},503);assert.equal(denied.error.code,'privacy_export_unverified');
-    assert.equal((await h.storage.exec("SELECT count(*) n FROM cleanup_intents WHERE request_id=? AND status='pending'",request.id))[0].n,1);
+    const pending=await h.storage.exec("SELECT object_key FROM cleanup_intents WHERE request_id=? AND status='pending' ORDER BY object_key",request.id);
+    const chunks=await h.storage.exec('SELECT k.object_key FROM privacy_export_chunks k JOIN privacy_exports e ON e.id=k.publication_id WHERE e.request_id=?',request.id);
+    assert.deepEqual(pending.map(row=>row.object_key),[publication.export_key,...chunks.map(row=>row.object_key)].sort());
+    assert.equal(chunks.length,1,'the small export retains its one intermediate chunk cleanup obligation');
     await h.json(`/privacy-exports/${request.id}/grant`,{token:owner.token,body:{}},404);
     const expired=await requestPrivacy(h,owner,'export');await approve(h,admin,expired.id);
     await h.json(`/privacy-requests/${expired.id}/process`,{token:admin.token,body:{}});
     await h.storage.exec('UPDATE privacy_requests SET export_expires_at=? WHERE id=?',Date.now()-1,expired.id);
     await h.json(`/privacy-exports/${expired.id}/grant`,{token:owner.token,body:{}},404);
+  } finally {await h.close();}
+});
+
+test('legacy export consumption preserves held root and chunk bytes until independently released',async()=>{
+  const h=await startHarness({faceVerifier:faceVerifierFixture,consumeQueue:false});
+  try {
+    const owner=await enroll(h),admin=await administrator(h),request=await requestPrivacy(h,owner,'export');
+    await approve(h,admin,request.id);await h.json(`/privacy-requests/${request.id}/process`,{token:admin.token,body:{}});
+    const grant=await h.json(`/privacy-exports/${request.id}/grant`,{token:owner.token,body:{}}),bucket=h.env.PRIVACY_EXPORTS;
+    const obligations=await h.db.all('SELECT object_key FROM cleanup_intents WHERE request_id=?',request.id);assert.equal(obligations.length,2);
+    await h.db.run("INSERT INTO retention_settings(id,version,raw_days,preview_days,face_crop_days,free_cache_days,audit_days,legal_hold,updated_at) VALUES('default',1,60,60,14,2,30,1,?) ON CONFLICT(id) DO UPDATE SET legal_hold=1,version=retention_settings.version+1",h.app.now());
+    const remove=bucket.delete.bind(bucket);let deletions=0;bucket.delete=async(...args)=>{deletions++;return remove(...args);};
+    try {
+      assert.equal((await h.json(grant.grant_path,{token:owner.token},409)).error.code,'privacy_legal_hold');
+      await flushPrivacyCleanup(h.app);assert.equal(deletions,0,'the legacy route and maintenance must not dispatch a held DELETE');
+      for(const row of obligations)assert(await bucket.head(row.object_key));
+      await h.db.run("UPDATE retention_settings SET legal_hold=0,version=version+1 WHERE id='default'");
+      await flushPrivacyCleanup(h.app);
+      for(const row of obligations)assert.equal(await bucket.head(row.object_key),null);
+      assert.equal((await h.db.one("SELECT count(*) n FROM cleanup_intents WHERE request_id=? AND status<>'verified'",request.id)).n,0);
+    } finally {bucket.delete=remove;}
   } finally {await h.close();}
 });
 

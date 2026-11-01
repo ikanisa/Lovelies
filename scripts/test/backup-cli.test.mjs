@@ -35,3 +35,30 @@ test('CLI arguments cannot inject producer options or turn inspection into a res
     assert.equal(result.status,1);assert.equal(JSON.parse(result.stderr).code,'backup_arguments_invalid');assert.equal(result.stdout,'');
   }
 });
+
+test('CLI keeps the exact tool version and byte limit before archive inspection',async t=>{
+  const root=await fs.mkdtemp(path.join(await fs.realpath(os.tmpdir()),'lovelies-backup-version-'));await fs.chmod(root,0o700);
+  t.after(()=>fs.rm(root,{recursive:true,force:true}));
+  const tool=path.join(root,'pg_restore'),marker=path.join(root,'inspection-attempted'),key=randomBytes(32).toString('base64url');
+  for(const item of [
+    {name:'maximum_valid_version',version:'17.6',bytes:16384,status:2},
+    {name:'overlong_valid_prefix',version:'17.6',bytes:16385,status:1},
+    {name:'wrong_major_version',version:'16.9',bytes:64,status:1},
+  ]){
+    const banner='pg_restore (PostgreSQL) '+item.version+'\n';
+    const source=`#!${process.execPath}\nimport fs from 'node:fs';
+      if(process.argv[2]==='--version'){
+        const banner=${JSON.stringify(banner)};process.stdout.write(banner+'x'.repeat(Math.min(16384,${item.bytes})-Buffer.byteLength(banner)));
+        if(${item.bytes}>16384)setImmediate(()=>process.stdout.write('x'.repeat(${item.bytes}-16384)));
+      }else{fs.writeFileSync(${JSON.stringify(marker)},'unexpected inspection');process.exit(99);}\n`;
+    await fs.writeFile(tool,source,{mode:0o700});const directory=path.join(root,item.name);await fs.mkdir(directory,{mode:0o700});
+    const result=spawnSync(process.execPath,[cli,'health','--directory',directory,'--pg-restore',tool,'--max-age-hours','24','--local-qualification'],
+      {encoding:'utf8',timeout:10000,env:{PATH:process.env.PATH,LOVELIES_BACKUP_ENCRYPTION_KEY:key}});
+    assert.equal(result.status,item.status,result.stderr);
+    if(item.status===2){assert.deepEqual(JSON.parse(result.stdout).reasons,['no_backups']);assert.equal(result.stderr,'');}
+    else{assert.equal(JSON.parse(result.stderr).code,'backup_tool_version_unqualified');assert.equal(result.stdout,'');}
+    assert.deepEqual(await fs.readdir(directory),[],'Known completed probes leave no process hold');
+    assert(!result.stdout.includes(key)&&!result.stderr.includes(key));
+  }
+  await assert.rejects(fs.stat(marker),{code:'ENOENT'});
+});

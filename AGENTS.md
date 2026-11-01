@@ -18,10 +18,11 @@ settings or other donor-only controls. See `docs/frontend-alignment.md` for the
 current mapping and retired-source boundary.
 
 Read `LOVELIES_CODEX_IMPLEMENTATION_SPEC.md`, including its owner amendments.
-The owner's 23 October 2026 direction selects Supabase project
-`ltqfplqevxztlswlzexn` (`https://ltqfplqevxztlswlzexn.supabase.co`) as the backend
-target and supersedes the earlier Cloudflare-only direction. Preserve required
-private inference/API supporting services only through an explicit architecture.
+The owner's 1 November 2026 direction selects locally hosted Supabase for the
+backend, database and enabled Supabase capabilities, superseding the earlier
+cloud-project target. Use deploy/local-supabase for the current topology and
+docs/local-supabase-architecture.md for its authority boundaries. Preserve the
+old cloud and donor sources as provenance, not deployment defaults.
 Start with anonymous
 authentication and automatically upgrade after backend verification of the
 registered profile selfies. No OTP. No liveness/PAD, blink, movement challenge,

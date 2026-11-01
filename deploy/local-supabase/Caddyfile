@@ -1,0 +1,53 @@
+{
+	email {$ACME_EMAIL}
+	admin off
+}
+{$PUBLIC_HOST} {
+	encode zstd gzip
+	header {
+		Strict-Transport-Security "max-age=31536000"
+		X-Content-Type-Options nosniff
+		Referrer-Policy no-referrer
+		-Server
+	}
+	# Scheduling is private even when the application also checks its bearer token.
+	@maintenance path /functions/v1/lovelies-api/_internal /functions/v1/lovelies-api/_internal/*
+	handle @maintenance {
+		respond 404
+	}
+	# Managed Auth credentials remain in the BFF. The product has no public
+	# GoTrue login flow; exposing signup here would bypass its admission budget.
+	@managedAuth path /auth/v1 /auth/v1/*
+	handle @managedAuth {
+		respond 404
+	}
+	@supabase path /rest/v1/* /storage/v1/* /realtime/v1/* /functions/v1/lovelies-api /functions/v1/lovelies-api/* /graphql/v1 /graphql/v1/*
+	handle @supabase {
+		reverse_proxy api-gw:8000 {
+			# Caddy is the Internet-facing peer in this profile. Overwrite any
+			# caller-provided value; no forwarded-header trust is configured.
+			header_up X-Lovelies-Client-IP {remote_host}
+		}
+	}
+	redir /admin /admin/ 308
+	handle_path /admin/* {
+		root * /srv/admin
+		header Cache-Control "no-store"
+		file_server
+	}
+	handle /clients/backend/* {
+		root * /srv
+		header Cache-Control "no-store"
+		file_server
+	}
+	handle /shared/* {
+		root * /srv
+		file_server
+	}
+	handle {
+		root * /srv/public
+		@associations path /.well-known/apple-app-site-association /.well-known/assetlinks.json
+		header @associations Content-Type application/json
+		file_server
+	}
+}
