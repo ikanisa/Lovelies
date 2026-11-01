@@ -27,6 +27,7 @@ private enum LiveJourneyFailure: Error, LocalizedError {
     var errorDescription: String? { if case .check(let value) = self { return value }; return nil }
 }
 private final class LiveMemorySecrets: NativeSecretStore, @unchecked Sendable {
+    let authorityNamespace = "fixture-" + UUID().uuidString.lowercased()
     private let lock = NSLock()
     private var values: [String: Data] = [:]
     func read(_ name: String) throws -> Data? { lock.lock(); defer { lock.unlock() }; return values[name] }

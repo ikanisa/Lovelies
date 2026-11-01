@@ -1,5 +1,11 @@
 # Lovelies native iOS frontend
 
+## Reconciled implementation — 1 November 2026
+
+The active backend is the locally hosted Supabase deployment. Supply `LOVELIES_API_ORIGIN` explicitly for Release, ending `/functions/v1/lovelies-api`; HTTPS on port 443 is required. Release configurations and target settings contain no hosted-cloud fallback. The processed Info.plist gate rejects missing, credential-bearing, noncanonical or incorrect-path API origins while preserving the existing bundle identity and signing controls.
+
+[Native reconciliation and acceptance](../android/NATIVE_RECONCILIATION.md) identifies the combined contracts, regression suites and outstanding Apple/device gates. Earlier verification records below remain historical evidence for their stated source and environment.
+
 Guest deletion is available before face enrollment through native confirmation
 and the existing Privacy route. Keychain restores the original request before
 anonymous bootstrap, preserves a same-account credential rotation across an

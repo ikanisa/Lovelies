@@ -15,7 +15,7 @@ jobs:
     timeout-minutes: 20
     services:
       postgres:
-        image: public.ecr.aws/supabase/postgres@sha256:99b1729aeb0bac314445024fc149fbd39306170b61dd50800ccf180327ab3459
+        image: supabase/postgres:17.11.0.003@sha256:7374d196da7e301512cc5329e18040e0f7bb856287b323777cdadecccbc6c7e4
         env:
           POSTGRES_PASSWORD: disposable-ci-fixture-only
           POSTGRES_DB: postgres
@@ -34,12 +34,31 @@ jobs:
           version: 10.33.2
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
-          node-version: '24'
+          node-version: '24.22.2'
           cache: pnpm
       - uses: denoland/setup-deno@22d081ff2d3a40755e97629de92e3bcbfa7cf2ed # v2.0.5
         with:
           deno-version: v2.9.6
       - run: pnpm install --frozen-lockfile --ignore-scripts
+      - name: Use the disposable service's pinned PostgreSQL restore client
+        shell: bash
+        env:
+          LOVELIES_CI_POSTGRES_CONTAINER: ${{ job.services.postgres.id }}
+        run: |
+          set -euo pipefail
+          [[ "$LOVELIES_CI_POSTGRES_CONTAINER" =~ ^[a-f0-9]{12,64}$ ]]
+          tool_directory="${RUNNER_TEMP}/lovelies-native-tools"
+          mkdir -p "$tool_directory"
+          cat > "$tool_directory/pg_restore" <<'SCRIPT'
+          #!/usr/bin/env bash
+          set -euo pipefail
+          [[ "${LOVELIES_CI_POSTGRES_CONTAINER:-}" =~ ^[a-f0-9]{12,64}$ ]]
+          exec docker exec -i "$LOVELIES_CI_POSTGRES_CONTAINER" pg_restore "$@"
+          SCRIPT
+          chmod 700 "$tool_directory/pg_restore"
+          "$tool_directory/pg_restore" --version
+          printf 'LOVELIES_CI_POSTGRES_CONTAINER=%s\n' "$LOVELIES_CI_POSTGRES_CONTAINER" >> "$GITHUB_ENV"
+          printf 'LOVELIES_TEST_PG_RESTORE=%s/pg_restore\n' "$tool_directory" >> "$GITHUB_ENV"
       - run: pnpm backend:build
       - run: pnpm backend:test
       - name: Run PGlite-only recovery regressions
@@ -63,8 +82,8 @@ jobs:
             test/notification-device-removal-race.test.mjs \
             test/notification-logout-delivery-race.test.mjs \
             test/storage-status-cleanup-runtime.test.mjs | tee "$report_file"
-          grep -qx '# tests 126' "$report_file"
-          grep -qx '# pass 126' "$report_file"
+          grep -qx '# tests 129' "$report_file"
+          grep -qx '# pass 129' "$report_file"
           grep -qx '# fail 0' "$report_file"
           grep -qx '# skipped 0' "$report_file"
       - name: Run PGlite-only privacy grant recovery regressions
@@ -169,6 +188,19 @@ jobs:
           done
       - run: pnpm backend:client:test
       - run: node --test services/link-association-worker/test/worker.test.mjs
+      - name: Verify native custody JSONB and authority boundaries
+        shell: bash
+        env:
+          LOVELIES_DISPOSABLE_PG_TEST: '1'
+        run: |
+          set -euo pipefail
+          report_file="$(mktemp "${TMPDIR:-/tmp}/lovelies-native-custody.XXXXXXXX")"
+          trap 'rm -f "$report_file"' EXIT
+          node --test --test-isolation=none --test-concurrency=1 --test-reporter=tap \
+            services/restore-journal/test/postgres-custody.test.mjs | tee "$report_file"
+          for summary in 'tests 8' 'pass 8' 'fail 0' 'cancelled 0' 'skipped 0' 'todo 0'; do
+            grep -Fxq "# $summary" "$report_file"
+          done
       - run: pnpm backup:test
       - run: pnpm admin:test
       - run: pnpm preview:test

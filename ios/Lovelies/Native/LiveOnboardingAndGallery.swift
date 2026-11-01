@@ -109,6 +109,7 @@ struct LiveOnboardingView: View {
                 Spacer()
                 PinkButton(title: String(localized: "Get Started"), enabled: live.connected && !live.busy) { store.go(.photoAccessPrompt) }
                 QuietButton(title: String(localized: "Recover my account"), enabled: !live.busy && live.guestDeletion == nil) { live.accountRecoverySheet = true }
+                if live.hasSavedAudienceDevice { QuietButton(title: String(localized: "Review eligibility for this device"), enabled: !live.busy) { live.checkDeviceAudience() } }
                 NativePolicyPanel()
                 if live.session?.authenticated == false {
                     QuietButton(title: String(localized: "Delete guest account"), enabled: live.canDeleteGuest) { store.go(.privacy, simulateProgress: false) }
@@ -252,6 +253,7 @@ struct ProtectedNativePhoto: View {
     @State private var failure = false
     @State private var attempt = 0
     @State private var expiresAt: Date?
+    @State private var deadline: NativePrivateMediaDeadline?
     var body: some View {
         ZStack {
             if let image { Image(uiImage: image).resizable().aspectRatio(contentMode: fit) }
@@ -259,7 +261,7 @@ struct ProtectedNativePhoto: View {
             if failure { Button { attempt += 1 } label: { Image(systemName: "arrow.clockwise").frame(width: 48, height: 48).background(.black.opacity(0.7), in: Circle()) }.accessibilityLabel("Retry protected preview") }
         }
         .task(id: "\(photo.id):\(photo.version):\(live.mediaRevision):\(live.session?.epoch ?? 0):\(live.isForeground):\(attempt)") {
-            image = nil; failure = false; expiresAt = nil
+            image = nil; failure = false; expiresAt = nil; deadline = nil
             guard let repository = live.repository, live.isForeground else { return }
             let revision = live.mediaRevision, epoch = live.session?.epoch
             do {
@@ -275,20 +277,35 @@ struct ProtectedNativePhoto: View {
                     return UIImage(cgImage: cg).pngData()
                 }.value
                 let currentApproval = try await repository.requireAudience(.faceAuthentication)
-                guard approval == currentApproval, !Task.isCancelled, revision == live.mediaRevision, epoch == live.session?.epoch else { return }
+                guard approval == currentApproval, live.isForeground, !Task.isCancelled, revision == live.mediaRevision, epoch == live.session?.epoch else { return }
+                let lease = try live.mediaDeadline(currentApproval)
+                guard lease.remaining(at: live.mediaInstant()) > 0 else { return }
                 image = decoded.flatMap(UIImage.init(data:)); failure = image == nil
-                expiresAt = live.session?.expiresAt
+                deadline = lease; expiresAt = live.mediaInstant().wall.addingTimeInterval(lease.remaining(at: live.mediaInstant()))
             } catch {
-                if !Task.isCancelled {
+                if !Task.isCancelled, live.isForeground, revision == live.mediaRevision, epoch == live.session?.epoch {
                     let currentSession = await repository.summary()
-                    guard !Task.isCancelled else { return }
+                    guard !Task.isCancelled, live.isForeground, revision == live.mediaRevision, epoch == live.session?.epoch else { return }
                     _ = live.synchronizeMediaSession(currentSession, expectedEpoch: epoch)
                     live.handleAudienceFailure(error)
                     image = nil; failure = true
                 }
             }
         }
-        .task(id: expiresAt) { if let expiresAt { do { try await Task.sleep(for: .seconds(max(0, expiresAt.timeIntervalSinceNow))); if !Task.isCancelled { image = nil; failure = true } } catch {} } }
+        .task(id: expiresAt) {
+            if let deadline {
+                do {
+                    while !Task.isCancelled {
+                        let remaining = deadline.remaining(at: live.mediaInstant())
+                        if remaining <= 0 { image = nil; failure = true; return }
+                        try await Task.sleep(for: .seconds(min(remaining, 60)))
+                    }
+                } catch {}
+            }
+        }
+        .onReceive(NotificationCenter.default.publisher(for: UIApplication.significantTimeChangeNotification)) { _ in
+            if let deadline, deadline.remaining(at: live.mediaInstant()) <= 0 { image = nil; failure = true }
+        }
         .onDisappear { image = nil }
     }
 }
@@ -373,14 +390,14 @@ struct LiveGalleryView: View {
                     TextField("Search your photos", text: $live.query).textFieldStyle(.plain).submitLabel(.search)
                         .padding(13).background(LoveliesTheme.surface, in: Capsule()).padding(.horizontal, 12)
                         .onSubmit { live.searchLibrary() }
-                        .task(id: live.query) { do { try await Task.sleep(for: .milliseconds(350)); if !Task.isCancelled, !live.busy { live.searchLibrary() } } catch {} }
+                        .task(id: live.query) { do { try await Task.sleep(for: .milliseconds(350)); if !Task.isCancelled { live.searchLibrary() } } catch {} }
                 }
                 ScrollViewReader { proxy in ScrollView {
                     if visible.isEmpty {
                         VStack(spacing: 18) {
                             Image(systemName: screen == .favorites ? "heart" : "photo.on.rectangle").font(.system(size: 52)).foregroundStyle(LoveliesTheme.pink).accessibilityHidden(true)
                             Text(live.busy ? String(localized: "Loading photos…") : screen == .favorites ? String(localized: "No favorites here yet") : live.query.isEmpty && live.galleryCategory == "all" ? String(localized: "No photos yet") : String(localized: "No matching photos")).font(.title2.weight(.medium))
-                            Text(screen == .favorites ? String(localized: "Favorite a photo in its viewer. Load more to find favorites from older pages.") : screen == .newMatches ? String(localized: "Received photos appear after a contributor shares them and you accept access.") : String(localized: "Add photos or accept a photo request. Search and filters use only photos your account can currently access.")).font(.body).foregroundStyle(LoveliesTheme.secondary)
+                            Text(screen == .favorites ? String(localized: "Favorites are saved on this device. Only photos your account can currently access are shown.") : screen == .newMatches ? String(localized: "Received photos appear after a contributor shares them and you accept access.") : String(localized: "Add photos or accept a photo request. Search and filters use only photos your account can currently access.")).font(.body).foregroundStyle(LoveliesTheme.secondary)
                             if !live.busy, screen != .newMatches { PinkButton(title: String(localized: "Add Photos")) { store.go(.uploadEntry) } }
                         }.padding(24).padding(.top, 50)
                     } else {
@@ -465,7 +482,9 @@ struct LiveAudienceGateView: View {
             PageHeader(title: String(localized: "Your age and privacy"), trailing: false, back: false)
             ScrollView { VStack(alignment: .leading, spacing: 18) {
                 Image(systemName: "person.crop.circle.badge.checkmark").font(.system(size: 42)).foregroundStyle(LoveliesTheme.pink).accessibilityHidden(true)
-                if let audience = live.audience {
+                if let device = live.deviceAudience {
+                    NativeDeviceAudiencePanel(status: device)
+                } else if let audience = live.audience {
                     if audience.ageBand == .unknown {
                         Text("Choose your age range").loveliesFont(size: 24, weight: .medium).accessibilityAddTraits(.isHeader)
                         Text("Lovelies is for ages 13 and over. Ages 13–17 need a parent or legal guardian’s approval and independent review before face setup or photos. We do not ask for your date of birth.").font(.body).foregroundStyle(LoveliesTheme.secondary)
@@ -486,6 +505,11 @@ struct LiveAudienceGateView: View {
                     Text("The service must confirm your current age and approval status before camera or photo access.").font(.body).foregroundStyle(LoveliesTheme.secondary)
                 }
                 QuietButton(title: String(localized: "Refresh age and approval status"), enabled: !live.busy) { live.refreshAudience() }
+                if live.audienceRenewalContinuation != nil {
+                    Text("Eligibility review is complete. Continue with a fresh face sign-in or the existing face-profile recovery for this same account. Previous photo purposes remain off.").font(.footnote).foregroundStyle(LoveliesTheme.secondary)
+                    QuietButton(title: String(localized: "Continue with this account"), enabled: !live.busy && !live.audiencePendingMutation) { live.continueAudienceRenewal() }
+                }
+                if live.hasSavedAudienceDevice, live.deviceAudience == nil { QuietButton(title: String(localized: "Review eligibility for this device"), enabled: !live.busy) { live.checkDeviceAudience() } }
                 if live.audiencePendingMutation {
                     if !live.transferText.isEmpty { Text(live.transferText).font(.footnote).foregroundStyle(LoveliesTheme.secondary) }
                     Text("An age or guardian request is not confirmed. Retry its original saved request before starting a different action.").font(.footnote).foregroundStyle(LoveliesTheme.secondary)
@@ -515,12 +539,73 @@ struct NativeAudienceStatusPanel: View {
                     Text(request.expiresAt, format: .dateTime.year().month().day()).font(.footnote).accessibilityLabel("Approval or request expiry")
                     if request.live { QuietButton(title: String(localized: "Withdraw guardian request or approval"), enabled: !live.busy && !live.audiencePendingMutation) { live.withdrawGuardian(request) } }
                 }
-                if audience.ageBand == .teen, audience.guardianRequest?.live != true {
+                if let deadline = audience.nextReviewAt { Text(deadline, format: .dateTime.year().month().day()).font(.footnote).accessibilityLabel("Next eligibility review") }
+                if audience.decision.needsReview() || audience.ageBand == .teen && audience.status == .guardianPending && audience.guardianRequest?.state == .approved { NativeAudienceReviewPanel(decision: audience.decision, deviceReview: false) }
+                if audience.ageBand == .teen, !audience.decision.needsReview(), audience.guardianRequest?.live != true {
                     PinkButton(title: String(localized: "Create guardian review request"), enabled: !live.busy && !live.audiencePendingMutation) { live.requestGuardianReview() }
                 }
             }
             Text("Guardian approval requires independent review. Sending or claiming a request does not activate face processing or give anyone photo access.").font(.footnote).foregroundStyle(LoveliesTheme.secondary)
         }.padding(16).background(LoveliesTheme.surface, in: RoundedRectangle(cornerRadius: 16))
+    }
+}
+private struct NativeAudienceReviewPanel: View {
+    @EnvironmentObject private var live: LiveAppStore
+    let decision: NativeAudienceDecision, deviceReview: Bool
+    @State private var adultConfirmed = false
+    @State private var authenticationConsented = false
+    @State private var minorConfirmed = false
+    var body: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            Text("Review your eligibility").font(.title3.weight(.semibold)).accessibilityAddTraits(.isHeader)
+            Text("Review is required at least once a year. Renewing eligibility does not restore photo matching, photo processing or old sharing permissions.").font(.body).foregroundStyle(LoveliesTheme.secondary)
+            if decision.ageBand == .adult {
+                Toggle("I confirm I am 18 or over.", isOn: $adultConfirmed).disabled(live.busy || live.audiencePendingMutation)
+                Toggle("I explicitly consent to using my registered face reference for face sign-in under the displayed policy.", isOn: $authenticationConsented)
+                    .disabled(live.busy || live.audiencePendingMutation || live.audienceReviewPolicy.isEmpty)
+                if !live.audienceReviewPolicy.isEmpty { Text("Face policy: \(live.audienceReviewPolicy)").font(.footnote).foregroundStyle(LoveliesTheme.secondary) }
+                PinkButton(title: String(localized: "Renew eligibility"), enabled: adultConfirmed && authenticationConsented && !live.audienceReviewPolicy.isEmpty && !live.busy && !live.audiencePendingMutation) {
+                    live.renewEligibility(consentPolicy: live.audienceReviewPolicy, adultConfirmed: adultConfirmed, authenticationConsented: authenticationConsented)
+                    adultConfirmed = false; authenticationConsented = false
+                }
+            } else if decision.ageBand == .teen {
+                Toggle("I confirm that parent or legal guardian approval is still required for me.", isOn: $minorConfirmed).disabled(live.busy || live.audiencePendingMutation)
+                PinkButton(title: deviceReview ? String(localized: "Renew eligibility and request guardian review") : String(localized: "Renew eligibility"), enabled: minorConfirmed && !live.busy && !live.audiencePendingMutation) { live.renewMinorEligibility(confirmed: minorConfirmed); minorConfirmed = false }
+            }
+        }.tint(LoveliesTheme.pink)
+            .onChange(of: decision.version) { _, _ in adultConfirmed = false; authenticationConsented = false; minorConfirmed = false }
+            .onChange(of: live.audienceReviewPolicy) { _, _ in adultConfirmed = false; authenticationConsented = false; minorConfirmed = false }
+    }
+}
+private struct NativeDeviceAudiencePanel: View {
+    @EnvironmentObject private var live: LiveAppStore
+    let status: NativeAudienceDeviceStatus
+    var body: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            Text("Eligibility for this device").font(.title2.weight(.semibold)).accessibilityAddTraits(.isHeader)
+            Text("This device check does not sign you in or allow camera or photo access.").foregroundStyle(LoveliesTheme.secondary)
+            if let deadline = status.decision.nextReviewAt { Text(deadline, format: .dateTime.year().month().day()).font(.footnote).accessibilityLabel("Next eligibility review") }
+            if status.decision.ageBand == .under13 {
+                Text("Lovelies is for ages 13 and over").font(.headline)
+            } else if (status.decision.guardianRequired == true ? status.guardianReviewAvailable : status.renewalAvailable) {
+                NativeAudienceReviewPanel(decision: status.decision, deviceReview: true)
+            }
+            if let request = status.guardianRequest {
+                Text(NativeGuardianCopy.state(request.state)).font(.headline)
+                Text("Guardian request reference").font(.footnote)
+                Text(request.id + ":" + String(request.revision)).font(.footnote.monospaced()).textSelection(.enabled)
+                Text("Share this reference privately with your parent or legal guardian. They need their own registered adult Lovelies account. A reference never gives access to your photos.").font(.footnote).foregroundStyle(LoveliesTheme.secondary)
+                Text("Guardian approval requires independent review. Sending or claiming a request does not activate face processing or give anyone photo access.").font(.footnote).foregroundStyle(LoveliesTheme.secondary)
+            }
+            if status.decision.status == .eligible, !status.decision.needsReview() {
+                if status.nextStep == "face_login" { QuietButton(title: String(localized: "Continue to face sign-in"), enabled: !live.busy && !live.audiencePendingMutation) { live.continueDeviceAudience() } }
+                else if status.nextStep == "profile_recovery" {
+                    Text("Your saved device cannot restore a retired face reference by itself. Use the existing profile recovery control or your recovery backup, or contact support. Keep this account and its saved requests.").font(.body).foregroundStyle(LoveliesTheme.secondary)
+                    if live.faceLifecycle != nil { QuietButton(title: String(localized: "Open face profile recovery"), enabled: !live.busy && !live.audiencePendingMutation) { live.continueDeviceAudience() } }
+                    else { QuietButton(title: String(localized: "Use recovery backup"), enabled: !live.busy && !live.audiencePendingMutation) { live.accountRecoverySheet = true } }
+                }
+            }
+        }
     }
 }
 enum NativeGuardianCopy {

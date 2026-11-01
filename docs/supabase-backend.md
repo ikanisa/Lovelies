@@ -1,3 +1,5 @@
+> Current deployment: locally hosted Supabase. The dated cloud-target material below is retained as historical evidence. See [current architecture](local-supabase-architecture.md), [local deployment](../deploy/local-supabase/README.md) and [current task register](release/local-supabase-tasks.json).
+
 # Lovelies Supabase backend
 
 Owner direction, 23 October 2026: Lovelies replaces the existing Memories store

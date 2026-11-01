@@ -4,6 +4,7 @@ import CryptoKit
 // Controlled failure, storage and protocol fixtures. These do not establish
 // URLSession daemon scheduling, iOS UI, physical Keychain or real recognition.
 private final class UploadSecrets: NativeSecretStore, @unchecked Sendable {
+    let authorityNamespace = "fixture-" + UUID().uuidString.lowercased()
     private let lock = NSLock(); private var values: [String: Data] = [:]
     func read(_ name: String) throws -> Data? { lock.lock(); defer { lock.unlock() }; return values[name] }
     func write(_ name: String, data: Data?) throws { lock.lock(); defer { lock.unlock() }; values[name] = data }
@@ -51,8 +52,8 @@ private actor UploadFixture: NativeTransport {
         // adult with current registered-face authority; neither is a production
         // default or a claim about a person/provider/device.
         if path == "/me/audience" {
-            return try reply(.object(["protocol": .string("lovelies-audience-v1"), "policy_version": .string("audience-2026-10-24-v1"), "account_id": .string(accountID),
-                "audience": .object(["age_band": .string("18_plus"), "status": .string("eligible"), "version": .integer(1), "policy_version": .string("audience-2026-10-24-v1"), "next_review_at": .null]),
+            return try reply(.object(["protocol": .string("lovelies-audience-v2"), "policy_version": .string("audience-2026-10-24-v1"), "account_id": .string(accountID),
+                "audience": .object(["at_least_13": .bool(true), "guardian_required": .bool(false), "status": .string("eligible"), "version": .integer(1), "policy_version": .string("audience-2026-10-24-v1"), "source": .string("self_declaration"), "rule_version": .string("audience-13-plus-guardian-v1"), "territory": .string("global"), "declared_at": .string(ISO8601DateFormatter().string(from: Date().addingTimeInterval(-60))), "next_review_at": .string(ISO8601DateFormatter().string(from: Date().addingTimeInterval(3600))), "review_required": .bool(false)]), "authority_expires_at": .string(ISO8601DateFormatter().string(from: Date().addingTimeInterval(3500))),
                 "guardian_request": .null, "capabilities": .object(["face_authentication": .bool(true), "photo_matching": .bool(true), "photo_processing": .bool(true)])]))
         }
         if path == "/me/profile" { return try reply(.object(["user_id": .string(accountID), "name": .string("Synthetic upload actor"), "profile_scope": .string("registered_face_profile")])) }

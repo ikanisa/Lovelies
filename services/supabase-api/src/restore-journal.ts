@@ -1,4 +1,5 @@
 import { ApiError, digest, stable } from './types.ts';
+import { restrictionManifest, validateManifestRecord, type RestrictionManifest } from './restore-manifest.ts';
 
 export const RESTORE_PROJECT_ID = 'ltqfplqevxztlswlzexn' as const;
 export const RESTORE_JOURNAL_PROTOCOL = 'lovelies-restriction-journal-v1' as const;
@@ -16,12 +17,31 @@ const SCOPE_FIELDS = {
   'consent-withdrawn': ['account_id', 'consent_id', 'purpose'],
   'profile-retired': ['account_id', 'profile_id', 'profile_revision'],
   'guardian-approval-retired': ['child_account_id', 'guardian_request_id', 'guardian_approval_id', 'purpose'],
+  'guardian-request-retired': ['child_account_id', 'guardian_request_id', 'request_revision', 'terminal_state'],
   'sharing-request-retired': ['sender_id', 'recipient_id', 'request_id'],
   'session-retired': ['account_id', 'session_id'],
   'device-retired': ['account_id', 'device_id', 'device_revision'],
   'asset-retired': ['owner_id', 'asset_id', 'asset_version'],
   'pair-blocked': ['blocker_id', 'blocked_id', 'block_operation_id'],
   'pair-block-ended': ['blocker_id', 'blocked_id', 'block_operation_id'],
+  'operator-capability-retired': ['account_id', 'grant_id', 'capability'],
+  'media-grant-retired': ['owner_id', 'recipient_id', 'grant_id', 'request_id', 'asset_id'],
+  'store-entitlement-retired': ['account_id','subscription_id','subscription_version'],
+  'privacy-export-grant-retired': ['account_id','grant_id','request_id','session_id'],
+  'privacy-export-publication-retired': ['account_id','publication_id','request_id'],
+  'push-device-retired': ['account_id', 'device_id', 'token_hash'],
+  'candidate-retired': ['owner_id', 'recipient_id', 'candidate_id', 'candidate_version'],
+  'account-moderation-restricted': ['account_id', 'hold_id'],
+  'asset-moderation-restricted': ['owner_id', 'asset_id', 'hold_id'],
+  'moderation-restriction-ended': ['hold_id'],
+  'account-authority-retired': ['account_id', 'auth_epoch'],
+  'notification-setting-retired': ['account_id', 'setting', 'updated_at'],
+  'global-retention-hold-started': ['hold_id'],
+  'global-retention-hold-ended': ['hold_id'],
+  'asset-retention-hold-started': ['owner_id','asset_id','hold_id'],
+  'asset-retention-hold-ended': ['owner_id','asset_id','hold_id'],
+  'privacy-hold-started': ['account_id','request_id','hold_id'],
+  'privacy-hold-ended': ['account_id','request_id','hold_id'],
 } as const;
 
 export type RestoreMarker = Readonly<{
@@ -42,11 +62,15 @@ export type RestoreEventReceipt = Readonly<{
   sequence: number; hash: string; previous_hash: string; payload_hash: string;
   recorded_at: number; event: RestoreRestrictionEvent;
 }>;
-export type RestoreOperationPlan = RestoreOperationInput & Readonly<{
+export type RestoreOperationPlanV1 = RestoreOperationInput & Readonly<{
   next: RestoreMarker; prepared_at: number; receipts: readonly RestoreEventReceipt[];
 }>;
+export type RestoreOperationPlanV2 = Omit<RestoreOperationInput,'version'|'events'> & Readonly<{
+  version:2;event_manifest:RestrictionManifest;next:RestoreMarker;prepared_at:number;
+}>;
+export type RestoreOperationPlan = RestoreOperationPlanV1 | RestoreOperationPlanV2;
 export type RestoreOperationRecord = Readonly<{
-  plan: RestoreOperationPlan; plan_hash: string; status: 'pending' | 'committed'; committed_at: number | null;
+  plan: RestoreOperationPlan; plan_hash: string; status: 'preparing' | 'pending' | 'committed' | 'recovered'; committed_at: number | null;
 }>;
 export type RestoreControl = Readonly<{
   state: 'serving' | 'pending' | 'quarantined'; marker: RestoreMarker;
@@ -86,6 +110,12 @@ export function validateRestoreRestrictionEvent(value: unknown): RestoreRestrict
     const item = value.scope[field];
     if (typeof item !== 'string') return unavailable();
     if (field === 'purpose' ? !PURPOSES.has(item) : field === 'decision' ? !['approved', 'rejected'].includes(item) :
+      field === 'terminal_state' ? !['withdrawn','expired','rejected'].includes(item) :
+      field === 'request_revision' || field === 'subscription_version' ? !/^[1-9][0-9]{0,15}$/.test(item) || !Number.isSafeInteger(Number(item)+1) :
+      field === 'capability' ? !/^(overview\.read|users\.(read|sessions\.revoke)|support\.(read|review)|safety\.(read|review)|guardian\.(read|review)|privacy\.(read|review)|uploads\.(read|recover)|retention\.(read|manage))$/.test(item) :
+      field === 'token_hash' ? !HASH.test(item) :
+      field === 'auth_epoch' || field === 'updated_at' ? !/^(0|[1-9][0-9]{0,15})$/.test(item) || !Number.isSafeInteger(Number(item)) :
+      field === 'setting' ? !['match_alerts','payment_alerts','support_alerts'].includes(item) :
       field.endsWith('_id') ? !UUID.test(item) : !OPAQUE.test(item)) return unavailable();
     scope[field] = item;
   }
@@ -94,10 +124,10 @@ export function validateRestoreRestrictionEvent(value: unknown): RestoreRestrict
       kind === 'sharing-request-retired' && scope.sender_id === scope.recipient_id) return unavailable();
   return Object.freeze({ version: 1, project_id: RESTORE_PROJECT_ID, operation_id: identifier(value.operation_id), kind, scope: Object.freeze(scope) });
 }
-export function validateRestoreOperationInput(value: unknown): RestoreOperationInput {
+export function validateRestoreOperationInput(value: unknown, options: {manifest?:boolean} = {}): RestoreOperationInput {
   if (!exact(value, ['version', 'project_id', 'operation_id', 'input_hash', 'expected', 'allocations', 'events']) ||
       value.version !== 1 || value.project_id !== RESTORE_PROJECT_ID || !plain(value.allocations) ||
-      Object.keys(value.allocations).length > 32 || !Array.isArray(value.events) || value.events.length > 32) return unavailable();
+      Object.keys(value.allocations).length > 32 || !Array.isArray(value.events) || !options.manifest && value.events.length > 32) return unavailable();
   const allocations: Record<string, string> = {};
   for (const [slot, id] of Object.entries(value.allocations)) {
     if (!/^id_(?:[0-9]|[12][0-9]|3[01])$/.test(slot)) return unavailable();
@@ -109,7 +139,7 @@ export function validateRestoreOperationInput(value: unknown): RestoreOperationI
   const input = Object.freeze({ version: 1 as const, project_id: RESTORE_PROJECT_ID, operation_id: identifier(value.operation_id),
     input_hash: hash(value.input_hash), expected: validateRestoreMarker(value.expected),
     allocations: Object.freeze(allocations), events: Object.freeze(events) });
-  if (new TextEncoder().encode(stable(input)).byteLength > RESTORE_REQUEST_BYTES) return unavailable();
+  if (!options.manifest && new TextEncoder().encode(stable(input)).byteLength > RESTORE_REQUEST_BYTES) return unavailable();
   return input;
 }
 export function validateRestoreControl(value: unknown): RestoreControl {
@@ -130,6 +160,7 @@ async function validateReceipt(value: unknown, event: RestoreRestrictionEvent, s
   return Object.freeze({ sequence, hash: value.hash as string, previous_hash: previous, payload_hash: payloadHash, recorded_at: recordedAt, event });
 }
 export async function validateRestoreOperationRecord(value: unknown): Promise<RestoreOperationRecord> {
+  if (plain(value) && plain(value.plan) && value.plan.version === 2) return validateManifestRecord(value);
   if (!exact(value, ['plan', 'plan_hash', 'status', 'committed_at']) || !exact(value.plan,
     ['version', 'project_id', 'operation_id', 'input_hash', 'expected', 'allocations', 'events', 'next', 'prepared_at', 'receipts'])) return unavailable();
   const raw = value.plan;
@@ -153,8 +184,8 @@ export async function validateRestoreOperationRecord(value: unknown): Promise<Re
   }))) return unavailable();
   const plan = Object.freeze({ ...input, next, prepared_at: preparedAt, receipts: Object.freeze(receipts) });
   const committedAt = value.committed_at === null ? null : integer(value.committed_at, 1);
-  if (!['pending', 'committed'].includes(value.status as string) || value.status === 'pending' && committedAt !== null ||
-      value.status === 'committed' && (committedAt === null || committedAt < preparedAt) || hash(value.plan_hash) !== await digest(stable(plan))) return unavailable();
+  if (!['pending', 'committed', 'recovered'].includes(value.status as string) || value.status === 'pending' && committedAt !== null ||
+      (value.status === 'committed' || value.status === 'recovered') && (committedAt === null || committedAt < preparedAt) || hash(value.plan_hash) !== await digest(stable(plan))) return unavailable();
   return Object.freeze({ plan, plan_hash: value.plan_hash as string, status: value.status as RestoreOperationRecord['status'], committed_at: committedAt });
 }
 
@@ -175,7 +206,7 @@ export class RestoreJournalClient {
       !Number.isSafeInteger(timeoutMs) || timeoutMs < 1 || timeoutMs > 55_000) throw new ApiError(503,'restore_journal_unavailable');
     this.base=base;this.#token=token;this.timeoutMs=timeoutMs;this.fetcher=options.fetcher??fetch;
   }
-  private async request<T>(path: string, body: unknown | undefined, validate: (value: unknown, status: number) => T | Promise<T>, signal?: AbortSignal): Promise<T> {
+  async request<T>(path: string, body: unknown | undefined, validate: (value: unknown, status: number) => T | Promise<T>, signal?: AbortSignal): Promise<T> {
     const controller = new AbortController();
     const abort = () => controller.abort();
     const timer = setTimeout(abort, this.timeoutMs);
@@ -239,17 +270,53 @@ export class RestoreJournalClient {
     }, signal);
   }
   async prepare(value: RestoreOperationInput, signal?: AbortSignal): Promise<RestoreOperationRecord> {
-    const input = validateRestoreOperationInput(value);
+    const input = validateRestoreOperationInput(value, {manifest:true});
+    if (input.events.length > 32 || new TextEncoder().encode(stable(input)).byteLength > RESTORE_REQUEST_BYTES) return this.prepareLarge(input, signal);
     return this.request('/v1/operations/prepare', input, async (value, status) => {
       if (status !== 200) return unavailable(); const envelope = this.envelope(value, ['protocol', 'project_id', 'control', 'operation']);
       const control = validateRestoreControl(envelope.control), operation = await validateRestoreOperationRecord(envelope.operation);
       const plan = operation.plan;
+      if (plan.version !== 1) return unavailable();
       if (!same({ version: plan.version, project_id: plan.project_id, operation_id: plan.operation_id, input_hash: plan.input_hash,
         expected: plan.expected, allocations: plan.allocations, events: plan.events }, input) || control.state === 'quarantined') return unavailable();
       if (operation.status === 'pending' && (control.state !== 'pending' || control.pending_operation_id !== input.operation_id || !same(control.marker, input.expected))) return unavailable();
       if (operation.status === 'committed' && (control.state !== 'serving' || !same(control.marker, plan.next))) return unavailable();
       return operation;
     }, signal);
+  }
+  private async prepareLarge(input:RestoreOperationInput,signal?:AbortSignal):Promise<RestoreOperationRecord>{
+    const {header,chunks}=await restrictionManifest(input),headerHash=await digest(stable(header));
+    const acceptManifest=async(value:unknown,status:number)=>{
+      if(status!==200)return unavailable();const result=this.envelope(value,['protocol','project_id','control','manifest']);
+      validateRestoreControl(result.control);
+      if(!plain(result.manifest)||!same(result.manifest.header,header)||result.manifest.header_hash!==headerHash||
+        !Number.isSafeInteger(result.manifest.uploaded_chunks)||Number(result.manifest.uploaded_chunks)<0||Number(result.manifest.uploaded_chunks)>chunks.length)return unavailable();
+      return Number(result.manifest.uploaded_chunks);
+    };
+    let uploaded=await this.request('/v1/manifests/begin',header,acceptManifest,signal);
+    while(uploaded<chunks.length){const next=await this.request('/v1/manifests/'+input.operation_id+'/chunk',chunks[uploaded],acceptManifest,signal);
+      if(next!==uploaded+1)return unavailable();uploaded=next;}
+    const operation=await this.request('/v1/manifests/'+input.operation_id+'/prepare',{version:2,project_id:RESTORE_PROJECT_ID,header_hash:headerHash},async(value,status)=>{
+      if(status!==200)return unavailable();const result=this.envelope(value,['protocol','project_id','control','operation']);validateRestoreControl(result.control);
+      const record=await validateRestoreOperationRecord(result.operation),plan=record.plan;
+      if(plan.version!==2||!same({version:plan.version,project_id:plan.project_id,operation_id:plan.operation_id,input_hash:plan.input_hash,
+        expected:plan.expected,allocations:plan.allocations,event_manifest:plan.event_manifest},header))return unavailable();return record;
+    },signal);
+    return this.finishPreparation(operation,signal);
+  }
+  async finishPreparation(operation:RestoreOperationRecord,signal?:AbortSignal):Promise<RestoreOperationRecord>{
+    let current=operation;
+    if(current.plan.version!==2&&current.status==='preparing')return unavailable();
+    const maximum=current.plan.version===2?current.plan.event_manifest.chunks:0;
+    for(let index=0;current.status==='preparing';index++){
+      if(index>=maximum)return unavailable();
+      current=await this.request('/v1/manifests/'+operation.plan.operation_id+'/continue',{version:2,project_id:RESTORE_PROJECT_ID,plan_hash:operation.plan_hash},async(value,status)=>{
+        if(status!==200)return unavailable();const result=this.envelope(value,['protocol','project_id','control','operation']);validateRestoreControl(result.control);
+        const record=await validateRestoreOperationRecord(result.operation);
+        if(record.plan_hash!==operation.plan_hash||!same(record.plan,operation.plan))return unavailable();return record;
+      },signal);
+    }
+    return current;
   }
   async lookup(operationId: string, signal?: AbortSignal): Promise<RestoreOperationRecord | null> {
     const id = identifier(operationId);
@@ -259,6 +326,24 @@ export class RestoreJournalClient {
       validateRestoreControl(envelope.control); const operation = await validateRestoreOperationRecord(envelope.operation);
       if (operation.plan.operation_id !== id) return unavailable(); return operation;
     }, signal);
+  }
+  async restrictionPage(after:RestoreMarker['cursor'],through:RestoreMarker['cursor'],signal?:AbortSignal):Promise<readonly RestoreEventReceipt[]>{
+    return this.request('/v1/recovery/events',{version:1,project_id:RESTORE_PROJECT_ID,after,through,limit:32},async(value,status)=>{
+      if(status!==200)return unavailable();const result=this.envelope(value,['protocol','project_id','after','through','records','next','complete']);
+      if(!same(result.after,after)||!same(result.through,through)||!Array.isArray(result.records)||result.records.length>32)return unavailable();
+      let cursor=after;const receipts:RestoreEventReceipt[]=[];
+      for(const raw of result.records){if(!plain(raw))return unavailable();const receipt=await validateReceipt(raw,validateRestoreRestrictionEvent(raw.event),cursor.sequence+1,cursor.hash);receipts.push(receipt);cursor={sequence:receipt.sequence,hash:receipt.hash};}
+      if(!same(result.next,cursor)||cursor.sequence>through.sequence||cursor.sequence===through.sequence&&cursor.hash!==through.hash||result.complete!==(cursor.sequence===through.sequence)||cursor.sequence<through.sequence&&receipts.length===0)return unavailable();
+      return Object.freeze(receipts);
+    },signal);
+  }
+  async acknowledgeRecovery(operation:RestoreOperationRecord,signal?:AbortSignal):Promise<RestoreOperationRecord>{
+    return this.request('/v1/operations/'+operation.plan.operation_id+'/reconcile',{version:1,project_id:RESTORE_PROJECT_ID,
+      plan_hash:operation.plan_hash,marker:operation.plan.next,replayed:operation.plan.next.cursor},async(value,status)=>{
+      if(status!==200)return unavailable();const result=this.envelope(value,['protocol','project_id','control','operation']);validateRestoreControl(result.control);
+      const actual=await validateRestoreOperationRecord(result.operation);
+      if(actual.status!=='recovered'||actual.plan_hash!==operation.plan_hash||!same(actual.plan,operation.plan))return unavailable();return actual;
+    },signal);
   }
   async acknowledge(operationId: string, planHash: string, marker: RestoreMarker, signal?: AbortSignal): Promise<RestoreOperationRecord> {
     const id = identifier(operationId), expectedHash = hash(planHash), next = validateRestoreMarker(marker);

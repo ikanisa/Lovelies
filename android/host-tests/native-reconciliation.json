@@ -1,0 +1,1769 @@
+{
+  "schema": "lovelies-native-reconciliation-v1",
+  "date": "2026-11-01",
+  "baseline_commit": "17df5efa0c312f0c7fee979ab3f2d91669243186",
+  "source_rule": "Complete baseline plus reviewed revision3 native/client changes; no blanket conflicting overwrite",
+  "revision3_paths": [
+    {
+      "path": "android/RECOVERY_READINESS.md",
+      "disposition": "superseded",
+      "reason": "Historical package evidence superseded by android/NATIVE_RECONCILIATION.md and current execution records; no inherited pass claims.",
+      "revision3_sha256": "2c2a99ccdacf9e9a3af93b41e3c25a6c6286e685c0bb00f7146c4b3cc96f6060",
+      "result_sha256": null
+    },
+    {
+      "path": "android/app/src/main/AndroidManifest.xml",
+      "disposition": "retained",
+      "reason": "Unique revision3 implementation retained unchanged.",
+      "revision3_sha256": "89680d0ceb0ae3d74b47cc651e548e35d015263e5314623c0da908fc321b59dd",
+      "result_sha256": "89680d0ceb0ae3d74b47cc651e548e35d015263e5314623c0da908fc321b59dd"
+    },
+    {
+      "path": "android/app/src/main/java/com/lovelies/frontend/preview/CloudflareRepository.kt",
+      "disposition": "merged",
+      "reason": "Semantically reconciled with Complete ownership, authority retirement and active export-v3 contracts; current source hashes bind the result.",
+      "revision3_sha256": "a6273db832ab63d514d4ee34bb0c1c14951e299fa47672f24265916cac92405c",
+      "result_sha256": "81478fa6c75b67ef4b8ec4cba5cec780242d7cd110b6c9ee0c9d9f430dc70bc3"
+    },
+    {
+      "path": "android/app/src/main/java/com/lovelies/frontend/preview/FaceLifecycle.kt",
+      "disposition": "retained",
+      "reason": "Unique revision3 implementation retained unchanged.",
+      "revision3_sha256": "2ed91798b01f6af92c9dc7244afcd02d8569fc39b76d62b3099b4137118117be",
+      "result_sha256": "2ed91798b01f6af92c9dc7244afcd02d8569fc39b76d62b3099b4137118117be"
+    },
+    {
+      "path": "android/app/src/main/java/com/lovelies/frontend/preview/GuestDeletion.kt",
+      "disposition": "retained",
+      "reason": "Unique revision3 implementation retained unchanged.",
+      "revision3_sha256": "6a0f9216d1f27f133d279cfbf1c8f8bc5a324adb977bd444e8c730be49ec88f4",
+      "result_sha256": "6a0f9216d1f27f133d279cfbf1c8f8bc5a324adb977bd444e8c730be49ec88f4"
+    },
+    {
+      "path": "android/app/src/main/java/com/lovelies/frontend/preview/LiveController.kt",
+      "disposition": "merged",
+      "reason": "Semantically reconciled with Complete ownership, authority retirement and active export-v3 contracts; current source hashes bind the result.",
+      "revision3_sha256": "5776f0b3ff5ddf09687741597a6089b310740c286f71e13bdfcce722408d8891",
+      "result_sha256": "9d5b57611c6da05ee7e77e7f80643be710e71e98c141dfb2d233fe2b66f23a19"
+    },
+    {
+      "path": "android/app/src/main/java/com/lovelies/frontend/preview/LiveScreens.kt",
+      "disposition": "merged",
+      "reason": "Semantically reconciled with Complete ownership, authority retirement and active export-v3 contracts; current source hashes bind the result. Release additionally omits the development-only reference-screen action.",
+      "revision3_sha256": "511715ba67f582e8705e86420742adb563e2c6d05541ce5c1efc389887fa8304",
+      "result_sha256": "42a6901a36a135da03f6a728f3dc82dd21f8e4aeda82f95456d3e8dacc5012c0"
+    },
+    {
+      "path": "android/app/src/main/java/com/lovelies/frontend/preview/PlayPurchases.kt",
+      "disposition": "retained",
+      "reason": "Unique revision3 implementation retained unchanged.",
+      "revision3_sha256": "0b872acb6ddf40ca30ed415189d53695b5061ab8f4c4551bf0017a246d035f09",
+      "result_sha256": "0b872acb6ddf40ca30ed415189d53695b5061ab8f4c4551bf0017a246d035f09"
+    },
+    {
+      "path": "android/app/src/main/java/com/lovelies/frontend/preview/PrivacyExportRecovery.kt",
+      "disposition": "superseded",
+      "reason": "Incompatible export-v2 client replaced by Complete PrivacyExportDelivery.kt plus ChunkedPrivacyExport.kt (active export v3).",
+      "revision3_sha256": "1b603b6a45570c0a01621cfc0a6bc4486c0a2ea27d641cd823e59eb95be26d34",
+      "result_sha256": null
+    },
+    {
+      "path": "android/app/src/main/java/com/lovelies/frontend/preview/PushMessaging.kt",
+      "disposition": "merged",
+      "reason": "Semantically reconciled with Complete ownership, authority retirement and active export-v3 contracts; current source hashes bind the result.",
+      "revision3_sha256": "a318674b70eebb8a3ec985230e66bbcbd3de69e9cdd662437f81c3bae31eb1ac",
+      "result_sha256": "76218931ef532995286feb1cd0750fd786f71435e375111f55a4793282aa2b84"
+    },
+    {
+      "path": "android/app/src/main/java/com/lovelies/frontend/preview/PushOperationRecovery.kt",
+      "disposition": "merged",
+      "reason": "Semantically reconciled with Complete ownership, authority retirement and active export-v3 contracts; current source hashes bind the result.",
+      "revision3_sha256": "a039b86f974a614ecb4028070b2f7362983baca99343fd70e1ab1f12866e2b50",
+      "result_sha256": "ae99de32548714c74cb8572f1631b498a7b69017127c3757fc8e47d17a455465"
+    },
+    {
+      "path": "android/app/src/main/java/com/lovelies/frontend/preview/RepositoryBoundary.kt",
+      "disposition": "merged",
+      "reason": "Semantically reconciled with Complete ownership, authority retirement and active export-v3 contracts; current source hashes bind the result.",
+      "revision3_sha256": "d0ce5a7c88bb3d3794e8f2baeeed09e46f51c30d9ec6efe6758e1e5104a6991b",
+      "result_sha256": "6f7dbc4be787dce4ab6fc23bd4ffc1da77171b250ce63b6f3286099e537f43eb"
+    },
+    {
+      "path": "android/app/src/main/java/com/lovelies/frontend/preview/SecureSession.kt",
+      "disposition": "superseded",
+      "reason": "Revision3 delta only added incompatible export-v2 staging. Complete encrypted chunk staging and independent authority journal retained.",
+      "revision3_sha256": "4d3c2fccdc0f7e56ac0913374613f465b486cd73c5dc41fc12fc89c875755f66",
+      "result_sha256": "c60fa5a13ee4c5c8e871881ebf21a0229a8d28d202663582b1a57fcffb3a20d0"
+    },
+    {
+      "path": "android/app/src/main/java/com/lovelies/frontend/preview/StorePurchaseRecovery.kt",
+      "disposition": "merged",
+      "reason": "Semantically reconciled with Complete ownership, authority retirement and active export-v3 contracts; current source hashes bind the result.",
+      "revision3_sha256": "c8e660c4894a558a1553c043c33177f2769088a47b7ada462a64a3d58be266ec",
+      "result_sha256": "52bd73f8f447348e99d6bbc34594a16293cc1a7a5717b5d8b59e045e7331e3c0"
+    },
+    {
+      "path": "android/app/src/main/res/values/audience-review.xml",
+      "disposition": "retained",
+      "reason": "Unique revision3 implementation retained unchanged.",
+      "revision3_sha256": "86552e6ccad852d3b27416afdf8504f3258811403ed33740d385711c8974643c",
+      "result_sha256": "86552e6ccad852d3b27416afdf8504f3258811403ed33740d385711c8974643c"
+    },
+    {
+      "path": "android/app/src/main/res/values/controller-copy.xml",
+      "disposition": "retained",
+      "reason": "Unique revision3 implementation retained unchanged.",
+      "revision3_sha256": "0056aabce403027cff3495a35ddf1558b22c6c0d774a01f9b2a8883e15ef21e0",
+      "result_sha256": "0056aabce403027cff3495a35ddf1558b22c6c0d774a01f9b2a8883e15ef21e0"
+    },
+    {
+      "path": "android/app/src/main/res/values-rw/audience-review.xml",
+      "disposition": "retained",
+      "reason": "Unique revision3 implementation retained unchanged.",
+      "revision3_sha256": "1f4ac1b2f8a569b8b2798b10351614a17dc681b46df4a21794f2589473a49413",
+      "result_sha256": "1f4ac1b2f8a569b8b2798b10351614a17dc681b46df4a21794f2589473a49413"
+    },
+    {
+      "path": "android/app/src/main/res/values-rw/controller-copy.xml",
+      "disposition": "retained",
+      "reason": "Unique revision3 implementation retained unchanged.",
+      "revision3_sha256": "7242e97a97ebda26b3e9098b7f06b1b1aa902f20f4706496f133cf8a5e6d1d4a",
+      "result_sha256": "7242e97a97ebda26b3e9098b7f06b1b1aa902f20f4706496f133cf8a5e6d1d4a"
+    },
+    {
+      "path": "android/app/src/main/res/xml/data_extraction_rules.xml",
+      "disposition": "retained",
+      "reason": "Complete already excludes every cloud-backup/device-transfer domain; v3 Manifest/test additions are merged.",
+      "revision3_sha256": "ef7143214e4d55cc60e14a90b4e0e8917ba56067e5a6fd98bf06814353b48a74",
+      "result_sha256": "dfcb9ad415795d4fcdc4bc447d9c8a5a3536d9c4bedd0039725dd72506b4772d"
+    },
+    {
+      "path": "android/app/src/test/java/com/lovelies/frontend/preview/AudienceProtocolTest.kt",
+      "disposition": "retained",
+      "reason": "Unique revision3 implementation retained unchanged.",
+      "revision3_sha256": "920344b160d6a3b5a9eceb98de91ac5be81dbc363eea1a6a25092723ef2c8d04",
+      "result_sha256": "920344b160d6a3b5a9eceb98de91ac5be81dbc363eea1a6a25092723ef2c8d04"
+    },
+    {
+      "path": "android/app/src/test/java/com/lovelies/frontend/preview/LocalCollectionAuthorityTest.kt",
+      "disposition": "retained",
+      "reason": "Unique revision3 implementation retained unchanged.",
+      "revision3_sha256": "08444f969b40fd16453c65348f3c760722df51ed58677cf9469336fd6915a7bc",
+      "result_sha256": "08444f969b40fd16453c65348f3c760722df51ed58677cf9469336fd6915a7bc"
+    },
+    {
+      "path": "android/app/src/test/java/com/lovelies/frontend/preview/ReleaseReadinessTest.kt",
+      "disposition": "merged",
+      "reason": "Semantically reconciled with Complete ownership, authority retirement and active export-v3 contracts; current source hashes bind the result.",
+      "revision3_sha256": "90b756b515eb95ddbeff6e48c4c0f076953a72fc567a3f919b28465804b275a7",
+      "result_sha256": "b6e34981a9bfb5f0d6f746c00f46a8b6f4349f2f950087f23268199d22ea39f7"
+    },
+    {
+      "path": "android/host-tests/AudienceReadinessTests.kt",
+      "disposition": "merged",
+      "reason": "Semantically reconciled with Complete ownership, authority retirement and active export-v3 contracts; current source hashes bind the result.",
+      "revision3_sha256": "9e4457abd9d1f2c3763190085348770f6baaa3c07e2d50349af0f9bf7703c82a",
+      "result_sha256": "e6cf4545a20cbe0be3db2cca98bdc682970c7985fbc2c2b397d29072162d3061"
+    },
+    {
+      "path": "android/host-tests/PrivacyExportRecoveryTests.kt",
+      "disposition": "superseded",
+      "reason": "Incompatible export-v2 assertions replaced by maintained Complete export-v3/authority host regression suites.",
+      "revision3_sha256": "f02aa8bacb828610cbb3dddd3b218573cd3a758122b05029496af53e7ba4fdc4",
+      "result_sha256": null
+    },
+    {
+      "path": "android/host-tests/PushOperationRecoveryTests.kt",
+      "disposition": "merged",
+      "reason": "Semantically reconciled with Complete ownership, authority retirement and active export-v3 contracts; current source hashes bind the result.",
+      "revision3_sha256": "cad76a609dbe6379c8e4d1ce78fff35d8af18aa0dea26665edf63c5187a700fb",
+      "result_sha256": "79c56f6c72feb7341195a70217233ecf10e0cfdbdcd542f641167b9e4f0d9d74"
+    },
+    {
+      "path": "android/host-tests/RepositoryReadinessTests.kt",
+      "disposition": "merged",
+      "reason": "Semantically reconciled with Complete ownership, authority retirement and active export-v3 contracts; current source hashes bind the result.",
+      "revision3_sha256": "fa85a9cdca7825fee807e731c5bef2be189cda4dc0461126ad6af004b019ffa2",
+      "result_sha256": "81bffef16b29c041cb8b00e216a5a690386a051d68cc2ece2e099ee6a2176d4f"
+    },
+    {
+      "path": "android/host-tests/StorePurchaseRecoveryTests.kt",
+      "disposition": "merged",
+      "reason": "Semantically reconciled with Complete ownership, authority retirement and active export-v3 contracts; current source hashes bind the result.",
+      "revision3_sha256": "4556f4919b01f344d1c00be86f058b9f610cc4bb7d6aca6c40bb87818b1b1935",
+      "result_sha256": "ba8823e2ec60428db7a12222814018fd4283640b679d08ef60b62d5cc714d35f"
+    },
+    {
+      "path": "clients/backend/audience-contracts.mjs",
+      "disposition": "retained",
+      "reason": "Unique revision3 implementation retained unchanged.",
+      "revision3_sha256": "76c29c41581026764870af188f83140eba5cb67393ee17c7503386928a4ac040",
+      "result_sha256": "76c29c41581026764870af188f83140eba5cb67393ee17c7503386928a4ac040"
+    },
+    {
+      "path": "clients/backend/audience-contracts.test.mjs",
+      "disposition": "retained",
+      "reason": "Unique revision3 implementation retained unchanged.",
+      "revision3_sha256": "35f383fe82e554d2e16c6cc5e73046d58d16aa559650a8bfc2bb194e6900a666",
+      "result_sha256": "35f383fe82e554d2e16c6cc5e73046d58d16aa559650a8bfc2bb194e6900a666"
+    },
+    {
+      "path": "ios/Lovelies/App/LoveliesApp.swift",
+      "disposition": "retained",
+      "reason": "Unique revision3 implementation retained unchanged.",
+      "revision3_sha256": "29bf5dbad8ed1bf875fc97a7bd77f3b1b77ad28b06765ce2ad8e098bd8440588",
+      "result_sha256": "29bf5dbad8ed1bf875fc97a7bd77f3b1b77ad28b06765ce2ad8e098bd8440588"
+    },
+    {
+      "path": "ios/Lovelies/Native/BackendRepository.swift",
+      "disposition": "merged",
+      "reason": "Semantically reconciled with Complete ownership, authority retirement and active export-v3 contracts; current source hashes bind the result.",
+      "revision3_sha256": "14e40163999ca356160f296fdc47c8d85b6f26aea213b919cc795a3ed042902f",
+      "result_sha256": "1511b69aadc6ab5a53937edc71de0e59445a81677b2e56a695b4c28ccb8ce3eb"
+    },
+    {
+      "path": "ios/Lovelies/Native/CoreWire.swift",
+      "disposition": "merged",
+      "reason": "Semantically reconciled with Complete ownership, authority retirement and active export-v3 contracts; current source hashes bind the result.",
+      "revision3_sha256": "be67f80ac9e255fd9bc44a85ed296da5c167f76c714bfbab2891fb794417b17c",
+      "result_sha256": "b676c7685b0bf5ca8f83ec9a0dd93dfb3143230acf1b3d63849fef156074a288"
+    },
+    {
+      "path": "ios/Lovelies/Native/DeviceIdentity.swift",
+      "disposition": "merged",
+      "reason": "Semantically reconciled with Complete ownership, authority retirement and active export-v3 contracts; current source hashes bind the result.",
+      "revision3_sha256": "239c79f7d89ac5e4e7cc212e010b3475cc848058f1ead4208c5e27ca3a2e0631",
+      "result_sha256": "2ec775f8060271415bbac853d03b830c302deb94b5bc7bde4a537f635b50175c"
+    },
+    {
+      "path": "ios/Lovelies/Native/LiveAppStore.swift",
+      "disposition": "merged",
+      "reason": "Semantically reconciled with Complete ownership, authority retirement and active export-v3 contracts; current source hashes bind the result.",
+      "revision3_sha256": "22937349d134afed27f40fdc04a783ba9ec3d610781c8e4f8e186c03deefc899",
+      "result_sha256": "e7434b3c08aa7ae114e26022f6f04b373d24d45dc926e81d6d5911e54edfb173"
+    },
+    {
+      "path": "ios/Lovelies/Native/LiveOnboardingAndGallery.swift",
+      "disposition": "merged",
+      "reason": "Semantically reconciled with Complete ownership, authority retirement and active export-v3 contracts; current source hashes bind the result.",
+      "revision3_sha256": "b296680c7704a594f50a2d1f8cefad75678e187c64999bb6f26e72bcc002687d",
+      "result_sha256": "7ef614b7cb28cd00e83c3615e038c989417f06c37a2559e4c90b33c92ff2ec3b"
+    },
+    {
+      "path": "ios/Lovelies/Native/LiveSharingAndSettings.swift",
+      "disposition": "merged",
+      "reason": "Semantically reconciled with Complete ownership, authority retirement and active export-v3 contracts; current source hashes bind the result.",
+      "revision3_sha256": "5190b074af54e93eb0757fe740a4768d7d2d3b78b2d69e1997699c8bf6236dd2",
+      "result_sha256": "1db719eb02c6179c03bbdeba61fff31df6235a36c3c4d90ba1a11134c28cac76"
+    },
+    {
+      "path": "ios/Lovelies/Native/NativeLocalAuthentication.swift",
+      "disposition": "retained",
+      "reason": "Unique revision3 implementation retained unchanged.",
+      "revision3_sha256": "5252353bb5d0d5de3a7558b80eec277d75f84bbca4ce359c8a7d8e73b9b5207c",
+      "result_sha256": "5252353bb5d0d5de3a7558b80eec277d75f84bbca4ce359c8a7d8e73b9b5207c"
+    },
+    {
+      "path": "ios/Lovelies/Native/NativeServices.swift",
+      "disposition": "merged",
+      "reason": "Semantically reconciled with Complete ownership, authority retirement and active export-v3 contracts; current source hashes bind the result.",
+      "revision3_sha256": "e88879700ca7817d049f8285d9d34c64b4325e7f7f04eb10f3a15f793a47b68f",
+      "result_sha256": "60db9cb8ea1701b4ffe63e701a1ff1db606cd1266f42d92cc1fd0d8ecf6af386"
+    },
+    {
+      "path": "ios/Lovelies/Native/NativeSettingsPanels.swift",
+      "disposition": "merged",
+      "reason": "Semantically reconciled with Complete ownership, authority retirement and active export-v3 contracts; current source hashes bind the result.",
+      "revision3_sha256": "7a8180a83d529bf20cdcd5b954b1459eea60e4d8f3ad5c36f18d3ac0819e193e",
+      "result_sha256": "9bb0c6b5b6fa3add833de2e9d4462f52623419fdcaab993078d5881793f84984"
+    },
+    {
+      "path": "ios/Lovelies/Native/UploadRecovery.swift",
+      "disposition": "retained",
+      "reason": "Unique revision3 implementation retained unchanged.",
+      "revision3_sha256": "798e7849baea4a375b4d8dd74ce68f895f8bbe29c24a053daf0e5f93bf60d620",
+      "result_sha256": "798e7849baea4a375b4d8dd74ce68f895f8bbe29c24a053daf0e5f93bf60d620"
+    },
+    {
+      "path": "ios/Lovelies/Resources/en.lproj/Localizable.strings",
+      "disposition": "merged",
+      "reason": "Semantically reconciled with Complete ownership, authority retirement and active export-v3 contracts; current source hashes bind the result.",
+      "revision3_sha256": "512a11d1ace081fe34dbb5d9c817ffa1224680797e6cd6f760a151f19fdbd04c",
+      "result_sha256": "6b3add4a417b6e19ccb6e0c2e704b81a8337f82ff150e54a13cdd6f6e36b198f"
+    },
+    {
+      "path": "ios/Lovelies/Resources/rw.lproj/Localizable.strings",
+      "disposition": "merged",
+      "reason": "Semantically reconciled with Complete ownership, authority retirement and active export-v3 contracts; current source hashes bind the result.",
+      "revision3_sha256": "de1ff5fd076333ce4dd34a1262d8f31f065b65b552b79deac9a87873aaa9113d",
+      "result_sha256": "aa57751e55883136243b92e5105694f034c11844d3eef927c34999ba26db43ff"
+    },
+    {
+      "path": "ios/RECOVERY_READINESS.md",
+      "disposition": "superseded",
+      "reason": "Historical package evidence superseded by android/NATIVE_RECONCILIATION.md and current execution records; no inherited pass claims.",
+      "revision3_sha256": "493c396c84f92891627dd7a788df1cc4fa45bb33357751faca576a14658ead6e",
+      "result_sha256": null
+    },
+    {
+      "path": "ios/Tests/NativeAccountRecoveryTests.swift",
+      "disposition": "merged",
+      "reason": "Semantically reconciled with Complete ownership, authority retirement and active export-v3 contracts; current source hashes bind the result.",
+      "revision3_sha256": "bbc49f09162bdaec2f1b38662183f3bdae5ffb8d5ea8807b8c10e09e321dd314",
+      "result_sha256": "1fa3d85af81e5f64e84de32d4c681d315a3ceb91baa4a1b05003901699e633e8"
+    },
+    {
+      "path": "ios/Tests/NativeAudienceHTTPJourney.swift",
+      "disposition": "merged",
+      "reason": "Semantically reconciled with Complete ownership, authority retirement and active export-v3 contracts; current source hashes bind the result.",
+      "revision3_sha256": "466abfc2569acfca93aad703b0a6b90b69893d2b8e6a6c3f1b809644fd1d462c",
+      "result_sha256": "1b338f2ba97a68c0db81ed6959f64a0f4e20d9e0f81e78f6ee6bb1332a03090f"
+    },
+    {
+      "path": "ios/Tests/NativeAudienceRenewalTests.swift",
+      "disposition": "merged",
+      "reason": "Semantically reconciled with Complete ownership, authority retirement and active export-v3 contracts; current source hashes bind the result.",
+      "revision3_sha256": "86fa6fc908b6cbcfd517ca9b0389d99b3c93e37a4a8e125d308c9991abd54eba",
+      "result_sha256": "3e8f3e99fcf6438b2233b062ddd7eaf3a82f59798a6de412212f5ce3d12f0946"
+    },
+    {
+      "path": "ios/Tests/NativeAudienceTests.swift",
+      "disposition": "merged",
+      "reason": "Semantically reconciled with Complete ownership, authority retirement and active export-v3 contracts; current source hashes bind the result.",
+      "revision3_sha256": "04d86d3f525a69be0b20ef8b2532105c1caffa1119ce630bf726d31079a02c44",
+      "result_sha256": "29510caada0f29f31a1a689a13ce23e7acfa39664fa92b94d22fa30dba258385"
+    },
+    {
+      "path": "ios/Tests/NativeConnectionTests.swift",
+      "disposition": "merged",
+      "reason": "Semantically reconciled with Complete ownership, authority retirement and active export-v3 contracts; current source hashes bind the result.",
+      "revision3_sha256": "e28540048302deb13dafa9376e8b13930db2b45ab6350b7463a4af5f84511ff2",
+      "result_sha256": "049f67e2404e82845ba8562231cf72c06bcfec3e94fe86d83f3ba6721bf02a4a"
+    },
+    {
+      "path": "ios/Tests/NativeEnrollmentRecoveryTests.swift",
+      "disposition": "merged",
+      "reason": "Semantically reconciled with Complete ownership, authority retirement and active export-v3 contracts; current source hashes bind the result.",
+      "revision3_sha256": "685280bc8ece087143be2949a38d139ecef455f2bc048156cdc059131c13c7b5",
+      "result_sha256": "b7c0cfc09b00ead13ffa57abc3372443ef98883627ec63427ac1979b00f044cf"
+    },
+    {
+      "path": "ios/Tests/NativeFaceProfileLifecycleTests.swift",
+      "disposition": "merged",
+      "reason": "Semantically reconciled with Complete ownership, authority retirement and active export-v3 contracts; current source hashes bind the result.",
+      "revision3_sha256": "db764d11aea49f3284da21274248540e75860083b42e07b5f702836483f1666e",
+      "result_sha256": "34555a093c17a90997fa50cdf92d9e2f8e7e7f81bf9336894382c92961b531d3"
+    },
+    {
+      "path": "ios/Tests/NativeLocalAuthenticationTests.swift",
+      "disposition": "merged",
+      "reason": "Semantically reconciled with Complete ownership, authority retirement and active export-v3 contracts; current source hashes bind the result.",
+      "revision3_sha256": "bf14074f71be74ae3369a4353e36f5496388b3b1c3a150f4fa6d91e98615c579",
+      "result_sha256": "6d4f67b886e0b7ec31aa8786f005ddbc6b643cb0153c9429021a7cca8694d9cc"
+    },
+    {
+      "path": "ios/Tests/NativeOrdinaryLoginTests.swift",
+      "disposition": "merged",
+      "reason": "Semantically reconciled with Complete ownership, authority retirement and active export-v3 contracts; current source hashes bind the result.",
+      "revision3_sha256": "1d9cd4383b747e671c9f48d8d1b50017efa01810613f0d2f4636fb434c14bfd5",
+      "result_sha256": "e6697547b8bcc8f1a4c783a442b5000d7099d25126107400d88a0887a2972d67"
+    },
+    {
+      "path": "ios/Tests/NativePhotoSelectionTests.swift",
+      "disposition": "merged",
+      "reason": "Semantically reconciled with Complete ownership, authority retirement and active export-v3 contracts; current source hashes bind the result.",
+      "revision3_sha256": "1a8c67288efcf01a44bec1349fd4c121df4c2d3ba54637d8dec86cfa65f7ba32",
+      "result_sha256": "e1ac7944511c98916d88099029dac479751e7c298ae42452e2f52a5710338541"
+    },
+    {
+      "path": "ios/Tests/NativePreviewExitExpiryTests.swift",
+      "disposition": "merged",
+      "reason": "Semantically reconciled with Complete ownership, authority retirement and active export-v3 contracts; current source hashes bind the result.",
+      "revision3_sha256": "b1c217425f8d310e6e04c8b3019c51649f1e04c3206256f994273c7b3b873183",
+      "result_sha256": "1a9c1450a36309e53dda08dcdac08be2a7d7f10c9d7bce86acc1d5d77adbd0ab"
+    },
+    {
+      "path": "ios/Tests/NativePrivateMediaTests.swift",
+      "disposition": "merged",
+      "reason": "Semantically reconciled with Complete ownership, authority retirement and active export-v3 contracts; current source hashes bind the result.",
+      "revision3_sha256": "b45145df8fb1930eb0adfb3f9300cdceeac97e88eb900dc9aa07f5dff812289b",
+      "result_sha256": "91267273777813a488e89f43dc9bcce9289fbd2201d4d0ca72f83f15672c20aa"
+    },
+    {
+      "path": "ios/Tests/NativeReadinessRecoveryTests.swift",
+      "disposition": "merged",
+      "reason": "Complete suite retained; unique v3 StoreKit/deletion cases moved to NativeStoreDeletionRecoveryTests.swift with authority fixture adaptation; incompatible export-v2 assertions omitted.",
+      "revision3_sha256": "1c777508c0c40be18205f3cd9f46e6a1e4586402e2b7fb342ea23e329891151d",
+      "result_sha256": "9f52cb612ca9758a3b4c45236209f5fc24ad748819c9a9e91cb7141ae372c056"
+    },
+    {
+      "path": "ios/Tests/NativeUploadRecoveryTests.swift",
+      "disposition": "merged",
+      "reason": "Semantically reconciled with Complete ownership, authority retirement and active export-v3 contracts; current source hashes bind the result.",
+      "revision3_sha256": "eee66ff012b557fbe413a59216dd03e85504dda87fb70cc8ae49ca294edc27ac",
+      "result_sha256": "77ffc17ebc14d3e50b23d0dd5ecada0a7787ab6f150491a3d5e9dfd67cabb667"
+    },
+    {
+      "path": "scripts/test-fixtures/android-push-optout/SignedOutOptOutTests.kt",
+      "disposition": "merged",
+      "reason": "Semantically reconciled with Complete ownership, authority retirement and active export-v3 contracts; current source hashes bind the result.",
+      "revision3_sha256": "fed047337b81c7090f9e369b889dcd50361c45c2050b242311cbad00c45fe9a4",
+      "result_sha256": "bcc868f67c02419022feb6e239911aae9ba6cff5563a7769aef7ff3b606c73e4"
+    },
+    {
+      "path": "scripts/test-fixtures/android-push-optout/android_content.kt",
+      "disposition": "merged",
+      "reason": "Semantically reconciled with Complete ownership, authority retirement and active export-v3 contracts; current source hashes bind the result.",
+      "revision3_sha256": "674a886c282e6357cb66403bbb4981d65d7746a774b0afd7fa097f1a80eb7793",
+      "result_sha256": "50e163a7f5a553698e9d585244be4ade7b8b69bd90ba66518fd4cbdd78f2a522"
+    },
+    {
+      "path": "scripts/test-fixtures/android-push-optout/app_stubs.kt",
+      "disposition": "merged",
+      "reason": "Semantically reconciled with Complete ownership, authority retirement and active export-v3 contracts; current source hashes bind the result.",
+      "revision3_sha256": "ace45cf3136709a67d414bebc0ff27e7cbe226bf619dc5b063858a3aca8a5624",
+      "result_sha256": "234c25407850f9df9da53af7842b2d66485cef063b0627d8f071601d58b4eb0e"
+    },
+    {
+      "path": "scripts/test-fixtures/android-repository-readiness/android_content.kt",
+      "disposition": "retained",
+      "reason": "Unique revision3 implementation retained unchanged.",
+      "revision3_sha256": "ed7ef6f3a5b1075716a3a31342f80310663d40c957f75f7196c63282541b4da1",
+      "result_sha256": "ed7ef6f3a5b1075716a3a31342f80310663d40c957f75f7196c63282541b4da1"
+    },
+    {
+      "path": "scripts/test-fixtures/android-repository-readiness/android_uri.kt",
+      "disposition": "retained",
+      "reason": "Unique revision3 implementation retained unchanged.",
+      "revision3_sha256": "58b2dfbbd6061a7034c5f3c4f07f75e765392c0d7efda8fd1f07e2f3bb75c393",
+      "result_sha256": "58b2dfbbd6061a7034c5f3c4f07f75e765392c0d7efda8fd1f07e2f3bb75c393"
+    },
+    {
+      "path": "scripts/test-fixtures/android-repository-readiness/json.kt",
+      "disposition": "retained",
+      "reason": "Unique revision3 implementation retained unchanged.",
+      "revision3_sha256": "efeb1f7a515b11936ff802c9bbd2f4b7e593a03e863dbb967e8c6ccd1dd5dffa",
+      "result_sha256": "efeb1f7a515b11936ff802c9bbd2f4b7e593a03e863dbb967e8c6ccd1dd5dffa"
+    },
+    {
+      "path": "scripts/test-fixtures/android-repository-readiness/platform.kt",
+      "disposition": "merged",
+      "reason": "Semantically reconciled with Complete ownership, authority retirement and active export-v3 contracts; current source hashes bind the result.",
+      "revision3_sha256": "f3629df7109834276e20d8baef13f69522baa79ccbb85812688385a22f420e43",
+      "result_sha256": "3248c91efe19f4b91569959b4091f0491727d83e93300fcd60a2e517719b1924"
+    },
+    {
+      "path": "scripts/test-fixtures/android-store-recovery/android_app.kt",
+      "disposition": "retained",
+      "reason": "Unique revision3 implementation retained unchanged.",
+      "revision3_sha256": "f1de17db783613916c12e029bcd0e2fbb9c981e6017fde825f9574f7f83149e2",
+      "result_sha256": "f1de17db783613916c12e029bcd0e2fbb9c981e6017fde825f9574f7f83149e2"
+    },
+    {
+      "path": "scripts/test-fixtures/android-store-recovery/billing.kt",
+      "disposition": "retained",
+      "reason": "Unique revision3 implementation retained unchanged.",
+      "revision3_sha256": "14741c382e6e2d8c42d2492e7ac9b675c56e766e0b4cae800e22260ea0029059",
+      "result_sha256": "14741c382e6e2d8c42d2492e7ac9b675c56e766e0b4cae800e22260ea0029059"
+    },
+    {
+      "path": "scripts/test-fixtures/android-store-recovery/compose.kt",
+      "disposition": "retained",
+      "reason": "Unique revision3 implementation retained unchanged.",
+      "revision3_sha256": "dbc3b65341b359a44c4b0bcf6a38418aa327b106da7e11ba0f187abd256897cc",
+      "result_sha256": "dbc3b65341b359a44c4b0bcf6a38418aa327b106da7e11ba0f187abd256897cc"
+    },
+    {
+      "path": "scripts/test-fixtures/android-store-recovery/copy.kt",
+      "disposition": "retained",
+      "reason": "Unique revision3 implementation retained unchanged.",
+      "revision3_sha256": "4cd4872ac76b8be4370d19a791bc8440779550fb6e70080fbb411864e1528d54",
+      "result_sha256": "4cd4872ac76b8be4370d19a791bc8440779550fb6e70080fbb411864e1528d54"
+    },
+    {
+      "path": "scripts/test-ios-openface.py",
+      "disposition": "merged",
+      "reason": "Semantically reconciled with Complete ownership, authority retirement and active export-v3 contracts; current source hashes bind the result.",
+      "revision3_sha256": "7a7e5775e703f7a28beb13fb01f13a22a3909f8f3c8716c4d4f5c9bd08bdc31b",
+      "result_sha256": "6b60b05129e6cde55df18b8caceb6f1ac36aa79153901f5d2e1303a78837bbe7"
+    },
+    {
+      "path": "scripts/test_android_audience_readiness.py",
+      "disposition": "merged",
+      "reason": "Semantically reconciled with Complete ownership, authority retirement and active export-v3 contracts; current source hashes bind the result.",
+      "revision3_sha256": "d37c7d93e17f99f47f6a23e9346beb1b6c0d364155a18fbf3619c4d8422789fb",
+      "result_sha256": "96c5917595d6e43b6cf49fb10c98213ce85c4dc01b797df72a1588600c4f4989"
+    },
+    {
+      "path": "scripts/test_android_privacy_export.py",
+      "disposition": "merged",
+      "reason": "Semantically reconciled with Complete ownership, authority retirement and active export-v3 contracts; current source hashes bind the result.",
+      "revision3_sha256": "d1982d4928e12449395d81dd82e8e051c134233b17f7474868bc0f23dbefa6c0",
+      "result_sha256": "ae53d73277e922a8a28d2f7f3c40ce2e3f00646782d58d34c152abee77cd16ca"
+    },
+    {
+      "path": "scripts/test_android_push_optout.py",
+      "disposition": "merged",
+      "reason": "Semantically reconciled with Complete ownership, authority retirement and active export-v3 contracts; current source hashes bind the result.",
+      "revision3_sha256": "37d7f4c5d9c347390e2ccd40eab68b365a3abd9dea729e13623b4dc4b90c6f3c",
+      "result_sha256": "3e8489d57fbcd48d8c7104541202ef9119ed5dfe8b7b563cc9cecbc268caa6f1"
+    },
+    {
+      "path": "scripts/test_android_push_recovery.py",
+      "disposition": "retained",
+      "reason": "Unique revision3 implementation retained unchanged.",
+      "revision3_sha256": "5cf9e3e02ffb14bfd0a8922347be4980bcc645107204fef1e4e438d212a13e79",
+      "result_sha256": "5cf9e3e02ffb14bfd0a8922347be4980bcc645107204fef1e4e438d212a13e79"
+    },
+    {
+      "path": "scripts/test_android_repository_readiness.py",
+      "disposition": "merged",
+      "reason": "Semantically reconciled with Complete ownership, authority retirement and active export-v3 contracts; current source hashes bind the result.",
+      "revision3_sha256": "018b9c0c13a121ca8fc190acea95381a19aca7723e7c017144fa4c96b0641447",
+      "result_sha256": "e10bf589f8cb1d59906fd883a21359b283bbc92059d0520a196a26430a51b1f7"
+    },
+    {
+      "path": "scripts/test_android_store_recovery.py",
+      "disposition": "merged",
+      "reason": "Semantically reconciled with Complete ownership, authority retirement and active export-v3 contracts; current source hashes bind the result.",
+      "revision3_sha256": "6e420523ff533a3663aa56c0502ffb77882ed6870e26f4ca0cbe8519ecb44332",
+      "result_sha256": "29b97e169889084cc114922a6907573f60e97c6d54940a5d3d5fcb8ed52dffff"
+    }
+  ],
+  "complete_guarantees_preserved": [
+    "Immutable Android PhotoActionOwner and original permission-action binding",
+    "Independent Android/iOS session authority retirement ledgers and snapshot CAS",
+    "API24 T45 directory fsync correction and installed compatibility regression",
+    "Session-bound chunked privacy export v3 with protected staging, expiry and exact cleanup",
+    "iOS query-aware pagination and delayed-account publication guards",
+    "com.lovelies.memories identity and existing release signing/version validation"
+  ],
+  "validation": {
+    "local_completed": [
+      {
+        "command": "python3 ios/Tests/test_release_origin.py",
+        "result": "passed",
+        "tests": 2
+      },
+      {
+        "command": "python3 ios/Tests/test_release_policy_urls.py",
+        "result": "passed",
+        "tests": 3
+      },
+      {
+        "command": "node --test clients/backend/audience-contracts.test.mjs",
+        "result": "passed",
+        "test_files": 1
+      },
+      {
+        "command": "Python AST parse of owned native runners",
+        "result": "passed"
+      },
+      {
+        "command": "git diff --check (owned paths)",
+        "result": "passed"
+      },
+      {
+        "command": "node scripts/test/release-gate.test.mjs",
+        "result": "passed",
+        "tests": 12,
+        "log": "/workspace/scratch/97844a440d4b/native_reconciliation/admin-review/release-gate-tests-final.log",
+        "log_sha256": "85d92f986eaf062c2fb34e15f98fb091dc807476b4a70019d4b1092912de9611",
+        "limit": "Validator integrity/scope fixtures only; no release authorization or deployment proof."
+      }
+    ],
+    "android_shared_build": {
+      "status": "final_source_candidate_verification_pending",
+      "observed_at": "2026-11-01T07:08:55.093582+00:00",
+      "completed_pre_fix_phases": {
+        "status": "apk_and_jvm_phases_passed_before_locale_and_reference_control_corrections",
+        "result_record": "/workspace/scratch/97844a440d4b/implementation_work/android-final-apk-jvm-result.json",
+        "result_sha256": "8908b258ab29877b0f997f887090a2b45abe3f3de1e071fede1a775d0f046512",
+        "tasks": [
+          ":app:assembleDebug",
+          ":app:testDebugUnitTest",
+          ":app:assembleDebugAndroidTest"
+        ],
+        "execution": {
+          "protocol": "lovelies-android-final-execution-v1",
+          "started_at": "2026-11-01T06:20:53.417388+00:00",
+          "finished_at": "2026-11-01T06:30:48.341280+00:00",
+          "exit_code": 1,
+          "command_record": "/workspace/scratch/97844a440d4b/implementation_work/android-final-isolated-attempt02-command.json",
+          "preflight": "/workspace/scratch/97844a440d4b/implementation_work/android-final-isolated-attempt02-preflight.json",
+          "memory_events_after": "low 0\nhigh 0\nmax 3681926\noom 25\noom_kill 11\noom_group_kill 0\n",
+          "log": "/workspace/scratch/97844a440d4b/implementation_work/android-final-isolated-attempt02.log"
+        },
+        "overall_invocation_status": "failed_later_during_lint_not_relabelled_as_success",
+        "log": "/workspace/scratch/97844a440d4b/implementation_work/android-final-isolated-attempt02.log",
+        "log_sha256": "f28e8cb21346fc0f078407eef14485c812f5d9eb17ae2f688f0789fdd7061ce5",
+        "jvm_tests": {
+          "total": 255,
+          "passed": 255,
+          "failed": 0,
+          "skipped": 0,
+          "suites": 21,
+          "declared_xml_tests": 255,
+          "errors": 0
+        },
+        "artifacts": [
+          {
+            "path": "/tmp/lovelies-android-final-output-20261101-02/app/outputs/apk/androidTest/debug/app-debug-androidTest.apk",
+            "sha256": "e4dcab6d4453fd646753c809e58f9b229fbc81515b2ce7198a1b330f0a55f835",
+            "bytes": 364696,
+            "application_id": "com.lovelies.memories.test",
+            "variant": "debugAndroidTest",
+            "version_code": 0,
+            "version_name": "",
+            "metadata_sha256": "3336c1ec481f55394ff1c4f39a5ee2d67253fe2c95e9c52fdff24f4ab612fda8",
+            "qualification": "debug_build_only_not_release_signed_or_installed"
+          },
+          {
+            "path": "/tmp/lovelies-android-final-output-20261101-02/app/outputs/apk/debug/app-debug.apk",
+            "sha256": "13a7ee6dcf5d94df576ee80ad8740731fe3c6906e896a0755afb94513a14c5bc",
+            "bytes": 14707150,
+            "application_id": "com.lovelies.memories",
+            "variant": "debug",
+            "version_code": 18,
+            "version_name": "2.0.0",
+            "metadata_sha256": "bca1355685985b5e557856bdbf6cbd2dd03f5d1566eda49ce8322ad1b3025e16",
+            "qualification": "debug_build_only_not_release_signed_or_installed"
+          }
+        ],
+        "source_manifest": "/workspace/scratch/97844a440d4b/implementation_work/android-final-effective-source-inputs.json",
+        "source_manifest_sha256": "e5223f9d4e2b29eece7075e7f652e9db41fee2cf7eafe6a2f153d5f06e9ddf62",
+        "source_aggregate_sha256": "18d6266129766d66285cf591438cf880516143565bc5fffa654cbcedeaf4a5bf",
+        "limit": "These Debug APKs and 255 JVM results belong to the candidate before the one-string rw translation correction and the LiveScreens Release-control rendering guard. Android Kotlin source now differs; no final-source compile, repackaged APK, JVM rerun or lint pass is claimed."
+      },
+      "lint_finding": {
+        "status": "failed_then_source_corrected_not_yet_rerun",
+        "result_record": "/workspace/scratch/97844a440d4b/implementation_work/android-final-lint-resource-failure.json",
+        "result_sha256": "869448aee80ba34324928fd50833c47ce3cd8875d6e74630aefd73f208c40b6c",
+        "report": "/workspace/scratch/97844a440d4b/implementation_work/android-lint-missing-translation.xml",
+        "report_sha256": "708f139a3899efddc9798fc74513c8d750faca47cd0ba27130ddbf2f05925820",
+        "fatal": 0,
+        "errors": 1,
+        "warnings": 59,
+        "id": "MissingTranslation",
+        "resource_name": "audience_change_retired",
+        "locale": "rw"
+      },
+      "final_source_delta": {
+        "path": "android/app/src/main/res/values-rw/strings.xml",
+        "before_sha256": "0278d52ad2e38bde56f97b844dcb3cb0e29f710e0c15adbf67c5f82a128cecb3",
+        "after_sha256": "775123e09c8de3167a4467abec902787fbd2414e1e446f1bc7b14cb660fbab1e",
+        "reason": "Add the missing Kinyarwanda audience-change retirement message found by actual lint; no lint suppression or policy change."
+      },
+      "final_resource_source_snapshot": {
+        "path": "/workspace/scratch/97844a440d4b/implementation_work/android-final-resource-source-inputs.json",
+        "sha256": "efefdccb599b50f1a9f85da7e9fdf8ff3a3ea8693a4f4b40f73b948533ab0e91",
+        "input_files": 288,
+        "source_aggregate_sha256": "d70326c0a8470d3776f729123bc472cb4ccba48eb7862c88cf71aaa2d60ec26b",
+        "note": "Captured immediately before this documentation-only inventory freeze. The one self-record entry changes only because validation/source-inventory metadata is finalized; an external post-freeze snapshot binds those finalized bytes without a hash cycle."
+      },
+      "pending_final_phases": [
+        "Recompile changed Android Kotlin source and package final localized Debug app/test APKs",
+        "Force rerun of only :app:testDebugUnitTest against the final candidate",
+        "Complete :app:lintDebug with no errors",
+        "Compile and execute the final iOS candidate on macOS, including the wordmark conditional control"
+      ],
+      "prepared_invocation": "/workspace/scratch/97844a440d4b/implementation_work/android-final-isolated-controls01-command.json",
+      "prepared_invocation_status": "not_launched_pending_root_coordination",
+      "resource_profile": "One worker; Gradle heap 1536 MiB/metaspace 768 MiB; one 256 MiB test worker; no global task rerun; at least 2.5 GiB estimated reclaimable headroom because LiveScreens Kotlin source requires recompilation.",
+      "prior_result": {
+        "status": "passed_on_prior_input",
+        "reported_by": "root",
+        "log": "/workspace/scratch/97844a440d4b/implementation_work/android-third.log",
+        "log_sha256": "754d699ee3e84f40c5c284c30dac0e89f63b600c43ae4110f3a8a6b3f00af5b4",
+        "tasks": [
+          "assembleDebug",
+          "testDebugUnitTest",
+          "assembleDebugAndroidTest",
+          "lintDebug"
+        ],
+        "jvm_tests": {
+          "total": 255,
+          "passed": 255,
+          "failed": 0,
+          "skipped": 0
+        },
+        "lint": {
+          "fatal": 0,
+          "errors": 0,
+          "warnings": 59
+        },
+        "elapsed": "6m9s",
+        "limit": "Executed before final 409/410 compatibility edits; parent will rerun final input."
+      },
+      "failed_attempts": [
+        {
+          "status": "failed_attempt_preserved",
+          "stage": "compileDebugKotlin",
+          "log": "/workspace/scratch/97844a440d4b/implementation_work/android-final.log",
+          "log_sha256": "9ee2e55be85913aab487315dacf9f17a9ba1610830e5cbbd873f50502856ed87",
+          "observation": "Widespread duplicate declarations from generated/incremental output; no duplicate original source or main sourceSets found. A subsequent clean compilation succeeded without Kotlin changes."
+        },
+        {
+          "status": "failed_attempt_preserved",
+          "stage": "mergeProjectDexDebug",
+          "log": "/workspace/scratch/97844a440d4b/implementation_work/android-final-clean.log",
+          "log_sha256": "8c1dd1134bf1c9ddea067a478c064d2882b6ccd230f3cfc5446e9a6bf66827e4",
+          "observation": "Kotlin compilation completed; an older generated resource dex archive survived clean. Both duplicate archives contained the same 214 resource classes."
+        },
+        {
+          "status": "failed_attempt_preserved",
+          "stage": "compileDebugKotlin_output_cleanup",
+          "log": "/workspace/scratch/97844a440d4b/implementation_work/android-final-fresh.log",
+          "log_sha256": "8889a71f81112412c9d31a29f0ae2c8f36a06d6572ea3e215011682a37307b91",
+          "observation": "Fresh cache/forced execution could not remove generated classes because a new .rsync-tmp appeared during deletion. Outputs were subsequently relocated outside the synchronized worktree."
+        },
+        {
+          "status": "failed_attempt_preserved",
+          "stage": "compileDebugKotlin_daemon_disappearance",
+          "log": "/workspace/scratch/97844a440d4b/implementation_work/android-final-isolated.log",
+          "log_sha256": "b7cc2a9b1264c544e8d59d8f555c5b0c63f44d459d0a2c6e4b7e34959b1ad450",
+          "observation": "Relocated output avoided synchronization/source diagnostics, but the daemon disappeared during saturated cgroup memory. Cumulative OOM observations were retained without conclusive per-process attribution."
+        },
+        {
+          "status": "failed_attempt_preserved",
+          "stage": "lint_variants_daemon_disappearance",
+          "log": "/workspace/scratch/97844a440d4b/implementation_work/android-final-isolated-attempt02.log",
+          "log_sha256": "f28e8cb21346fc0f078407eef14485c812f5d9eb17ae2f688f0789fdd7061ce5",
+          "observation": "Both APKs and 255 JVM tests completed; the overall process later disappeared in lint. The cgroup OOM-kill counter increased from 10 to 11. Completed phases remain separately bound to their exact pre-localization inputs."
+        },
+        {
+          "status": "failed_attempt_preserved",
+          "stage": "lint_missing_translation",
+          "log": "/workspace/scratch/97844a440d4b/implementation_work/android-final-isolated-lint01.log",
+          "log_sha256": "dd6d214e369bb3e62c85e062d6d9bf45a68a9a1fccabccbf247542e4bdea6e3d",
+          "observation": "Lint completed with one MissingTranslation error for audience_change_retired in rw and 59 warnings. The rw resource was corrected with no suppression or baseline change; final resource packaging/lint/JVM execution remains pending."
+        }
+      ],
+      "refused_launches": [
+        {
+          "status": "launch_refused_resource_preflight",
+          "path": "/workspace/scratch/97844a440d4b/implementation_work/android-final-isolated-attempt02-preflight-2026-11-01T024057.031536_0000.json",
+          "sha256": "b67abb745773b19649a02bdfa16454a04aa7d3c926ea12ebb19f29c335635b75",
+          "estimated_reclaimable_headroom_bytes": 532685888,
+          "required_headroom_bytes": 2684354560,
+          "no_compiler_launched": true,
+          "reason": "Initial conservative compiler-sized resource guard"
+        },
+        {
+          "status": "launch_refused_resource_preflight",
+          "path": "/workspace/scratch/97844a440d4b/implementation_work/android-final-isolated-resource01-preflight-2026-11-01T063748.499848_0000.json",
+          "sha256": "defaec610dcd66eb1f2df8e36ed093ae2eb1e839177261649289b3723269b8ff",
+          "estimated_reclaimable_headroom_bytes": 2393200672,
+          "required_headroom_bytes": 2684354560,
+          "no_compiler_launched": true,
+          "reason": "Initial conservative compiler-sized resource guard"
+        },
+        {
+          "status": "launch_refused_resource_preflight",
+          "path": "/workspace/scratch/97844a440d4b/implementation_work/android-final-isolated-resource01-preflight-2026-11-01T063925.475130_0000.json",
+          "sha256": "3621a65bd73875dc67fd9181bd552a23a3729820bae0ec5e864098bbccf3ddc9",
+          "estimated_reclaimable_headroom_bytes": 2456833680,
+          "required_headroom_bytes": 2684354560,
+          "no_compiler_launched": true,
+          "reason": "Initial conservative compiler-sized resource guard"
+        },
+        {
+          "status": "launch_refused_resource_preflight",
+          "path": "/workspace/scratch/97844a440d4b/implementation_work/android-final-isolated-resource01-preflight.json",
+          "sha256": "f21135c5a2d47a4ee4ef2d84ec7884fdcd31c4c5459b7f3a167533fdbab29ec3",
+          "estimated_reclaimable_headroom_bytes": 1919162176,
+          "required_headroom_bytes": 2147483648,
+          "no_compiler_launched": true,
+          "reason": "Root-approved cached resource/JVM/lint invocation: Kotlin/Java inputs are unchanged, Gradle heap remains 1024 MiB with metaspace 768 MiB, and the single forced test worker is capped at 256 MiB. The prior lint-only invocation with this Gradle profile completed without an OOM-counter increment. A 2 GiB headroom guard is retained; no full compilation/task rerun is requested."
+        }
+      ],
+      "external_acceptance": {
+        "connected_android_tests_executed": false,
+        "physical_devices_qualified": false,
+        "release_artifact_signed": false,
+        "store_upgrade_qualified": false,
+        "live_provider_qualified": false,
+        "deployed_local_supabase_qualified": false
+      },
+      "limit": "Final source qualification remains pending. Historical APK/JVM successes predate both the rw translation and Android reference-control changes; actual lint failure/source correction and refused attempts remain distinct. No connected tests, physical-device, signing, store, provider, Apple or deployed-host acceptance is inferred.",
+      "final_reference_control_deltas": [
+        {
+          "path": "android/app/src/main/java/com/lovelies/frontend/preview/LiveScreens.kt",
+          "before_sha256": "85960a9b366c113ca645e29ab7300bfa48d7b6f4bb62e7f50c8bde07ed362ee1",
+          "after_sha256": "42a6901a36a135da03f6a728f3dc82dd21f8e4aeda82f95456d3e8dacc5012c0",
+          "reason": "Render the profile reference-screen action only in REFERENCE_SCREENS builds; preserve the existing release handler guard and core account routes."
+        },
+        {
+          "path": "ios/Lovelies/Views/Components.swift",
+          "before_sha256": "7fc5f9303fc5e4682e2798040efe767ef3f1281fff62923c830e5eb1e2edbfa5",
+          "after_sha256": "aebc63bfe5b415609771101559d80ac649107df8bbc8d623e8f6a70d0a250b17",
+          "reason": "Attach wordmark reference long-press and VoiceOver action only when reference review is enabled; retain the ordinary branded image and accessibility label in Release."
+        }
+      ]
+    },
+    "android_host_runners": [
+      {
+        "suite": "push_optout_export_authority",
+        "status": "passed_on_prior_input",
+        "tests": {
+          "total": 80,
+          "passed": 80,
+          "failed": 0
+        },
+        "named_checks": [
+          "explicit opt-out is saved even if the registered session is absent",
+          "absent-session preference write failure is surfaced",
+          "temporary absent-session sync without an explicit change preserves preference",
+          "enabling without registered credentials reports the missing session",
+          "enabling from an anonymous session reports the missing registered session",
+          "failed opt-in preference commit is surfaced before provider or backend work",
+          "exception saving opt-in is surfaced before provider or backend work",
+          "a later successful opt-in clears the process-local failure fence",
+          "successful registered opt-in preserves an existing matching registration",
+          "registered opt-out removes the same saved device once",
+          "failed explicit preference write is not reported successful for a registered session",
+          "registered opt-out without a saved row makes no removal request",
+          "explicit opt-out leaves unrelated preference entries unchanged",
+          "an uninitialized Firebase app does not make local opt-out fail",
+          "a failed best-effort SDK switch does not pretend to be a preference failure",
+          "app-level notification disablement is effective before Android 13",
+          "a muted updates channel is not reported enabled",
+          "foreground token reconciliation consumes a rotation only after current registration",
+          "a concurrent newer rotation is preserved for the next reconciliation",
+          "a matching local hash cannot hide server deactivation",
+          "unconfirmed push status does not dispatch a second mutation or turn opt-out back on",
+          "same permission action survives a transient read invalidation",
+          "photo actions reject changed selection route session account and device",
+          "push typed receipt validates redacted input and current device without using historical active as authority",
+          "unknown typed push receipt carries no registration authority",
+          "export lost create reply recovers the same durable operation and delivery",
+          "export GET response loss can repeat the same delivery before ACK",
+          "export lost staging acknowledgement recovers verified durable bytes without another GET",
+          "export lost stage journal acknowledgement stops ACK until persistence is reconfirmed",
+          "export lost ACK response resumes with staged bytes and the distinct original ACK key",
+          "export document failure retains staged bytes and rechecks current server authority on retry",
+          "export altered bytes cannot be staged acknowledged or published",
+          "export session replacement after ACK prevents document publication",
+          "export wall expiry and elapsed rollback both fail before requesting private bytes",
+          "export response cannot change account path expiry or payload after first delivery",
+          "owned temporary files retain durable proof and expire after restart-equivalent reread",
+          "matching unknown legacy filenames are preserved",
+          "stale file handles and sweep cannot delete a same-path replacement",
+          "supported temporary writers serialize with cleanup and stale handles reject reused names",
+          "completed store evidence is archived under its original account without becoming another account entitlement",
+          "unresolved store evidence cannot be archived as completed or merged across accounts",
+          "store history capacity preserves prior records and fails before new evidence is discarded",
+          "account collections load beyond 100 while preserving IDs and current row updates",
+          "account collection requests explicitly ask for 100 and preserve opaque cursor bytes",
+          "account collection continuation rejects duplicate IDs empty continuing pages and cursor cycles",
+          "account collection fences reject late old-account and old-epoch replies and discard old cursors on reset",
+          "account collection metadata cannot silently truncate default pages or misreport continuation",
+          "cold-process logout advances the durable generation before loading old credentials",
+          "retirement publication and independent durability do not wait for a blocked session snapshot",
+          "late credential publication must compare the pre-write scope",
+          "shared-vault retirement invalidates a background repository immediately",
+          "snapshot compare-and-swap preserves a newer repository's operation evidence",
+          "lost retirement write acknowledgement still prevents old credentials after restart",
+          "failed retirement persistence remains unconfirmed and keeps the live gate closed",
+          "a missing authority file after migration cannot be mistaken for a fresh install",
+          "a damaged credential stamp fails closed and preserves its original bytes",
+          "retired challenge and refresh identities cannot adopt an unseen late credential",
+          "retirement preserves unknown generic and upload evidence without reauthorizing it",
+          "an unrelated marker change cannot silently adopt another account credential",
+          "large export streams over 20 MiB and preserves UTF-8 across raw chunk boundaries",
+          "chunk download interruption resumes the same create and acknowledgement identities",
+          "lost chunk write acknowledgement reuses only exact verified local chunks",
+          "lost chunk export journal acknowledgement resumes durable staging before ACK",
+          "lost large export ACK reply recovers from protected chunks without another remote GET",
+          "missing acknowledged chunk preserves evidence and cannot publish or fetch retired publication",
+          "corrupted acknowledged chunk is rejected before publication without overwriting evidence",
+          "logout or expiry while large export ACK returns closes publication",
+          "manifest rejects out-of-scope paths hashes counts and unexpected continuation",
+          "manifest pagination binds 128-row pages to the previous root and total publication",
+          "replacement is confirmed before the previous device is revoked",
+          "ambiguous replacement leaves the previous registration intact",
+          "rotation callback during registration cannot be cleared by an older sync",
+          "same token cached locally is re-registered when server row is inactive",
+          "opt-out revokes only this authentication device's Android rows",
+          "permission withdrawal during registration cannot publish success or retire old rows",
+          "successful rotation consumes the durable marker and reconciles original operations",
+          "automatic sync cannot replace a terminal registration with a new key",
+          "an explicit enabled setting authorizes a fresh operation after terminal registration",
+          "automatic opt-out recovery cannot replace a terminal removal",
+          "explicit disable authorizes a fresh removal after a terminal rollback"
+        ],
+        "evidence_directory": "/workspace/scratch/97844a440d4b/native_reconciliation/push-optout-attempt-01",
+        "result_sha256": "aac1e68a9afc683ef1090460a7eb254a51caa0eb8b91f6b97605705dc1deef6d",
+        "test_log_sha256": "2a6982dd97cf19e5a111f8ff0a75128438a7f0dc28cb9a5f0bf419dac5b2ef40",
+        "input_hashes_match_final_owned_sources": false,
+        "scope": "actual push, action binding, account pagination, session authority, chunked export/store recovery and temporary-media ownership source; synthetic Android/Firebase/HTTP/vault boundaries; real temporary host filesystem with explicit host directory fsync; Android Os directory-sync default is not executed here and requires the installed Android journey; no real provider, Android lifecycle, MediaStore or FileProvider",
+        "input_sha256": {
+          "scripts/test_android_push_optout.py": "3e8489d57fbcd48d8c7104541202ef9119ed5dfe8b7b563cc9cecbc268caa6f1",
+          "android/app/src/main/java/com/lovelies/frontend/preview/PushMessaging.kt": "76218931ef532995286feb1cd0750fd786f71435e375111f55a4793282aa2b84",
+          "android/app/src/main/java/com/lovelies/frontend/preview/NativeProtocol.kt": "fd176fceb9ff29902973bdc854a8cbeca366df0f027b98609fedec7ec2bfb07f",
+          "android/app/src/main/java/com/lovelies/frontend/preview/PushOperationRecovery.kt": "e0c0f0e5dcde9a0d0424605f58f3db8affd48289c5c71c36883cf969fe97db5f",
+          "android/app/src/main/java/com/lovelies/frontend/preview/PhotoActionOwner.kt": "2dfbca2ccb8ec8546f6184433f81ff0c2b24e7f1cadebd094cb21257af5079c1",
+          "android/app/src/main/java/com/lovelies/frontend/preview/PrivacyExportDelivery.kt": "44436f3f199c45adea62a5f4cd49a73ad2317c46ed58623709bdfd58f1cd6994",
+          "android/app/src/main/java/com/lovelies/frontend/preview/StorePurchaseRecovery.kt": "4402cdba2e491cb44d9bb4b26f6cbb7d01ce8d4c32b8ca83fca64eb18c6fd562",
+          "android/app/src/main/java/com/lovelies/frontend/preview/PhotoUploadJournal.kt": "4b42994b9ed0b7f0e3afc8fed6fea6eef3e81ea1915e873523747cc108bff15b",
+          "android/app/src/main/java/com/lovelies/frontend/preview/AccountCollectionPage.kt": "3dd17dfbcc588da8f0c6b6fb452468776e7295d7ba8eec7f1a1e55185352be19",
+          "android/app/src/main/java/com/lovelies/frontend/preview/SessionAuthority.kt": "b094f4cc1719dd2069f4667c576fffcb4520ffbfc33bd1f27c75ce8af0b36881",
+          "android/app/src/main/java/com/lovelies/frontend/preview/ChunkedPrivacyExport.kt": "a6d50429af4bea80eb29d026e109b85abf0ab6fd361547ab6473dadd5deccb3c",
+          "android/app/src/main/java/com/lovelies/frontend/preview/OriginalMedia.kt": "01512fa6480a1af90302e29033e2fa588075ce9d84b05932a78bc7efaad95f92",
+          "android/app/src/main/java/com/lovelies/frontend/preview/RepositoryBoundary.kt": "222af52a585e64de85c4d3dbcb37eba85fa71c01023778f6bc16f21fc8460ffc",
+          "scripts/test-fixtures/android-push-optout/AccountCollectionTests.kt": "4db6f6d36993f5dcaf3ca214884d6052b2556ab505588f7713f1444361f9150e",
+          "scripts/test-fixtures/android-push-optout/ChunkedExportTests.kt": "5fc0d816afef12656fc49a78b3df7d6835a32e3dcf3c6041972488279ee4757b",
+          "scripts/test-fixtures/android-push-optout/RecoveryTests.kt": "b22eea6919c898dc72dfc07a9e7f4c5cc584bb0c99d7d9bf7c6b2cbd2aa00cd8",
+          "scripts/test-fixtures/android-push-optout/SessionAuthorityTests.kt": "e2126309cc389aeb9d3f4005822a466d8b736d88427de014c43199a8a985e6d7",
+          "scripts/test-fixtures/android-push-optout/SignedOutOptOutTests.kt": "bcc868f67c02419022feb6e239911aae9ba6cff5563a7769aef7ff3b606c73e4",
+          "scripts/test-fixtures/android-push-optout/android_app.kt": "4b5cae5d3b46f873373f2368adda38e9769546962d8e94cafb5bab8c4f66d91c",
+          "scripts/test-fixtures/android-push-optout/android_content.kt": "50e163a7f5a553698e9d585244be4ade7b8b69bd90ba66518fd4cbdd78f2a522",
+          "scripts/test-fixtures/android-push-optout/android_manifest.kt": "dd2d31f5d08f02c46a30470a583b6358a5a54c650366ab5ebc6c59b253707811",
+          "scripts/test-fixtures/android-push-optout/android_os.kt": "021752285ba105a7504677d2e234c8ae52ed7ebe45c835b3712224bcb6cb4bdc",
+          "scripts/test-fixtures/android-push-optout/android_pm.kt": "fb88619a1947a02179f76c4b4abba487722b14886f5c136e8b1aeff634b19b90",
+          "scripts/test-fixtures/android-push-optout/android_system.kt": "415986cb6026844ea46e9e7c9ec1c115bf6c13f58e4f7db964e04e889cdb87f1",
+          "scripts/test-fixtures/android-push-optout/androidx.kt": "8ffd11710135ec5fa9d8ede99b34045ba42755966e4bca8b2d57bace159580b8",
+          "scripts/test-fixtures/android-push-optout/androidx_app.kt": "cae544b7d51f0df4165e5f53f4bf8e9f06661d96780c969364e4f48326f3fb03",
+          "scripts/test-fixtures/android-push-optout/app_stubs.kt": "234c25407850f9df9da53af7842b2d66485cef063b0627d8f071601d58b4eb0e",
+          "scripts/test-fixtures/android-push-optout/firebase.kt": "f10ce5c5e5a6ea6c30972bbdadea0e925f55a9a491a51718a0501dc2a7a49f3f",
+          "scripts/test-fixtures/android-push-optout/firebase_messaging.kt": "94fbe94f1764f8ca5c0857860e76044ab2022261b40b8e366241459da30a2412",
+          "/tmp/lovelies-kotlin-20261031/kotlinc/bin/kotlinc": "90750c977cc043dd2b05c69dd4e052c10377554925dd5a155e74ef732be28c7d",
+          "/tmp/lovelies-android-sdk-20261031/jdk/bin/java": "a2195ae9f8a91b82f53df7e1d1b9a650937ebbabbf67d0240c6378b4fbd9990b",
+          "/tmp/lovelies-kotlin-20261031/kotlinc/lib/kotlinx-coroutines-core-jvm.jar": "9860906a1937490bf5f3b06d2f0e10ef451e65b95b269f22daf68a3d1f5065c5"
+        },
+        "qualification_limit": "Prior execution retained with its original input hashes. Export implementation is unchanged; shared NativeProtocol input changed for terminal handling, so this is not a claim of execution against the final tree."
+      },
+      {
+        "suite": "push_recovery",
+        "status": "passed_current_input",
+        "tests": {
+          "total": 26,
+          "passed": 26,
+          "failed": 0
+        },
+        "named_checks": [
+          "unresolved original token and exact digest survive vault serialization",
+          "wrong origin and changed original token are rejected",
+          "typed committed receipt validates both supported persisted input schemes",
+          "wrong operation action, key, or digest cannot authorize completion",
+          "another authentication device cannot adopt a historical registration",
+          "historical registration remains distinct from currently inactive device",
+          "removal receipt binds exact device ID",
+          "lost registration response recovers from typed receipt without a second POST",
+          "restart after server commit looks up original key without redispatch",
+          "dropped request before commit retries only original key and exact token",
+          "permission withdrawal keeps unresolved registration lookup only",
+          "committed earlier registration can reconcile after opt-out for revocation",
+          "revocation survives restart and may dispatch while opted out",
+          "authority changes between actor reply and continuation cannot persist success",
+          "failed receipt write remains unresolved and is not reported as registered",
+          "missing previously committed receipt never replays a retired token",
+          "resolved journal drops raw token and preserves immutable input binding",
+          "terminal dispatch durably erases only the original credential and never retries its key",
+          "terminal exact-key lookup retires an unresolved registration without dispatch",
+          "exact 410 replay retirement normalizes only after preserving original source code and hashes",
+          "410 storage failure preserves original input and never falls through to lookup",
+          "failed terminal persistence keeps the original operation unresolved",
+          "nonterminal status or authority failures cannot erase original push evidence",
+          "late terminal lookup after account retirement cannot persist disposition",
+          "a terminal rollback cannot overwrite previously committed receipt evidence",
+          "retired records reject credential resurrection, forged dispositions and altered digest"
+        ],
+        "evidence_directory": "/workspace/scratch/97844a440d4b/native_reconciliation/push-recovery-terminal-02",
+        "result_sha256": "380265a268b11a270afae05d2c89ff31c3df17c357039b3417f646bba486ac5f",
+        "test_log_sha256": "56e928c330b2c1e09ab9b2c58648abcd782e6984be60d6c4daf69146e862bb2d",
+        "input_hashes_match_final_owned_sources": true,
+        "scope": "actual Kotlin journal/protocol/recovery code; controlled vault, network and authority; no Android SDK, Firebase delivery or device validation",
+        "input_sha256": {
+          "scripts/test_android_push_recovery.py": "5cf9e3e02ffb14bfd0a8922347be4980bcc645107204fef1e4e438d212a13e79",
+          "/tmp/lovelies-kotlin-20261031/kotlinc/bin/kotlinc": "90750c977cc043dd2b05c69dd4e052c10377554925dd5a155e74ef732be28c7d",
+          "/tmp/lovelies-android-sdk-20261031/jdk/bin/java": "a2195ae9f8a91b82f53df7e1d1b9a650937ebbabbf67d0240c6378b4fbd9990b",
+          "/tmp/lovelies-kotlin-20261031/kotlinc/lib/kotlinx-coroutines-core-jvm.jar": "9860906a1937490bf5f3b06d2f0e10ef451e65b95b269f22daf68a3d1f5065c5",
+          "android/app/src/main/java/com/lovelies/frontend/preview/NativeProtocol.kt": "a2ba49acdf20b97b3c7c07c99df427eb7abde652239fb1ba8ecbdbc07cf139e6",
+          "android/app/src/main/java/com/lovelies/frontend/preview/PushOperationRecovery.kt": "ae99de32548714c74cb8572f1631b498a7b69017127c3757fc8e47d17a455465",
+          "android/host-tests/PushOperationRecoveryTests.kt": "79c56f6c72feb7341195a70217233ecf10e0cfdbdcd542f641167b9e4f0d9d74"
+        },
+        "qualification_limit": "Synthetic boundary execution; no Android SDK or provider/device qualification."
+      },
+      {
+        "suite": "audience_readiness",
+        "status": "passed_current_input",
+        "tests": {
+          "total": 39,
+          "passed": 39,
+          "failed": 0
+        },
+        "named_checks": [
+          "known decisions require finite annual metadata and valid minimized boolean tuples",
+          "unknown and blocked decisions never acquire product capabilities",
+          "earliest effective authority deadline expires before own annual review",
+          "minor own review remains separate from earlier guardian authority deadline",
+          "legacy projection is accepted only for exact receipt recovery and cannot authorize",
+          "actual new declaration persists only decision flags before dispatch",
+          "failed durable declaration write dispatches no request",
+          "lost declaration response retries exact original input after repository restart",
+          "legacy pending declaration retains its exact age-band key and body",
+          "signed expired adult status precedes camera and publishes no session",
+          "weak status rejects another account nonce and injected product graph",
+          "missing device key never creates a substitute identity",
+          "foreign session cannot submit retained device review",
+          "adult renewal needs its separate immutable current face consent",
+          "failed device renewal persistence occurs before signing or HTTP",
+          "lost renewal response survives restart with same key consent and fresh nonce",
+          "malformed renewal receipt retains original operation through restart",
+          "failed receipt retirement keeps durable recovery marker and retries same key",
+          "account generation change during signing prevents renewal dispatch",
+          "late signed reply cannot retire another account generation's journal",
+          "minor review atomically requests fresh guardian approval without face consent",
+          "lost minor guardian-review uses original decision and guardian request receipt",
+          "historical renewal receipt does not replace newer current eligibility",
+          "foreign renewal records survive successful own-account retirement",
+          "logout preserves pending review and exact device proof without creating identity",
+          "session annual renewal returns explicit recovery step and minimized saved consent",
+          "expired retained control status exposes only management metadata",
+          "retained control renewal persists exact old secret and reviewed consent before dispatch",
+          "lost retained-control renewal replays original binding key and consent with fresh proof",
+          "control renewal cannot sign before durable original review is saved",
+          "policy refusal retains the exact session renewal journal until original-key reconciliation",
+          "earlier guardian expiry exposes separate minor review availability without adult renewal",
+          "exact server cancellation releases old capture only after bound reconciliation across policy advance",
+          "session audience 409 retains exact negative evidence before releasing pending input",
+          "signed audience 409 requires a fresh decision and preserves source evidence across restart",
+          "session audience 410 retains exact negative evidence before releasing pending input",
+          "signed audience 410 requires a fresh decision and preserves source evidence across restart",
+          "failed terminal audience evidence write leaves both journal forms unchanged and unresolved",
+          "signed current status cannot retire an unresolved renewal or normalize a conflict"
+        ],
+        "evidence_directory": "/workspace/scratch/97844a440d4b/native_reconciliation/audience-terminal-03",
+        "result_sha256": "68249111234cf10a774977b0bbb8b1ce4042ffdb3d59182a1aedd7511ec97f79",
+        "test_log_sha256": "bd318bcabc4b3ee9c24d08bf0a86d55605c74a99538438b3f0525624a78bda07",
+        "input_hashes_match_final_owned_sources": true,
+        "scope": "actual CloudflareRepository audience and retained-control dispatch/journal/recovery plus production DTO/fence sources; injected vault/network and compile-only Android/JSON/Keystore stubs; no Android SDK, crypto/device/provider validation",
+        "input_sha256": {
+          "scripts/test_android_audience_readiness.py": "96c5917595d6e43b6cf49fb10c98213ce85c4dc01b797df72a1588600c4f4989",
+          "/tmp/lovelies-kotlin-20261031/kotlinc/bin/kotlinc": "90750c977cc043dd2b05c69dd4e052c10377554925dd5a155e74ef732be28c7d",
+          "/tmp/lovelies-android-sdk-20261031/jdk/bin/java": "a2195ae9f8a91b82f53df7e1d1b9a650937ebbabbf67d0240c6378b4fbd9990b",
+          "/tmp/lovelies-kotlin-20261031/kotlinc/lib/kotlinx-coroutines-core-jvm.jar": "9860906a1937490bf5f3b06d2f0e10ef451e65b95b269f22daf68a3d1f5065c5",
+          "android/app/src/main/java/com/lovelies/frontend/preview/NativeProtocol.kt": "a2ba49acdf20b97b3c7c07c99df427eb7abde652239fb1ba8ecbdbc07cf139e6",
+          "android/app/src/main/java/com/lovelies/frontend/preview/PushOperationRecovery.kt": "ae99de32548714c74cb8572f1631b498a7b69017127c3757fc8e47d17a455465",
+          "android/app/src/main/java/com/lovelies/frontend/preview/PrivacyExportDelivery.kt": "44436f3f199c45adea62a5f4cd49a73ad2317c46ed58623709bdfd58f1cd6994",
+          "android/app/src/main/java/com/lovelies/frontend/preview/ChunkedPrivacyExport.kt": "a6d50429af4bea80eb29d026e109b85abf0ab6fd361547ab6473dadd5deccb3c",
+          "android/app/src/main/java/com/lovelies/frontend/preview/SessionAuthority.kt": "b094f4cc1719dd2069f4667c576fffcb4520ffbfc33bd1f27c75ce8af0b36881",
+          "android/app/src/main/java/com/lovelies/frontend/preview/AccountCollectionPage.kt": "3dd17dfbcc588da8f0c6b6fb452468776e7295d7ba8eec7f1a1e55185352be19",
+          "android/app/src/main/java/com/lovelies/frontend/preview/CloudflareRepository.kt": "81478fa6c75b67ef4b8ec4cba5cec780242d7cd110b6c9ee0c9d9f430dc70bc3",
+          "android/app/src/main/java/com/lovelies/frontend/preview/RepositoryBoundary.kt": "6f7dbc4be787dce4ab6fc23bd4ffc1da77171b250ce63b6f3286099e537f43eb",
+          "android/app/src/main/java/com/lovelies/frontend/preview/DeviceIdentity.kt": "0d28e143c015c643db29bd780ca26d5ace3242d6f01222acbd91dabdc8d393af",
+          "android/app/src/main/java/com/lovelies/frontend/preview/EnrollmentJournal.kt": "5e4754849d2fa24c201533492b0713648ad37143234fb3841e374a20643d75cc",
+          "android/app/src/main/java/com/lovelies/frontend/preview/GuestDeletion.kt": "6a0f9216d1f27f133d279cfbf1c8f8bc5a324adb977bd444e8c730be49ec88f4",
+          "android/app/src/main/java/com/lovelies/frontend/preview/AccountRecovery.kt": "3661000de5b533d4f98074ee67143e568cc45ac2050e7998e9f46dbc7e64ec03",
+          "android/app/src/main/java/com/lovelies/frontend/preview/FaceLifecycle.kt": "2ed91798b01f6af92c9dc7244afcd02d8569fc39b76d62b3099b4137118117be",
+          "android/app/src/main/java/com/lovelies/frontend/preview/CameraRecovery.kt": "8178e6921664b2e074fa7c1d6191c81dda28476712c32a24c25c87377b31f7ac",
+          "android/app/src/main/java/com/lovelies/frontend/preview/CaptureOwnership.kt": "420a72583b5b37c2920b939a9e1d79b85a46e29334b04df446c4fe22a3bfa42b",
+          "android/app/src/main/java/com/lovelies/frontend/preview/RefreshDelivery.kt": "236f3dd706736b65be0e5739af938ac2348d49d4a3fff76f0e70f0427f0fc287",
+          "android/app/src/main/java/com/lovelies/frontend/preview/PhotoUploadJournal.kt": "4b42994b9ed0b7f0e3afc8fed6fea6eef3e81ea1915e873523747cc108bff15b",
+          "android/app/src/main/java/com/lovelies/frontend/preview/StorePurchaseRecovery.kt": "52bd73f8f447348e99d6bbc34594a16293cc1a7a5717b5d8b59e045e7331e3c0",
+          "android/app/src/main/java/com/lovelies/frontend/preview/LibraryState.kt": "08575ab553cb0b959f41401eb8a7c488284a5985215e2a7b7ff6969465a15416",
+          "android/host-tests/AudienceReadinessTests.kt": "e6cf4545a20cbe0be3db2cca98bdc682970c7985fbc2c2b397d29072162d3061",
+          "scripts/test-fixtures/android-repository-readiness/android_content.kt": "ed7ef6f3a5b1075716a3a31342f80310663d40c957f75f7196c63282541b4da1",
+          "scripts/test-fixtures/android-repository-readiness/android_os.kt": "9d060217db7842391505242cd63972f08fd6308814bf207a474d498ca18e754b",
+          "scripts/test-fixtures/android-repository-readiness/android_uri.kt": "58b2dfbbd6061a7034c5f3c4f07f75e765392c0d7efda8fd1f07e2f3bb75c393",
+          "scripts/test-fixtures/android-repository-readiness/json.kt": "efeb1f7a515b11936ff802c9bbd2f4b7e593a03e863dbb967e8c6ccd1dd5dffa",
+          "scripts/test-fixtures/android-repository-readiness/platform.kt": "3248c91efe19f4b91569959b4091f0491727d83e93300fcd60a2e517719b1924"
+        },
+        "qualification_limit": "Synthetic boundary execution; no Android SDK or provider/device qualification."
+      },
+      {
+        "suite": "repository_readiness",
+        "status": "passed_current_input",
+        "tests": {
+          "total": 11,
+          "passed": 11,
+          "failed": 0
+        },
+        "named_checks": [
+          "terminal restrictive-recovery response removes only the original generic pending body",
+          "terminal lookup after restart clears pending without replaying the original business action",
+          "unknown commit keeps original body and key across explicit retries",
+          "failed terminal-body retirement keeps the exact pending operation held locally",
+          "terminal push lookup durably retires raw token and survives an actual repository restart",
+          "one terminal push row cannot block unrelated pending operations or erase another account",
+          "automatic registration retries cannot silently replace a terminal original operation",
+          "explicit new setting action can replace exactly its retired registration",
+          "failed terminal push persistence remains blocked until its exact disposition is durably saved",
+          "late terminal push response cannot mutate another account generation",
+          "generic exact 410 preserves negative identity while key conflicts retain pending body"
+        ],
+        "evidence_directory": "/workspace/scratch/97844a440d4b/native_reconciliation/repository-terminal-02",
+        "result_sha256": "8f64672f8b2ae6b05622979bda75f7ce4656846deab1b596a218481d99cb8186",
+        "test_log_sha256": "4307eb38e4d98e54943756c684ae42361ff801dbca00af05305effbb88a88f98",
+        "input_hashes_match_final_owned_sources": true,
+        "scope": "actual repository plus recovery/fence production sources; injected vault/network and compile-only Android/JSON/Keystore stubs; no Android SDK, real document provider, encryption or device validation",
+        "input_sha256": {
+          "scripts/test_android_repository_readiness.py": "e10bf589f8cb1d59906fd883a21359b283bbc92059d0520a196a26430a51b1f7",
+          "/tmp/lovelies-kotlin-20261031/kotlinc/bin/kotlinc": "90750c977cc043dd2b05c69dd4e052c10377554925dd5a155e74ef732be28c7d",
+          "/tmp/lovelies-android-sdk-20261031/jdk/bin/java": "a2195ae9f8a91b82f53df7e1d1b9a650937ebbabbf67d0240c6378b4fbd9990b",
+          "/tmp/lovelies-kotlin-20261031/kotlinc/lib/kotlinx-coroutines-core-jvm.jar": "9860906a1937490bf5f3b06d2f0e10ef451e65b95b269f22daf68a3d1f5065c5",
+          "android/app/src/main/java/com/lovelies/frontend/preview/NativeProtocol.kt": "a2ba49acdf20b97b3c7c07c99df427eb7abde652239fb1ba8ecbdbc07cf139e6",
+          "android/app/src/main/java/com/lovelies/frontend/preview/PushOperationRecovery.kt": "ae99de32548714c74cb8572f1631b498a7b69017127c3757fc8e47d17a455465",
+          "android/app/src/main/java/com/lovelies/frontend/preview/PrivacyExportDelivery.kt": "44436f3f199c45adea62a5f4cd49a73ad2317c46ed58623709bdfd58f1cd6994",
+          "android/app/src/main/java/com/lovelies/frontend/preview/ChunkedPrivacyExport.kt": "a6d50429af4bea80eb29d026e109b85abf0ab6fd361547ab6473dadd5deccb3c",
+          "android/app/src/main/java/com/lovelies/frontend/preview/SessionAuthority.kt": "b094f4cc1719dd2069f4667c576fffcb4520ffbfc33bd1f27c75ce8af0b36881",
+          "android/app/src/main/java/com/lovelies/frontend/preview/AccountCollectionPage.kt": "3dd17dfbcc588da8f0c6b6fb452468776e7295d7ba8eec7f1a1e55185352be19",
+          "android/app/src/main/java/com/lovelies/frontend/preview/CloudflareRepository.kt": "81478fa6c75b67ef4b8ec4cba5cec780242d7cd110b6c9ee0c9d9f430dc70bc3",
+          "android/app/src/main/java/com/lovelies/frontend/preview/RepositoryBoundary.kt": "6f7dbc4be787dce4ab6fc23bd4ffc1da77171b250ce63b6f3286099e537f43eb",
+          "android/app/src/main/java/com/lovelies/frontend/preview/DeviceIdentity.kt": "0d28e143c015c643db29bd780ca26d5ace3242d6f01222acbd91dabdc8d393af",
+          "android/app/src/main/java/com/lovelies/frontend/preview/EnrollmentJournal.kt": "5e4754849d2fa24c201533492b0713648ad37143234fb3841e374a20643d75cc",
+          "android/app/src/main/java/com/lovelies/frontend/preview/GuestDeletion.kt": "6a0f9216d1f27f133d279cfbf1c8f8bc5a324adb977bd444e8c730be49ec88f4",
+          "android/app/src/main/java/com/lovelies/frontend/preview/AccountRecovery.kt": "3661000de5b533d4f98074ee67143e568cc45ac2050e7998e9f46dbc7e64ec03",
+          "android/app/src/main/java/com/lovelies/frontend/preview/FaceLifecycle.kt": "2ed91798b01f6af92c9dc7244afcd02d8569fc39b76d62b3099b4137118117be",
+          "android/app/src/main/java/com/lovelies/frontend/preview/CameraRecovery.kt": "8178e6921664b2e074fa7c1d6191c81dda28476712c32a24c25c87377b31f7ac",
+          "android/app/src/main/java/com/lovelies/frontend/preview/CaptureOwnership.kt": "420a72583b5b37c2920b939a9e1d79b85a46e29334b04df446c4fe22a3bfa42b",
+          "android/app/src/main/java/com/lovelies/frontend/preview/RefreshDelivery.kt": "236f3dd706736b65be0e5739af938ac2348d49d4a3fff76f0e70f0427f0fc287",
+          "android/app/src/main/java/com/lovelies/frontend/preview/PhotoUploadJournal.kt": "4b42994b9ed0b7f0e3afc8fed6fea6eef3e81ea1915e873523747cc108bff15b",
+          "android/app/src/main/java/com/lovelies/frontend/preview/StorePurchaseRecovery.kt": "52bd73f8f447348e99d6bbc34594a16293cc1a7a5717b5d8b59e045e7331e3c0",
+          "android/app/src/main/java/com/lovelies/frontend/preview/LibraryState.kt": "08575ab553cb0b959f41401eb8a7c488284a5985215e2a7b7ff6969465a15416",
+          "android/host-tests/RepositoryReadinessTests.kt": "81bffef16b29c041cb8b00e216a5a690386a051d68cc2ece2e099ee6a2176d4f",
+          "scripts/test-fixtures/android-repository-readiness/android_content.kt": "ed7ef6f3a5b1075716a3a31342f80310663d40c957f75f7196c63282541b4da1",
+          "scripts/test-fixtures/android-repository-readiness/android_os.kt": "9d060217db7842391505242cd63972f08fd6308814bf207a474d498ca18e754b",
+          "scripts/test-fixtures/android-repository-readiness/android_uri.kt": "58b2dfbbd6061a7034c5f3c4f07f75e765392c0d7efda8fd1f07e2f3bb75c393",
+          "scripts/test-fixtures/android-repository-readiness/json.kt": "efeb1f7a515b11936ff802c9bbd2f4b7e593a03e863dbb967e8c6ccd1dd5dffa",
+          "scripts/test-fixtures/android-repository-readiness/platform.kt": "3248c91efe19f4b91569959b4091f0491727d83e93300fcd60a2e517719b1924"
+        },
+        "qualification_limit": "Synthetic boundary execution; no Android SDK or provider/device qualification."
+      },
+      {
+        "suite": "store_recovery",
+        "status": "passed_current_input",
+        "tests": {
+          "total": 47,
+          "passed": 47,
+          "failed": 0
+        },
+        "named_checks": [
+          "store input hashes retain independent canonical golden vectors",
+          "normal direct verification requires exact typed receipt and survives restart read only",
+          "legacy and digest receipt schemes bind the same original independently",
+          "unknown lookup retains original key and never resends a saved credential",
+          "wrong actor key product hash and credential cannot confirm the original",
+          "terminal direct response persists minimized exact operation without lookup or success",
+          "terminal exact-key lookup retires without dispatch and stays retired after restart",
+          "exact 410 store replay retains original server code and both input schemes without provider replay",
+          "terminal persistence failure leaves original credential and key held",
+          "late terminal result cannot retire another account generation",
+          "terminal rollback contradicting a saved receipt is rejected without erasing evidence",
+          "direct success followed by terminal lookup remains a contradiction hold",
+          "other HTTP errors and wrong terminal status preserve unresolved evidence",
+          "terminal persistence merge wins over pending but rejects committed contradiction",
+          "terminal serialization rejects token resurrection and keeps original input hashes",
+          "one restore attempt admits a token once and never stores its raw credential",
+          "actual repository retires terminal store and generic legacy credential together",
+          "actual automatic callbacks cannot replace a retired verification or grant a receipt",
+          "explicit same-token restoration admits one fresh key after durable retirement",
+          "a replacement receiving terminal outcome stops after one fresh verification",
+          "failed terminal write cannot authorize a fresh store key",
+          "lost replacement marker acknowledgement keeps new key lookup-only across restart",
+          "another account and late account switch cannot consume a terminal restoration",
+          "actual Play callback remains automatic and tells user to restore without repurchase",
+          "explicit Play restore queries purchased ownership then verifies fresh without billing sheet",
+          "duplicate Play enumeration cannot replace two terminal keys in one restore",
+          "pending or foreign SDK purchase cannot authorize terminal replacement",
+          "purchase button cannot open another provider sheet while original verification is terminal",
+          "Play restore stops before SDK retry when terminal persistence fails",
+          "restarted receipt cannot contradict a persisted direct success result",
+          "uncertain direct success constrains a later receipt and contradictory receipt merges",
+          "missing or contradictory persisted direct proof cannot admit a receipt",
+          "both repository store entries reject a foreign originating scope before archival",
+          "repository mutex wait cannot reuse a prior session verification permission",
+          "Play restore SDK wait retains its original account and session epoch",
+          "Play restore waiting for verification cannot spend permission after an A B A session switch",
+          "account activation preserves pending terminal and confirmed work across A B A",
+          "foreign legacy and terminal write uncertainty archive together without resurrecting credentials",
+          "foreign legacy pending credential becomes exact read-only account history",
+          "uncertain replacement child remains lookup-only through another account activation",
+          "failed foreign archive cannot create another account operation",
+          "lost foreign archive acknowledgement preserves original work for restart",
+          "full account archive holds rather than evicting pending or terminal markers",
+          "foreign contradictory committed uncertainty blocks archival without dropping evidence",
+          "terminal recovery minimizes the same operation in current and account history",
+          "failed same-key terminal history save holds original and safely retries minimization",
+          "stronger same-key historical commit rejects terminal despite weaker current record"
+        ],
+        "evidence_directory": "/workspace/scratch/97844a440d4b/native_reconciliation/store-terminal-02",
+        "result_sha256": "2aa8f871fcc60a9b409a11002d6da682810556d158eee91ba2ae9643a3dbc23d",
+        "test_log_sha256": "e7bbceed4197d42ff450f3ce1dcf6ede9005213f0a519c31dd08234cafef3180",
+        "input_hashes_match_final_owned_sources": true,
+        "scope": "actual store engine, repository and PlayPurchases caller; injected vault/network, controlled Billing SDK, and compile-only Android/Compose/JSON/Keystore stubs; no Android SDK app, provider, payment, encryption or device validation",
+        "input_sha256": {
+          "scripts/test_android_store_recovery.py": "29b97e169889084cc114922a6907573f60e97c6d54940a5d3d5fcb8ed52dffff",
+          "/tmp/lovelies-kotlin-20261031/kotlinc/bin/kotlinc": "90750c977cc043dd2b05c69dd4e052c10377554925dd5a155e74ef732be28c7d",
+          "/tmp/lovelies-android-sdk-20261031/jdk/bin/java": "a2195ae9f8a91b82f53df7e1d1b9a650937ebbabbf67d0240c6378b4fbd9990b",
+          "/tmp/lovelies-kotlin-20261031/kotlinc/lib/kotlinx-coroutines-core-jvm.jar": "9860906a1937490bf5f3b06d2f0e10ef451e65b95b269f22daf68a3d1f5065c5",
+          "android/app/src/main/java/com/lovelies/frontend/preview/NativeProtocol.kt": "a2ba49acdf20b97b3c7c07c99df427eb7abde652239fb1ba8ecbdbc07cf139e6",
+          "android/app/src/main/java/com/lovelies/frontend/preview/PushOperationRecovery.kt": "ae99de32548714c74cb8572f1631b498a7b69017127c3757fc8e47d17a455465",
+          "android/app/src/main/java/com/lovelies/frontend/preview/PrivacyExportDelivery.kt": "44436f3f199c45adea62a5f4cd49a73ad2317c46ed58623709bdfd58f1cd6994",
+          "android/app/src/main/java/com/lovelies/frontend/preview/ChunkedPrivacyExport.kt": "a6d50429af4bea80eb29d026e109b85abf0ab6fd361547ab6473dadd5deccb3c",
+          "android/app/src/main/java/com/lovelies/frontend/preview/SessionAuthority.kt": "b094f4cc1719dd2069f4667c576fffcb4520ffbfc33bd1f27c75ce8af0b36881",
+          "android/app/src/main/java/com/lovelies/frontend/preview/AccountCollectionPage.kt": "3dd17dfbcc588da8f0c6b6fb452468776e7295d7ba8eec7f1a1e55185352be19",
+          "android/app/src/main/java/com/lovelies/frontend/preview/CloudflareRepository.kt": "81478fa6c75b67ef4b8ec4cba5cec780242d7cd110b6c9ee0c9d9f430dc70bc3",
+          "android/app/src/main/java/com/lovelies/frontend/preview/RepositoryBoundary.kt": "6f7dbc4be787dce4ab6fc23bd4ffc1da77171b250ce63b6f3286099e537f43eb",
+          "android/app/src/main/java/com/lovelies/frontend/preview/DeviceIdentity.kt": "0d28e143c015c643db29bd780ca26d5ace3242d6f01222acbd91dabdc8d393af",
+          "android/app/src/main/java/com/lovelies/frontend/preview/EnrollmentJournal.kt": "5e4754849d2fa24c201533492b0713648ad37143234fb3841e374a20643d75cc",
+          "android/app/src/main/java/com/lovelies/frontend/preview/GuestDeletion.kt": "6a0f9216d1f27f133d279cfbf1c8f8bc5a324adb977bd444e8c730be49ec88f4",
+          "android/app/src/main/java/com/lovelies/frontend/preview/AccountRecovery.kt": "3661000de5b533d4f98074ee67143e568cc45ac2050e7998e9f46dbc7e64ec03",
+          "android/app/src/main/java/com/lovelies/frontend/preview/FaceLifecycle.kt": "2ed91798b01f6af92c9dc7244afcd02d8569fc39b76d62b3099b4137118117be",
+          "android/app/src/main/java/com/lovelies/frontend/preview/CameraRecovery.kt": "8178e6921664b2e074fa7c1d6191c81dda28476712c32a24c25c87377b31f7ac",
+          "android/app/src/main/java/com/lovelies/frontend/preview/CaptureOwnership.kt": "420a72583b5b37c2920b939a9e1d79b85a46e29334b04df446c4fe22a3bfa42b",
+          "android/app/src/main/java/com/lovelies/frontend/preview/RefreshDelivery.kt": "236f3dd706736b65be0e5739af938ac2348d49d4a3fff76f0e70f0427f0fc287",
+          "android/app/src/main/java/com/lovelies/frontend/preview/PhotoUploadJournal.kt": "4b42994b9ed0b7f0e3afc8fed6fea6eef3e81ea1915e873523747cc108bff15b",
+          "android/app/src/main/java/com/lovelies/frontend/preview/StorePurchaseRecovery.kt": "52bd73f8f447348e99d6bbc34594a16293cc1a7a5717b5d8b59e045e7331e3c0",
+          "android/app/src/main/java/com/lovelies/frontend/preview/LibraryState.kt": "08575ab553cb0b959f41401eb8a7c488284a5985215e2a7b7ff6969465a15416",
+          "android/app/src/main/java/com/lovelies/frontend/preview/PlayPurchases.kt": "0b872acb6ddf40ca30ed415189d53695b5061ab8f4c4551bf0017a246d035f09",
+          "android/host-tests/StorePurchaseRecoveryTests.kt": "ba8823e2ec60428db7a12222814018fd4283640b679d08ef60b62d5cc714d35f",
+          "scripts/test-fixtures/android-repository-readiness/android_content.kt": "ed7ef6f3a5b1075716a3a31342f80310663d40c957f75f7196c63282541b4da1",
+          "scripts/test-fixtures/android-repository-readiness/android_os.kt": "9d060217db7842391505242cd63972f08fd6308814bf207a474d498ca18e754b",
+          "scripts/test-fixtures/android-repository-readiness/android_uri.kt": "58b2dfbbd6061a7034c5f3c4f07f75e765392c0d7efda8fd1f07e2f3bb75c393",
+          "scripts/test-fixtures/android-repository-readiness/json.kt": "efeb1f7a515b11936ff802c9bbd2f4b7e593a03e863dbb967e8c6ccd1dd5dffa",
+          "scripts/test-fixtures/android-repository-readiness/platform.kt": "3248c91efe19f4b91569959b4091f0491727d83e93300fcd60a2e517719b1924",
+          "scripts/test-fixtures/android-store-recovery/android_app.kt": "f1de17db783613916c12e029bcd0e2fbb9c981e6017fde825f9574f7f83149e2",
+          "scripts/test-fixtures/android-store-recovery/billing.kt": "14741c382e6e2d8c42d2492e7ac9b675c56e766e0b4cae800e22260ea0029059",
+          "scripts/test-fixtures/android-store-recovery/compose.kt": "dbc3b65341b359a44c4b0bcf6a38418aa327b106da7e11ba0f187abd256897cc",
+          "scripts/test-fixtures/android-store-recovery/copy.kt": "4cd4872ac76b8be4370d19a791bc8440779550fb6e70080fbb411864e1528d54"
+        },
+        "qualification_limit": "Synthetic boundary execution; no Android SDK or provider/device qualification."
+      }
+    ],
+    "apple_source_tests": "Controlled Swift regressions authored, including signed audience, generic/push/store negative terminal evidence and failed persistence. No swiftc or Apple SDK available here: no Swift syntax/typecheck/compile/XCTest/physical-device pass claimed. Pinned macOS workflow must compile and execute the final commit.",
+    "failed_attempts": [
+      {
+        "suite": "audience_readiness",
+        "attempt": "audience-readiness-attempt-01",
+        "result": "compiler timeout after 180 seconds; no tests ran; rerun attempt 02 passed33",
+        "evidence": "/workspace/scratch/97844a440d4b/native_reconciliation/audience-readiness-attempt-01/timeout-observation.json"
+      }
+    ],
+    "ci_workflow": ".github/workflows/native-readiness.yml: YAML parsed locally; remote execution is a separate gate. Android workers2/in-process Kotlin; Apple builds jobs2; artifact retention14days; no signing or store distribution.",
+    "counting_rule": "Only executed named checks are counted. Four controlled Kotlin host suites retain matching inputs: 123 checks. Historical Android SDK Debug phases produced both APKs and 255 JVM passes before the locale and reference-control source changes; the overall process failed later in lint. The actual missing rw translation is corrected, and two exposed Release development controls are now conditionally absent. Final Android Kotlin compilation, packaging, targeted JVM and lint remain pending. The earlier 80-check suite and older shared build are prior-input evidence. Authored Swift tests, manual source review and CI definitions are not Apple/device execution."
+  },
+  "tasks": [
+    {
+      "id": "A02",
+      "title": "Integrate native and admin session lifecycle",
+      "status": "source_integrated_external_qualification_pending",
+      "implemented": "Existing token contract retained; independent authority/CAS secure-storage fencing, exact-operation recovery, expiry and account publication maintained. Backend-managed Supabase Auth requires no native credential migration. Exact terminal 409/410 recovery retains durable negative evidence and requires an explicit new decision before replacement.",
+      "remaining_external_acceptance": "Integrated managed-Auth endpoint tests on the local Supabase deployment, real Keychain/Keystore and account/refresh/logout/background return acceptance."
+    },
+    {
+      "id": "A03",
+      "title": "Prove enrollment recovery and face-profile lifecycle",
+      "status": "source_integrated_external_qualification_pending",
+      "implemented": "Complete three-capture enrollment, signed one-use challenge, exact-account recovery/profile lifecycle retained; revision3 signed audience/device review and retained-control renewals integrated.",
+      "remaining_external_acceptance": "Actual backend/device capture, replay, expiry, lost-device replacement, reference deletion and each consent-purpose withdrawal."
+    },
+    {
+      "id": "D01",
+      "title": "Preserve immutable Save and Share ownership",
+      "status": "source_integrated_external_qualification_pending",
+      "implemented": "Complete PhotoActionOwner and permission action binding retained in LiveController/LiveScreens and host fixtures.",
+      "remaining_external_acceptance": "Installed pager, permission, billing and account/device-switch interleavings."
+    },
+    {
+      "id": "D02",
+      "title": "Merge secure authority and temporary-file recovery",
+      "status": "source_integrated_external_qualification_pending",
+      "implemented": "Complete SessionAuthority retirement and CAS, T45 API24 directory-fsync, protected temporary media retained; backup/transfer exclusions and v3 manifest assertion integrated.",
+      "remaining_external_acceptance": "Owned-device lock/reboot/process-death, Keystore and storage/filesystem-failure acceptance."
+    },
+    {
+      "id": "D03",
+      "title": "Verify push registration and notification settings",
+      "status": "source_integrated_external_qualification_pending",
+      "implemented": "Merged push roster, typed receipts, exact-key migration, explicit terminal replacement, durable rotation and full OS/app/channel permission gates. Exact terminal 409/410 recovery retains durable negative evidence and requires an explicit new decision before replacement.",
+      "remaining_external_acceptance": "Real FCM registration/delivery, settings return, account switch/logout and authenticated taps."
+    },
+    {
+      "id": "D04",
+      "title": "Verify export Save Share and document-provider delivery",
+      "status": "source_integrated_external_qualification_pending",
+      "implemented": "Complete session-bound chunked export v3 and immutable original Save/Share ownership retained; v3 incompatible export-v2 intentionally inactive.",
+      "remaining_external_acceptance": "Actual Android document providers, chooser cancellation, denied writes and stale session handoff."
+    },
+    {
+      "id": "D05",
+      "title": "Verify background uploads and complete client journeys",
+      "status": "source_integrated_external_qualification_pending",
+      "implemented": "Complete WorkManager and exact upload batch recovery retained; v3 owner/retained control fixes integrated. Store recovery rejects a foreign retained Play credential by digest across all durable records before any new account portfolio write.",
+      "remaining_external_acceptance": "Installed foreground/background handoff, provider permissions, low disk/memory and process restart against local Supabase."
+    },
+    {
+      "id": "D06",
+      "title": "Qualify final Android release artifact",
+      "status": "source_integrated_external_qualification_pending",
+      "implemented": "Explicit local HTTPS API release input, exact function path and existing identity/version/signing certificate checks implemented. The Release profile also omits its development-only reference-screen action while retaining the handler guard.",
+      "remaining_external_acceptance": "Signed AAB/splits, all supported API/ABI/16-KiB, signing lineage and in-place store upgrade acceptance."
+    },
+    {
+      "id": "I01",
+      "title": "Compile the merged iOS application and run native tests",
+      "status": "source_integrated_external_qualification_pending",
+      "implemented": "Combined source and controlled/XCTest runners prepared; extra StoreKit/deletion and audience renewal suites added. Native CI now attempts Debug/XCTest and unsigned Release simulator builds with retained logs/results; release policy guards remain intact.",
+      "remaining_external_acceptance": "Actual Apple SDK Debug/Release compile/typecheck/XCTest for final commit; unavailable on this Linux host."
+    },
+    {
+      "id": "I02",
+      "title": "Verify Keychain device keys and retirement recovery",
+      "status": "source_integrated_external_qualification_pending",
+      "implemented": "Complete independent retirement ledger, challenge/refresh reservation and CAS retained; v3 deletion ownership/retry integrated using exact public-key removal. Completed-deletion restart retires exact stored authority durably, with a regression for cleanup failure/replayed credential bytes and foreign authority preservation.",
+      "remaining_external_acceptance": "Physical Keychain/Secure Enclave, lock/failure/relaunch and concurrent-instance acceptance."
+    },
+    {
+      "id": "I03",
+      "title": "Verify native photo capture import and delivery",
+      "status": "source_integrated_external_qualification_pending",
+      "implemented": "Complete owner-bound photo selection/import/save/share and chunked export retained; audience-effective media deadlines integrated.",
+      "remaining_external_acceptance": "AVFoundation/PHPicker/Photos/Files/HEIC/large image/permission and byte-correct device acceptance."
+    },
+    {
+      "id": "I04",
+      "title": "Verify StoreKit purchase and transaction recovery",
+      "status": "source_integrated_external_qualification_pending",
+      "implemented": "V3 bounded transaction roster, pre-payment capacity reservation, terminal disposition, explicit restore and finish observation integrated; Complete prior journals migrate by exact original key/input. Durable legacy migration preserves original timestamp and exact evidence, then removes the superseded per-transaction credential slot. Exact terminal 409/410 recovery retains durable negative evidence and requires an explicit new decision before replacement.",
+      "remaining_external_acceptance": "StoreKit sandbox/provider payment cancellation/pending/redelivery/restore and authoritative entitlement behavior on device."
+    },
+    {
+      "id": "I05",
+      "title": "Verify search favorites pagination and delayed UI results",
+      "status": "source_integrated_external_qualification_pending",
+      "implemented": "Complete query-bound pagination, latest search/favourite IDs and delayed result fences retained; new audience and publication state reconciled.",
+      "remaining_external_acceptance": "Real SwiftUI navigation/search/favourites/history/support/notification and background stale-result tests."
+    },
+    {
+      "id": "I06",
+      "title": "Qualify iOS background and signed in-place release",
+      "status": "source_integrated_external_qualification_pending",
+      "implemented": "Existing BGProcessingTask/foreground recovery and release identity retained; v3 deletion upload cancellation/file cleanup/push lifecycle integrated. Exact terminal 409/410 recovery retains durable negative evidence and requires an explicit new decision before replacement. The connected home wordmark exposes reference-only accessibility/long-press actions only in reference-enabled builds; Release retains the branded image and label.",
+      "remaining_external_acceptance": "Signed archive/TestFlight in-place update, APNs/deep links, background expiry and protected share handoff on device."
+    }
+  ],
+  "implementation_paths": [
+    {
+      "path": ".github/workflows/native-readiness.yml",
+      "sha256": "1b058cc1f80b514cb14bb14eeede55056e8cc0aab38012017c37fde8b8045f79"
+    },
+    {
+      "path": "android/NATIVE_RECONCILIATION.md",
+      "sha256": "85a8c2be0879cdc83bf74a9d68459b3c42396d24deed5fde9b4c2f494b149586"
+    },
+    {
+      "path": "android/README.md",
+      "sha256": "518494e9b949160f453e41de3a904366a81c7032eaaff9a80ed3180af1813d83"
+    },
+    {
+      "path": "android/app/build.gradle.kts",
+      "sha256": "adc96ec28ab23e2923bf72d7b37faf6cd1a8329843c5e49a9b72d036f9ce3ee9"
+    },
+    {
+      "path": "android/app/src/main/AndroidManifest.xml",
+      "sha256": "89680d0ceb0ae3d74b47cc651e548e35d015263e5314623c0da908fc321b59dd"
+    },
+    {
+      "path": "android/app/src/main/java/com/lovelies/frontend/preview/CloudflareRepository.kt",
+      "sha256": "81478fa6c75b67ef4b8ec4cba5cec780242d7cd110b6c9ee0c9d9f430dc70bc3"
+    },
+    {
+      "path": "android/app/src/main/java/com/lovelies/frontend/preview/FaceLifecycle.kt",
+      "sha256": "2ed91798b01f6af92c9dc7244afcd02d8569fc39b76d62b3099b4137118117be"
+    },
+    {
+      "path": "android/app/src/main/java/com/lovelies/frontend/preview/GuestDeletion.kt",
+      "sha256": "6a0f9216d1f27f133d279cfbf1c8f8bc5a324adb977bd444e8c730be49ec88f4"
+    },
+    {
+      "path": "android/app/src/main/java/com/lovelies/frontend/preview/LiveController.kt",
+      "sha256": "9d5b57611c6da05ee7e77e7f80643be710e71e98c141dfb2d233fe2b66f23a19"
+    },
+    {
+      "path": "android/app/src/main/java/com/lovelies/frontend/preview/LiveScreens.kt",
+      "sha256": "42a6901a36a135da03f6a728f3dc82dd21f8e4aeda82f95456d3e8dacc5012c0"
+    },
+    {
+      "path": "android/app/src/main/java/com/lovelies/frontend/preview/NativeProtocol.kt",
+      "sha256": "a2ba49acdf20b97b3c7c07c99df427eb7abde652239fb1ba8ecbdbc07cf139e6"
+    },
+    {
+      "path": "android/app/src/main/java/com/lovelies/frontend/preview/PlayPurchases.kt",
+      "sha256": "0b872acb6ddf40ca30ed415189d53695b5061ab8f4c4551bf0017a246d035f09"
+    },
+    {
+      "path": "android/app/src/main/java/com/lovelies/frontend/preview/PushMessaging.kt",
+      "sha256": "76218931ef532995286feb1cd0750fd786f71435e375111f55a4793282aa2b84"
+    },
+    {
+      "path": "android/app/src/main/java/com/lovelies/frontend/preview/PushOperationRecovery.kt",
+      "sha256": "ae99de32548714c74cb8572f1631b498a7b69017127c3757fc8e47d17a455465"
+    },
+    {
+      "path": "android/app/src/main/java/com/lovelies/frontend/preview/RepositoryBoundary.kt",
+      "sha256": "6f7dbc4be787dce4ab6fc23bd4ffc1da77171b250ce63b6f3286099e537f43eb"
+    },
+    {
+      "path": "android/app/src/main/java/com/lovelies/frontend/preview/StorePurchaseRecovery.kt",
+      "sha256": "52bd73f8f447348e99d6bbc34594a16293cc1a7a5717b5d8b59e045e7331e3c0"
+    },
+    {
+      "path": "android/app/src/main/res/values-rw/audience-review.xml",
+      "sha256": "1f4ac1b2f8a569b8b2798b10351614a17dc681b46df4a21794f2589473a49413"
+    },
+    {
+      "path": "android/app/src/main/res/values-rw/controller-copy.xml",
+      "sha256": "7242e97a97ebda26b3e9098b7f06b1b1aa902f20f4706496f133cf8a5e6d1d4a"
+    },
+    {
+      "path": "android/app/src/main/res/values-rw/strings.xml",
+      "sha256": "775123e09c8de3167a4467abec902787fbd2414e1e446f1bc7b14cb660fbab1e"
+    },
+    {
+      "path": "android/app/src/main/res/values/audience-review.xml",
+      "sha256": "86552e6ccad852d3b27416afdf8504f3258811403ed33740d385711c8974643c"
+    },
+    {
+      "path": "android/app/src/main/res/values/controller-copy.xml",
+      "sha256": "0056aabce403027cff3495a35ddf1558b22c6c0d774a01f9b2a8883e15ef21e0"
+    },
+    {
+      "path": "android/app/src/main/res/values/strings.xml",
+      "sha256": "086f354678219f799eceb98c0c72b70f562fe8971c6a22eb10e087db9b34ec40"
+    },
+    {
+      "path": "android/app/src/test/java/com/lovelies/frontend/preview/AudienceProtocolTest.kt",
+      "sha256": "920344b160d6a3b5a9eceb98de91ac5be81dbc363eea1a6a25092723ef2c8d04"
+    },
+    {
+      "path": "android/app/src/test/java/com/lovelies/frontend/preview/LocalCollectionAuthorityTest.kt",
+      "sha256": "08444f969b40fd16453c65348f3c760722df51ed58677cf9469336fd6915a7bc"
+    },
+    {
+      "path": "android/app/src/test/java/com/lovelies/frontend/preview/ReleaseReadinessTest.kt",
+      "sha256": "b6e34981a9bfb5f0d6f746c00f46a8b6f4349f2f950087f23268199d22ea39f7"
+    },
+    {
+      "path": "android/app/src/test/java/com/lovelies/frontend/preview/StoreRepositoryBoundaryTest.kt",
+      "sha256": "2a7ad14ba9906201c5fa5157c770604456a45481a509c17ee25fdfee955d60bc"
+    },
+    {
+      "path": "android/host-tests/AudienceReadinessTests.kt",
+      "sha256": "e6cf4545a20cbe0be3db2cca98bdc682970c7985fbc2c2b397d29072162d3061"
+    },
+    {
+      "path": "android/host-tests/PushOperationRecoveryTests.kt",
+      "sha256": "79c56f6c72feb7341195a70217233ecf10e0cfdbdcd542f641167b9e4f0d9d74"
+    },
+    {
+      "path": "android/host-tests/RepositoryReadinessTests.kt",
+      "sha256": "81bffef16b29c041cb8b00e216a5a690386a051d68cc2ece2e099ee6a2176d4f"
+    },
+    {
+      "path": "android/host-tests/StorePurchaseRecoveryTests.kt",
+      "sha256": "ba8823e2ec60428db7a12222814018fd4283640b679d08ef60b62d5cc714d35f"
+    },
+    {
+      "path": "clients/backend/audience-contracts.mjs",
+      "sha256": "76c29c41581026764870af188f83140eba5cb67393ee17c7503386928a4ac040"
+    },
+    {
+      "path": "clients/backend/audience-contracts.test.mjs",
+      "sha256": "35f383fe82e554d2e16c6cc5e73046d58d16aa559650a8bfc2bb194e6900a666"
+    },
+    {
+      "path": "ios/Configuration/Release.xcconfig",
+      "sha256": "03dcd79e04d3451df763d2947eedf50a531503247b1d384be6fed778e7a6f0ad"
+    },
+    {
+      "path": "ios/Lovelies.xcodeproj/project.pbxproj",
+      "sha256": "e54dadc97ff819c5fbb39da7f9f612de4830f1d0e417cfbfeb0d98ce175f709f"
+    },
+    {
+      "path": "ios/Lovelies/App/LoveliesApp.swift",
+      "sha256": "29bf5dbad8ed1bf875fc97a7bd77f3b1b77ad28b06765ce2ad8e098bd8440588"
+    },
+    {
+      "path": "ios/Lovelies/Native/BackendRepository.swift",
+      "sha256": "1511b69aadc6ab5a53937edc71de0e59445a81677b2e56a695b4c28ccb8ce3eb"
+    },
+    {
+      "path": "ios/Lovelies/Native/CoreWire.swift",
+      "sha256": "b676c7685b0bf5ca8f83ec9a0dd93dfb3143230acf1b3d63849fef156074a288"
+    },
+    {
+      "path": "ios/Lovelies/Native/DeviceIdentity.swift",
+      "sha256": "2ec775f8060271415bbac853d03b830c302deb94b5bc7bde4a537f635b50175c"
+    },
+    {
+      "path": "ios/Lovelies/Native/LiveAppStore.swift",
+      "sha256": "e7434b3c08aa7ae114e26022f6f04b373d24d45dc926e81d6d5911e54edfb173"
+    },
+    {
+      "path": "ios/Lovelies/Native/LiveOnboardingAndGallery.swift",
+      "sha256": "7ef614b7cb28cd00e83c3615e038c989417f06c37a2559e4c90b33c92ff2ec3b"
+    },
+    {
+      "path": "ios/Lovelies/Native/LiveSharingAndSettings.swift",
+      "sha256": "1db719eb02c6179c03bbdeba61fff31df6235a36c3c4d90ba1a11134c28cac76"
+    },
+    {
+      "path": "ios/Lovelies/Native/NativeLocalAuthentication.swift",
+      "sha256": "5252353bb5d0d5de3a7558b80eec277d75f84bbca4ce359c8a7d8e73b9b5207c"
+    },
+    {
+      "path": "ios/Lovelies/Native/NativeServices.swift",
+      "sha256": "60db9cb8ea1701b4ffe63e701a1ff1db606cd1266f42d92cc1fd0d8ecf6af386"
+    },
+    {
+      "path": "ios/Lovelies/Native/NativeSettingsPanels.swift",
+      "sha256": "9bb0c6b5b6fa3add833de2e9d4462f52623419fdcaab993078d5881793f84984"
+    },
+    {
+      "path": "ios/Lovelies/Native/UploadRecovery.swift",
+      "sha256": "798e7849baea4a375b4d8dd74ce68f895f8bbe29c24a053daf0e5f93bf60d620"
+    },
+    {
+      "path": "ios/Lovelies/Resources/en.lproj/Localizable.strings",
+      "sha256": "6b3add4a417b6e19ccb6e0c2e704b81a8337f82ff150e54a13cdd6f6e36b198f"
+    },
+    {
+      "path": "ios/Lovelies/Resources/rw.lproj/Localizable.strings",
+      "sha256": "aa57751e55883136243b92e5105694f034c11844d3eef927c34999ba26db43ff"
+    },
+    {
+      "path": "ios/Lovelies/Views/Components.swift",
+      "sha256": "aebc63bfe5b415609771101559d80ac649107df8bbc8d623e8f6a70d0a250b17"
+    },
+    {
+      "path": "ios/README.md",
+      "sha256": "90a5c580d5e19f61336e01ff89ab3e170dd7a46193bc992a2140e93cde0db4f0"
+    },
+    {
+      "path": "ios/ReleaseTests/ReleaseReadinessTests.swift",
+      "sha256": "70cba265de6e6c31d2ff019a22e508b92c37ec721557dbe38b9bb07f1850545f"
+    },
+    {
+      "path": "ios/Tests/NativeAccountRecoveryTests.swift",
+      "sha256": "1fa3d85af81e5f64e84de32d4c681d315a3ceb91baa4a1b05003901699e633e8"
+    },
+    {
+      "path": "ios/Tests/NativeAudienceHTTPJourney.swift",
+      "sha256": "1b338f2ba97a68c0db81ed6959f64a0f4e20d9e0f81e78f6ee6bb1332a03090f"
+    },
+    {
+      "path": "ios/Tests/NativeAudienceRenewalTests.swift",
+      "sha256": "3e8f3e99fcf6438b2233b062ddd7eaf3a82f59798a6de412212f5ce3d12f0946"
+    },
+    {
+      "path": "ios/Tests/NativeAudienceTests.swift",
+      "sha256": "29510caada0f29f31a1a689a13ce23e7acfa39664fa92b94d22fa30dba258385"
+    },
+    {
+      "path": "ios/Tests/NativeConnectionTests.swift",
+      "sha256": "049f67e2404e82845ba8562231cf72c06bcfec3e94fe86d83f3ba6721bf02a4a"
+    },
+    {
+      "path": "ios/Tests/NativeEnrollmentRecoveryTests.swift",
+      "sha256": "b7c0cfc09b00ead13ffa57abc3372443ef98883627ec63427ac1979b00f044cf"
+    },
+    {
+      "path": "ios/Tests/NativeFaceProfileLifecycleTests.swift",
+      "sha256": "34555a093c17a90997fa50cdf92d9e2f8e7e7f81bf9336894382c92961b531d3"
+    },
+    {
+      "path": "ios/Tests/NativeLocalAuthenticationTests.swift",
+      "sha256": "6d4f67b886e0b7ec31aa8786f005ddbc6b643cb0153c9429021a7cca8694d9cc"
+    },
+    {
+      "path": "ios/Tests/NativeOrdinaryLoginTests.swift",
+      "sha256": "e6697547b8bcc8f1a4c783a442b5000d7099d25126107400d88a0887a2972d67"
+    },
+    {
+      "path": "ios/Tests/NativePhotoSelectionTests.swift",
+      "sha256": "e1ac7944511c98916d88099029dac479751e7c298ae42452e2f52a5710338541"
+    },
+    {
+      "path": "ios/Tests/NativePreviewExitExpiryTests.swift",
+      "sha256": "1a9c1450a36309e53dda08dcdac08be2a7d7f10c9d7bce86acc1d5d77adbd0ab"
+    },
+    {
+      "path": "ios/Tests/NativePrivateMediaTests.swift",
+      "sha256": "91267273777813a488e89f43dc9bcce9289fbd2201d4d0ca72f83f15672c20aa"
+    },
+    {
+      "path": "ios/Tests/NativeReadinessRecoveryTests.swift",
+      "sha256": "9f52cb612ca9758a3b4c45236209f5fc24ad748819c9a9e91cb7141ae372c056"
+    },
+    {
+      "path": "ios/Tests/NativeReleaseReadinessTests.swift",
+      "sha256": "9627ed75703e58ad60feeab1e0dbd41847df44bfb0fd8454c580cbeadf6ef6f6"
+    },
+    {
+      "path": "ios/Tests/NativeStoreDeletionRecoveryTests.swift",
+      "sha256": "1bff8857cec548fbdbb77bd8855365d724d311f8b7dde12bb19d358b0ba8a323"
+    },
+    {
+      "path": "ios/Tests/NativeUploadRecoveryTests.swift",
+      "sha256": "77ffc17ebc14d3e50b23d0dd5ecada0a7787ab6f150491a3d5e9dfd67cabb667"
+    },
+    {
+      "path": "ios/Tests/run-readiness-host-tests.sh",
+      "sha256": "46d3b2524d35d8b6de645e143aea06043add280141baa9cd8bad833c41304842"
+    },
+    {
+      "path": "ios/Tests/test_release_origin.py",
+      "sha256": "91af84b9f68aeb4735512a388cd62e75823ea6ca45b31866f1ebed52c078328f"
+    },
+    {
+      "path": "ios/scripts/check_release_policy_urls.py",
+      "sha256": "aa9c73620c918d8194df17b3f0fe3a974688c74f78cf4d6de28f2962de994c81"
+    },
+    {
+      "path": "scripts/release-gate.mjs",
+      "sha256": "a792870fc7a64a91fbf5b80f5149e432b396053b1ac839049e409a9d2e579ec3"
+    },
+    {
+      "path": "scripts/test-fixtures/android-push-optout/SignedOutOptOutTests.kt",
+      "sha256": "bcc868f67c02419022feb6e239911aae9ba6cff5563a7769aef7ff3b606c73e4"
+    },
+    {
+      "path": "scripts/test-fixtures/android-push-optout/android_content.kt",
+      "sha256": "50e163a7f5a553698e9d585244be4ade7b8b69bd90ba66518fd4cbdd78f2a522"
+    },
+    {
+      "path": "scripts/test-fixtures/android-push-optout/app_stubs.kt",
+      "sha256": "234c25407850f9df9da53af7842b2d66485cef063b0627d8f071601d58b4eb0e"
+    },
+    {
+      "path": "scripts/test-fixtures/android-repository-readiness/android_content.kt",
+      "sha256": "ed7ef6f3a5b1075716a3a31342f80310663d40c957f75f7196c63282541b4da1"
+    },
+    {
+      "path": "scripts/test-fixtures/android-repository-readiness/android_os.kt",
+      "sha256": "9d060217db7842391505242cd63972f08fd6308814bf207a474d498ca18e754b"
+    },
+    {
+      "path": "scripts/test-fixtures/android-repository-readiness/android_uri.kt",
+      "sha256": "58b2dfbbd6061a7034c5f3c4f07f75e765392c0d7efda8fd1f07e2f3bb75c393"
+    },
+    {
+      "path": "scripts/test-fixtures/android-repository-readiness/json.kt",
+      "sha256": "efeb1f7a515b11936ff802c9bbd2f4b7e593a03e863dbb967e8c6ccd1dd5dffa"
+    },
+    {
+      "path": "scripts/test-fixtures/android-repository-readiness/platform.kt",
+      "sha256": "3248c91efe19f4b91569959b4091f0491727d83e93300fcd60a2e517719b1924"
+    },
+    {
+      "path": "scripts/test-fixtures/android-store-recovery/android_app.kt",
+      "sha256": "f1de17db783613916c12e029bcd0e2fbb9c981e6017fde825f9574f7f83149e2"
+    },
+    {
+      "path": "scripts/test-fixtures/android-store-recovery/billing.kt",
+      "sha256": "14741c382e6e2d8c42d2492e7ac9b675c56e766e0b4cae800e22260ea0029059"
+    },
+    {
+      "path": "scripts/test-fixtures/android-store-recovery/compose.kt",
+      "sha256": "dbc3b65341b359a44c4b0bcf6a38418aa327b106da7e11ba0f187abd256897cc"
+    },
+    {
+      "path": "scripts/test-fixtures/android-store-recovery/copy.kt",
+      "sha256": "4cd4872ac76b8be4370d19a791bc8440779550fb6e70080fbb411864e1528d54"
+    },
+    {
+      "path": "scripts/test-ios-openface.py",
+      "sha256": "6b60b05129e6cde55df18b8caceb6f1ac36aa79153901f5d2e1303a78837bbe7"
+    },
+    {
+      "path": "scripts/test/release-gate.test.mjs",
+      "sha256": "13602624ecaa3e0dfb092b8f48c2206d20ff50af35e2a38c87bd6aab573f8d84"
+    },
+    {
+      "path": "scripts/test_android_audience_readiness.py",
+      "sha256": "96c5917595d6e43b6cf49fb10c98213ce85c4dc01b797df72a1588600c4f4989"
+    },
+    {
+      "path": "scripts/test_android_privacy_export.py",
+      "sha256": "ae53d73277e922a8a28d2f7f3c40ce2e3f00646782d58d34c152abee77cd16ca"
+    },
+    {
+      "path": "scripts/test_android_push_optout.py",
+      "sha256": "3e8489d57fbcd48d8c7104541202ef9119ed5dfe8b7b563cc9cecbc268caa6f1"
+    },
+    {
+      "path": "scripts/test_android_push_recovery.py",
+      "sha256": "5cf9e3e02ffb14bfd0a8922347be4980bcc645107204fef1e4e438d212a13e79"
+    },
+    {
+      "path": "scripts/test_android_repository_readiness.py",
+      "sha256": "e10bf589f8cb1d59906fd883a21359b283bbc92059d0520a196a26430a51b1f7"
+    },
+    {
+      "path": "scripts/test_android_store_recovery.py",
+      "sha256": "29b97e169889084cc114922a6907573f60e97c6d54940a5d3d5fcb8ed52dffff"
+    }
+  ],
+  "native_acceptance_executed": {
+    "physical_devices": false,
+    "apple_sdk": false,
+    "store_provider_sandbox": false,
+    "signed_store_artifacts": false,
+    "local_supabase_end_to_end": false
+  },
+  "source_snapshot": {
+    "observed_at": "2026-11-01T02:16:17.237012+00:00",
+    "state": "frozen_native_candidate_after_approved_reference_control_fixes_pending_qualification",
+    "branch": "implementation/local-supabase-20261101",
+    "final_source_frozen_at": "2026-11-01T07:08:55.093582+00:00",
+    "prior_inventory_sha256": "99ba3e40fac0ba217f2864d52ff8a8634daf95ff92148b8be1896471427c9b51",
+    "changed_owned_paths": 90,
+    "changed_owned_paths_aggregate_sha256": "145053e6ba7975e582eb8d6119eb0bcc4520a4b3280e9492a13e036996ee30d7",
+    "final_localization_delta": {
+      "path": "android/app/src/main/res/values-rw/strings.xml",
+      "before_sha256": "0278d52ad2e38bde56f97b844dcb3cb0e29f710e0c15adbf67c5f82a128cecb3",
+      "after_sha256": "775123e09c8de3167a4467abec902787fbd2414e1e446f1bc7b14cb660fbab1e",
+      "reason": "Add the missing Kinyarwanda audience-change retirement message found by actual lint; no lint suppression or policy change."
+    },
+    "future_verification_rule": "This source inventory is frozen. Add later execution receipts outside it, bound to the unchanged 90 implementation hashes and external post-freeze 288-file Android snapshot. Do not rewrite source dispositions or this inventory merely to attach later test results.",
+    "prior_inventory_record": "/workspace/scratch/97844a440d4b/native_reconciliation/pre-reference-controls/native-reconciliation.json",
+    "final_reference_control_deltas": [
+      {
+        "path": "android/app/src/main/java/com/lovelies/frontend/preview/LiveScreens.kt",
+        "before_sha256": "85960a9b366c113ca645e29ab7300bfa48d7b6f4bb62e7f50c8bde07ed362ee1",
+        "after_sha256": "42a6901a36a135da03f6a728f3dc82dd21f8e4aeda82f95456d3e8dacc5012c0",
+        "reason": "Render the profile reference-screen action only in REFERENCE_SCREENS builds; preserve the existing release handler guard and core account routes."
+      },
+      {
+        "path": "ios/Lovelies/Views/Components.swift",
+        "before_sha256": "7fc5f9303fc5e4682e2798040efe767ef3f1281fff62923c830e5eb1e2edbfa5",
+        "after_sha256": "aebc63bfe5b415609771101559d80ac649107df8bbc8d623e8f6a70d0a250b17",
+        "reason": "Attach wordmark reference long-press and VoiceOver action only when reference review is enabled; retain the ordinary branded image and accessibility label in Release."
+      }
+    ]
+  },
+  "terminal_contract": {
+    "server_pairs": [
+      {
+        "status": 409,
+        "code": "operation_recovered_without_result"
+      },
+      {
+        "status": 410,
+        "code": "operation_retired_by_recovery"
+      }
+    ],
+    "canonical_disposition": "operation_recovered_without_result",
+    "ordering": "Original key/action/input digest and original server status/code are durably retained before the active journal is released. Failure to persist leaves the original pending.",
+    "pending_not_success": [
+      "operation_key_conflict",
+      "audience_operation_outcome_unresolved",
+      "queue_repair_outcome_unresolved"
+    ],
+    "audience": "Current eligibility never proves the original mutation succeeded. Retry cannot generate a new key; fresh controls require renewed confirmation.",
+    "push": "Android archives terminal rows even after explicit replacement. iOS generic push intents have durable terminal holds preventing automatic foreground/token replacement, with a separately explicit notification choice bound to account/binding generation.",
+    "store": "No automatic purchase credential replay; exact 410/409 server observation retained separately from successful provider evidence."
+  }
+}

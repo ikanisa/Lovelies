@@ -1284,3 +1284,25 @@ Implement a **dark, image-dominant, tightly arranged, responsive Lovelies applic
 Prioritize the complete real journey over another collection of isolated mockups. Automatic matching must not become automatic sharing. The user must always be able to understand and control who receives each photograph.
 
 **Begin with the actual checkout, implement the first vertical slice, run the relevant tests, and continue through the ordered phases. Document evidence and unresolved external checks truthfully.**
+
+
+## Owner amendment — 1 November 2026: local Supabase implementation
+
+The owner explicitly selected locally hosted Supabase for the backend, database
+and other enabled Supabase capabilities, referenced the Google Drive `supabase`
+configuration folder, and authorized full implementation of the readiness tasks.
+This supersedes earlier cloud-project and Cloudflare deployment targets. It does
+not add OTP, liveness/PAD, donor-only features, replacement store identities,
+or authority to destroy unknown data.
+
+The active architecture is documented in `docs/local-supabase-architecture.md`.
+Managed Supabase Auth sessions sit behind the existing signed face/device/session
+capability contract. The managed anonymous flag does not establish a verified
+face, adult eligibility, operator rights or photo access. PostgreSQL, private
+Storage and Edge Functions run locally. Independent restore and push custody
+use separate locally operated PostgreSQL instances and independent restoration.
+The same host snapshot must not restore both application state and its witness.
+
+Source implementation and synthetic regressions do not establish host, physical
+device, recognition accuracy, provider, store or launch acceptance. The current
+63-task register and its release gate retain those evidence requirements.

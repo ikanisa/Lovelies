@@ -29,6 +29,7 @@ test('authentication precedes all database/provider work and startup defaults di
 test('accepted receipt survives duplicate requests and a new ledger instance without resending', async t => {
   const f = await fixture(t), input = makeInput();
   const first = await (await f.gateway(sendRequest(input))).json(); assert.equal(first.status, 'accepted');
+  assert.equal(first.protocol, 'lovelies-push-dispatch-receipt-v1'); assert.equal(first.request_sha256, requestHash(input));
   assert.deepEqual(await (await f.gateway(sendRequest(input))).json(), first);
   assert.deepEqual(await (await f.gateway(getRequest(input.operation_key))).json(), first);
   assert.equal(receipt(await new DispatchLedger(f.db).lookup(input.operation_key), input.operation_key).provider_message_id, first.provider_message_id);
@@ -92,4 +93,17 @@ test('actual local HTTP adapter preserves auth, operation receipt and bounded JS
   assert.equal((await fetch(url + '/send', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(input) })).status, 401);
   const result = await fetch(url + '/send', { method: 'POST', headers: { authorization: 'Bearer ' + secret, 'content-type': 'application/json' }, body: JSON.stringify(input) });
   assert.equal((await result.json()).status, 'accepted'); assert.equal(f.count(), 1);
+});
+
+// An unknown operation cannot name a request digest or authorize a new send.
+test('versioned lookup returns null binding only for a missing operation', async t => {
+  const f=await fixture(t), input=makeInput();
+  assert.deepEqual(await (await f.gateway(getRequest(input.operation_key))).json(), {protocol:'lovelies-push-dispatch-receipt-v1',operation_key:input.operation_key,request_sha256:null,status:'unknown'});
+  assert.equal(f.count(),0);
+});
+test('receipt rendering rejects a missing or corrupt stored digest instead of fabricating a versioned proof', () => {
+  const input=makeInput(), row={operation_key:input.operation_key,status:'accepted',provider_message_id:'synthetic-receipt'};
+  for(const request_sha256 of [undefined,null,'','g'.repeat(64)])
+    assert.throws(()=>receipt({...row,request_sha256},input.operation_key),/dispatch_receipt_binding_unavailable/);
+  assert.throws(()=>receipt({...row,request_sha256:'a'.repeat(64)},'notification:'+randomUUID()+':'+randomUUID()),/dispatch_receipt_binding_unavailable/);
 });

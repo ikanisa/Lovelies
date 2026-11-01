@@ -276,6 +276,7 @@ private struct ConnectedDeviceQAConfiguration {
 
 /// A dedicated test service, never the installed application's fixed vault.
 private final class ConnectedDeviceQASecrets: NativeSecretStore, @unchecked Sendable {
+    let authorityNamespace = "fixture-" + UUID().uuidString.lowercased()
     private let service: String
     private let lock = NSRecursiveLock()
     private var claimed = false
@@ -459,6 +460,7 @@ private final class ConnectedDeviceQASigner: NativeDeviceSigner, @unchecked Send
 // Synthetic same-account test of the actual LiveAppStore and repository path.
 // The transport is in-memory and the test creates only its own temporary folder.
 private final class PhotoShareSelectionSecrets: NativeSecretStore, @unchecked Sendable {
+    let authorityNamespace = "fixture-" + UUID().uuidString.lowercased()
     private let lock = NSLock()
     private var slots: [String: Data] = [:]
     func read(_ name: String) throws -> Data? { lock.lock(); defer { lock.unlock() }; return slots[name] }
@@ -495,8 +497,8 @@ private actor PhotoShareSelectionTransport: NativeTransport {
             return try json(.object(["user_id": .string(Self.account), "auth_method": .string("registered_face"), "authenticated": .bool(true)]))
         case "/me/audience":
             return try json(.object(["protocol": .string(NativeAudienceProjection.protocolName), "policy_version": .string(NativeAudienceProjection.policy), "account_id": .string(Self.account),
-                "audience": .object(["age_band": .string("18_plus"), "status": .string("eligible"), "version": .integer(1), "policy_version": .string(NativeAudienceProjection.policy), "next_review_at": .null]),
-                "guardian_request": .null, "capabilities": .object(["face_authentication": .bool(true), "photo_matching": .bool(true), "photo_processing": .bool(true)])]))
+                "audience": .object(["at_least_13": .bool(true), "guardian_required": .bool(false), "status": .string("eligible"), "version": .integer(1), "policy_version": .string(NativeAudienceProjection.policy), "source": .string("self_declaration"), "rule_version": .string("audience-13-plus-guardian-v1"), "territory": .string("global"), "declared_at": .string(ISO8601DateFormatter().string(from: Date().addingTimeInterval(-60))), "next_review_at": .string(ISO8601DateFormatter().string(from: Date().addingTimeInterval(3600))), "review_required": .bool(false)]),
+                "authority_expires_at": .string(ISO8601DateFormatter().string(from: Date().addingTimeInterval(3500))), "guardian_request": .null, "capabilities": .object(["face_authentication": .bool(true), "photo_matching": .bool(true), "photo_processing": .bool(true)])]))
         case "/downloads/sign":
             signCount += 1
             let body = try WireValue.decoded(request.httpBody!)
@@ -638,5 +640,133 @@ private actor PhotoShareSelectionTransport: NativeTransport {
         XCTAssertEqual(saver.attempts, 1); XCTAssertEqual(saver.dispatched, 0)
         XCTAssertNotNil(store.error)
         try cleanup(store, scratch: scratch)
+    }
+}
+
+/// Controlled MainActor interleavings through the production store/repository.
+/// The transport ignores cancellation deliberately, so late-reply publication
+/// has to be stopped by the consumer's own generation/account checks.
+private actor ReadinessUITransport: NativeTransport {
+    static let account = "00000000-0000-4000-8000-000000000201"
+    static let first = "00000000-0000-4000-8000-000000000202"
+    static let second = "00000000-0000-4000-8000-000000000203"
+    static let favorite = "00000000-0000-4000-8000-000000000204"
+    let gate: PhotoShareSelectionGate
+    let reached: XCTestExpectation?
+    let mode: String
+    private(set) var photoRequests: [WireValue] = []
+    private(set) var lookupRequests: [[String]] = []
+    init(mode: String, gate: PhotoShareSelectionGate, reached: XCTestExpectation?) { self.mode = mode; self.gate = gate; self.reached = reached }
+    nonisolated func cancelPending() {}
+    func send(_ request: URLRequest, limit: Int) async throws -> NativeHTTPReply {
+        func json(_ value: WireValue) throws -> NativeHTTPReply { .init(status: 200, headers: ["content-type": "application/json"], data: try value.encoded()) }
+        func photo(_ id: String) -> WireValue { .object(["id": .string(id), "title": .string("Synthetic photo"), "media_source": .string("personal"), "source": .string("contributions"), "version": .string("v1")]) }
+        switch request.url!.path {
+        case "/me": return try json(.object(["user_id": .string(Self.account), "auth_method": .string("registered_face"), "authenticated": .bool(true), "name": .string("Synthetic")]))
+        case "/me/audience":
+            return try json(.object(["protocol": .string(NativeAudienceProjection.protocolName), "policy_version": .string(NativeAudienceProjection.policy), "account_id": .string(Self.account),
+                "audience": .object(["at_least_13": .bool(true), "guardian_required": .bool(false), "status": .string("eligible"), "version": .integer(1), "policy_version": .string(NativeAudienceProjection.policy), "source": .string("self_declaration"), "rule_version": .string("audience-13-plus-guardian-v1"), "territory": .string("global"), "declared_at": .string(ISO8601DateFormatter().string(from: Date().addingTimeInterval(-60))), "next_review_at": .string(ISO8601DateFormatter().string(from: Date().addingTimeInterval(3600))), "review_required": .bool(false)]),
+                "authority_expires_at": .string(ISO8601DateFormatter().string(from: Date().addingTimeInterval(3500))), "guardian_request": .null, "capabilities": .object(["face_authentication": .bool(true), "photo_matching": .bool(true), "photo_processing": .bool(true)])]))
+        case "/me/photo-preferences": return try json(.object(["policy_version": .string("fixture"), "processing_consent": .bool(true)]))
+        case "/privacy/center":
+            reached?.fulfill(); await gate.hold()
+            return try json(.object(["sensitive_fixture": .string("old-account-only")]))
+        case "/community/action":
+            let body = try WireValue.decoded(request.httpBody!), payload = body["payload"]
+            if body["action"].string == "photos.lookup" {
+                let ids = payload["asset_ids"].array!.compactMap(\.string); lookupRequests.append(ids)
+                return try json(.object(["items": .array(ids.map(photo)), "unavailable_ids": .array([])]))
+            }
+            guard body["action"].string == "photos" else { throw NativeAPIError.invalidResponse }
+            photoRequests.append(payload)
+            if mode == "slow-search", payload["query"].string == "A" { reached?.fulfill(); await gate.hold() }
+            let id = payload["query"].string == "B" || payload["before_id"] != .null ? Self.second : Self.first
+            let cursor: WireValue = payload["before_id"] == .null ? .object(["before_at": .integer(1), "before_id": .string(id)]) : .null
+            return try json(.object(["items": .array([photo(id)]), "next_cursor": cursor]))
+        default: throw NativeAPIError.invalidResponse
+        }
+    }
+}
+
+@MainActor final class ReadinessPublicationAndGalleryTests: XCTestCase {
+    private func idle(_ store: LiveAppStore) async throws {
+        for _ in 0..<1000 {
+            if !store.busy { return }
+            try await Task.sleep(nanoseconds: 5_000_000)
+        }
+        XCTFail("Controlled read did not become idle")
+        throw NativeAPIError.unavailable("fixture_timeout")
+    }
+    private func makeStore(mode: String = "normal", reached: XCTestExpectation? = nil, favorite: Bool = false) async throws -> (LiveAppStore, ReadinessUITransport, PhotoShareSelectionGate, URL) {
+        let gate = PhotoShareSelectionGate(), secrets = PhotoShareSelectionSecrets()
+        let transport = ReadinessUITransport(mode: mode, gate: gate, reached: reached)
+        let claims: WireValue = .object(["sub": .string(ReadinessUITransport.account), "jti": .string(UUID().uuidString.lowercased()), "auth_method": .string("registered_face"), "exp": .integer(Int(Date().timeIntervalSince1970) + 900)])
+        let credential = try NativeCredentials(.object(["access_token": .string("fixture." + (try claims.encoded()).base64URL + ".signature"), "refresh_token": .string("synthetic-ui-refresh"),
+            "account_id": .string(ReadinessUITransport.account), "auth_method": .string("registered_face"), "expires_in": .integer(900), "roles": .strings(["user"])]))
+        try secrets.write("credentials", data: JSONEncoder().encode(credential))
+        if favorite {
+            var state = NativeLibraryState(accountID: ReadinessUITransport.account); state.favoriteIDs = [ReadinessUITransport.favorite]
+            try secrets.write("library-state-" + ReadinessUITransport.account, data: JSONEncoder().encode(state))
+        }
+        let scratch = FileManager.default.temporaryDirectory.appendingPathComponent("lovelies-readiness-ui-" + UUID().uuidString, isDirectory: true)
+        let repository = BackendRepository(origin: URL(string: "https://fixture.invalid")!, transport: transport, secrets: secrets, signer: PhotoShareSelectionSigner(),
+            exportFiles: NativeExportStagingFiles(directory: scratch.appendingPathComponent("exports", isDirectory: true)))
+        _ = try await repository.bootstrap()
+        let store = LiveAppStore(sharedFiles: NativeAuthorizedShareFiles(directory: scratch.appendingPathComponent("shares", isDirectory: true)), repository: repository)
+        store.refreshAudience(); try await idle(store)
+        return (store, transport, gate, scratch)
+    }
+    private func cleanup(_ store: LiveAppStore, _ scratch: URL) throws {
+        store.background(); store.retireSharedFile()
+        if FileManager.default.fileExists(atPath: scratch.path) { try FileManager.default.removeItem(at: scratch) }
+    }
+    func testLatePrivacyResponseCannotPublishAfterBackgroundOrAccountSwitch() async throws {
+        for mode in ["background", "account-switch"] {
+            let reached = expectation(description: "Private read held " + mode)
+            let (store, _, gate, scratch) = try await makeStore(mode: mode, reached: reached)
+            store.loadPrivacy(); await fulfillment(of: [reached], timeout: 5)
+            if mode == "background" { store.background() }
+            else { store.session = NativeSessionSummary(accountID: UUID().uuidString.lowercased(), roles: ["user"], authenticated: true, expiresAt: Date().addingTimeInterval(900), epoch: 99) }
+            await gate.open(); try await idle(store)
+            // The background case cleared busy immediately; allow the cancelled
+            // task's ignored transport cancellation to reach its consumer check.
+            for _ in 0..<10 { await Task.yield() }
+            XCTAssertEqual(store.privacy, .object([:])); try cleanup(store, scratch)
+        }
+    }
+    func testLatestSearchRunsAfterSlowEarlierSearchWithoutMoreTyping() async throws {
+        let reached = expectation(description: "First search held")
+        let (store, transport, gate, scratch) = try await makeStore(mode: "slow-search", reached: reached)
+        store.showLibrary(.allPhotos); try await idle(store)
+        store.showLibrary(.search); store.query = "A"; store.searchLibrary()
+        await fulfillment(of: [reached], timeout: 5)
+        store.query = "B"; store.searchLibrary()
+        XCTAssertTrue(store.busy)
+        await gate.open(); try await idle(store)
+        let queries = await transport.photoRequests.compactMap { $0["query"].string }
+        XCTAssertEqual(queries, ["A", "B"]); XCTAssertEqual(store.photos.map(\.id), [ReadinessUITransport.second])
+        try cleanup(store, scratch)
+    }
+    func testLeavingSearchResetsSameSourceRowsAndCursor() async throws {
+        let (store, transport, _, scratch) = try await makeStore()
+        store.showLibrary(.allPhotos); try await idle(store)
+        store.showLibrary(.search); store.query = "A"; store.searchLibrary(); try await idle(store)
+        store.showLibrary(.allPhotos); try await idle(store)
+        let requests = await transport.photoRequests
+        XCTAssertGreaterThanOrEqual(requests.count, 3)
+        XCTAssertEqual(requests.last?["query"], .null); XCTAssertEqual(requests.last?["before_id"], .null)
+        store.loadMore(); try await idle(store)
+        XCTAssertEqual(store.photos.map(\.id), [ReadinessUITransport.first, ReadinessUITransport.second])
+        try cleanup(store, scratch)
+    }
+    func testFavoritesLookupDoesNotDependOnLoadingOlderGalleryPages() async throws {
+        let (store, transport, _, scratch) = try await makeStore(favorite: true)
+        store.showLibrary(.allPhotos); try await idle(store)
+        XCTAssertFalse(store.photos.contains(where: { $0.id == ReadinessUITransport.favorite }))
+        store.showLibrary(.favorites); try await idle(store)
+        XCTAssertEqual(store.photos.map(\.id), [ReadinessUITransport.favorite])
+        let lookup = await transport.lookupRequests
+        XCTAssertEqual(lookup, [[ReadinessUITransport.favorite]])
+        try cleanup(store, scratch)
     }
 }

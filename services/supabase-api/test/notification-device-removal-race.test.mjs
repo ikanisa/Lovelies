@@ -1,3 +1,4 @@
+import { pushReceipt } from './notification-receipt-fixture.mjs';
 import assert from 'node:assert/strict';
 import {after,test} from 'node:test';
 import {startHarness,enroll,faceVerifierFixture} from './runtime-harness.mjs';
@@ -9,6 +10,8 @@ const localTest=process.env.TEST_DATABASE_URL===undefined?test:test.skip;
 const originalFetch=globalThis.fetch;
 if(process.env.TEST_DATABASE_URL===undefined){globalThis.fetch=async()=>{throw Error('network_denied_by_fixture');};after(()=>{globalThis.fetch=originalFetch;});}
 const key=()=>crypto.randomUUID();
+// Fair reconciliation records examination time without changing send history.
+function assertHistoryPreserved(actual,before){assert(actual.updated_at>=before.updated_at);assert.deepEqual({...actual,updated_at:before.updated_at},before);}
 async function fixture(t){
  const h=await startHarness({faceVerifier:faceVerifierFixture,consumeQueue:false});t.after(()=>h.close());
  const actor=await enroll(h),token='synthetic-fcm-token-'+key();
@@ -49,12 +52,14 @@ for(const item of cases)localTest(`removing the current device handles ${item.na
  const after=await h.db.one('SELECT * FROM notification_deliveries WHERE id=?',id);
  if(item.preserve)assert.deepEqual(after,before);else {assert.equal(after.status,'cancelled');assert.deepEqual({...after,status:before.status,updated_at:before.updated_at},before);}
  assert.equal(h.env.PUSH_SERVICE,undefined);
- if(item.preserve)await assert.rejects(()=>processNotificationJob({notification_id:note},h.app),e=>e?.status===503&&e.code==='push_reconciliation_required');
+ const holdCode=item.lease||item.deadlineOnly?'push_reconciliation_required':'push_delivery_binding_unavailable';
+ if(item.preserve&&item.status!=='accepted')await assert.rejects(()=>processNotificationJob({notification_id:note},h.app),e=>e?.status===503&&e.code===holdCode);
+ if(item.status==='accepted'){await processNotificationJob({notification_id:note},h.app);assert.equal((await h.db.one('SELECT status FROM notification_jobs WHERE notification_id=?',note)).status,'accepted');}
  if(item.preserve&&item.status==='queued'){
   const restored=await h.json('/me/push-devices',{token:actor.token,body:{platform:'android',push_token:token,operation_key:key()}});assert.equal(restored.id,device.id);
   let sends=0;h.env.PUSH_SERVICE={fetch:async()=>{sends++;throw Error('synthetic_provider_must_not_be_called');}};
-  await assert.rejects(()=>processNotificationJob({notification_id:note},h.app),e=>e?.status===503&&e.code==='push_reconciliation_required');
-  assert.equal(sends,0);assert.deepEqual(await h.db.one('SELECT * FROM notification_deliveries WHERE id=?',id),before);
+  await assert.rejects(()=>processNotificationJob({notification_id:note},h.app),e=>e?.status===503&&e.code===holdCode);
+  assert.equal(sends,0);assertHistoryPreserved(await h.db.one('SELECT * FROM notification_deliveries WHERE id=?',id),before);
  }
 });
 
@@ -66,9 +71,9 @@ localTest('removal after device enumeration preserves a stale worker’s ambiguo
  const pending=processNotificationJob({notification_id:note},createApp(pauseAfterDeviceRead(h.db,entered,released),h.env));void pending.catch(()=>{});
  await Promise.race([entered.promise,pending.then(()=>{throw Error('device_read_did_not_pause');})]);
  const response=await h.request('/me/push-devices/'+device.id,{method:'DELETE',token:actor.token,body:{operation_key:key()}});assert.equal(response.status,200);await response.body?.cancel();
- released.resolve();await assert.rejects(pending,e=>e?.status===503&&e.code==='push_reconciliation_required');
- assert.equal(sends,0);assert.deepEqual(await h.db.one('SELECT * FROM notification_deliveries WHERE id=?',id),before);
- assert.equal((await h.db.one('SELECT status FROM notification_jobs WHERE notification_id=?',note)).status,'queued');
+ released.resolve();await assert.rejects(pending,e=>e?.status===503&&e.code==='push_delivery_binding_unavailable');
+ assert.equal(sends,0);assertHistoryPreserved(await h.db.one('SELECT * FROM notification_deliveries WHERE id=?',id),before);
+ assert.equal((await h.db.one('SELECT status FROM notification_jobs WHERE notification_id=?',note)).status,'ambiguous');
 });
 
 localTest('a remaining device cannot make the queue complete while the removed device is ambiguous',{timeout:30000},async t=>{
@@ -77,11 +82,11 @@ localTest('a remaining device cannot make the queue complete while the removed d
  await h.db.run("INSERT INTO notification_deliveries(id,notification_id,device_id,operation_key,status,token_hash,attempts,created_at,updated_at) VALUES(?,?,?,?,'ambiguous',?,1,?,?)",id,note,device.id,operation,push.token_hash,now,now);
  const before=await h.db.one('SELECT * FROM notification_deliveries WHERE id=?',id);
  const response=await h.request('/me/push-devices/'+device.id,{method:'DELETE',token:actor.token,body:{operation_key:key()}});assert.equal(response.status,200);await response.body?.cancel();
- let sends=0;h.env.PUSH_SERVICE={fetch:async(_url,init)=>{assert.equal(init?.method,'POST');sends++;const body=JSON.parse(init.body);return Response.json({operation_key:body.operation_key,status:'accepted',provider_message_id:'synthetic-receipt'});}};
+ let sends=0;h.env.PUSH_SERVICE={fetch:async(_url,init)=>{assert.equal(init?.method,'POST');sends++;const body=JSON.parse(init.body);return Response.json(pushReceipt(body,{status:'accepted',provider_message_id:'synthetic-receipt'}));}};
  await new PostgresJobQueue(h.db).send({category:'notification',payload:{notification_id:note}});
  assert.deepEqual(await drainJobs(h.app,1),{processed:0,failed:1});
- const job=await h.db.one('SELECT state,error_code FROM job_queue');assert.deepEqual(job,{state:'pending',error_code:'push_reconciliation_required'});
- assert.equal(sends,1);assert.deepEqual(await h.db.one('SELECT * FROM notification_deliveries WHERE id=?',id),before);
+ const job=await h.db.one('SELECT state,error_code FROM job_queue');assert.deepEqual(job,{state:'pending',error_code:'push_delivery_binding_unavailable'});
+ assert.equal(sends,1);assertHistoryPreserved(await h.db.one('SELECT * FROM notification_deliveries WHERE id=?',id),before);
  assert.deepEqual(await h.db.one('SELECT status,provider_receipt FROM notification_deliveries WHERE notification_id=? AND device_id=?',note,remaining.id),{status:'accepted',provider_receipt:'synthetic-receipt'});
- assert.equal((await h.db.one('SELECT status FROM notification_jobs WHERE notification_id=?',note)).status,'queued');
+ assert.equal((await h.db.one('SELECT status FROM notification_jobs WHERE notification_id=?',note)).status,'ambiguous');
 });

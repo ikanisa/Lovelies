@@ -1,7 +1,11 @@
+import { handleQueueRepair, handleQueueRepairCollection } from './queue-repair.ts';
+import { photoRecoveryDiagnostics } from './operator-recovery.ts';
 import { ApiError, digest, jsonBody, ok, stable, uuid, type Actor, type AppContext, type Database } from './types.ts';
 import { assertRegisteredActor, executeOperation, prepareOperation } from './operations.ts';
 import { currentAsset, currentPair, protectedRendition } from './gallery.ts';
 import { enqueueNotification } from './notifications.ts';
+import { parseAdminPage, readAdminPage } from './admin-pagination.ts';
+import { assertOperatorCapability, operatorCapabilities, type OperatorCapability } from './operator-capabilities.ts';
 // Retired photographer rows remain only for existing-schema compatibility and
 // subject export/erasure. No route can create, approve or activate this role.
 export const operatorsSchemaStatements: readonly string[] = [
@@ -13,10 +17,10 @@ export const operatorsSchemaStatements: readonly string[] = [
 ];
 export async function initOperatorsSchema(db: Database): Promise<void> { for (const statement of operatorsSchemaStatements)
     (await db.run(statement)); }
-export async function requireOperator(ctx: AppContext, actor: Actor, fresh = false): Promise<void> {
+export async function requireOperator(ctx: AppContext, actor: Actor, fresh = false, capability?: OperatorCapability): Promise<void> {
     (await assertRegisteredActor(ctx, actor));
-    if (!actor.roles.includes('admin'))
-        throw new ApiError(403, 'admin_required');
+    if (capability) await assertOperatorCapability(ctx, actor, capability);
+    else if (!actor.roles.includes('admin')) throw new ApiError(403, 'admin_required');
     if (fresh) {
         // Refresh changes session creation time without another face comparison.
         // Only an actual completed login bound to this exact session can satisfy
@@ -29,6 +33,24 @@ export async function requireOperator(ctx: AppContext, actor: Actor, fresh = fal
           AND c.created_at<=s.created_at AND c.used_at>=s.created_at LIMIT 1`,actor.sessionId,ctx.now()-300000,ctx.now());
         if (!proof) throw new ApiError(403, 'fresh_face_authentication_required');
     }
+}
+/** A read can outlive its grant while queries, audits or the transaction finish.
+ * Recheck one current capability snapshot before releasing its private result.
+ * The synchronous projection may only remove secondary sections. */
+export async function readOperator<T>(ctx: AppContext, actor: Actor, capability: OperatorCapability,
+    read: () => Promise<T>, project: (value: T, capabilities: readonly OperatorCapability[]) => T = value => value): Promise<T> {
+    const release = async (value: T): Promise<T> => {
+        await assertRegisteredActor(ctx, actor);
+        const capabilities = await operatorCapabilities(ctx, actor.accountId);
+        if (!capabilities.includes(capability)) throw new ApiError(403, 'operator_capability_required');
+        if (actor.expiresAt <= ctx.now()) throw new ApiError(401, 'session_invalid');
+        return project(value, capabilities);
+    };
+    const value = await ctx.db.transaction(async () => {
+        await requireOperator(ctx, actor, false, capability);
+        return release(await read());
+    });
+    return ctx.db.read(() => release(value));
 }
 function text(value: unknown, max: number, min = 0): string | null {
     if (value == null)
@@ -51,10 +73,60 @@ async function revokePair(ctx: AppContext, owner: string, recipient: string, ass
 export async function mediaHeld(ctx: AppContext, accountId: string, assetId: string): Promise<boolean> {
     return !!(await ctx.db.one('SELECT id FROM moderation_holds WHERE active=1 AND (subject_id=? OR asset_id=?) LIMIT 1', accountId, assetId));
 }
+const supportStatuses = ['open', 'under_review', 'resolved', 'closed'] as const;
+async function supportList(request: Request, ctx: AppContext, accountId?: string) {
+    const page = parseAdminPage(new URL(request.url), { scope: accountId ? 'support.own.' + accountId : 'support.admin', statuses: supportStatuses });
+    const result = await readAdminPage(ctx.db, page, {
+        select: accountId ? 'id,subject,status,category,review_outcome,review_notes,revision,created_at,updated_at' : '*',
+        from: 'support_requests', where: accountId ? 'account_id=?' : '1=1', values: accountId ? [accountId] : [],
+        priority: "CASE WHEN status IN('open','under_review') THEN 0 ELSE 1 END",
+        statusColumn: 'status', searchColumns: accountId ? ['id', 'subject'] : ['id', 'account_id', 'subject'],
+    });
+    return { support_requests: result.items, page: result.page };
+}
+
+async function supportDetail(request: Request, ctx: AppContext, actor: Actor, id: string) {
+    const supportRequest = await ctx.db.one<any>('SELECT * FROM support_requests WHERE id=?', id);
+    if (!supportRequest) throw new ApiError(404, 'support_request_not_found');
+    const page = parseAdminPage(new URL(request.url), { scope: 'support.history.' + id, statuses: [] });
+    const result = await readAdminPage<any>(ctx.db, page, {
+        select: 'o.actor_id,o.operation_key,o.action,o.payload_hash,o.payload_json,o.response_json,o.created_at',
+        from: 'operations o',
+        where: `o.source='support' AND ((o.action IN('support.start','support.approve','support.reject','support.close')
+            AND json_extract(o.payload_json,'$.request_id')=?) OR (o.action='support.create' AND json_extract(o.response_json,'$.id')=?))`,
+        values: [id, id], priority: '0', statusColumn: 'o.action', searchColumns: [],
+        idColumn: "o.actor_id || ':' || o.operation_key",
+        // Revisions provide case order even when several decisions share one
+        // database-clock timestamp. Actual timestamps are still returned.
+        createdAtColumn: "CAST(coalesce(CAST(o.response_json AS jsonb)->'support_request'->>'revision',CAST(o.response_json AS jsonb)->>'revision') AS BIGINT)",
+    });
+    const history = [];
+    for (const receipt of result.items) {
+        try {
+            const input = JSON.parse(receipt.payload_json), output = JSON.parse(receipt.response_json);
+            if (input.operation_key !== receipt.operation_key || receipt.payload_hash !== await digest(stable({ action: receipt.action, source: 'support', payload: input }))) throw new Error();
+            const created = receipt.action === 'support.create';
+            const row = created ? output : output.support_request;
+            if (!row || row.id !== id || (!created && (row.account_id !== supportRequest.account_id || input.request_id !== id ||
+                !Number.isSafeInteger(input.expected_revision) || row.revision !== input.expected_revision + 1)) ||
+                (created && receipt.actor_id !== supportRequest.account_id) || !supportStatuses.includes(row.status) ||
+                !Number.isSafeInteger(row.revision) || row.revision < 1 ||
+                (row.review_notes != null && (typeof row.review_notes !== 'string' || row.review_notes.length > 4000))) throw new Error();
+            history.push({ id: receipt.actor_id + ':' + receipt.operation_key, actor_id: receipt.actor_id,
+                action: receipt.action, created_at: receipt.created_at, status: row.status,
+                revision: row.revision, review_notes: row.review_notes ?? null, review_outcome: row.review_outcome ?? null });
+        } catch { throw new ApiError(503, 'support_history_unavailable'); }
+    }
+    await audit(ctx, actor, 'support.admin_read', id, { returned_history: history.length });
+    return { support_request: supportRequest, history, page: result.page,
+        history_scope: 'retained_verified_operations', history_notice: 'History follows the existing operation retention and erasure policy. Retired receipts are not reconstructed.' };
+}
+
 async function support(request: Request, ctx: AppContext, actor: Actor, path: string): Promise<Response> {
     const own = /^\/support\/requests\/([0-9a-f-]{36})$/i.exec(path), admin = /^\/admin\/support-requests\/([0-9a-f-]{36})\/(start|approve|reject|close)$/i.exec(path);
-    if (request.method === 'GET')
-        return ok((await ctx.db.transaction(async () => {
+    const adminRead = /^\/admin\/support-requests\/([0-9a-f-]{36})$/i.exec(path);
+    if (request.method === 'GET') {
+        if (own || path === '/support/requests') return ok((await ctx.db.transaction(async () => {
             (await assertRegisteredActor(ctx, actor));
             if (own) {
                 const row = (await ctx.db.one('SELECT id,subject,status,category,review_outcome,review_notes,revision,created_at,updated_at FROM support_requests WHERE id=? AND account_id=?', uuid(own[1]), actor.accountId));
@@ -62,21 +134,24 @@ async function support(request: Request, ctx: AppContext, actor: Actor, path: st
                     throw new ApiError(404, 'support_request_not_found');
                 return { support_request: row };
             }
-            if (path === '/support/requests')
-                return { support_requests: (await ctx.db.all('SELECT id,subject,status,category,review_outcome,review_notes,revision,created_at,updated_at FROM support_requests WHERE account_id=? ORDER BY created_at DESC,id LIMIT 100', actor.accountId)) };
-            (await requireOperator(ctx, actor));
-            (await audit(ctx, actor, 'support.admin_list', actor.accountId));
-            return { support_requests: (await ctx.db.all('SELECT * FROM support_requests ORDER BY created_at DESC,id LIMIT 100')) };
+            return await supportList(request, ctx, actor.accountId);
         })));
+        return ok(await readOperator(ctx, actor, 'support.read', async () => {
+            if (adminRead) return await supportDetail(request, ctx, actor, uuid(adminRead[1]));
+            if (path !== '/admin/support-requests') throw new ApiError(404, 'route_not_found');
+            (await audit(ctx, actor, 'support.admin_list', actor.accountId));
+            return await supportList(request, ctx);
+        }));
+    }
     if (request.method !== 'POST')
         throw new ApiError(405, 'method_not_allowed');
     const body = await jsonBody(request, 16384);
     if (admin) {
-        (await requireOperator(ctx, actor));
+        (await requireOperator(ctx, actor, false, 'support.review'));
         exact(body, ['review_notes', 'sla_due_at', 'expected_revision', 'operation_key']);
         const notes = text(body.review_notes, 4000), intent = await prepareOperation('support.' + admin[2], { ...body, request_id: uuid(admin[1]) }, 'support');
         return ok((await executeOperation(ctx, actor, intent, async () => {
-            (await requireOperator(ctx, actor));
+            (await requireOperator(ctx, actor, false, 'support.review'));
             const row = (await ctx.db.one<any>('SELECT * FROM support_requests WHERE id=?', uuid(admin[1])));
             if (!row)
                 throw new ApiError(404, 'support_request_not_found');
@@ -94,6 +169,7 @@ async function support(request: Request, ctx: AppContext, actor: Actor, path: st
             return { support_request: (await ctx.db.one('SELECT * FROM support_requests WHERE id=?', row.id)) };
         }, [String((await ctx.db.one<any>('SELECT account_id FROM support_requests WHERE id=?', uuid(admin[1])))?.account_id ?? actor.accountId)])));
     }
+    if (path !== '/support/requests') throw new ApiError(404, 'route_not_found');
     exact(body, ['subject', 'details', 'operation_key']);
     const subject = text(body.subject, 160, 3), details = text(body.details, 4000, 5);
     if (!subject || !details)
@@ -107,27 +183,40 @@ async function safety(request: Request, ctx: AppContext, actor: Actor, path: str
     const detail = /^\/admin\/matches\/([0-9a-f-]{36})$/i.exec(path);
     const review = /^\/(?:admin\/matches\/([0-9a-f-]{36})\/resolve|matches\/([0-9a-f-]{36})\/review)$/i.exec(path);
     const reportReview = /^\/admin\/safety\/reports\/([0-9a-f-]{36})\/resolve$/i.exec(path);
-    if (request.method === 'GET')
-        return ok((await ctx.db.transaction(async () => {
+    if (request.method === 'GET') {
+        if (path === '/me/blocks') return ok((await ctx.db.transaction(async () => {
             (await assertRegisteredActor(ctx, actor));
-            if (path === '/me/blocks')
-                return { items: (await ctx.db.all('SELECT blocked_id,created_at FROM blocks WHERE blocker_id=? ORDER BY created_at DESC LIMIT 100', actor.accountId)) };
-            (await requireOperator(ctx, actor));
+            return { items: (await ctx.db.all('SELECT blocked_id,created_at FROM blocks WHERE blocker_id=? ORDER BY created_at DESC LIMIT 100', actor.accountId)) };
+        })));
+        return ok(await readOperator(ctx, actor, 'safety.read', async () => {
             if (detail) {
                 const row = (await ctx.db.one('SELECT * FROM candidates WHERE id=?', uuid(detail[1])));
                 if (!row)
                     throw new ApiError(404, 'match_not_found');
                 return { match: row, reports: (await ctx.db.all('SELECT * FROM safety_reports WHERE candidate_id=? ORDER BY created_at DESC LIMIT 100', uuid(detail[1]))) };
             }
-            return { reports: (await ctx.db.all('SELECT * FROM safety_reports ORDER BY created_at DESC,id LIMIT 100')), matches: (await ctx.db.all("SELECT id,asset_id,owner_id,recipient_id,status,version FROM candidates WHERE status<>'eligible' ORDER BY created_at DESC,id LIMIT 100")) };
-        })));
+            if (path !== '/admin/safety/reports') throw new ApiError(404, 'route_not_found');
+            const url = new URL(request.url), collection = url.searchParams.get('collection') ?? 'reports';
+            if (!['reports', 'matches'].includes(collection)) throw new ApiError(400, 'invalid_input');
+            const page = parseAdminPage(url, { scope: 'safety.' + collection, extraKeys: ['collection'], statuses: collection === 'reports'
+                ? ['open', 'under_review', 'resolved', 'rejected'] : ['needs_review', 'rejected', 'blocked', 'not_me', 'deleted', 'expired'] });
+            const result = await readAdminPage(ctx.db, page, collection === 'reports' ? {
+                select: '*', from: 'safety_reports', priority: "CASE WHEN status IN('open','under_review') THEN 0 ELSE 1 END",
+                statusColumn: 'status', searchColumns: ['id', 'reason', 'reporter_id', 'subject_id', 'asset_id'],
+            } : {
+                select: 'id,asset_id,owner_id,recipient_id,status,version,created_at', from: 'candidates', where: "status<>'eligible'",
+                priority: "CASE WHEN status='needs_review' THEN 0 ELSE 1 END", statusColumn: 'status', searchColumns: ['id', 'asset_id', 'owner_id', 'recipient_id'],
+            });
+            return { reports: collection === 'reports' ? result.items : [], matches: collection === 'matches' ? result.items : [], collection, page: result.page };
+        }));
+    }
     if (!['POST', 'DELETE'].includes(request.method))
         throw new ApiError(405, 'method_not_allowed');
     const body = await jsonBody(request, 16384);
     if (reportReview) {
         if (request.method !== 'POST')
             throw new ApiError(405, 'method_not_allowed');
-        (await requireOperator(ctx, actor, true));
+        (await requireOperator(ctx, actor, true, 'safety.review'));
         exact(body, ['action', 'expected_revision', 'reason', 'operation_key']);
         if (!['hold', 'release', 'resolve', 'reject'].includes(String(body.action)))
             throw new ApiError(400, 'invalid_report_action');
@@ -136,7 +225,7 @@ async function safety(request: Request, ctx: AppContext, actor: Actor, path: str
             throw new ApiError(400, 'review_reason_required');
         const intent = await prepareOperation('safety.review', { ...body, report_id: id }, 'moderation');
         return ok((await executeOperation(ctx, actor, intent, async () => {
-            (await requireOperator(ctx, actor, true));
+            (await requireOperator(ctx, actor, true, 'safety.review'));
             const row = (await ctx.db.one<any>('SELECT * FROM safety_reports WHERE id=?', id));
             if (!row)
                 throw new ApiError(404, 'report_not_found');
@@ -192,14 +281,14 @@ async function safety(request: Request, ctx: AppContext, actor: Actor, path: str
         }, [target])));
     }
     if (review) {
-        (await requireOperator(ctx, actor, true));
+        (await requireOperator(ctx, actor, true, 'safety.review'));
         const id = uuid(review[1] ?? review[2]);
         exact(body, ['action', 'expected_revision', 'reason', 'operation_key']);
         if (!['approve', 'reject', 'escalate', 'delete', 'audit'].includes(String(body.action)))
             throw new ApiError(400, 'invalid_review_action');
         const rationale = text(body.reason, 4096), intent = await prepareOperation('match.review', { ...body, match_id: id }, 'moderation');
         return ok((await executeOperation(ctx, actor, intent, async () => {
-            (await requireOperator(ctx, actor, true));
+            (await requireOperator(ctx, actor, true, 'safety.review'));
             const row = (await ctx.db.one<any>('SELECT * FROM candidates WHERE id=?', id));
             if (!row)
                 throw new ApiError(404, 'match_not_found');
@@ -249,20 +338,63 @@ async function safety(request: Request, ctx: AppContext, actor: Actor, path: str
         return { id, status: 'open', ...(notMe ? { match_id: candidate.id, removed_photo_count: 1, related_photo_count: 0, cluster_cleanup: false } : {}), grants_created: 0 };
     }, target ? [target] : [])), 201);
 }
+async function uploads(request: Request, ctx: AppContext, actor: Actor, id?: string) {
+    if (id) {
+        const asset = await ctx.db.one<any>("SELECT id,owner_id,source,batch_id,status,title,created_at,byte_size,content_type,width,height,version FROM assets WHERE id=? AND source='personal' AND deleted_at IS NULL", id);
+        if (!asset) throw new ApiError(404, 'upload_not_found');
+        const page = parseAdminPage(new URL(request.url), { scope: 'upload.attempts.' + id, statuses: [] });
+        const result = await readAdminPage<any>(ctx.db, page, {
+            select: 'p.id,p.status,p.source_version,p.model_version,p.captured_at,p.expires_at,p.completed_at,p.error_code,p.lease_until',
+            from: 'processing_attempts p', where: 'p.asset_id=?', values: [id], priority: '0',
+            statusColumn: 'p.status', searchColumns: [], idColumn: 'p.id', createdAtColumn: 'p.captured_at',
+        });
+        const attempts = [];
+        for (const attempt of result.items) {
+            const outbox = await ctx.db.one('SELECT id,status,created_at,dispatched_at FROM photo_job_outbox WHERE attempt_id=?', attempt.id);
+            const jobId = await digest(stable({ category: 'photo', payload: { attempt_id: attempt.id } }));
+            const job = await ctx.db.one('SELECT id,state,attempts,handoff_count,available_at,created_at,completed_at,error_code,lease_until FROM job_queue WHERE id=? AND category=?', jobId, 'photo');
+            attempts.push({ ...attempt, outbox: outbox ?? null, job: job ?? null, recovery: await photoRecoveryDiagnostics(ctx,id,attempt.id) });
+        }
+        const activeHold = await mediaHeld(ctx, asset.owner_id, id);
+        await audit(ctx, actor, 'upload.admin_read', id, { returned_attempts: attempts.length });
+        return { upload: asset, attempts, page: result.page, diagnostics: { observed_at: ctx.now(), moderation_hold: activeHold,
+            attempt_history_scope: 'retained_processing_attempts', retry_available: attempts.some(item => item.recovery.eligible), private_media_included: false } };
+    }
+    const page = parseAdminPage(new URL(request.url), { scope: 'uploads.admin', statuses: ['uploading', 'uploaded', 'processing', 'ready', 'failed', 'cancelled'] });
+    const result = await readAdminPage(ctx.db, page, {
+        select: 'id,owner_id,source,batch_id,status,title,created_at', from: 'assets', where: "source='personal' AND deleted_at IS NULL",
+        priority: "CASE WHEN status='failed' THEN 0 WHEN status IN('uploading','uploaded','processing') THEN 1 ELSE 2 END",
+        statusColumn: 'status', searchColumns: ['id', 'owner_id', 'batch_id', 'title'],
+    });
+    return { uploads: result.items, page: result.page };
+}
+
 export async function handleOperators(request: Request, ctx: AppContext): Promise<Response | null> {
     const path = new URL(request.url).pathname;
+    const queueRepair=/^\/admin\/queue-repairs\/([0-9a-f]{64})$/.exec(path);
+    const queueCollection=path==='/admin/queue-repairs';
     const isSupport = path === '/support/requests' || /^\/(support\/requests|admin\/support-requests)(\/|$)/.test(path);
     const isSafety = path === '/safety/reports' || path === '/me/blocks' || /^\/me\/blocks\//.test(path) || /^\/matches\/[^/]+\/(not-me|review)$/.test(path) || /^\/admin\/matches\//.test(path) || /^\/admin\/safety\/reports(?:\/|$)/.test(path);
-    const adminMetrics = path === '/admin/metrics' || path === '/admin/uploads';
-    if (!isSupport && !isSafety && !adminMetrics)
+    const uploadDetail = /^\/admin\/uploads\/([0-9a-f-]{36})$/i.exec(path);
+    const adminMetrics = path === '/admin/metrics' || path === '/admin/uploads' || !!uploadDetail;
+    if (!isSupport && !isSafety && !adminMetrics && !queueRepair && !queueCollection)
         return null;
     const actor = await ctx.authenticate(request);
     (await assertRegisteredActor(ctx, actor));
+    if(queueCollection){await requireOperator(ctx,actor);return handleQueueRepairCollection(request,ctx,actor,requireOperator);}
+    if(queueRepair){await requireOperator(ctx,actor);return handleQueueRepair(request,ctx,actor,queueRepair[1],requireOperator);}
     if (adminMetrics) {
-        (await requireOperator(ctx, actor));
+        (await requireOperator(ctx, actor, false, path === '/admin/metrics' ? 'overview.read' : 'uploads.read'));
         if (request.method !== 'GET')
             throw new ApiError(405, 'method_not_allowed');
-        return ok((await ctx.db.transaction(async () => { (await requireOperator(ctx, actor)); return path === '/admin/uploads' ? { uploads: (await ctx.db.all("SELECT id,owner_id,source,batch_id,status,title,created_at FROM assets WHERE source='personal' AND deleted_at IS NULL ORDER BY created_at DESC,id LIMIT 100")) } : { accounts: (await ctx.db.one('SELECT count(*) n FROM accounts WHERE disabled_at IS NULL'))!.n, uploads: (await ctx.db.one("SELECT count(*) n FROM assets WHERE source='personal' AND deleted_at IS NULL"))!.n, active_grants: (await ctx.db.one("SELECT count(*) n FROM media_grants g JOIN assets a ON a.id=g.asset_id WHERE g.active=1 AND a.source='personal' AND a.deleted_at IS NULL"))!.n, open_support: (await ctx.db.one("SELECT count(*) n FROM support_requests WHERE status IN('open','under_review')"))!.n, open_reports: (await ctx.db.one("SELECT count(*) n FROM safety_reports WHERE status IN('open','under_review')"))!.n }; })));
+        return ok(await readOperator(ctx, actor, path === '/admin/metrics' ? 'overview.read' : 'uploads.read', async () => {
+            if (path === '/admin/uploads' || uploadDetail) return await uploads(request, ctx, actor, uploadDetail ? uuid(uploadDetail[1]) : undefined);
+            return { accounts: (await ctx.db.one('SELECT count(*) n FROM accounts WHERE disabled_at IS NULL'))!.n,
+                uploads: (await ctx.db.one("SELECT count(*) n FROM assets WHERE source='personal' AND deleted_at IS NULL"))!.n,
+                active_grants: (await ctx.db.one("SELECT count(*) n FROM media_grants g JOIN assets a ON a.id=g.asset_id WHERE g.active=1 AND a.source='personal' AND a.deleted_at IS NULL"))!.n,
+                open_support: (await ctx.db.one("SELECT count(*) n FROM support_requests WHERE status IN('open','under_review')"))!.n,
+                open_reports: (await ctx.db.one("SELECT count(*) n FROM safety_reports WHERE status IN('open','under_review')"))!.n };
+        }));
     }
     if (isSupport)
         return (await support(request, ctx, actor, path));

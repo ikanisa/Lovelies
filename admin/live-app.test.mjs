@@ -1,8 +1,9 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import {previewAllowed} from './entry.mjs';
-import {parseRoute,reviewIntent,recordTable,startWorkspace} from './live-app.mjs';
+import {parseRoute,reviewIntent,recordTable,startWorkspace,permittedRoutes} from './live-app.mjs';
 import {AUDIENCE_POLICY} from './audience.mjs';
+import {queueQuery,queuePage,queueStatuses} from './live-queues.mjs';
 
 const id=n=>`00000000-0000-4000-8000-${String(n).padStart(12,'0')}`;
 const unknownAudience=account=>({protocol:'lovelies-audience-v1',policy_version:AUDIENCE_POLICY,account_id:account,
@@ -40,10 +41,13 @@ test('server record copy is escaped and no raw metadata or private media is rend
   assert(html.includes('&lt;img'));assert(!html.includes('<img'));assert(!html.includes('private-template'));assert(!html.includes('private-token'));assert(!html.includes('private.example'));assert(html.includes('scope="col"'));
 });
 
-function harness({hash='#overview',operator=false}={}) {
+function harness({hash='#overview',operator=false,deferDialogClose=false}={}) {
+  const dialogCloses=[];
   class Element {
     constructor(){this.innerHTML='';this.textContent='';this.dataset={};this.attributes={};this.hidden=false;this.disabled=false;this.value='';this.open=false;this.firstElementChild={textContent:''};this.listeners=new Map();this.classList={add(){}};}
-    setAttribute(k,v){this.attributes[k]=v;}removeAttribute(k){delete this.attributes[k];}replaceChildren(){}focus(){this.focused=true;}close(){this.open=false;}showModal(){this.open=true;}prepend(){}insertAdjacentHTML(_where,html){this.innerHTML+=html;}addEventListener(k,v){this.listeners.set(k,v);}querySelector(){return null;}
+    setAttribute(k,v){this.attributes[k]=v;}removeAttribute(k){delete this.attributes[k];}replaceChildren(){}focus(){this.focused=true;}
+    close(){const wasOpen=this.open;this.open=false;if(wasOpen){const dispatch=()=>this.listeners.get('close')?.({target:this});if(deferDialogClose)dialogCloses.push(dispatch);else queueMicrotask(dispatch);}}
+    showModal(){this.open=true;}prepend(){}insertAdjacentHTML(_where,html){this.innerHTML+=html;}addEventListener(k,v){this.listeners.set(k,v);}querySelector(){return null;}
   }
   const elements=new Map(),events=new Map(),windowEvents=new Map(),calls=[];
   const get=s=>{if(!elements.has(s))elements.set(s,new Element());return elements.get(s);};
@@ -51,11 +55,40 @@ function harness({hash='#overview',operator=false}={}) {
   const window={navigator:{onLine:true},location:{hash},requestAnimationFrame:fn=>fn(),setTimeout,FormData:class{},addEventListener:(type,callback)=>windowEvents.set(type,callback),URL:{revokeObjectURL(){}}};
   const session={operator:operator?{user_id:id(9),roles:['admin']}:null,credentials:operator?{}:null,challenge:null,captures:[],state:{reference:{},pendingAction:null},cancelled:0,
     async restore(){return {registered:true,pending:false};},cancelCapture(){this.challenge=null;this.captures=[];this.cancelled++;},async request(path){calls.push(path);return {accounts:4,uploads:8,active_grants:3,open_support:2,open_reports:1};}};
-  return {document,window,session,events,windowEvents,calls,get};
+  return {document,window,session,events,windowEvents,calls,get,flushDialogCloses(){while(dialogCloses.length)dialogCloses.shift()();}};
 }
 test('initial protected shell reads private device state without calling an API or displaying sample rows',async()=>{
   const h=harness();await startWorkspace(h);const html=h.get('#main').innerHTML;
   assert(html.includes('Verify my face'));assert(!html.includes('Alex Morgan'));assert(!html.includes('Sample operator'));assert.deepEqual(h.calls,[]);
+});
+test('delegated support workspace opens only its permitted queue and read-only details have no decision form',async()=>{
+ const h=harness({operator:true});h.session.operator={user_id:id(9),roles:['user'],operator_capabilities:['support.read']};
+ const row={id:id(1),subject:'Scoped support case',status:'open',revision:1};
+ h.session.request=async path=>{h.calls.push(path);return path.startsWith('/admin/support-requests/'+id(1))?{support_request:row,history:[],page:{limit:25,total:0,next_cursor:null}}:{support_requests:[row],page:{limit:25,total:1,next_cursor:null}};};
+ const app=await startWorkspace(h);await app.refresh();
+ assert.deepEqual(permittedRoutes(h.session.operator),['support']);assert(h.calls[0].startsWith('/admin/support-requests?'));
+ const links=h.get('#navigation').innerHTML;assert(links.includes('#support'));for(const route of ['#privacy','#users','#uploads','#operators'])assert(!links.includes(route));
+ h.events.get('click')({target:{closest:()=>({dataset:{live:'detail',kind:'support',id:id(1)}})}});
+ await new Promise(resolve=>setTimeout(resolve,0));
+ assert(h.get('#detail-dialog').innerHTML.includes('Scoped support case'));assert(!h.get('#detail-dialog').innerHTML.includes('live-review-form'));
+});
+test('operator access is visible only to existing administrators and action scopes do not imply unrelated routes',()=>{
+ assert(permittedRoutes({roles:['admin']}).includes('operators'));
+ assert.deepEqual(permittedRoutes({roles:['user'],operator_capabilities:['uploads.read','uploads.recover']}),['uploads']);
+ assert.deepEqual(permittedRoutes({roles:['user'],operator_capabilities:[]}),[]);
+});
+test('delegated privacy readers never receive admin-only queue recovery controls or dispatch',async()=>{
+ const h=harness({operator:true,hash:'#privacy'}),job='a'.repeat(64);
+ h.session.operator={user_id:id(9),roles:['user'],operator_capabilities:['privacy.read']};
+ const row={id:id(1),status:'processing',request_type:'delete',diagnostics:{queue:{job_id:job,state:'failed'}}};
+ h.session.request=async route=>{h.calls.push(route);return route.startsWith('/privacy-requests/')?{privacy_request:row}:{privacy_requests:[row],page:{limit:25,total:1,next_cursor:null}};};
+ const app=await startWorkspace(h);await app.refresh();
+ h.events.get('click')({target:{closest:()=>({dataset:{live:'detail',kind:'privacy',id:id(1)}})}});
+ await new Promise(resolve=>setTimeout(resolve,0));
+ assert(h.get('#detail-dialog').open);assert(!h.get('#detail-dialog').innerHTML.includes('Inspect work recovery'));
+ h.events.get('click')({target:{closest:()=>({dataset:{live:'inspect-queue',jobId:job}})}});
+ await new Promise(resolve=>setTimeout(resolve,0));
+ assert(!h.calls.some(route=>route.startsWith('/admin/queue-repairs/')));assert(h.session.operator);
 });
 test('authorized overview uses actual response values; offline clears those records',async()=>{
   const h=harness({operator:true}),app=await startWorkspace(h);await app.refresh();
@@ -140,4 +173,167 @@ test('authority expiry, cancellation or challenge replacement during encoding pr
   await new Promise(resolve=>setImmediate(resolve));
   assert.equal(reads,0);assert.equal(urls,0);assert(stopped>0);assert.equal(canvas.width,1);assert.equal(canvas.height,1);
  });
+});
+
+const settle=()=>new Promise(resolve=>setImmediate(resolve));
+const click=(h,live,extra={})=>h.events.get('click')({target:{closest:()=>({dataset:{live,...extra}})}});
+test('all queue queries carry search, status and complete collection identity to the server',()=>{
+ for(const route of ['users','support','privacy','guardians','uploads','match-reports']) {
+  const state={route,q:'literal %_ & account',filter:route==='users'?'registered':'all',collection:'matches'};
+  const params=new URLSearchParams(queueQuery(state,'cursor-value'));
+  assert.equal(params.get('q'),state.q);assert.equal(params.get('status'),state.filter);assert.equal(params.get('cursor'),'cursor-value');assert.equal(params.get('limit'),'25');
+  assert.equal(params.has('collection'),route==='match-reports');
+ }
+ assert(queueStatuses({route:'guardians'}).includes('under_review'));
+ assert.throws(()=>queueQuery({route:'support'},'bad cursor'));
+ for(const page of [{limit:101,next_cursor:null},{limit:25,next_cursor:'bad cursor'},{limit:25,next_cursor:null,total:-1}])assert.throws(()=>queuePage(page));
+});
+test('support next/previous pages reach server records beyond a bounded first response',async()=>{
+ const h=harness({operator:true,hash:'#support'}),app=await startWorkspace(h),paths=[];
+ h.session.request=async path=>{paths.push(path);const cursor=new URL(path,'http://fixture').searchParams.get('cursor');return {support_requests:[{id:id(cursor?102:1),subject:cursor?'Later case':'First case',status:'open',revision:1}],page:{limit:25,total:101,next_cursor:cursor?null:'next-cursor'}};};
+ await app.refresh();assert(h.get('#main').innerHTML.includes('101 matching records'));assert(h.get('#main').innerHTML.includes('First case'));
+ click(h,'next-page');await settle();assert(h.get('#main').innerHTML.includes('Later case'));assert(!h.get('#main').innerHTML.includes('First case'));assert(h.get('#main').innerHTML.includes('Page 2'));
+ click(h,'previous-page');await settle();assert(h.get('#main').innerHTML.includes('First case'));assert(h.get('#main').innerHTML.includes('Page 1'));
+ assert.deepEqual(paths.map(path=>new URL(path,'http://fixture').searchParams.get('cursor')),[null,'next-cursor',null]);
+});
+test('server search results are not discarded by a second incompatible browser filter',async()=>{
+ const h=harness({operator:true,hash:'#support?q=owner-id'}),app=await startWorkspace(h);let path;
+ h.session.request=async value=>{path=value;return {support_requests:[{id:id(1),subject:'A case matched by its owner',status:'open'}],page:{limit:25,total:1,next_cursor:null}};};
+ await app.refresh();assert.equal(new URL(path,'http://fixture').searchParams.get('q'),'owner-id');assert(h.get('#main').innerHTML.includes('A case matched by its owner'));assert(!h.get('#main').innerHTML.includes('Search filters this loaded set'));
+});
+test('safety collection switches retain independent query and cursor identity',async()=>{
+ const h=harness({operator:true,hash:'#match-reports?collection=matches&filter=needs_review'}),app=await startWorkspace(h);let path;
+ h.session.request=async value=>{path=value;return {reports:[],matches:[{id:id(2),version:id(3),status:'needs_review'}],page:{limit:25,total:1,next_cursor:null}};};
+ await app.refresh();const params=new URL(path,'http://fixture').searchParams;assert.equal(params.get('collection'),'matches');assert.equal(params.get('status'),'needs_review');assert(h.get('#main').innerHTML.includes('data-kind="match"'));
+ click(h,'safety-reports');assert.equal(h.window.location.hash,'match-reports');
+});
+test('support detail renders retained rationale and updated revision without raw receipt fields',async()=>{
+ const h=harness({operator:true,hash:'#support'}),app=await startWorkspace(h);
+ h.session.request=async path=>new URL(path,'http://fixture').pathname.endsWith(id(1))?{
+  support_request:{id:id(1),subject:'Case',status:'under_review',revision:3},
+  history:[{id:'receipt',action:'support.start',actor_id:id(9),created_at:1000,status:'under_review',revision:2,review_notes:'<script>unsafe markup</script>',payload_json:'private-raw-payload'}],
+  page:{limit:25,total:1,next_cursor:null},
+ }:{support_requests:[{id:id(1),subject:'Case',status:'open',revision:1}],page:{limit:25,total:1,next_cursor:null}};
+ await app.refresh();click(h,'detail',{kind:'support',id:id(1)});await settle();const html=h.get('#detail-dialog').innerHTML;
+ assert(html.includes('Decision history'));assert(html.includes('&lt;script&gt;'));assert(!html.includes('<script>'));assert(!html.includes('private-raw-payload'));assert(html.includes('Retired receipts are not reconstructed'));
+});
+test('upload diagnostics display job failure metadata without private service fields',async()=>{
+ const h=harness({operator:true,hash:'#uploads'}),app=await startWorkspace(h);
+ h.session.request=async path=>new URL(path,'http://fixture').pathname.endsWith(id(1))?{
+  upload:{id:id(1),title:'Photo',status:'failed',object_key:'private-object'},
+  attempts:[{id:id(2),status:'failed',error_code:'inference_unavailable',processor_nonce:'private-nonce',job:{state:'failed',attempts:20,lease_token:'private-lease'},outbox:{status:'dispatched'}}],
+  diagnostics:{observed_at:1000,moderation_hold:false},page:{limit:25,total:1,next_cursor:null},
+ }:{uploads:[{id:id(1),title:'Photo',status:'failed'}],page:{limit:25,total:1,next_cursor:null}};
+ await app.refresh();click(h,'detail',{kind:'uploads',id:id(1)});await settle();const html=h.get('#detail-dialog').innerHTML;
+ assert(html.includes('Processing attempts'));assert(html.includes('inference_unavailable'));assert(html.includes('20'));
+ for(const secret of ['private-object','private-nonce','private-lease'])assert(!html.includes(secret));
+});
+test('a late case history cannot reopen the protected detail after logout',async()=>{
+ const h=harness({operator:true,hash:'#support'}),app=await startWorkspace(h);let release;
+ h.session.request=async path=>new URL(path,'http://fixture').pathname.endsWith(id(1))?new Promise(resolve=>release=resolve):{support_requests:[{id:id(1),subject:'Case',status:'open',revision:1}]};
+ h.session.logout=async()=>{h.session.operator=null;h.session.credentials=null;};
+ await app.refresh();click(h,'detail',{kind:'support',id:id(1)});click(h,'logout');
+ release({support_request:{id:id(1),subject:'Private case',status:'open',revision:1},history:[],page:{limit:25,total:0,next_cursor:null}});await settle();
+ assert.equal(h.get('#detail-dialog').open,false);assert(!h.get('#detail-dialog').innerHTML.includes('Private case'));
+});
+
+const supportRecord=(number,subject)=>({id:id(number),subject,status:'open',revision:1});
+const supportDetail=(record,next=null)=>({support_request:record,history:[],page:{limit:25,total:next?26:1,next_cursor:next}});
+test('closing a pending history permits a new record; old close events and replies cannot replace it',async()=>{
+ const h=harness({operator:true,hash:'#support',deferDialogClose:true}),first=supportRecord(1,'First private case'),second=supportRecord(2,'Newly selected case');
+ let releaseHistory,releaseSecond;
+ h.session.request=async path=>{
+  const url=new URL(path,'http://fixture');
+  if(url.pathname.endsWith(id(2)))return new Promise(resolve=>releaseSecond=resolve);
+  if(url.pathname.endsWith(id(1)))return url.searchParams.has('cursor')?new Promise(resolve=>releaseHistory=resolve):supportDetail(first,'next-history');
+  return {support_requests:[first,second],page:{limit:25,total:2,next_cursor:null}};
+ };
+ const app=await startWorkspace(h);await app.refresh();click(h,'detail',{kind:'support',id:id(1)});await settle();
+ const dialog=h.get('#detail-dialog');assert.equal(dialog.open,true);
+ click(h,'detail-next',{kind:'support',id:id(1)});assert.equal(typeof releaseHistory,'function');
+ click(h,'close-detail');assert.equal(dialog.open,false);assert.equal(dialog.innerHTML,'');
+ click(h,'detail',{kind:'support',id:id(2)});assert.equal(typeof releaseSecond,'function','dismissal releases only the cancelled detail read');
+ h.flushDialogCloses();releaseSecond(supportDetail(second));await settle();
+ assert.equal(dialog.open,true);assert(dialog.innerHTML.includes(second.subject));
+ const current=dialog.innerHTML;releaseHistory(supportDetail({...first,subject:'Late dismissed history'}));await settle();
+ assert.equal(dialog.innerHTML,current);assert.equal(dialog.open,true);
+});
+test('a queued native close cannot cancel a new request begun after the old dialog was already closed',async()=>{
+ const h=harness({operator:true,hash:'#support',deferDialogClose:true}),first=supportRecord(1,'Closed private case'),second=supportRecord(2,'New request after native close');let releaseSecond;
+ h.session.request=async path=>{
+  const url=new URL(path,'http://fixture');
+  if(url.pathname.endsWith(id(2)))return new Promise(resolve=>releaseSecond=resolve);
+  if(url.pathname.endsWith(id(1)))return supportDetail(first);
+  return {support_requests:[first,second],page:{limit:25,total:2,next_cursor:null}};
+ };
+ const app=await startWorkspace(h);await app.refresh();click(h,'detail',{kind:'support',id:id(1)});await settle();
+ const dialog=h.get('#detail-dialog');assert.equal(dialog.open,true);dialog.close();
+ click(h,'detail',{kind:'support',id:id(2)});assert.equal(typeof releaseSecond,'function');
+ assert.equal(dialog.innerHTML,'','the already-closed private record is removed before the new read waits');
+ h.flushDialogCloses();releaseSecond(supportDetail(second));await settle();
+ assert.equal(dialog.open,true);assert(dialog.innerHTML.includes(second.subject));assert(!dialog.innerHTML.includes(first.subject));
+});
+test('a history reply cannot reopen a native-closed dialog before its close event is delivered',async()=>{
+ const h=harness({operator:true,hash:'#support',deferDialogClose:true}),record=supportRecord(1,'Closed history owner');let releaseHistory;
+ h.session.request=async path=>{
+  const url=new URL(path,'http://fixture');
+  if(url.pathname.endsWith(id(1)))return url.searchParams.has('cursor')?new Promise(resolve=>releaseHistory=resolve):supportDetail(record,'next-history');
+  return {support_requests:[record],page:{limit:25,total:1,next_cursor:null}};
+ };
+ const app=await startWorkspace(h);await app.refresh();click(h,'detail',{kind:'support',id:id(1)});await settle();
+ click(h,'detail-next',{kind:'support',id:id(1)});const dialog=h.get('#detail-dialog');dialog.close();
+ releaseHistory(supportDetail({...record,subject:'Reply before queued close'}));await settle();
+ assert.equal(dialog.open,false);assert.equal(dialog.innerHTML,'');h.flushDialogCloses();
+ assert.equal(dialog.open,false);assert.equal(dialog.innerHTML,'');
+});
+test('native Escape cancels history ownership and its later error cannot overwrite a newer error',async()=>{
+ const h=harness({operator:true,hash:'#support'}),first=supportRecord(1,'Dismissed private case'),second=supportRecord(2,'Second case');let rejectHistory;
+ h.session.request=async path=>{
+  const url=new URL(path,'http://fixture');
+  if(url.pathname.endsWith(id(2)))throw new Error('invalid_response');
+  if(url.pathname.endsWith(id(1)))return url.searchParams.has('cursor')?new Promise((_resolve,reject)=>rejectHistory=reject):supportDetail(first,'next-history');
+  return {support_requests:[first,second],page:{limit:25,total:2,next_cursor:null}};
+ };
+ const app=await startWorkspace(h);await app.refresh();click(h,'detail',{kind:'support',id:id(1)});await settle();
+ click(h,'detail-next',{kind:'support',id:id(1)});const dialog=h.get('#detail-dialog');let prevented=false;
+ dialog.listeners.get('cancel')({preventDefault(){prevented=true;}});assert.equal(prevented,true);assert.equal(dialog.open,false);assert.equal(dialog.innerHTML,'');
+ click(h,'detail',{kind:'support',id:id(2)});await settle();
+ const current=h.get('#main').innerHTML;assert(current.includes('server returned an unexpected response'));
+ rejectHistory(Object.assign(new Error('private_write_failed'),{code:'private_write_failed'}));await settle();
+ assert.equal(h.get('#main').innerHTML,current);assert.equal(dialog.open,false);assert.equal(dialog.innerHTML,'');
+});
+test('native dialog close retires pending history and removes its private DOM',async()=>{
+ const h=harness({operator:true,hash:'#support'}),record=supportRecord(1,'Native-close case');let releaseHistory;
+ h.session.request=async path=>{
+  const url=new URL(path,'http://fixture');
+  if(url.pathname.endsWith(id(1)))return url.searchParams.has('cursor')?new Promise(resolve=>releaseHistory=resolve):supportDetail(record,'next-history');
+  return {support_requests:[record],page:{limit:25,total:1,next_cursor:null}};
+ };
+ const app=await startWorkspace(h);await app.refresh();click(h,'detail',{kind:'support',id:id(1)});await settle();
+ click(h,'detail-next',{kind:'support',id:id(1)});const dialog=h.get('#detail-dialog');dialog.close();await settle();
+ assert.equal(dialog.innerHTML,'');releaseHistory(supportDetail({...record,subject:'Late native-close response'}));await settle();
+ assert.equal(dialog.open,false);assert.equal(dialog.innerHTML,'');
+});
+test('a dismissed detail that discovers current authority loss still clears private records',async()=>{
+ const h=harness({operator:true,hash:'#support'}),record=supportRecord(1,'Protected queue record');let rejectHistory;
+ h.session.request=async path=>{
+  const url=new URL(path,'http://fixture');
+  if(url.pathname.endsWith(id(1)))return url.searchParams.has('cursor')?new Promise((_resolve,reject)=>rejectHistory=reject):supportDetail(record,'next-history');
+  return {support_requests:[record],page:{limit:25,total:1,next_cursor:null}};
+ };
+ const app=await startWorkspace(h);await app.refresh();click(h,'detail',{kind:'support',id:id(1)});await settle();
+ click(h,'detail-next',{kind:'support',id:id(1)});click(h,'close-detail');
+ const credentials=h.session.credentials,pending={path:'/admin/original',body:{operation_key:id(7)},accountId:id(9)};h.session.state.pendingAction=pending;
+ h.session.operator=null;rejectHistory(Object.assign(new Error('operator_capability_required'),{code:'operator_capability_required',status:403}));await settle();
+ assert(!h.get('#main').innerHTML.includes(record.subject));assert(h.get('#main').innerHTML.includes('Verify my face'));
+ assert.equal(h.get('#detail-dialog').innerHTML,'');assert.equal(h.session.credentials,credentials);assert.equal(h.session.state.pendingAction,pending);
+});
+test('skip link focuses the current queue without changing its hash, records or history',async()=>{
+ const h=harness({operator:true,hash:'#support?q=priority&filter=open'});let calls=0;
+ h.window.history={pushState(){assert.fail('Skip must not add history');},replaceState(){assert.fail('Skip must not replace history');}};
+ h.session.request=async()=>{calls++;return {support_requests:[supportRecord(1,'Current filtered case')],page:{limit:25,total:1,next_cursor:null}};};
+ const app=await startWorkspace(h);await app.refresh();const current=h.get('#main').innerHTML,hash=h.window.location.hash;let prevented=false;
+ h.get('.skip-link').listeners.get('click')({preventDefault(){prevented=true;}});
+ assert.equal(prevented,true);assert.equal(h.get('#main').focused,true);assert.equal(h.window.location.hash,hash);
+ assert.equal(h.get('#main').innerHTML,current);assert.equal(calls,1);
 });

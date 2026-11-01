@@ -15,6 +15,8 @@ test('operation-specific result or error requires authority after a delayed row/
  try {
   const person=await enroll(h);const base=Date.now();let now=base;h.app.now=()=>now;
   const session=(await h.storage.exec("SELECT id,expires_at FROM sessions WHERE account_id=? AND auth_method='registered_face' AND revoked_at IS NULL",person.accountId))[0];assert(session);
+  const [audience]=await h.storage.exec('SELECT next_review_at FROM account_audience WHERE account_id=?',person.accountId);
+  assert(audience && Number.isSafeInteger(audience.next_review_at) && audience.next_review_at>session.expires_at,'fixture retains a finite audience review date beyond the session expiry');
   const insert=async(label,{action='request.decide',hash,payloadJson,responseJson,decision='accept'}={})=>{
    const operationKey=key(label),payload={request_id:requestId,decision,operation_key:operationKey};
    const intent=await prepareOperation('request.decide',payload,'personal');
@@ -31,7 +33,8 @@ test('operation-specific result or error requires authority after a delayed row/
   const missing={operationKey:key('unknown')};
   const branches=[['wrong action',wrongAction,409],['retired',retired,410],['partial retirement',partial,503],['wrong hash',wrongHash,503],['invalid result',badResult,503],['non-string decision',invalidDecision,503],['recorded success',success,200],['unknown',missing,200]];
   const call=operationKey=>h.request('/community/action',{token:person.token,body:{action:'request.decision-operation',payload:{operation_key:operationKey}}});
-  const setAudience=async deadline=>h.storage.exec('UPDATE account_audience SET next_review_at=? WHERE account_id=?',deadline,person.accountId);
+  // Reset to the original finite v2 review date; NULL is not a valid declaration.
+  const setAudience=async deadline=>h.storage.exec('UPDATE account_audience SET next_review_at=? WHERE account_id=?',deadline??audience.next_review_at,person.accountId);
   for(const [name,fixture,status] of branches)await t.test(`${name} retains its ordinary response when authority remains current`,async()=>{now=base;await setAudience(null);const r=await call(fixture.operationKey);assert.equal(r.status,status);await r.body?.cancel();});
   async function delayedRow(fixture,authority){
    now=base;await setAudience(authority==='audience'?base+1000:null);const g=gate(),original=h.db.one;let hits=0;

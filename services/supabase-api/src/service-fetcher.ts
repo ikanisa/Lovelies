@@ -1,5 +1,7 @@
+import type {RestoreServiceEffects,RestoreEffectLease} from './restore-effects.ts';
 import { ApiError, type ServiceFetcher } from './types.ts';
 import {INFERENCE_LIMITS,INFERENCE_REPLY_BYTES} from './inference-contract.ts';
+import { internalEndpoint, type InternalEndpointPolicy } from './endpoint-configuration.ts';
 
 interface BodyLimits {requestBytes:number;responseBytes:number;}
 
@@ -14,10 +16,9 @@ function discard(cancel:()=>unknown):void {
 export class AuthenticatedService implements ServiceFetcher {
   private readonly base:URL;
   constructor(url:string,private readonly token:string,private readonly fetcher:typeof fetch=fetch,private readonly timeoutMs=55_000,
-    private readonly limits:BodyLimits={requestBytes:INFERENCE_LIMITS.photo_body_bytes,responseBytes:INFERENCE_REPLY_BYTES}){
-    this.base=new URL(url);
-    const permitted=this.base.protocol==='https:'||this.base.protocol==='http:'&&['localhost','127.0.0.1','::1','[::1]'].includes(this.base.hostname);
-    if(this.base.username||this.base.password||this.base.search||this.base.hash||!permitted||token.length<32||!Number.isSafeInteger(timeoutMs)||timeoutMs<1||timeoutMs>55_000||
+    private readonly limits:BodyLimits={requestBytes:INFERENCE_LIMITS.photo_body_bytes,responseBytes:INFERENCE_REPLY_BYTES},private readonly effects?:RestoreServiceEffects,policy:InternalEndpointPolicy={}){
+    this.base=internalEndpoint(url,policy,true);
+    if(token.length<32||!Number.isSafeInteger(timeoutMs)||timeoutMs<1||timeoutMs>55_000||
       !Number.isSafeInteger(limits.requestBytes)||limits.requestBytes<1||limits.requestBytes>INFERENCE_LIMITS.photo_body_bytes||
       !Number.isSafeInteger(limits.responseBytes)||limits.responseBytes<1||limits.responseBytes>INFERENCE_REPLY_BYTES)
       throw new Error('Private service requires a pinned HTTPS URL, bounded timeout/body and secret');
@@ -40,22 +41,34 @@ export class AuthenticatedService implements ServiceFetcher {
     // still be observed when an oversized/invalid request takes that path.
     void aborted.catch(()=>{});
     const finish=()=>{clearTimeout(timer);source.signal.removeEventListener('abort',forwardAbort);};
+    let effect:RestoreEffectLease|undefined;
     try{
       // A caller that is already cancelled must not dispatch an external call.
       if(controller.signal.aborted)throw abortReason();
       const claimed=source.headers.get('content-length');
       if(claimed&&/^\d+$/.test(claimed)&&Number(claimed)>this.limits.requestBytes)throw new ApiError(413,'private_service_request_too_large');
       let requestBytes=0;
-      const limited=source.body?.pipeThrough(new TransformStream<Uint8Array,Uint8Array>({
+      let limited=source.body?.pipeThrough(new TransformStream<Uint8Array,Uint8Array>({
         transform:(chunk,output)=>{requestBytes+=chunk.byteLength;if(requestBytes>this.limits.requestBytes)throw new ApiError(413,'private_service_request_too_large');output.enqueue(chunk);},
       }));
+      if(this.effects&&['POST','PUT','PATCH','DELETE'].includes(source.method)){
+        const reader=limited?.getReader(),chunks:Uint8Array[]=[];let size=0;
+        try{if(reader)for(;;){const next=await Promise.race([reader.read(),aborted]);if(next.done)break;size+=next.value.byteLength;if(size>this.limits.requestBytes)throw new ApiError(413,'private_service_request_too_large');chunks.push(next.value);}}
+        finally{if(reader){discard(()=>reader.cancel());reader.releaseLock();}}
+        const bytes=new Uint8Array(size);let offset=0;for(const chunk of chunks){bytes.set(chunk,offset);offset+=chunk.byteLength;}
+        effect=await Promise.race([this.effects.prepare(source.method,path.pathname,bytes),aborted]);
+        if(effect.replay)throw new ApiError(503,'restore_effect_reconciliation_required');
+        limited=new ReadableStream({start(output){output.enqueue(bytes);output.close();}});
+      }
+      if(controller.signal.aborted)throw abortReason();
       const forwarded=new Request(destination,{method:source.method,headers,redirect:'manual',signal:controller.signal,
         ...(limited?{body:limited,duplex:'half'}:{})} as RequestInit);
       const pending=this.fetcher(forwarded);
       let replyDiscarded=false;
       const discardReply=(reply:Response)=>{if(!replyDiscarded){replyDiscarded=true;discard(()=>reply.body?.cancel());}};
-      void pending.then(late=>{if(controller.signal.aborted)discardReply(late);},()=>{});
+      void pending.then(late=>{if(effect&&late.status>=200&&late.status<300)void effect.succeed(late.status).catch(()=>{});if(controller.signal.aborted)discardReply(late);},()=>{});
       const response=await Promise.race([pending,aborted]);
+      if(effect){if(response.status>=200&&response.status<300)await effect.succeed(response.status);else await effect.unknown();}
       // Both promises may already be settled when the race is registered.
       if(controller.signal.aborted){discardReply(response);throw abortReason();}
       if(response.redirected||response.status>=300&&response.status<400){discardReply(response);throw new ApiError(503,'private_service_redirect_denied');}
@@ -89,6 +102,7 @@ export class AuthenticatedService implements ServiceFetcher {
       // If cancellation was already observed, preserve it even when a
       // simultaneously settled fetch rejection wins the promise race.
       const finalError=controller.signal.aborted?abortReason():error;
+      await effect?.unknown().catch(()=>{});
       finish();controller.abort(finalError);discard(()=>{if(source.body&&!source.body.locked)return source.body.cancel(finalError);});throw finalError;
     }
   }

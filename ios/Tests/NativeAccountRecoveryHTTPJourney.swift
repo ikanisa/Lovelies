@@ -30,6 +30,7 @@ private enum LiveJourneyFailure: Error, LocalizedError {
 // contain no JPEGs. AES.GCM +0700/0600 fixture files exercise process persistence;
 // this is not a Keychain or Secure Enclave implementation/qualification.
 private final class LiveMemorySecrets: NativeSecretStore, @unchecked Sendable {
+    let authorityNamespace = "fixture-" + UUID().uuidString.lowercased()
     private let lock = NSLock()
     private var values: [String: Data] = [:]
     private let directory: URL?, encryptionKey: SymmetricKey?

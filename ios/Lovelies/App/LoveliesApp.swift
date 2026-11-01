@@ -63,8 +63,9 @@ struct LoveliesRootView: View {
         .onChange(of: live.busy) { _, busy in if !store.isReferenceMode, !busy { NativePush.shared.routePending() } }
         .onOpenURL { if !store.isReferenceMode { live.openLink($0) } }
         .onContinueUserActivity(NSUserActivityTypeBrowsingWeb) { activity in if !store.isReferenceMode, let url = activity.webpageURL { live.openLink(url) } }
-        .sheet(item: $live.sharedFile, onDismiss: { live.retireSharedFile() }) { item in NativeSystemShare(url: item.url) { live.retireSharedFile() } }
+        .sheet(item: $live.sharedFile, onDismiss: { live.retireSharedFile() }) { item in NativeSystemShare(url: item.url) { completed in live.completeSharedFile(item.id, completed: completed) } }
         .onReceive(NotificationCenter.default.publisher(for: Notification.Name("LoveliesAccountRetired"))) { _ in purchases.retire() }
+        .onReceive(NotificationCenter.default.publisher(for: UIApplication.significantTimeChangeNotification)) { _ in live.expireAudienceAuthority() }
         .onChange(of: scenePhase) { _, phase in
             foregroundRefresh?.cancel()
             guard !store.isReferenceMode else { return }
@@ -111,7 +112,7 @@ struct LoveliesRootView: View {
             guard !Task.isCancelled, !store.isReferenceMode else { return }
             await NativePush.shared.foreground()
             guard !Task.isCancelled, !store.isReferenceMode else { return }
-            try? await purchases.refreshEntitlement()
+            await purchases.load()
         }
     }
     @ViewBuilder private var route: some View {

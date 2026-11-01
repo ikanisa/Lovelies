@@ -1,8 +1,10 @@
+import { adminSearch, adminStatus, readAdminPage, selectAdminPage } from './child-pagination.ts';
 import { audienceProjection } from './audience.ts';
 import { accountRoles, base64url, decodeBase64url } from './auth.ts';
 import { cancelDeviceLifecycle, unusedPendingConsents } from './face-profile.ts';
 import { executeOperation, prepareOperation } from './operations.ts';
-import { requireOperator } from './operators.ts';
+import { readOperator, requireOperator } from './operators.ts';
+import { hasOperatorCapability } from './operator-capabilities.ts';
 import { sessionRetirementScope, type RetirementSession } from './session-retirement.ts';
 import { ApiError, jsonBody, ok, stable, uuid, type Actor, type AppContext } from './types.ts';
 type Account = {
@@ -33,6 +35,8 @@ const accountFields = 'a.id,a.name,a.roles_json,a.identity_state,a.disabled_at,a
 // an assertion that a particular access token remains in the user's possession.
 // Keep the profile/consent/device predicates aligned with assertEnrollmentActor.
 const sessionAuthority = `a.disabled_at IS NULL AND s.revoked_at IS NULL
+  AND (clock.managed_auth_required=0 OR EXISTS(SELECT 1 FROM managed_auth_bindings m WHERE m.local_session_id=s.id AND m.account_id=s.account_id
+    AND m.state='bound' AND m.incarnation_id=(SELECT incarnation_id FROM restore_control WHERE singleton=1) AND managed_auth_session_current(m.auth_user_id,m.auth_session_id,clock.now)))
   AND s.refresh_consumed_at IS NULL AND s.auth_epoch=a.auth_epoch
   AND s.auth_method=a.identity_state AND (
     (s.auth_method='anonymous' AND json_array_length(a.roles_json)=1
@@ -66,12 +70,13 @@ const summaryFields = `${accountFields},
   (SELECT count(*) FROM privacy_requests r WHERE r.subject_id=a.id
     AND r.status IN('pending_approval','approved','queued','processing','failed')
     AND (r.request_type='delete' OR r.expires_at>clock.now OR r.metadata_erased_at IS NOT NULL)) pending_privacy`;
-const clockSql = 'WITH clock AS (SELECT ? AS now,? AS policy,? AS photo_policy)';
+const clockSql = 'WITH clock AS (SELECT ? AS now,? AS policy,? AS photo_policy,? AS managed_auth_required)';
 const clockValues = (ctx: AppContext): [
     number,
     string,
-    string
-] => [ctx.now(), ctx.env.FACE_AUTH_POLICY_VERSION ?? '', ctx.env.PHOTO_CONSENT_POLICY_VERSION ?? ctx.env.PHOTO_MODEL_VERSION ?? ''];
+    string,
+    number
+] => [ctx.now(), ctx.env.FACE_AUTH_POLICY_VERSION ?? '', ctx.env.PHOTO_CONSENT_POLICY_VERSION ?? ctx.env.PHOTO_MODEL_VERSION ?? '',ctx.env.APP_ENV==='test'&&!ctx.env.MANAGED_AUTH?0:1];
 function summary(row: Account) {
     return {
         id: row.id, name: row.disabled_at === null ? row.name : '', identity_state: row.identity_state,
@@ -114,8 +119,7 @@ async function audit(ctx: AppContext, actor: Actor, action: string, subject: str
 }
 async function listUsers(params: URLSearchParams, ctx: AppContext, actor: Actor): Promise<Response> {
     const filter = filters(params), cursor = readCursor(params.get('cursor'), filter);
-    return ok((await ctx.db.transaction(async () => {
-        (await requireOperator(ctx, actor));
+    return ok((await readOperator(ctx, actor, 'users.read', async () => {
         const where: string[] = [], values: (string | number)[] = [];
         if (filter.status === 'deleted')
             where.push('a.disabled_at IS NOT NULL');
@@ -143,43 +147,124 @@ async function listUsers(params: URLSearchParams, ctx: AppContext, actor: Actor)
         return { users: page.map(summary), page: { limit: filter.limit, has_more: hasMore, next_cursor: next } };
     })));
 }
+type AccountSection = 'sessions' | 'support' | 'safety' | 'privacy' | 'history';
+async function accountSection(id: string, kind: AccountSection, params: URLSearchParams, ctx: AppContext) {
+    const statuses: Record<AccountSection, string[]> = {
+        sessions: ['all', 'attention', 'active', 'refreshable', 'revoked', 'expired'],
+        support: ['all', 'attention', 'open', 'under_review', 'resolved', 'closed'],
+        safety: ['all', 'attention', 'open', 'under_review', 'resolved', 'rejected'],
+        privacy: ['all', 'attention', 'pending_approval', 'approved', 'queued', 'processing', 'completed', 'rejected', 'failed', 'cancelled'],
+        history: ['all'],
+    };
+    const page = readAdminPage(params, { scope: `admin.user.${kind}:${id}`, statuses: statuses[kind],
+        defaultLimit: kind === 'sessions' ? limits.sessions : kind === 'history' ? limits.history : limits.cases_per_kind,
+        ranked: kind === 'sessions' });
+    if (kind === 'sessions') {
+        const search = adminSearch(page.q, ['id', 'auth_method']);
+        const status = adminStatus(page.status, 'status', ['active', 'refreshable']);
+        const result = await selectAdminPage(ctx, page, { select: '*', from: `(SELECT s.id,s.auth_method,s.created_at,s.expires_at,
+            CASE WHEN s.revoked_at IS NOT NULL OR s.refresh_consumed_at IS NOT NULL THEN 'revoked'
+              WHEN s.refresh_expires_at<=clock.now THEN 'expired' WHEN NOT (${sessionAuthority}) THEN 'revoked'
+              WHEN s.expires_at>clock.now THEN 'active' ELSE 'refreshable' END status,
+            CASE WHEN s.refresh_expires_at>clock.now AND ${sessionAuthority} THEN 0 ELSE 1 END queue_rank
+            FROM sessions s JOIN accounts a ON a.id=s.account_id CROSS JOIN (SELECT ? AS now,? AS policy,? AS photo_policy,? AS managed_auth_required) clock
+            WHERE a.id=?) entries`, where: [search.clause, status.clause],
+            values: [...clockValues(ctx), id, ...search.values, ...status.values] });
+        // The ranking field only drives continuation, not an authorization claim.
+        return { ...result, items: result.items.map(({ queue_rank: _rank, ...row }) => row) };
+    }
+    if (kind === 'support') {
+        const search = adminSearch(page.q, ['id', 'subject', 'category']);
+        const status = adminStatus(page.status, 'status', ['open', 'under_review']);
+        return await selectAdminPage(ctx, page, { select: 'id,subject,status,category,created_at,updated_at', from: 'support_requests',
+            where: ['account_id=?', search.clause, status.clause], values: [id, ...search.values, ...status.values] });
+    }
+    if (kind === 'safety') {
+        const search = adminSearch(page.q, ['id', 'outcome']);
+        const status = adminStatus(page.status, 'status', ['open', 'under_review']);
+        return await selectAdminPage(ctx, page, { select: '*', from: `(SELECT id,status,outcome,created_at,reviewed_at,
+            CASE WHEN reporter_id=? AND subject_id=? THEN 'reporter_and_subject'
+              WHEN reporter_id=? THEN 'reporter' ELSE 'subject' END relation
+            FROM safety_reports WHERE reporter_id=? OR subject_id=?) entries`,
+            where: [search.clause, status.clause], values: [id, id, id, id, id, ...search.values, ...status.values] });
+    }
+    if (kind === 'privacy') {
+        const search = adminSearch(page.q, ['id', 'request_type']);
+        const status = adminStatus(page.status, 'status', ['pending_approval', 'approved', 'queued', 'processing', 'failed']);
+        return await selectAdminPage(ctx, page, { select: 'id,request_type,status,created_at,reviewed_at,completed_at,failure_code', from: 'privacy_requests',
+            where: ['subject_id=?', search.clause, status.clause], values: [id, ...search.values, ...status.values] });
+    }
+    const search = adminSearch(page.q, ['id', 'action']);
+    return await selectAdminPage(ctx, page, { select: 'id,action,created_at', from: 'audit_events',
+        where: [`(actor_id=? OR subject_id=? OR entity_id IN (
+            SELECT id FROM support_requests WHERE account_id=? UNION ALL
+            SELECT id FROM safety_reports WHERE reporter_id=? OR subject_id=? UNION ALL
+            SELECT id FROM privacy_requests WHERE subject_id=? UNION ALL
+            SELECT id FROM sessions WHERE account_id=?))`, search.clause],
+        values: [id, id, id, id, id, id, id, ...search.values] });
+}
 async function userDetail(id: string, ctx: AppContext, actor: Actor): Promise<Response> {
-    return ok((await ctx.db.transaction(async () => {
-        (await requireOperator(ctx, actor));
+    return ok((await readOperator(ctx, actor, 'users.read', async () => {
         const account = (await ctx.db.one<Account>(`${clockSql} SELECT ${summaryFields} FROM accounts a CROSS JOIN clock WHERE a.id=?`, ...clockValues(ctx), id));
         if (!account)
             throw new ApiError(404, 'account_not_found');
-        const sessions = (await ctx.db.all(`${clockSql} SELECT s.id,s.auth_method,s.created_at,s.expires_at,
-      CASE WHEN s.revoked_at IS NOT NULL OR s.refresh_consumed_at IS NOT NULL THEN 'revoked'
-        WHEN s.refresh_expires_at<=clock.now THEN 'expired'
-        WHEN NOT (${sessionAuthority}) THEN 'revoked'
-        WHEN s.expires_at>clock.now THEN 'active' ELSE 'refreshable' END status
-      FROM sessions s JOIN accounts a ON a.id=s.account_id CROSS JOIN clock WHERE a.id=?
-      ORDER BY s.created_at DESC,s.id LIMIT ?`, ...clockValues(ctx), id, limits.sessions + 1));
-        const support = (await ctx.db.all(`SELECT id,subject,status,category,created_at,updated_at FROM support_requests
-      WHERE account_id=? ORDER BY created_at DESC,id LIMIT ?`, id, limits.cases_per_kind + 1));
-        const safety = (await ctx.db.all(`SELECT id,status,outcome,created_at,reviewed_at,
-      CASE WHEN reporter_id=? AND subject_id=? THEN 'reporter_and_subject'
-        WHEN reporter_id=? THEN 'reporter' ELSE 'subject' END relation
-      FROM safety_reports WHERE reporter_id=? OR subject_id=? ORDER BY created_at DESC,id LIMIT ?`, id, id, id, id, id, limits.cases_per_kind + 1));
-        const privacy = (await ctx.db.all(`SELECT id,request_type,status,created_at,reviewed_at,completed_at,failure_code
-      FROM privacy_requests WHERE subject_id=? ORDER BY created_at DESC,id LIMIT ?`, id, limits.cases_per_kind + 1));
-        const history = (await ctx.db.all(`SELECT id,action,created_at FROM audit_events
-      WHERE actor_id=? OR subject_id=? OR entity_id IN (
-        SELECT id FROM support_requests WHERE account_id=? UNION ALL
-        SELECT id FROM safety_reports WHERE reporter_id=? OR subject_id=? UNION ALL
-        SELECT id FROM privacy_requests WHERE subject_id=? UNION ALL
-        SELECT id FROM sessions WHERE account_id=?) ORDER BY created_at DESC,id LIMIT ?`, id, id, id, id, id, id, id, limits.history + 1));
+        const empty = () => ({items:[] as Record<string,any>[],page:{limit:limits.cases_per_kind,total:0,has_more:false,next_cursor:null as string|null,sort:'newest' as const}});
+        const visible = {support: await hasOperatorCapability(ctx,actor.accountId,'support.read'), safety: await hasOperatorCapability(ctx,actor.accountId,'safety.read'), privacy: await hasOperatorCapability(ctx,actor.accountId,'privacy.read')};
+        const sections = {
+            sessions: await accountSection(id,'sessions',new URLSearchParams(),ctx),
+            support: visible.support ? await accountSection(id,'support',new URLSearchParams(),ctx) : empty(),
+            safety: visible.safety ? await accountSection(id,'safety',new URLSearchParams(),ctx) : empty(),
+            privacy: visible.privacy ? await accountSection(id,'privacy',new URLSearchParams(),ctx) : empty(),
+            history: actor.roles.includes('admin') ? await accountSection(id,'history',new URLSearchParams(),ctx) : empty(),
+        };
+        const sessions=sections.sessions.items,support=sections.support.items,safety=sections.safety.items,privacy=sections.privacy.items,history=sections.history.items;
         (await audit(ctx, actor, 'admin.user.read', id, id));
         return { user: summary(account), audience: await audienceProjection(ctx, id), sessions: sessions.slice(0, limits.sessions),
             cases: { support: support.slice(0, limits.cases_per_kind), safety: safety.slice(0, limits.cases_per_kind), privacy: privacy.slice(0, limits.cases_per_kind) },
             history: history.slice(0, limits.history), limits,
-            has_more: { sessions: sessions.length > limits.sessions, support: support.length > limits.cases_per_kind,
-                safety: safety.length > limits.cases_per_kind, privacy: privacy.length > limits.cases_per_kind, history: history.length > limits.history } };
+            pages:Object.fromEntries(Object.entries(sections).map(([kind,result])=>[kind,result.page])),
+            redacted_sections: [...Object.entries(visible).filter(([,allowed])=>!allowed).map(([name])=>name), ...(actor.roles.includes('admin')?[]:['history'])],
+            has_more: { sessions: sections.sessions.page.has_more, support: sections.support.page.has_more,
+                safety: sections.safety.page.has_more, privacy: sections.privacy.page.has_more, history: sections.history.page.has_more } };
+    }, (value, capabilities) => {
+        // A previously fetched case remains private if its secondary permission
+        // expires during another query or transaction completion. Do not expose
+        // case counts through pagination, or imply an unfetched section is full.
+        const visible = {
+            support: capabilities.includes('support.read') && !value.redacted_sections.includes('support'),
+            safety: capabilities.includes('safety.read') && !value.redacted_sections.includes('safety'),
+            privacy: capabilities.includes('privacy.read') && !value.redacted_sections.includes('privacy'),
+        };
+        return { ...value,
+            pages:Object.fromEntries(Object.entries(value.pages).filter(([kind])=>!['support','safety','privacy'].includes(kind)||visible[kind as keyof typeof visible])),
+            cases: { support: visible.support ? value.cases.support : [], safety: visible.safety ? value.cases.safety : [],
+                privacy: visible.privacy ? value.cases.privacy : [] },
+            redacted_sections: [...Object.entries(visible).filter(([,allowed]) => !allowed).map(([name]) => name),
+                ...(value.redacted_sections.includes('history') ? ['history'] : [])],
+            has_more: { ...value.has_more, support: visible.support && value.has_more.support,
+                safety: visible.safety && value.has_more.safety, privacy: visible.privacy && value.has_more.privacy },
+        };
     })));
 }
+async function userSection(id: string, kind: AccountSection, params: URLSearchParams, ctx: AppContext, actor: Actor): Promise<Response> {
+    return ok(await readOperator(ctx,actor,'users.read',async()=>{
+        const capability=kind==='support'?'support.read':kind==='safety'?'safety.read':kind==='privacy'?'privacy.read':undefined;
+        if(kind==='history')await requireOperator(ctx,actor);
+        else if(capability)await requireOperator(ctx,actor,false,capability);
+        if (!await ctx.db.one('SELECT id FROM accounts WHERE id=?', id)) throw new ApiError(404, 'account_not_found');
+        const result = await accountSection(id, kind, params, ctx);
+        await audit(ctx, actor, 'admin.user.' + kind + '.list', id, id, { returned: result.items.length });
+        if(kind==='history')await requireOperator(ctx,actor);
+        else if(capability)await requireOperator(ctx,actor,false,capability);
+        return result;
+    },(value,capabilities)=>{
+        const required=kind==='support'?'support.read':kind==='safety'?'safety.read':kind==='privacy'?'privacy.read':undefined;
+        if(required&&!capabilities.includes(required))throw new ApiError(403,'operator_capability_required');
+        return value;
+    }));
+}
 async function requireFreshFace(ctx: AppContext, actor: Actor): Promise<void> {
-    (await requireOperator(ctx, actor));
+    (await requireOperator(ctx, actor, false, 'users.sessions.revoke'));
     // Refresh rotates created_at without comparing a face. Require a completed
     // login challenge overlapping this session's issuance and exact authority.
     // An older session cannot borrow another session's later face verification.
@@ -245,8 +330,6 @@ async function revokeSession(request: Request, id: string, ctx: AppContext, acto
                 ];
                 const ordered = [...new Map(facts.map(fact => [stable(fact), fact])).entries()]
                     .sort(([a], [b]) => a < b ? -1 : a > b ? 1 : 0).map(([, fact]) => fact);
-                if (ordered.length > 32)
-                    throw new ApiError(503, 'admin_session_restriction_capacity');
                 // executeOperation owns the stable identity and has already
                 // checked the original SQL receipt before this new callback.
                 for (const fact of ordered)
@@ -274,11 +357,16 @@ export async function handleAdminUsers(request: Request, ctx: AppContext): Promi
     if (path !== '/admin/users' && !path.startsWith('/admin/users/'))
         return null;
     const actor = await ctx.authenticate(request);
-    (await requireOperator(ctx, actor));
+    (await requireOperator(ctx, actor, false, path.endsWith('/sessions/revoke') ? 'users.sessions.revoke' : 'users.read'));
     if (path === '/admin/users') {
         if (request.method !== 'GET')
             throw new ApiError(405, 'method_not_allowed');
         return (await listUsers(url.searchParams, ctx, actor));
+    }
+    const child=/^\/admin\/users\/([0-9a-f-]{36})\/(sessions|support|safety|privacy|history)$/i.exec(path);
+    if(child){
+        if(request.method!=='GET')throw new ApiError(405,'method_not_allowed');
+        return userSection(uuid(child[1]),child[2] as AccountSection,url.searchParams,ctx,actor);
     }
     const detail = /^\/admin\/users\/([0-9a-f-]{36})$/i.exec(path);
     const revoke = /^\/admin\/users\/([0-9a-f-]{36})\/sessions\/revoke$/i.exec(path);

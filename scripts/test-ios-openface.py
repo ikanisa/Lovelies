@@ -29,8 +29,8 @@ PRODUCTION = [
 ]
 CONTROLLED = [
     'NativeProtocolTests', 'NativeConnectionTests', 'NativeOrdinaryLoginTests', 'NativeCameraRecoveryTests',
-    'NativeEnrollmentRecoveryTests', 'NativeFaceProfileLifecycleTests',
-    'NativeAccountRecoveryTests', 'NativeRefreshDeliveryTests', 'NativePreviewExitExpiryTests', 'NativePhotoSelectionTests',
+    'NativeEnrollmentRecoveryTests', 'NativeFaceProfileLifecycleTests', 'NativeAudienceTests', 'NativeAudienceRenewalTests',
+    'NativeAccountRecoveryTests', 'NativeRefreshDeliveryTests', 'NativePreviewExitExpiryTests', 'NativePhotoSelectionTests', 'NativeReadinessRecoveryTests', 'NativeStoreDeletionRecoveryTests',
 ]
 HTTP = {
     'live': ('NativeLiveHTTPJourney', [None]),
@@ -42,7 +42,7 @@ HTTP = {
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('--suite', choices=['wire', 'controlled', 'preview-expiry', 'photo-selection', *HTTP], required=True)
+    parser.add_argument('--suite', choices=['wire', 'controlled', 'preview-expiry', 'photo-selection', 'readiness-recovery', 'audience', *HTTP], required=True)
     parser.add_argument('--config', type=Path, help='Frozen shared native fixture config; required for HTTP suites')
     parser.add_argument('--output', type=Path, required=True, help='A new private evidence directory; existing attempts are preserved')
     args = parser.parse_args()
@@ -57,7 +57,9 @@ def main():
         parser.error('Select the installed full Xcode using DEVELOPER_DIR')
     names = (['NativeProtocolTests'] if args.suite == 'wire' else CONTROLLED if args.suite == 'controlled'
              else ['NativePreviewExitExpiryTests'] if args.suite == 'preview-expiry'
-             else ['NativePhotoSelectionTests'] if args.suite == 'photo-selection' else [HTTP[args.suite][0]])
+             else ['NativePhotoSelectionTests'] if args.suite == 'photo-selection'
+             else ['NativeReadinessRecoveryTests', 'NativeStoreDeletionRecoveryTests'] if args.suite == 'readiness-recovery'
+             else ['NativeAudienceTests', 'NativeAudienceRenewalTests'] if args.suite == 'audience' else [HTTP[args.suite][0]])
     source_paths = [ROOT / name for name in PRODUCTION]
     source_paths += [ROOT / 'ios/Tests' / (name + '.swift') for name in names]
     source_paths.append(Path(__file__).resolve())
@@ -145,7 +147,7 @@ def main():
                 env['TMPDIR'] = str(output / 'private') + '/'
                 compiler += ['-D', 'SELECTION_FIXED', '-module-cache-path', str(output / 'private' / 'module-cache')]
             run(name + '-compile', [*compiler, *PRODUCTION, 'ios/Tests/' + name + '.swift', '-o', str(binary)], 300)
-            if args.suite in ['wire', 'controlled', 'preview-expiry', 'photo-selection']:
+            if args.suite in ['wire', 'controlled', 'preview-expiry', 'photo-selection', 'readiness-recovery', 'audience']:
                 arguments = ['--fixed'] if name in ['NativePreviewExitExpiryTests', 'NativePhotoSelectionTests'] else []
                 command = [str(binary), *arguments]
                 if name == 'NativePhotoSelectionTests':

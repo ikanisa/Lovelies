@@ -1,10 +1,12 @@
+import {planEvents} from './restore-plan-fixture.mjs';
+import {assertRestrictedAbort} from './restore-restricted-abort.fixture.mjs';
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { randomUUID } from 'node:crypto';
 import { createApp, createHandler } from '../src/index.ts';
 import { restoreOperationID } from '../src/restore-transaction.ts';
 import { enroll, captureProofs, faceVerifierFixture, sign, encode, stable } from './runtime-harness.mjs';
-import { fixture, digest, unavailable } from './restore-database-fixture.mjs';
+import { fixture, digest } from './restore-database-fixture.mjs';
 import { addConsentReference, assertIsolatedReference, assertSurvivingSecuritySession, historicalRevokedNull, referenceRows } from './restore-consent-reference-fixtures.mjs';
 
 const AUTH_POLICY = 'face-policy-fixture-v1';
@@ -123,17 +125,17 @@ async function assertPlan(f, facts, { committed = true, body = f.body } = {}) {
   assert.deepEqual(saved.plan.allocations, {});
   assert.equal(saved.plan.input_hash, digest(stable({ action: 'admin.user.session.revoke', source: 'admin_users', payload: {
     account_id: f.person.accountId, session_id: body.session_id, reason: body.reason.trim(), operation_key: body.operation_key } })));
-  assert.deepEqual(saved.plan.events.map(({ kind, scope }) => ({ kind, scope })), ordered(facts));
-  assert.equal(new Set(saved.plan.events.map(value => value.operation_id)).size, ordered(facts).length);
-  const encoded = JSON.stringify(saved.plan);
+  const events=await planEvents(f,saved);
+  assert.deepEqual(events.map(({ kind, scope }) => ({ kind, scope })), ordered(facts));
+  assert.equal(new Set(events.map(value => value.operation_id)).size, ordered(facts).length);
+  const encoded = JSON.stringify({plan:saved.plan,events});
   for (const field of ['access_token', 'refresh_token', 'refresh_hash', 'public_jwk', 'template_key', 'template_digest', 'control_key', 'token_value', 'reason']) assert(!encoded.includes('"' + field + '"'));
   for (const value of [f.admin.token, f.admin.refresh_token, f.person.token, f.person.refresh_token, f.person.faceHandle, f.profile?.template_key,
     f.profile?.template_digest, body.reason].filter(Boolean)) assert(!encoded.includes(value));
   return saved;
 }
 
-// These are PostgreSQL-capable tests prepared for the root-owned execution lane.
-// This file's presence does not establish a test pass or application deployment.
+// PostgreSQL fixtures verify exact receipts and the original authorization scope.
 test('anonymous target retirement records exactly its session and preserves other-device pending work', async t => {
   const f = await adminFixture(t, { registered: false }), unrelated = await f.pending({ deviceID: await f.otherDevice() }), before = await snapshot(f);
   assert.equal(f.original.device_id, null);
@@ -232,7 +234,7 @@ test('original receipt precedes newer authority, and demotion cannot disclose th
   await f.h.db.run('UPDATE accounts SET roles_json=? WHERE id=?', '["user"]', f.admin.accountId);
   const demoted = await snapshot(f); assert.equal((await f.json(f.body, 401)).error.code, 'session_invalid'); assert.deepEqual(await snapshot(f), demoted);
   const ordinary = await login(f.h, f.admin), current = await snapshot(f); assert.deepEqual(ordinary.roles, ['user']);
-  assert.equal((await f.json(f.body, 403, { token: ordinary.token })).error.code, 'admin_required'); assert.deepEqual(await snapshot(f), current);
+  assert.equal((await f.json(f.body, 403, { token: ordinary.token })).error.code, 'operator_capability_required'); assert.deepEqual(await snapshot(f), current);
   assert.deepEqual(await f.journal.lookup(await operationID(f)), originalPlan); assert.deepEqual(await receipt(f), originalReceipt);
 });
 
@@ -259,7 +261,7 @@ test('reason, input and operation-key validation plus anonymous or ordinary call
   const f = await adminFixture(t), before = await snapshot(f);
   for (const reason of ['', 'no', null, 'x'.repeat(1001), 'line\nbreak']) await f.json({ ...f.body, reason }, 400);
   await f.json({ ...f.body, unsupported: 'suspend' }, 400); await f.json({ ...f.body, operation_key: undefined }, 400);
-  await f.json(f.body, 401, { token: null }); assert.equal((await f.json(f.body, 403, { token: f.person.token })).error.code, 'admin_required');
+  await f.json(f.body, 401, { token: null }); assert.equal((await f.json(f.body, 403, { token: f.person.token })).error.code, 'operator_capability_required');
   assert.deepEqual(await snapshot(f), before); assert.equal(await f.journal.lookup(await operationID(f)), null);
 });
 
@@ -318,16 +320,9 @@ test('linked challenge generation drift after fact collection rolls back the sel
   assert.deepEqual(await snapshot(f), before); assert.equal(await f.journal.lookup(await operationID(f)), null); assert.equal(await receipt(f), null);
 });
 
-for (const pendingCount of [31, 32]) test((pendingCount + 1) + ' admin retirement facts include the session and atomically commit or fail before writes', async t => {
-  const f = await adminFixture(t), selected = []; await f.seedPush();
-  for (let index = 0; index < pendingCount; index++) selected.push(await f.pending());
-  const before = await snapshot(f); f.trace.length = 0;
-  if (pendingCount === 31) { await f.json(); await assertPlan(f, [sessionFact(f), ...selected.map(row => consentFact(f, row.consentID))]); assert.equal(await cursor(f), 32); }
-  else {
-    assert.equal((await f.json(f.body, 503)).error.code, 'admin_session_restriction_capacity'); assert.deepEqual(await snapshot(f), before);
-    assert.equal(await f.journal.lookup(await operationID(f)), null); assert.equal(await cursor(f), 0);
-    assert(!f.trace.some(value => value.kind === 'sql' && /^(INSERT|UPDATE|DELETE) /.test(value.sql) && !value.sql.startsWith('UPDATE restore_control ')));
-  }
+for(const pendingCount of [31,32,64])test((pendingCount+1)+' admin retirement facts include every pending consent and the session',async t=>{
+ const f=await adminFixture(t),selected=[];await f.seedPush();for(let index=0;index<pendingCount;index++)selected.push(await f.pending());
+ await f.json();await assertPlan(f,[sessionFact(f),...selected.map(row=>consentFact(f,row.consentID))]);assert.equal(await cursor(f),pendingCount+1);
 });
 
 for (const malformed of ['cross-account', 'other-purpose']) test('malformed pending ' + malformed + ' fails before any admin retirement or audit', async t => {
@@ -343,12 +338,16 @@ test('callback failure after session SQL rolls back pending cancellation, target
   await f.uncertain(); assert.equal(consumed, true); assert.deepEqual(await snapshot(f), before); assert.equal(await f.journal.lookup(await operationID(f)), null);
 });
 
-test('accepted admin plan with rejected SQL commit retains pending facts and blocks callback replay', async t => {
+test('accepted admin plan with rejected SQL commit recovers restrictions without recreating the action receipt', async t => {
   const f = await adminFixture(t), pending = await f.pending(), before = await snapshot(f), id = await operationID(f), prepare = f.journal.prepare.bind(f.journal); let armed = true;
   f.journal.prepare = async value => { const saved = await prepare(value); if (armed && value.operation_id === id) { armed = false; f.faults.beforeCommit = true; } return saved; };
-  await f.uncertain(); assert.equal(armed, false); assert.equal(f.faults.beforeCommit, false); assert.deepEqual(await snapshot(f), before);
-  const saved = await assertPlan(f, [sessionFact(f), consentFact(f, pending.consentID)], { committed: false }); assert.equal(saved.status, 'pending');
-  await assert.rejects(() => f.db.one('SELECT id FROM accounts LIMIT 1'), unavailable); await f.uncertain(); assert.deepEqual(await snapshot(f), before); assert.deepEqual(await f.journal.lookup(id), saved);
+  await f.uncertain(); assert.equal(armed, false); assert.equal(f.faults.beforeCommit, false);
+  const saved = await assertPlan(f, [sessionFact(f), consentFact(f, pending.consentID)], { committed: false });
+  assert(['pending','recovered'].includes(saved.status),'a rejected SQL commit must not create a committed action receipt');
+  const {recovered,after}=await assertRestrictedAbort(f,{saved,before,snapshot});
+  assert.equal((await f.json(f.body,410)).error.code,'operation_retired_by_recovery');
+  assert.deepEqual(await snapshot(f),after);assert.deepEqual(await f.journal.lookup(id),recovered);
+  assert.equal(await receipt(f),null);assert.equal((await auditRows(f)).length,0);
 });
 
 for (const mode of ['outage', 'prepare-before', 'prepare-after', 'commit-result-loss', 'ack-before', 'ack-after']) test('admin retirement ' + mode + ' preserves exact journal, SQL receipt and actual commit boundary', async t => {
@@ -370,7 +369,9 @@ for (const mode of ['outage', 'prepare-before', 'prepare-after', 'commit-result-
   }
   if (mode === 'prepare-after') {
     assert.equal(f.faults.reply, undefined); assert.deepEqual(await snapshot(f), before); await assertPlan(f, facts, { committed: false }); assert.equal(saved.status, 'pending');
-    await assert.rejects(() => f.db.one('SELECT id FROM accounts LIMIT 1'), unavailable); await f.uncertain(); assert.deepEqual(await snapshot(f), before); assert.deepEqual(await f.journal.lookup(id), saved); return;
+    const {recovered,after}=await assertRestrictedAbort(f,{saved,before,snapshot});
+    assert.equal((await f.json(f.body,410)).error.code,'operation_retired_by_recovery');assert.deepEqual(await snapshot(f),after);
+    assert.deepEqual(await f.journal.lookup(id),recovered);assert.equal(await receipt(f),null);assert.equal((await auditRows(f)).length,0);return;
   }
   assert.notEqual((await target(f)).revoked_at, null); assert.equal((await f.h.db.one('SELECT status FROM consents WHERE id=?', pending.consentID)).status, 'revoked');
   assert(await receipt(f)); assert.equal((await auditRows(f)).length, 1);

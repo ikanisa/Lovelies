@@ -29,7 +29,6 @@ async function revokeOwnSession(actor: Actor, id: string, ctx: AppContext): Prom
         await assertPrivacyActor(actor, ctx);
         const selected = await sessionRetirement(actor.accountId, id, ctx);
         if (selected.session.revoked_at === null) {
-            if (selected.facts.length > 32) throw new ApiError(503, 'session_revoke_restriction_capacity');
             // Both native clients omit operation_key; it was accepted but ignored.
             // The immutable target session UUID identifies this terminal episode.
             restore.operation({ operation_id: await restoreOperationID(actor.accountId, 'identity.session-revoke-v1', 'session.revoke:' + id),
@@ -125,7 +124,6 @@ async function revokeOwnDevice(actor: Actor, id: string, ctx: AppContext): Promi
         if (selected.device.status !== 'revoked') {
             if (currentDevice === id && !selected.sessions.some(row => row.id === actor.sessionId))
                 throw new ApiError(409, 'device_revoke_metadata_invalid');
-            if (selected.facts.length > 32) throw new ApiError(503, 'device_revoke_restriction_capacity');
             // Native callers omit operation_key; the optional former key remains
             // ignored. A bounded digest keys this exact original revision episode.
             const episode = await digest(stable({ device_id: id, device_revision: selected.device.revision }));

@@ -4,6 +4,7 @@ import CryptoKit
 // Real NativeURLTransport and repository against the isolated production API.
 // This substitutes only host storage/signing; no guardian is approved or enrolled.
 private final class AudienceHTTPSecrets: NativeSecretStore, @unchecked Sendable {
+    let authorityNamespace = "fixture-" + UUID().uuidString.lowercased()
     private let lock = NSLock()
     private var values: [String: Data] = [:]
     func read(_ name: String) throws -> Data? { lock.lock(); defer { lock.unlock() }; return values[name] }
@@ -88,7 +89,7 @@ private struct AudienceHTTPNoEnrollment: NativeDeviceSigner {
             do { _ = try await adult.declareAudience(.adult, expectedVersion: 0); throw NativeAPIError.invalidResponse }
             catch NativeAPIError.operationUnconfirmed { assertions += 1 }
             guard let original = try await adult.pendingAudienceMutation() else { throw NativeAPIError.invalidResponse }
-            try require(original.accountID == adultSession.accountID && original.body["age_band"].string == "18_plus", "Unconfirmed mutation must retain its original account/body/key")
+            try require(original.accountID == adultSession.accountID && original.body["at_least_13"].bool == true && original.body["guardian_required"].bool == false && original.body["age_band"] == .null, "Unconfirmed mutation must retain its original account/body/key")
             try require(try secrets.read("credentials") == originalCredentials, "503 must not clear or replace credentials")
             let restarted = BackendRepository(origin: origin, transport: NativeURLTransport(), secrets: secrets, signer: AudienceHTTPNoEnrollment())
             do { _ = try await restarted.bootstrap() } catch NativeAPIError.denied(503, "database_schema_not_ready") { assertions += 1 }

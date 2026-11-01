@@ -12,7 +12,7 @@ class LocalCollectionAuthorityTest {
     private val actor=LiveCredentials(account,"private-session-token","refresh","registered_face",now+60_000,emptyMap())
     private val profile: WireObject=mapOf("user_id" to account,"name" to "Jean","profile_scope" to "registered_face_profile")
     private fun audience(band: String="18_plus",status: String="eligible",auth: Boolean=true,processing: Boolean=true,request: GuardianRequest?=null)=
-        AudienceState(account,band,status,2,null,mapOf("face_authentication" to auth,"photo_matching" to false,"photo_processing" to processing),request)
+        AudienceState(account,AudienceDecision(if(band=="unknown")null else band!="under13",if(band=="unknown")null else band=="13_17",status,2,now+60000,false,"self_declaration","audience-13-plus-guardian-v1","global",now-1000),mapOf("face_authentication" to auth,"photo_matching" to false,"photo_processing" to processing),request,now+60000)
     private fun authority(permission: AudienceState=audience())=LocalCollectionAuthority.parse(profile,permission,scope,actor,now)
     private fun rejected(block: ()->Unit) {
         try { block();fail("Expected local photo collection to remain closed") } catch(expected: LiveFailure) { }
@@ -68,7 +68,7 @@ class LocalCollectionAuthorityTest {
         val permit=authority()
         rejected { permit.assertCurrent(scope,actor,actor.expires) }
         rejected { LocalCollectionAuthority.parse(profile,audience(),scope,actor.copy(expires=now),now) }
-        val reviewed=authority(audience().copy(nextReview=now+1_000))
+        val reviewed=authority(audience().let { it.copy(decision=it.decision.copy(nextReview=now+1_000)) })
         rejected { reviewed.assertCurrent(scope,actor,now+1_000) }
     }
 }

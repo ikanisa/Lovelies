@@ -277,7 +277,7 @@ test('guest deletion cancels registration and rejection requires fresh explicit 
   assert.equal((await h.storage.exec('SELECT count(*) n FROM face_profiles'))[0].n,0);
   assert.equal((await h.storage.exec("SELECT count(*) n FROM sessions WHERE auth_method='registered_face'"))[0].n,0);
   const audience=await h.json('/me/audience',{token:i.anonymous.access_token});
-  await h.json('/me/audience',{token:i.anonymous.access_token,method:'PUT',body:{age_band:'18_plus',expected_version:audience.audience.version,policy_version:'audience-2026-10-24-v1',operation_key:crypto.randomUUID()}});
+  await h.json('/me/audience',{token:i.anonymous.access_token,method:'PUT',body:{at_least_13:true,guardian_required:false,expected_version:audience.audience.version,policy_version:'audience-2026-10-24-v1',operation_key:crypto.randomUUID()}});
   i.saved={...i.saved,enrollment_key:crypto.randomUUID(),face_handle:'lfh_'+encode(crypto.getRandomValues(new Uint8Array(32)))};
   i.body={...i.saved,device_public_jwk:i.jwk,consent:{purpose:'face_authentication',policy_version:policy,granted:true}};
   i.body.device_signature=await sign(i.keys.privateKey,{protocol,step:'start',...i.saved,policy_version:policy,device_public_jwk:i.jwk});

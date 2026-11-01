@@ -34,7 +34,7 @@ async function admission(request:Request,env:SupabaseInferenceEnv,https:boolean)
   if(https&&url.protocol!=='https:')throw new ProxyError(400,'https_required');
   if(url.search||url.username||url.password||url.hash)throw new ProxyError(404,'route_not_found');
   const path=url.pathname,limit=path==='/internal/face'&&request.method==='POST'?SUPABASE_INFERENCE_LIMITS.face:
-    path==='/internal/photo'&&request.method==='POST'?SUPABASE_INFERENCE_LIMITS.photo:
+    (path==='/internal/photo'||path==='/internal/photo-batch')&&request.method==='POST'?SUPABASE_INFERENCE_LIMITS.photo:
     path==='/ready'&&request.method==='GET'?0:-1;
   if(limit<0||request.headers.has('upgrade'))throw new ProxyError(404,'route_not_found');
   const length=request.headers.get('content-length');let claimed:number|null=null;

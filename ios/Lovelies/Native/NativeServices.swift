@@ -15,6 +15,7 @@ enum NativePolicyLinks {
               url.port == nil || url.port == 443 else { return nil }
         return url
     }
+    static var purchaseReady: Bool { url(.privacy) != nil && url(.terms) != nil }
 }
 
 /// Local choices never substitute for a current server snapshot, media grant,
@@ -22,10 +23,10 @@ enum NativePolicyLinks {
 struct NativeShareFile: Identifiable { let id = UUID(); let url: URL }
 struct NativeSystemShare: UIViewControllerRepresentable {
     let url: URL
-    let completion: () -> Void
+    let completion: (Bool) -> Void
     func makeUIViewController(context: Context) -> UIActivityViewController {
         let controller = UIActivityViewController(activityItems: [url], applicationActivities: nil)
-        controller.completionWithItemsHandler = { _, _, _, _ in completion() }
+        controller.completionWithItemsHandler = { _, completed, _, error in completion(completed && error == nil) }
         return controller
     }
     func updateUIViewController(_ controller: UIActivityViewController, context: Context) {}
@@ -49,7 +50,7 @@ struct NativeSystemShare: UIViewControllerRepresentable {
             for await value in StoreKit.Transaction.updates {
                 guard !Task.isCancelled, let self, self.bindingGeneration == binding else { return }
                 do { try await self.verify(value) }
-                catch { if self.bindingGeneration == binding, !Task.isCancelled { self.message = error.localizedDescription } }
+                catch { if self.bindingGeneration == binding, !Task.isCancelled { self.message = self.failureMessage(error) } }
             }
         }
     }
@@ -59,77 +60,165 @@ struct NativeSystemShare: UIViewControllerRepresentable {
     }
     func load() async {
         guard !Task.isCancelled, let live else { return }
+        if updates == nil { attach(live) }
         let binding = bindingGeneration
+        var recoveryFailure: (any Error)?
         do {
             let available = try await Product.products(for: [productID]).first
             guard isCurrent(live, binding: binding) else { return }
             product = available
             if product == nil { message = String(localized: "This subscription is currently unavailable from the App Store.") }
+        } catch { recoveryFailure = error }
+        guard isCurrent(live, binding: binding) else { return }
+        do {
+            do { try await recoverUnfinished() } catch { recoveryFailure = error }
+            // One held historical submission cannot suppress an independent,
+            // authoritative read of today's subscription entitlement.
             try await refreshEntitlement()
-        } catch { if isCurrent(live, binding: binding) { message = error.localizedDescription } }
+            if let recoveryFailure, isCurrent(live, binding: binding) { message = failureMessage(recoveryFailure) }
+        } catch { if isCurrent(live, binding: binding) { message = failureMessage(error) } }
     }
     func refreshEntitlement() async throws {
         try Task.checkCancellation()
         guard let live, live.session?.authenticated == true, let repository = live.repository else { throw NativeAPIError.authenticationRequired }
         let binding = bindingGeneration
-        let account = live.session?.accountID
-        let result = try await repository.protectedJSON("/me/entitlements")
-        guard isCurrent(live, binding: binding), live.session?.accountID == account else { throw NativeAPIError.sessionChanged }
+        let account = live.session?.accountID, epoch = live.session?.epoch, fence = live.publicationFence()
+        let result = try await repository.refreshedAppleEntitlements()
+        try live.checkPublication(fence)
+        guard isCurrent(live, binding: binding), live.session?.accountID == account, live.session?.epoch == epoch,
+              let expires = live.session?.expiresAt, expires > Date() else { throw NativeAPIError.sessionChanged }
         entitlement = result
     }
     func purchase() async {
-        guard !working else { return }
+        guard !working, let live else { return }
+        let binding = bindingGeneration, owner = live.session?.accountID
         working = true; defer { working = false }
         do {
-            guard let product, let live, live.session?.authenticated == true,
+            guard NativePolicyLinks.purchaseReady else { throw NativeAPIError.unsupported(String(localized: "Review the available privacy policy and terms before subscribing.")) }
+            guard let product, let repository = live.repository, live.session?.authenticated == true,
                   let account = UUID(uuidString: live.session?.accountID ?? "") else { throw NativeAPIError.authenticationRequired }
-            switch try await product.purchase(options: [.appAccountToken(account)]) {
+            let binding = bindingGeneration, fence = live.publicationFence(), sessionEpoch = live.session?.epoch
+            let reservation = try await repository.reserveApplePurchase(product: product.id)
+            try live.checkPublication(fence)
+            guard isCurrent(live, binding: binding), live.session?.accountID == owner, live.session?.epoch == sessionEpoch else { throw NativeAPIError.sessionChanged }
+            let result = try await product.purchase(options: [.appAccountToken(account)])
+            try live.checkPublication(fence)
+            guard isCurrent(live, binding: binding), live.session?.accountID == account.uuidString.lowercased(), live.session?.epoch == sessionEpoch else { throw NativeAPIError.sessionChanged }
+            switch result {
             case .success(let result): try await verify(result)
-            case .pending: message = String(localized: "Purchase awaits App Store approval. Original access has not been granted.")
-            case .userCancelled: message = String(localized: "Purchase cancelled.")
-            @unknown default: message = String(localized: "The App Store returned an unknown purchase state. Check or restore purchases.")
+            case .pending:
+                if isCurrent(live, binding: binding), live.session?.accountID == owner { message = String(localized: "Purchase awaits App Store approval. Original access has not been granted.") }
+            case .userCancelled:
+                try await repository.releaseApplePurchaseReservation(reservation)
+                if isCurrent(live, binding: binding), live.session?.accountID == owner { message = String(localized: "Purchase cancelled.") }
+            @unknown default:
+                if isCurrent(live, binding: binding), live.session?.accountID == owner { message = String(localized: "The App Store returned an unknown purchase state. Check or restore purchases.") }
             }
-        } catch { message = error.localizedDescription }
+        } catch { if isCurrent(live, binding: binding), live.session?.accountID == owner { message = failureMessage(error) } }
     }
     func restore() async {
-        guard !working else { return }
+        guard !working, let live else { return }
+        let binding = bindingGeneration, owner = live.session?.accountID, epoch = live.session?.epoch
+        func requireRestoreOwner() throws {
+            guard isCurrent(live, binding: binding), let owner, live.session?.authenticated == true,
+                  live.session?.accountID == owner, live.session?.epoch == epoch else { throw NativeAPIError.sessionChanged }
+        }
         working = true; defer { working = false }
+        let restoreAttempt = NativeAppleRestoreAttempt()
         do {
+            try requireRestoreOwner()
             try await AppStore.sync()
+            try requireRestoreOwner()
+            var recoveryFailure: (any Error)?
+            do { try await recoverUnfinished(restoreAttempt: restoreAttempt); try requireRestoreOwner() }
+            catch { try requireRestoreOwner(); recoveryFailure = error }
             var restored = false
             for await result in StoreKit.Transaction.currentEntitlements {
+                try requireRestoreOwner()
                 if case .verified(let transaction) = result, transaction.productID == productID {
-                    try await verify(result); restored = true
+                    do { try await verify(result, restoreAttempt: restoreAttempt); try requireRestoreOwner(); restored = true }
+                    catch { try requireRestoreOwner(); recoveryFailure = error }
                 }
             }
+            try requireRestoreOwner()
             try await refreshEntitlement()
-            if !restored { message = String(localized: "No current matching subscription was returned by the App Store.") }
-        } catch { message = error.localizedDescription }
+            if isCurrent(live, binding: binding), live.session?.accountID == owner, live.session?.epoch == epoch {
+                if let recoveryFailure { message = failureMessage(recoveryFailure) }
+                else if !restored { message = String(localized: "No current matching subscription was returned by the App Store.") }
+            }
+        } catch { if isCurrent(live, binding: binding), live.session?.accountID == owner, live.session?.epoch == epoch { message = failureMessage(error) } }
     }
-    private func verify(_ result: VerificationResult<StoreKit.Transaction>) async throws {
+    private func recoverUnfinished(restoreAttempt: NativeAppleRestoreAttempt? = nil) async throws {
+        guard let live, let owner = live.session?.accountID, let repository = live.repository else { throw NativeAPIError.authenticationRequired }
+        let binding = bindingGeneration, epoch = live.session?.epoch
+        var failure: (any Error)?
+        var seen: Set<String> = []
+        for await result in StoreKit.Transaction.unfinished {
+            guard isCurrent(live, binding: binding), live.session?.accountID == owner, live.session?.epoch == epoch else { throw NativeAPIError.sessionChanged }
+            if case .verified(let transaction) = result, transaction.productID == productID,
+               transaction.appAccountToken?.uuidString.lowercased() == owner {
+                seen.insert(String(transaction.id))
+                do { try await verify(result, restoreAttempt: restoreAttempt) } catch { if failure == nil { failure = error } }
+            }
+        }
+        // finish() can succeed immediately before process death, leaving the
+        // local provider-confirmed marker behind. Such a transaction is absent
+        // from unfinished; the verified history supplies its exact StoreKit ID.
+        let originalIDs = try await repository.unfinishedApplePurchaseIDs(includeTerminal: restoreAttempt != nil)
+        guard isCurrent(live, binding: binding), live.session?.accountID == owner, live.session?.epoch == epoch else { throw NativeAPIError.sessionChanged }
+        var retained = originalIDs.subtracting(seen)
+        if !retained.isEmpty {
+            for await result in StoreKit.Transaction.all {
+                guard isCurrent(live, binding: binding), live.session?.accountID == owner, live.session?.epoch == epoch else { throw NativeAPIError.sessionChanged }
+                if case .verified(let transaction) = result, retained.contains(String(transaction.id)), transaction.productID == productID,
+                   transaction.appAccountToken?.uuidString.lowercased() == owner {
+                    do { try await verify(result, restoreAttempt: restoreAttempt) } catch { if failure == nil { failure = error } }
+                    retained.remove(String(transaction.id)); if retained.isEmpty { break }
+                }
+            }
+        }
+        if let failure { throw failure }
+    }
+    private func verify(_ result: VerificationResult<StoreKit.Transaction>, restoreAttempt: NativeAppleRestoreAttempt? = nil) async throws {
         try Task.checkCancellation()
         guard case .verified(let transaction) = result, transaction.productID == productID else { throw NativeAPIError.unsupported(String(localized: "The App Store transaction could not be verified.")) }
         guard let live, let session = live.session, session.authenticated, let repository = live.repository,
               transaction.appAccountToken?.uuidString.lowercased() == session.accountID else { throw NativeAPIError.unsupported(String(localized: "This purchase belongs to another Lovelies account. Sign in to the purchasing account before restoring.")) }
-        let binding = bindingGeneration
-        let response = try await repository.post("/subscriptions/apple/transactions", payload: .object([
-            "product_id": .string(transaction.productID), "signed_transaction": .string(result.jwsRepresentation)
-        ]), operation: "store.apple")
+        let binding = bindingGeneration, fence = live.publicationFence()
+        let environment: String
+        if transaction.environment == .production { environment = "production" }
+        else if transaction.environment == .sandbox { environment = "sandbox" }
+        else { throw NativeAPIError.unsupported(String(localized: "This App Store environment cannot grant a live Lovelies entitlement.")) }
+        if let restoreAttempt, !restoreAttempt.claim(account: session.accountID, product: transaction.productID, transaction: String(transaction.id), original: String(transaction.originalID), environment: environment) { return }
+        let record = try await repository.verifyApplePurchase(account: session.accountID, product: transaction.productID,
+            transaction: String(transaction.id), original: String(transaction.originalID), environment: environment, signedTransaction: result.jwsRepresentation,
+            allowTerminalReplacement: restoreAttempt != nil, expectedEpoch: session.epoch)
+        try live.checkPublication(fence)
         guard isCurrent(live, binding: binding), live.session?.accountID == session.accountID, live.session?.epoch == session.epoch,
-              response["product_id"].string == transaction.productID,
-              response["transaction_id"].string == String(transaction.id), response["active"].bool != nil,
-              ["production", "sandbox"].contains(response["billing_environment"].string ?? "") else { throw NativeAPIError.invalidResponse }
-        // Finish only after durable backend verification. An unavailable service
-        // leaves StoreKit's transaction unfinished for the next update/relaunch.
-        await transaction.finish()
-        guard isCurrent(live, binding: binding) else { throw NativeAPIError.sessionChanged }
+              let receipt = record.receipt, let response = try record.result(from: receipt) else { throw NativeAPIError.sessionChanged }
+        try live.checkPublication(fence)
+        guard (live.session?.expiresAt ?? .distantPast) > Date() else { throw NativeAPIError.sessionChanged }
+        if !record.finished {
+            await transaction.finish()
+            // This historical observation survives cancellation/account changes;
+            // it never publishes content or authorizes another account.
+            try await repository.applePurchaseFinishObserved(record.operationKey, account: record.accountID)
+        }
+        guard isCurrent(live, binding: binding), live.session?.accountID == session.accountID, live.session?.epoch == session.epoch else { throw NativeAPIError.sessionChanged }
         try await refreshEntitlement()
+        guard isCurrent(live, binding: binding), live.session?.accountID == session.accountID else { throw NativeAPIError.sessionChanged }
         message = response["billing_environment"].string == "sandbox" ? String(localized: "Sandbox transaction verified. Production original access is unchanged.") : response["active"].bool == true ? String(localized: "Subscription verified by Lovelies.") : String(localized: "Subscription is expired or revoked.")
     }
     private func isCurrent(_ store: LiveAppStore, binding: Int) -> Bool {
-        !Task.isCancelled && live === store && bindingGeneration == binding
+        !Task.isCancelled && live === store && bindingGeneration == binding && store.isForeground
     }
-    func retire() { entitlement = .object([:]); message = "" }
+    private func failureMessage(_ error: any Error) -> String {
+        if case NativeAPIError.denied(409, "operation_recovered_without_result") = error {
+            return String(localized: "Purchase verification ended without confirmation. Choose Restore purchases to try again.")
+        }
+        return error.localizedDescription
+    }
+    func retire() { bindingGeneration += 1; updates?.cancel(); updates = nil; entitlement = .object([:]); message = "" }
 }
 
 @MainActor final class NativePush: NSObject, ObservableObject, UNUserNotificationCenterDelegate {
@@ -144,6 +233,7 @@ struct NativeSystemShare: UIViewControllerRepresentable {
     private var routingNotification = false
     private var boundAccount: String?
     private var registrationID: String?
+    private var explicitRegistrationChoice: (account: String, binding: Int)?
     func attach(_ store: LiveAppStore) {
         if live !== store { bindingGeneration += 1 }
         live = store; UNUserNotificationCenter.current().delegate = self
@@ -154,11 +244,16 @@ struct NativeSystemShare: UIViewControllerRepresentable {
         if center.delegate === self { center.delegate = nil }
     }
     func requestPermission() async {
+        guard let live else { return }
+        let binding = bindingGeneration, account = live.session?.accountID
         do {
             let accepted = try await UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .badge, .sound])
+            guard isCurrent(live, binding: binding), live.session?.accountID == account else { return }
             permission = accepted ? String(localized: "Allowed") : String(localized: "Disabled in Settings")
-            if accepted { UIApplication.shared.registerForRemoteNotifications() }
-            else { await unregister() }
+            if accepted {
+                if let account { explicitRegistrationChoice = (account, binding) }
+                UIApplication.shared.registerForRemoteNotifications(); await register()
+            } else { explicitRegistrationChoice = nil; await unregister(allowNewAfterTerminal: true) }
         } catch { failure = String(localized: "Notification permission could not be requested.") }
     }
     func foreground() async {
@@ -177,9 +272,11 @@ struct NativeSystemShare: UIViewControllerRepresentable {
     func register() async {
         guard let live, !live.busy, let session = live.session, session.authenticated, let repository = live.repository, let token else { return }
         let binding = bindingGeneration
+        let allowReplacement = explicitRegistrationChoice?.account == session.accountID && explicitRegistrationChoice?.binding == binding
+        explicitRegistrationChoice = nil
         do {
             try Task.checkCancellation()
-            let value = try await repository.post("/me/push-devices", payload: .object(["platform": .string("ios"), "push_token": .string(token)]), operation: "notification.device.register")
+            let value = try await repository.post("/me/push-devices", payload: .object(["platform": .string("ios"), "push_token": .string(token)]), operation: "notification.device.register", allowNewAfterTerminal: allowReplacement)
             guard isCurrent(live, binding: binding), live.session?.accountID == session.accountID else { return }
             registrationID = try value.uuid("id"); boundAccount = session.accountID; failure = nil
             if let authDevice = try await repository.device()?.deviceID {
@@ -193,7 +290,7 @@ struct NativeSystemShare: UIViewControllerRepresentable {
             }
         } catch { if isCurrent(live, binding: binding) { failure = error.localizedDescription } }
     }
-    func unregister() async {
+    func unregister(allowNewAfterTerminal: Bool = false) async {
         guard let live, let repository = live.repository, live.session?.authenticated == true else { return }
         let binding = bindingGeneration
         do {
@@ -203,11 +300,15 @@ struct NativeSystemShare: UIViewControllerRepresentable {
             for row in rows where row["platform"].string == "ios" && row["auth_device_id"].string == authDevice && row["active"].bool != false && row["active"].integer != 0 {
                 guard isCurrent(live, binding: binding) else { return }
                 let id = try row.uuid("id")
-                _ = try await repository.post("/me/push-devices/\(id)", payload: .object([:]), operation: "notification.device.remove", method: "DELETE")
+                _ = try await repository.post("/me/push-devices/\(id)", payload: .object([:]), operation: "notification.device.remove", method: "DELETE", allowNewAfterTerminal: allowNewAfterTerminal)
             }
             guard isCurrent(live, binding: binding) else { return }
             registrationID = nil; boundAccount = nil
         } catch { if isCurrent(live, binding: binding) { failure = error.localizedDescription } }
+    }
+    func retireAccountBinding() {
+        bindingGeneration += 1; registrationID = nil; boundAccount = nil
+        pending = nil; pendingNotificationID = nil; failure = nil; explicitRegistrationChoice = nil
     }
     func queue(kind: String, entity: String) {
         guard ["match", "support", "payment"].contains(kind),
@@ -216,7 +317,7 @@ struct NativeSystemShare: UIViewControllerRepresentable {
     }
     func queueNotification(id: String) {
         guard UUID(uuidString: id) != nil else { return }
-        pendingNotificationID = id; routePending()
+        pendingNotificationID = id.lowercased(); routePending()
     }
     func routePending() {
         guard let live, let session = live.session, session.authenticated, !live.busy else { return }
@@ -228,9 +329,12 @@ struct NativeSystemShare: UIViewControllerRepresentable {
                 do {
                     guard self.isCurrent(live, binding: binding) else { return }
                     guard let repository = live.repository else { throw NativeAPIError.authenticationRequired }
-                    let response = try await repository.protectedJSON("/me/notifications")
+                    let fence = live.publicationFence()
+                    let response = try await repository.protectedJSON("/me/notifications/" + id)
+                    try live.checkPublication(fence)
+                    let row = response["notification"]
                     guard self.isCurrent(live, binding: binding), live.session?.accountID == session.accountID, live.session?.epoch == session.epoch,
-                          let row = response["items"].array?.first(where: { $0["id"].string == id }),
+                          session.expiresAt > Date(), row["id"].string == id,
                           let kind = row["kind"].string, let entity = row["entity_id"].string else { throw NativeAPIError.sessionChanged }
                     self.queue(kind: kind, entity: entity)
                 } catch { if self.isCurrent(live, binding: binding) { self.failure = String(localized: "This account update is unavailable. Open your notification inbox.") } }

@@ -4,8 +4,9 @@ import {createHash} from 'node:crypto';
 import {SupabasePrivateBucket} from '../src/storage.ts';
 const deferred=()=>{let resolve;const promise=new Promise(r=>resolve=r);return {promise,resolve};};
 const digest=bytes=>createHash('sha256').update(bytes).digest('hex');
-export function delayedPrivateMedia(memory,{bucket,prefix,mode}){
+export function delayedPrivateMedia(memory,{bucket,prefix,mode,maximumWrites=1}){
  assert(['photos','privacy-exports'].includes(bucket));assert(['ambiguous','acknowledged'].includes(mode));
+ assert(Number.isInteger(maximumWrites)&&maximumWrites>=1&&maximumWrites<=2);
  assert(typeof prefix==='string'&&prefix.length>0);const initial=new Set(memory.rows.keys()),gate=deferred(),events=[],writes=[];
  const origin='http://127.0.0.1:1',secret='synthetic-private-media-only';
  const target=key=>key.startsWith(prefix)&&!key.split('/').some(part=>!part||part==='.'||part==='..');
@@ -15,7 +16,7 @@ export function delayedPrivateMedia(memory,{bucket,prefix,mode}){
   const url=new URL(String(input)),method=(init.method??'GET').toUpperCase();assert.equal(url.origin,origin);assert.equal(url.search,'');
   const headers=new Headers(init.headers);assert.equal(headers.get('apikey'),secret);assert.equal(headers.get('authorization'),null);
   if(method==='POST'&&url.pathname.startsWith('/storage/v1/object/'+bucket+'/')){
-   const key=keyFrom(url.pathname,'/storage/v1/object/'+bucket+'/');assert(target(key));assert.equal(writes.length,0,'one targeted producer dispatch only');assert.equal(headers.get('x-upsert'),'false');
+   const key=keyFrom(url.pathname,'/storage/v1/object/'+bucket+'/');assert(target(key));assert(writes.length<maximumWrites,'only the explicitly budgeted producer dispatches are permitted');assert(!writes.some(write=>write.key===key),'an immutable attempt key must never be dispatched twice');assert.equal(headers.get('x-upsert'),'false');
    const bytes=init.body instanceof Uint8Array?new Uint8Array(init.body):new Uint8Array(init.body).slice();
    const metadata=JSON.parse(Buffer.from(headers.get('x-metadata')??'e30=','base64').toString('utf8'));
    const options={customMetadata:metadata,httpMetadata:{contentType:headers.get('content-type')??'application/octet-stream'}};

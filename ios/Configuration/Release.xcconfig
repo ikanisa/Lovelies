@@ -5,11 +5,15 @@ CURRENT_PROJECT_VERSION = 18
 // Supply the verified team with -configuration Release DEVELOPMENT_TEAM=...
 LOVELIES_APNS_ENVIRONMENT = production
 LOVELIES_SUBSCRIPTION_PRODUCT = com.lovelies.memories.pro.monthly
-LOVELIES_API_ORIGIN = https:/$()/ltqfplqevxztlswlzexn.supabase.co/functions/v1/lovelies-api
+// Explicit public HTTPS base of the locally hosted Supabase Edge Function.
+// Supply LOVELIES_API_ORIGIN at build time; there is no hosted-cloud fallback.
+LOVELIES_API_ORIGIN =
 // Public association and Apple CDN were verified on 28 October 2026.
 LOVELIES_LINK_HOST = lovelies.ikanisa.com
 
 // Public app-policy URLs are supplied only after content/hosting qualification.
+// The app target's Release Policy URLs phase fails the processed artifact when
+// any value is absent/invalid. Debug simulator development remains available.
 LOVELIES_PRIVACY_POLICY_URL =
 LOVELIES_TERMS_URL =
 LOVELIES_SUPPORT_URL =

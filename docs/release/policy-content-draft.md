@@ -49,10 +49,13 @@ private signing keys remain in protected device/browser storage; they are not
 uploaded. The app does not request access to your entire library merely to enroll
 your face. Photo import uses the photos/files you choose through system controls.
 
-Supabase project ltqfplqevxztlswlzexn in EU West (Ireland) is the selected backend
-for private PostgreSQL records and private Storage. A separately authenticated
-private YuNet/SFace service processes the necessary image/reference bytes. Record
-its actual hosting operator and location here after deployment qualification.
+Locally hosted Supabase is the selected backend for private PostgreSQL records,
+managed Auth sessions, private Storage, Edge Functions and the other explicitly
+enabled platform capabilities. A separately authenticated local YuNet/SFace
+service processes the necessary image/reference bytes. The former cloud project
+identifier remains only a protocol tenant identifier; it does not establish the
+current hosting location. Record the actual host operator, location, enabled
+processors and retention after deployment qualification and before publication.
 These data are not sent to messaging providers for face verification. Apple and
 Google process store purchases. APNs/FCM process opted-in device notification
 tokens and generic account-update messages; private photos and face references

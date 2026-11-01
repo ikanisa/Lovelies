@@ -27,6 +27,11 @@ class PreviewHttpTests(unittest.TestCase):
         files = {
             "admin/index.html": b'<link rel="manifest" href="./manifest.webmanifest"><script type="module" src="./app.js"></script>',
             "admin/app.js": b"import { createDemoStore } from './demo-store.mjs'",
+            "admin/live-queues.mjs": b"export function queueQuery() {}",
+            "admin/live-collections.mjs": b"export const publicContract = true;",
+            "admin/review-drafts.mjs": b"export const publicContract = true;",
+            "admin/draft-store.mjs": b"export const publicContract = true;",
+            "admin/audience.mjs": b"export const AUDIENCE_POLICY = 'public-policy';",
             "admin/demo-store.mjs": b"export function createDemoStore() {}",
             "admin/view-model.mjs": b"export const filters = {};",
             "admin/collection-views.mjs": b"export function renderCollection() {}",
@@ -54,6 +59,8 @@ class PreviewHttpTests(unittest.TestCase):
             "Lovelies-48-Screen-PNGs/screens/Screen 01.png": b"PUBLIC_SCREEN_REFERENCE",
             "clients/backend/client.mjs": b"export class LoveliesClient {}",
             "clients/backend/contracts.mjs": b"export const protocol='reviewed-sharing-v1'",
+            "clients/backend/audience-contracts.mjs": b"export const publicContract = true;",
+            "clients/backend/operator-capabilities.mjs": b"export const publicContract = true;",
             "clients/backend/face-contracts.mjs": b"export const FACE_PROTOCOL='lovelies-face-auth-v1'",
             "backend/config.json": self.secret,
             "services/api-worker/src/index.ts": self.secret,
@@ -127,8 +134,15 @@ class PreviewHttpTests(unittest.TestCase):
         self.assertIn("text/css", headers["Content-Type"])
 
     def test_public_client_modules_and_layout_data_are_readable(self):
-        for path, mime in [("/clients/backend/client.mjs", "application/javascript"),
+        for path, mime in [("/admin/live-queues.mjs", "application/javascript"),
+                           ("/admin/live-collections.mjs", "application/javascript"),
+                           ("/admin/review-drafts.mjs", "application/javascript"),
+                           ("/admin/draft-store.mjs", "application/javascript"),
+                           ("/admin/audience.mjs", "application/javascript"),
+                           ("/clients/backend/client.mjs", "application/javascript"),
                            ("/clients/backend/contracts.mjs", "application/javascript"),
+                           ("/clients/backend/audience-contracts.mjs", "application/javascript"),
+                           ("/clients/backend/operator-capabilities.mjs", "application/javascript"),
                            ("/clients/backend/face-contracts.mjs", "application/javascript"),
                            ("/shared/home-grid.json", "application/json"),
                            ("/shared/reference-grids/layouts.json", "application/json"),

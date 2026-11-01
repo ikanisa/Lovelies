@@ -31,7 +31,7 @@ struct NativeSubscriptionPanel: View {
             if let product = purchases.product {
                 Text("\(product.displayName) · \(product.displayPrice) / month").font(.headline)
                 Text("Payment is charged to your Apple Account. The subscription renews monthly unless cancelled at least 24 hours before the current period ends. Manage or cancel in App Store subscriptions.").font(.footnote).foregroundStyle(LoveliesTheme.secondary)
-                PinkButton(title: String(localized: "Subscribe with App Store"), enabled: !purchases.working && live.canEdit) { Task { await purchases.purchase() } }
+                PinkButton(title: String(localized: "Subscribe with App Store"), enabled: !purchases.working && live.canEdit && NativePolicyLinks.purchaseReady) { Task { await purchases.purchase() } }
             } else { QuietButton(title: String(localized: "Check App Store product"), enabled: !purchases.working) { Task { await purchases.load() } } }
             QuietButton(title: String(localized: "Restore purchases"), enabled: !purchases.working && live.canEdit) { Task { await purchases.restore() } }
             if purchases.working { ProgressView("Contacting the App Store…").tint(LoveliesTheme.pink) }
@@ -67,6 +67,7 @@ struct NativeSupportPanel: View {
                     if let notes = item["review_notes"].string, !notes.isEmpty { Text(notes).font(.body).foregroundStyle(LoveliesTheme.secondary) }
                 }.padding(14).frame(maxWidth: .infinity, alignment: .leading).background(LoveliesTheme.surface, in: RoundedRectangle(cornerRadius: 14))
             }
+            if live.hasMoreSupport { QuietButton(title: String(localized: "Load more"), enabled: !live.busy) { live.loadSupport(loadMore: true) } }
         }.onAppear { live.loadSupport() }
             .toolbar { ToolbarItemGroup(placement: .keyboard) { Spacer(); Button("Done") { editing = nil } } }
     }
@@ -93,14 +94,20 @@ struct NativePrivacyPanel: View {
                     }
                     if let failure = item["failure_code"].string { Text(failure).font(.footnote).foregroundStyle(LoveliesTheme.secondary) }
                     if let id = item["id"].string {
-                        if item["download_state"].string == "ready" {
+                        if item["download_state"].string == "ready" || live.retainedPrivacyExports.contains(id) {
                             PinkButton(title: String(localized: "Save or share data export"), enabled: live.canManagePrivacy) { live.exportPrivacy(id) }
-                            Text("This retrieves an account-bound, one-time export. Choose Save to Files in the system share sheet. Keep the saved copy private.").font(.footnote).foregroundStyle(LoveliesTheme.secondary)
+                            Text("Choose Save to Files in the system share sheet. If delivery is interrupted, reopen this export to continue. Keep the saved copy private.").font(.footnote).foregroundStyle(LoveliesTheme.secondary)
                         } else if item["request_type"].string == "export", item["status"].string == "completed" {
                             Text("The export download is unavailable or expired. Request a fresh export.").font(.footnote).foregroundStyle(LoveliesTheme.secondary)
                         }
                         QuietButton(title: String(localized: "Check request status"), enabled: live.canManagePrivacy) { live.checkPrivacyRequest(id) }
                     }
+                }.padding(14).background(LoveliesTheme.surface, in: RoundedRectangle(cornerRadius: 16))
+            }
+            ForEach(live.retainedPrivacyExports.subtracting(Set(requests.compactMap { $0["id"].string })).sorted(), id: \.self) { id in
+                VStack(alignment: .leading, spacing: 8) {
+                    Text("Data export").font(.headline)
+                    PinkButton(title: String(localized: "Save or share data export"), enabled: live.canManagePrivacy) { live.exportPrivacy(id) }
                 }.padding(14).background(LoveliesTheme.surface, in: RoundedRectangle(cornerRadius: 16))
             }
             QuietButton(title: String(localized: "Refresh privacy status"), enabled: live.canManagePrivacy) { live.loadPrivacy() }
@@ -127,7 +134,14 @@ struct NativeRegisteredDeletionView: View {
                         Text(status == "completed" ? String(localized: "Awaiting confirmation") : (status.map(NativeStatusCopy.privacy) ?? String(localized: "Awaiting confirmation"))).font(.headline).foregroundStyle(LoveliesTheme.pink)
                     }
                     Text(receipt.completed ? String(localized: "The server confirmed account erasure and private-file cleanup. Previously downloaded or forwarded copies cannot be recalled.") : String(localized: "Your private status receipt is stored securely on this device and works after your session is retired. Deletion is complete only when the server confirms it.")).font(.body).foregroundStyle(LoveliesTheme.secondary)
-                    if receipt.completed { PinkButton(title: String(localized: "Start again"), enabled: !live.busy) { live.startAfterRegisteredDeletion() } }
+                    if receipt.completed {
+                        if receipt.localCleanupComplete != true {
+                            Text("Deletion is confirmed by the server. Secure cleanup on this device still needs to finish; your receipt is retained for retry.").font(.footnote).foregroundStyle(LoveliesTheme.secondary)
+                            PinkButton(title: String(localized: "Finish device cleanup"), enabled: !live.busy) { live.checkRegisteredDeletion() }
+                        } else {
+                            PinkButton(title: String(localized: "Start again"), enabled: !live.busy) { live.startAfterRegisteredDeletion() }
+                        }
+                    }
                     else {
                         PinkButton(title: String(localized: "Check deletion status"), enabled: !live.busy) { live.checkRegisteredDeletion() }
                         if receipt.response == nil, live.session?.authenticated == true || live.hasRegisteredPrivacyIdentity { QuietButton(title: String(localized: "Retry original request"), enabled: !live.busy) { live.checkRegisteredDeletion(retry: true) } }

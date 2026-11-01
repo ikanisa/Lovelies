@@ -16,7 +16,10 @@ enum NativeLocalAuthenticationPurpose: String, Sendable {
             return [face, "lovelies-account-recovery-device-v1"].contains(name)
         case .profileControl:
             return [face, "lovelies-face-profile-device-v1"].contains(name)
-        case .connect, .capture, .reconciliation:
+        case .reconciliation:
+            return [face, "lovelies-face-enrollment-device-v1", "lovelies-ordinary-face-login-device-v1",
+                    "lovelies-account-recovery-device-v1", "lovelies-face-profile-device-v1", "lovelies-audience-device-v1"].contains(name)
+        case .connect, .capture:
             // These journeys resume one of the existing signed journals or its
             // challenge. The repository still fixes the account and aliases.
             return [face, "lovelies-face-enrollment-device-v1", "lovelies-ordinary-face-login-device-v1",

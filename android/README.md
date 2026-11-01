@@ -1,6 +1,6 @@
 # Lovelies native Android
 
-Kotlin and Jetpack Compose. The release target is the selected Supabase API (`ltqfplqevxztlswlzexn`): anonymous first, three ordinary Camera2 enrollment photos, signed one-use captures, then automatic registered-face authentication. A retained verified device handle supports a fresh camera sign-in after logout. There is no OTP or additional authentication screen.
+Kotlin and Jetpack Compose. The release target is the explicitly configured, locally hosted Supabase API: anonymous first, three ordinary Camera2 enrollment photos, signed one-use captures, then automatic registered-face authentication. A retained verified device handle supports a fresh camera sign-in after logout. There is no OTP or additional authentication screen.
 
 The live gallery loads currently authorized metadata and protected previews. Android's photo/file pickers provide chosen images; uploads are bounded to 20 MiB and actual server processing status. Sharing uses a sparse server snapshot, global photo/person selections, individual photo-person exclusions, an immutable exact-subset preview, and an idempotent commit. Photo access begins only after recipient acceptance. A failed or uncertain operation stays visible; retries preserve the original operation key and reviewed payload.
 
@@ -16,9 +16,13 @@ Deletion receipt checks carry no bearer credentials. Read
 [current verification](../verification/anonymous-deletion-20261014/README.md).
 Current units include logout-phase and interrupted-write/restore regressions.
 
+## Reconciled implementation — 1 November 2026
+
+The current native source combines the Complete readiness package with revision 3. [Native reconciliation and acceptance](NATIVE_RECONCILIATION.md) records the active contracts and remaining execution gates. Historical verification paragraphs below refer to their dated source and environment; they do not establish acceptance of this branch.
+
 ## Configuration
 
-Debug defaults to `http://10.0.2.2:8787` for an emulator talking to a local compatible API. Override with Gradle property `loveliesDebugApiUrl`. Cleartext is permitted only for debug loopback hosts (`10.0.2.2`, `localhost`, `127.0.0.1`). Release requires `loveliesApiUrl=https://ltqfplqevxztlswlzexn.supabase.co/functions/v1/lovelies-api`. The existing `CloudflareRepository` class name is historical; its HTTP wire protocol supports the Supabase function prefix.
+Debug defaults to `http://10.0.2.2:8787` for an emulator talking to a local compatible API. Override with Gradle property `loveliesDebugApiUrl`. Cleartext is permitted only for debug loopback hosts (`10.0.2.2`, `localhost`, `127.0.0.1`). Release requires `loveliesApiUrl` to contain the deployed local Supabase public HTTPS base ending `/functions/v1/lovelies-api`. No cloud project address is built in. The existing `CloudflareRepository` class name is historical; its HTTP wire protocol supports the Supabase function prefix.
 
 `:app:validateLoveliesRelease` runs before a Release build. Supply verified Gradle properties `loveliesPrivacyPolicyUrl`, `loveliesTermsUrl`, `loveliesDeletionUrl`, `loveliesPlayProduct`, `loveliesLinkHost`, `loveliesFirebaseProjectId`, `loveliesFirebaseAppId`, `loveliesFirebaseApiKey` and `loveliesFirebaseSenderId`. Set `loveliesLinkHost` to `lovelies.ikanisa.com`, the host of the published association documents; a different host requires its own verified association and a corresponding release-preflight change. Policy URLs must be public HTTPS addresses; the build does not guess that local policy drafts have been published. No configuration values are printed by preflight. Store product and Firebase values must match their real consoles. Passing configuration preflight does not verify publishing, provider delivery or hosted acceptance.
 
@@ -67,9 +71,9 @@ adb shell am start -n com.lovelies.frontend.preview/.MainActivity --ei screen 33
 
 ## Private state and actual limits
 
-Access/refresh tokens, verified opaque device/face handle, review drafts and unresolved operation intents are AES-256-GCM encrypted in app-private no-backup storage. Device signing uses a nonexportable Android Keystore P-256 key. Protected previews are authorized afresh, held in memory, and hidden/cleared on background or logout. Unverified enrollment keys are discarded on cancellation. Ordinary logout removes tokens, drafts, operation intents and private photo references while retaining the verified hardware device identity; device revocation/forget removes that identity too. Local camera files and persisted picker grants are released on logout.
+Access/refresh tokens, verified opaque device/face handle, review drafts and unresolved operation intents are AES-256-GCM encrypted in app-private no-backup storage. Device signing uses a nonexportable Android Keystore P-256 key. Protected previews are authorized afresh, held in memory, and hidden/cleared on background or logout. Unverified enrollment keys are discarded on cancellation. Ordinary logout retires token authority, drafts and private photo references while preserving exact unresolved recovery journals and the verified hardware device identity; device revocation/forget removes that identity too. Local camera files and persisted picker grants are released on logout.
 
-Private Cloudflare face/processing services must be configured for actual verification and matching. Their failure does not create an authenticated account, successful upload or delivered-photo result. Hosted connectivity, physical-camera accuracy, production subscription/download entitlement, store release and device security acceptance require their own runtime proof.
+The locally operated Supabase API must have its private face verification and processing integration configured for actual verification and matching. Their failure does not create an authenticated account, successful upload or delivered-photo result. Hosted connectivity, physical-camera accuracy, production subscription/download entitlement, store release and device security acceptance require their own runtime proof.
 
 Android API references: [Keystore](https://developer.android.com/privacy-and-security/keystore), [Camera2](https://developer.android.com/reference/android/hardware/camera2/CameraDevice), [Photo picker](https://developer.android.com/training/data-storage/shared/photo-picker).
 

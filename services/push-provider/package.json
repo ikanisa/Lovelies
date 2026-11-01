@@ -9,8 +9,9 @@
   "scripts": {
     "start": "node src/server.mjs",
     "test": "node --test --test-concurrency=1 test/*.test.mjs",
-    "check": "node --check src/server.mjs && node --check src/gateway.mjs && node --check src/providers.mjs && node --check src/private-files.mjs && node --check src/ledger.mjs && node --check src/remote-ledger.mjs && node --check src/durable-ledger.mjs && node --check src/ledger-worker.mjs",
-    "migrate": "node src/migrate.mjs"
+    "check": "node ../../scripts/check-service-source.mjs push-provider",
+    "migrate": "node src/migrate.mjs",
+    "ledger:start": "node src/ledger-server.mjs"
   },
   "dependencies": {
     "postgres": "3.4.7"

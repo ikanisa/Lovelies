@@ -11,7 +11,7 @@ if(process.env.TEST_DATABASE_URL===undefined)globalThis.fetch=async()=>{throw Er
 const cursor=f=>f.db.one("SELECT last_at,last_id FROM retention_scan_cursors WHERE scan='guardian' AND entity_id='audience-expiry-v1'");
 async function setup(t){
  const f=await fixture(t),h=f.h,child=await h.anonymous(),now=h.app.now();
- await h.json('/me/audience',{method:'PUT',token:child.access_token,body:{age_band:'13_17',policy_version:AUDIENCE_POLICY,expected_version:0,operation_key:randomUUID()}});
+ await h.json('/me/audience',{method:'PUT',token:child.access_token,body:{at_least_13:true,guardian_required:true,policy_version:AUDIENCE_POLICY,expected_version:0,operation_key:randomUUID()}});
  const g=await h.json('/me/guardian-requests',{token:child.access_token,body:{policy_version:AUDIENCE_POLICY,expected_version:1,operation_key:randomUUID()}},201);
  const requestId=g.guardian_request.id;await h.db.run('UPDATE guardian_requests SET expires_at=?,created_at=? WHERE id=?',now-1,now-2000,requestId);
  const context=createApp(f.db,h.env,h.app.now);

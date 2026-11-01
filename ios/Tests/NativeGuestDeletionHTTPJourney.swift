@@ -5,6 +5,7 @@ import CryptoKit
 // protected storage is substituted. No verifier, server, transport response,
 // administrator approval or cleanup outcome is mocked or elevated.
 private final class GuestHTTPSecrets: NativeSecretStore, @unchecked Sendable {
+    let authorityNamespace = "fixture-" + UUID().uuidString.lowercased()
     private let lock = NSLock()
     private var values: [String: Data] = [:]
     func read(_ name: String) throws -> Data? { lock.lock(); defer { lock.unlock() }; return values[name] }

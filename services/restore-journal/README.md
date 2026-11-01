@@ -13,20 +13,30 @@ reacquires the shared lock and rereads PostgreSQL before acknowledging a cached
 successor. It can recover an exact committed marker after a lost reply without
 rerunning a callback.
 
-Domain restriction producers/stable allocation consumption, generation fences
-across external effects, actual replay, object inventory/cleanup and computed
-safe recovery completion remain unfinished. Default empty-event mutation
-checkpoints alone do not implement deletion/withdrawal suppression. There is no
-recovery-clear endpoint. Do not deploy the application as restore-qualified from
-these local protocol tests.
+The selected deployment is `src/server.mjs`, using the independent, locally
+hosted Supabase PostgreSQL database in `deploy/local-supabase/compose.custody.yml`.
+`src/postgres-storage.mjs` supplies one PostgreSQL transaction and a fixed
+namespace advisory lock for each state-machine transition. Immutable facts are
+also protected by database triggers. Separate runtime roles, credentials,
+external volumes and a separate Compose project keep custody outside the
+application restore lifecycle. `src/private-server.mjs` terminates trusted
+private TLS and protects health and metrics with a separate observer credential.
+The service has no published host port. The legacy Worker/SQLite adapter remains
+only as a protocol compatibility fixture; no Cloudflare authority is selected.
 
-The Worker and its SQLite Durable Object authenticate before body reads and
-storage/namespace access. The project is fixed to `ltqfplqevxztlswlzexn`; the
-production namespace selection is `jurisdiction('eu')`. Supply the independent
-server-only `RESTORE_JOURNAL_TOKEN` and keep it out of clients and logs. The
-current configuration has no public route and is not deployed. Production
-Supabase access requires an explicit authenticated HTTPS endpoint and verified
-provider placement/custody; the local tests cannot establish either.
+The Complete implementation includes restriction producers, immutable manifest
+chunks, effects fencing, replay, object inventory/cleanup and computed recovery
+completion. Its manifests-v2 and recovery-v2 contracts are retained. The later
+V3 `paged-operations.mjs` is not overlaid: that competing operations entrypoint
+would remove these existing recovery/effects contracts. Complete already bounds
+large manifests and continuation work. An actual coordinated host restore drill
+is still required; source or PGlite tests are not proof of production recovery.
+
+The project is fixed to `ltqfplqevxztlswlzexn` as a logical protocol tenant.
+Supply the server-only `RESTORE_JOURNAL_TOKEN`; initial deployment additionally
+requires the distinct `RESTORE_JOURNAL_BOOTSTRAP_TOKEN`. The API receives only
+the runtime token. The local service authenticates before body reads and storage
+access. It never creates an initial serving marker as a request fallback.
 
 ## Restriction facts
 
@@ -93,9 +103,9 @@ that an application database is genuinely a fresh initial deployment. An
 empty/genesis journal is required for a serving bootstrap. If the journal already
 contains event-only facts, bootstrap preserves them and binds only in quarantine
 with reason `preexisting_restrictions`. Installing its marker or retrying bootstrap
-cannot open serving. This version has no computed recovery-completion protocol,
-so a nonzero prebinding journal remains closed until that protocol is implemented
-and qualifies replay/cleanup; no caller assertion can substitute for it.
+cannot open serving. The computed recovery protocol in `recovery.mjs` requires
+independent replay, effect and object-inventory evidence. No caller assertion or
+manual clear flag can substitute for that evidence.
 
 Prepare accepts a stable logical `operation_id` UUID and `input_hash` SHA-256.
 The trusted API derives that ID from the actor, action and existing operation
@@ -142,8 +152,8 @@ Its checkpoint hash is SHA-256 of canonical:
 
 Successful envelopes are bounded at 131,072 bytes. Every successful route returns
 200; errors are only `{error: <fixed code>}` and never include request contents or
-private diagnostics. The outer Worker and the Durable Object authenticate before
-body/storage access. Neither accepts queries, compressed JSON or alternate RPC
+private diagnostics. The private TLS listener and protocol handlers authenticate
+before body/storage access. They reject queries, compressed JSON or alternate RPC
 write methods for this protocol.
 
 The API must hold its reserved PostgreSQL advisory lock while reading and
@@ -182,16 +192,18 @@ Recovery begin permanently fences the current service state and records one
 immutable generation: prior marker, any pending operation, independently generated
 new incarnation, current journal head, a fixed reason and generation hash. Exact
 retry is stable. A different generation is rejected while this generation is
-active. The present foundation deliberately has no recovery-complete/clear route,
-so it cannot open even the new proposed incarnation. No bootstrap, historical
-acknowledgement or environment flag can bypass that fence.
+active. The current `recovery.mjs` implementation exposes recovery-v2 progress,
+replay acknowledgement, effect proofs, authority retirement, clearance preparation
+and completion. Completion requires the exact computed clearance and committed
+new marker. No bootstrap, historical acknowledgement or environment flag can
+bypass that fence.
 
-The future recovery worker must prove contiguous restriction replay against a
-fresh independent head, exact episode semantics, old-incarnation credential and
-delivery retirement, pending-operation reconciliation, and resource cleanup with
-independent object inventory/absence checks. It must preserve later independent
-consent, adulthood, profile, device and block episodes. Only a computed protocol
-covering those effects may install a new database marker and open that generation.
+The recovery controller proves contiguous restriction replay against a fresh
+independent head, exact episode semantics, old-incarnation credential and delivery
+retirement, pending-operation reconciliation, and resource cleanup with independent
+object inventory/absence checks. It preserves later independent consent,
+adulthood, profile, device and block episodes. Its computed protocol installs a
+new database marker and opens that generation only after all required proofs.
 An event-only cursor, same-schema version, same-database outbox or operator boolean
 cannot supply this evidence.
 
@@ -216,18 +228,31 @@ this foundation. Keep provider restore/custody and operator separation explicit.
 ```sh
 pnpm restore-journal:test
 pnpm restore-journal:check
-pnpm restore-journal:build
+node --test --test-isolation=none services/restore-journal/test/postgres-custody.test.mjs
 ```
 
-The build is a dry run. Unit cases exercise strict schemas, authentication before
+Unit cases exercise strict schemas, authentication before
 reads, concurrent idempotency/conflicts, rollback/outage, corruption, pagination,
-clock/sequence limits and scoped event preservation. The separate runtime case
-executes the actual outer Worker and SQLite Durable Object, with concurrent
-HTTP appends, full hash-chain paging and dispose/restart persistence. workerd
-does not implement jurisdiction restrictions: a test-only selector seam records
-the requested `eu` namespace and forwards to the real local DO. Production code
-has no jurisdiction fallback. This is not EU-placement, hosted restoration,
-independent guardian-review or store acceptance evidence.
+clock/sequence limits and scoped event preservation. The PostgreSQL custody suite
+uses the actual SQL schema, dedicated runtime roles and immutable triggers. It
+checks rollback, concurrency, persistent state across adapter reconstruction,
+old-marker quarantine, push v2 admission and ambiguous provider outcomes.
+The default fixture uses PGlite. To run the same eight cases against a newly
+initialized disposable local PostgreSQL server, supply its administrator URL in
+`TEST_DATABASE_URL` and run:
+
+```sh
+LOVELIES_DISPOSABLE_PG_TEST=1 node --test --test-isolation=none --test-concurrency=1 --test-reporter=tap services/restore-journal/test/postgres-custody.test.mjs
+```
+
+The native fixture creates and removes its own `lovelies_test_<UUID>` database.
+Both runtime namespaces check stored `jsonb_typeof` and exact object, array,
+scalar-string, null, boolean and numeric round trips, including quoted text,
+backslashes and Unicode. Validated JSON text is bound as `text` before conversion
+to `jsonb`, so the driver cannot serialize that text a second time.
+Historical Worker/SQLite tests remain compatibility checks for the same state
+machine. Their former `eu` selector fixture does not establish the location of a
+local deployment. No fixture is host, guardian-review or store acceptance evidence.
 
 Operation cases additionally cover stable allocations, concurrent exact prepares,
 bounded manifests, empty-event checkpoints, pre/post-commit pending fences,
@@ -238,14 +263,21 @@ HTTP with persistence/restarts and test-only injected exceptions after real
 SQLite writes. It qualifies transactional rollback and protocol persistence;
 it does not perform an application database restore or cleanup.
 
-### Sharing producer checkpoint, 26 October
+### Current implementation and qualification boundary
 
-The Supabase API now registers exact `sharing-request-retired` facts for actual
-validated decline/withdraw/revoke transitions before their SQL effects. Its
-immutable transaction collector binds the actor/source/key logical operation and
-payload hash, shares one scope through nested callbacks, closes registration
-before journal preparation and prevents duplicate facts on receipt/no-op retries.
-Current proof:41 focused actualPG/collector/sharing cases, whole API344/343-pass
-with one optional model skip, and94 operator cases. Other producers, new-resource
-allocation consumption, generation fences and recovery replay/cleanup/completion
-remain unfinished; this is no hosted custody or recovery-clearance claim.
+The Supabase API records exact domain restrictions before their SQL effects. Its
+transaction collector binds actor/source/key operations and payload hashes,
+shares one scope through nested callbacks, and prevents duplicate facts on
+receipt/no-op retries. Complete added resource allocations, effect generation
+fences, bounded replay, inventory/cleanup and computed recovery completion after
+the earlier October foundation reports. Those earlier reports are historical
+evidence and their unfinished-feature lists do not describe this source tree.
+
+Use `scripts/local-supabase-backup.mjs` for a coherent complete app database plus
+Storage-byte snapshot. It includes Auth session custody in the same database
+snapshot and encrypts runtime recovery material separately. Use the isolated
+`scripts/local-supabase-restore-drill.mjs` to restore an older app snapshot against
+a newer copy of independent custody. It verifies persistent quarantine and keeps
+computed replay/cleanup and real provider evidence explicitly pending until
+actually exercised. It never restores the serving custody store or opens a
+quarantine. See `deploy/local-supabase/README.md` for the operational gates.

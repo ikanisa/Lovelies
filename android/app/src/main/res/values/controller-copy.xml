@@ -69,4 +69,5 @@
   </plurals>
   <string name="controller_a6e0f9a6503b">"Private account updates"</string>
   <string name="controller_f72a6f212afb">"Lovelies photo"</string>
+  <string name="store_verification_ended_restore">Purchase verification ended without confirmation. Choose Restore purchases to try again.</string>
 </resources>

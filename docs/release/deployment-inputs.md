@@ -1,4 +1,82 @@
+> **Current deployment, 1 November 2026:** locally hosted Supabase replaces the historical cloud/Cloudflare target below. The integrated API requires schema19 and managed Auth. Follow [the current architecture](../local-supabase-architecture.md), the versioned `deploy/local-supabase` configuration and current task evidence. Old host observations, versions and credentials are historical and cannot qualify this candidate. Preserve unknown data and existing app signing identities.
+
 # Remaining deployment inputs
+
+## 29 October source package: additional inputs, not deployed
+
+The complete source package prepared against commit
+`34b30678a64bf00933c8aeb979cccbcf622aa338` adds the following ordered migrations:
+
+| Migration | Schema | Added behavior |
+|---|---:|---|
+| `20261029120000_delivery_reliability.sql` | 14 | Export deliveries, processing profile batches and durable queue handoffs |
+| `20261029130000_restore_recovery_protocol.sql` | 15 | Exact restriction capture, recovery progress, external-effect reconciliation and hold episodes |
+| `20261029140000_chunked_privacy_exports.sql` | 16 | Immutable export snapshots, bounded chunks and authenticated delivery v3 |
+| `20261029150000_operator_capabilities.sql` | 17 | Current, expiring delegated operator capabilities and immutable grant episodes |
+
+The API requires schema **17** exactly. The historical hosted observations below
+remain version 13; this package has not applied a hosted migration or enabled
+serving. Qualify the ordered migrations against an isolated restored copy before
+an approved deployment. Install the independent journal's manifest/effect/recovery
+protocol before the new API can use it; deploy schema 14–17 and the matching API as
+one controlled maintenance change. Missing protocol, schema, budget or serving
+admission fails closed. Do not replay old migrations, fabricate a restore marker,
+or bypass independently computed recovery clearance.
+
+The API also requires five explicit positive-integer engineering budgets:
+
+| Environment variable | Enforced per-account limit |
+|---|---|
+| `UPLOAD_MAX_INFLIGHT` | Active uploading, uploaded and processing assets |
+| `UPLOAD_MAX_RESERVED_SOURCE_BYTES` | Retained/reserved original-source bytes |
+| `UPLOAD_MAX_DAILY_SOURCE_BYTES` | Source bytes reserved in the rolling preceding 24 hours |
+| `UPLOAD_MAX_DAILY_RESERVATIONS` | Upload reservations in the rolling preceding 24 hours |
+| `PHOTO_MAX_DAILY_ATTEMPTS` | Processing attempts in the rolling preceding 24 hours |
+
+Missing or malformed budgets fail readiness and admission. There are no
+production defaults or inferred commercial tiers. Choose and document values
+from actual deployment capacity and abuse limits. Cancelled/failed reservations
+remain in rolling admission totals; unresolved cleanup/writer obligations
+conservatively retain terminal source-byte reservations. These are source-byte
+and job-admission bounds, not a claim to measure every provider copy or all
+inference cost. The isolated Edge test has explicitly labelled fixture budgets.
+
+Deploy the API and private push gateway as a coordinated change: late receipt
+reconciliation includes the original request digest. Upgrade native consumers
+after the schema and backend pass their acceptance gates. Small exports retain
+flat delivery v2. Larger exports use delivery v3 with one-MiB immutable chunks,
+paged manifests, original-session authorization, per-chunk and complete-file
+verification, and a separate durable acknowledgement. There is no whole-account
+20 MiB/25,000-row rejection in the new producer. Each remote write attempt has a
+unique key, independent effect evidence, and exact cleanup obligations; an expired
+lease never proves an older writer stopped. Existing per-object bucket limits
+still apply and do not need to increase for the one-MiB chunks.
+
+The production entrypoint records private Storage writes and inference, push and
+store requests in the independent journal before dispatch. Recovery replays exact
+restrictions, retires restored authority, reconciles each registered effect and
+scans all three private bucket namespaces before computing a new incarnation.
+Use the supplied recovery CLI and its runbook. Unknown pre-upgrade objects/writers
+remain preserved blockers until independent evidence qualifies them; a restored
+SQL row or elapsed time is not such evidence. An actual hosted restore rehearsal,
+provider terminality and independently operated backup custody remain required.
+
+Delegated staff receive only explicit, current database capabilities for up to
+30 days. Granting/revoking scopes requires an independently provisioned full
+administrator, fresh face authority, an expected revision and a reviewed reason.
+No migration creates an administrator or gives anyone a capability. The reviewed
+upload-recovery control can resume only the original eligible processing attempt;
+changed consent/source/model, an active lease, a hold or an unresolved writer
+prevents recovery.
+
+iOS Release builds now reject empty/non-HTTPS privacy, terms, support and
+deletion URLs. Supply actual approved public endpoints; test-fixture URLs and
+draft notices are not release inputs. New native/service CI workflow files are
+local source changes, not evidence of successful Actions runs or required
+branch checks. No billing, hosting, repository settings, credentials, provider
+delivery, signed artifact or store publication was changed by this package.
+
+## Historical deployment evidence and remaining acceptance
 
 Current integration evidence is in [audience-readiness-20261024.md](audience-readiness-20261024.md).
 The additive v9–v11 and v12 transactions are applied hosted, with preservation,

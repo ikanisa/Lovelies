@@ -158,6 +158,7 @@ private fun UploadSelection(state: PreviewState) {
 @Composable
 private fun ReviewUpload(state: PreviewState) {
     val uiContext = androidx.compose.ui.platform.LocalContext.current
+    val uiResources = androidx.compose.ui.platform.LocalResources.current
     Column(Modifier.fillMaxSize().padding(horizontal = 18.dp)) {
         ScreenHeader(uiContext.getString(R.string.copy_review_upload_da9297a6),onBack = state::back)
         Column(Modifier.weight(1f).verticalScroll(rememberScrollState()),verticalArrangement = Arrangement.spacedBy(15.dp)) {
@@ -185,7 +186,7 @@ private fun ReviewUpload(state: PreviewState) {
                     state.visibility = "Approved recipients"
                 }
             }
-            Text(uiContext.resources.getQuantityString(R.plurals.copy_upload_ready_count, state.selectedUpload.size, state.selectedUpload.size),color = Muted,fontSize = 12.sp,
+            Text(uiResources.getQuantityString(R.plurals.copy_upload_ready_count, state.selectedUpload.size, state.selectedUpload.size),color = Muted,fontSize = 12.sp,
                 modifier = Modifier.padding(top = 2.dp))
         }
         PinkButton(uiContext.getString(R.string.copy_start_upload_ae78e1e4),Modifier.padding(top = 18.dp,bottom = 20.dp),enabled = state.selectedUpload.isNotEmpty()) { state.navigate(23) }
@@ -233,12 +234,13 @@ private fun UploadProgress(state: PreviewState) {
 @Composable
 private fun UploadComplete(state: PreviewState) {
     val uiContext = androidx.compose.ui.platform.LocalContext.current
+    val uiResources = androidx.compose.ui.platform.LocalResources.current
     Column(Modifier.fillMaxSize().padding(horizontal = 20.dp),horizontalAlignment = Alignment.CenterHorizontally) {
         Spacer(Modifier.weight(.5f))
         SourceHero("upload-hero.png",.716f,184f/101f)
         Text(uiContext.getString(R.string.copy_upload_complete_0cbc966e),color = Color.White,fontSize = 24.sp,fontWeight = FontWeight.Medium,
             modifier = Modifier.padding(top = 15.dp))
-        BodyText(uiContext.resources.getQuantityString(R.plurals.copy_library_added_count, state.selectedUpload.size, state.selectedUpload.size),Modifier.padding(top = 10.dp))
+        BodyText(uiResources.getQuantityString(R.plurals.copy_library_added_count, state.selectedUpload.size, state.selectedUpload.size),Modifier.padding(top = 10.dp))
         Spacer(Modifier.height(26.dp))
         PinkButton(uiContext.getString(R.string.copy_view_in_library_c3973650)) { state.navigate(13) }
         Spacer(Modifier.weight(.35f))
@@ -250,6 +252,6 @@ private fun UploadComplete(state: PreviewState) {
             listOf(9,0,4,6,8,1).forEach { photo -> Asset(photoAsset(photo),Modifier.width(64.dp).fillMaxHeight().clip(RoundedCornerShape(6.dp))
                 .clickable(role = Role.Button) { state.openPhoto(photo) },uiContext.getString(R.string.copy_photo_1_s_b27fd7d6, (photo+1).toString())) }
         }
-        Text(uiContext.resources.getQuantityString(R.plurals.copy_just_now_photo_count, state.selectedUpload.size, state.selectedUpload.size),color = Muted,fontSize = 12.sp,modifier = Modifier.align(Alignment.Start).padding(top = 9.dp,bottom = 20.dp))
+        Text(uiResources.getQuantityString(R.plurals.copy_just_now_photo_count, state.selectedUpload.size, state.selectedUpload.size),color = Muted,fontSize = 12.sp,modifier = Modifier.align(Alignment.Start).padding(top = 9.dp,bottom = 20.dp))
     }
 }

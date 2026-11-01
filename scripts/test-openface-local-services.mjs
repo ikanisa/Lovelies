@@ -7,7 +7,7 @@ import {randomBytes,createHmac} from 'node:crypto';
 import {mkdir,writeFile,readFile,stat} from 'node:fs/promises';
 import {resolve,join} from 'node:path';
 
-const images={postgres:'public.ecr.aws/supabase/postgres:17.6.1.158',storage:'public.ecr.aws/supabase/storage-api:v1.68.10'};
+const images={postgres:'supabase/postgres:17.11.0.003@sha256:7374d196da7e301512cc5329e18040e0f7bb856287b323777cdadecccbc6c7e4',storage:'public.ecr.aws/supabase/storage-api:v1.68.10'};
 const [action,destination]=process.argv.slice(2);
 if(!['start','stop'].includes(action)||!destination)throw new Error('Usage: node scripts/test-openface-local-services.mjs start|stop <new-owned-directory>');
 const directory=resolve(destination),manifestPath=join(directory,'services.json');

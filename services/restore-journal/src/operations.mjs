@@ -9,6 +9,11 @@ import {
   loadHead, headView, checkedReceipt, appendEventTransaction, response, errorResponse,
 } from './journal.mjs';
 
+import {beginFullRecovery,readFullRecovery,acknowledgeReplay,refreshEffectCut,acknowledgeEffectProof,acknowledgeAuthorityRetirement,prepareRecoveryClearance,completeRecovery,checkedRecoveryV2,checkedRecoveryCommit,recoveredOperationOutcome,activeIncarnation} from './recovery.mjs';
+import { registerEffect,dispatchEffect,observeEffect,readEffectPage,lookupEffect } from './effects.mjs';
+import { checkedReconciliation,reconcilePreparedOperation,readRestrictionPage } from './reconciliation.mjs';
+import { checkedManifestPlan, manifestPreparing, beginManifest, uploadManifestChunk, prepareManifest, continueManifest } from './manifests.mjs';
+
 export const MAX_OPERATION_BYTES = 32_768;
 export const MAX_RESPONSE_BYTES = 131_072;
 export const MAX_MANIFEST_EVENTS = 32;
@@ -71,6 +76,11 @@ export function operationRoute(request) {
     '/v1/admission': ['POST', 'admission'],
     '/v1/operations/prepare': ['POST', 'prepare'],
     '/v1/recovery/begin': ['POST', 'recovery'],
+    '/v1/manifests/begin': ['POST', 'manifest-begin'],
+    '/v1/recovery/events': ['POST', 'replay-page'],
+    '/v1/recovery/begin-v2': ['POST', 'recovery-begin-v2'],
+    '/v1/effects/register': ['POST','effect-register'],
+    '/v1/effects/page': ['POST','effect-page'],
   };
   let target;
   if (Object.hasOwn(fixed, url.pathname)) {
@@ -78,6 +88,34 @@ export function operationRoute(request) {
     if (request.method !== method) fail(405, 'method_unavailable');
     target = { kind };
   } else {
+    const recovery = /^\/v1\/recovery\/([0-9a-f-]+)(?:\/(replay|refresh-effects|effect|retire-authority|prepare-clearance|complete))?$/.exec(url.pathname);
+    if(recovery){
+      if(!uuid(recovery[1]))fail(404,'route_unavailable');
+      if(request.method!==(recovery[2]?'POST':'GET'))fail(405,'method_unavailable');
+      if(url.search)fail(400,'query_invalid');
+      return {kind:'recovery-v2-'+(recovery[2]??'read'),operation_id:recovery[1]};
+    }
+    const effect = /^\/v1\/effects\/([^/]+)(?:\/(dispatch|observe))?$/.exec(url.pathname);
+    if (effect) {
+      if (!uuid(effect[1])) fail(404,'route_unavailable');
+      if (request.method!==(effect[2]?'POST':'GET')) fail(405,'method_unavailable');
+      if (url.search) fail(400,'query_invalid');
+      return {kind:'effect-'+(effect[2]??'lookup'),operation_id:effect[1]};
+    }
+    const reconcile = /^\/v1\/operations\/([^/]+)\/reconcile$/.exec(url.pathname);
+    if (reconcile) {
+      if (!uuid(reconcile[1])) fail(404,'route_unavailable');
+      if (request.method!=='POST') fail(405,'method_unavailable');
+      if (url.search) fail(400,'query_invalid');
+      return {kind:'reconcile',operation_id:reconcile[1]};
+    }
+    const manifest = /^\/v1\/manifests\/([^/]+)\/(chunk|prepare|continue)$/.exec(url.pathname);
+    if (manifest) {
+      if (!uuid(manifest[1])) fail(404, 'route_unavailable');
+      if (request.method !== 'POST') fail(405, 'method_unavailable');
+      if (url.search) fail(400, 'query_invalid');
+      return { kind: 'manifest-' + manifest[2], operation_id: manifest[1] };
+    }
     const match = /^\/v1\/operations\/([^/]+)(\/acknowledge)?$/.exec(url.pathname);
     if (!match) return null;
     if (!uuid(match[1])) fail(404, 'route_unavailable');
@@ -123,6 +161,7 @@ export async function checkedBinding(txn) {
 export async function checkedPlan(txn, id) {
   const value = await txn.get(planKey(id));
   if (value === undefined) return undefined;
+  if (value?.plan?.version === 2) return checkedManifestPlan(txn, id, value);
   if (!exact(value, ['plan', 'plan_hash']) || !digest(value.plan_hash) ||
       !exact(value.plan, ['version', 'project_id', 'operation_id', 'input_hash', 'expected', 'allocations', 'events', 'next', 'prepared_at', 'receipts'])) fail(503, 'journal_integrity_failed');
   const plan = value.plan;
@@ -154,6 +193,7 @@ export async function checkedPlan(txn, id) {
 
 async function checkedCommit(txn, revision, binding) {
   const value = await txn.get(commitKey(revision));
+  if(value?.version===2){if(value.marker?.checkpoint?.revision!==revision)fail(503,'journal_integrity_failed');return checkedRecoveryCommit(txn,value);}
   if (!exact(value, ['version', 'project_id', 'marker', 'operation_id', 'plan_hash', 'committed_at']) || value.version !== 1 ||
       value.project_id !== PROJECT_ID || !positive(value.committed_at)) fail(503, 'journal_integrity_failed');
   try { validateMarker(value.marker); } catch { fail(503, 'journal_integrity_failed'); }
@@ -170,6 +210,7 @@ async function checkedCommit(txn, revision, binding) {
 
 async function checkedRecovery(txn, id) {
   const value = await txn.get(recoveryKey(id));
+  if(value?.version===2)return checkedRecoveryV2(txn,id,value);
   if (!exact(value, ['version', 'project_id', 'recovery_id', 'generation', 'prior_marker', 'prior_pending_operation_id',
     'incarnation_id', 'journal_head', 'reason', 'created_at', 'generation_hash']) || value.version !== 1 || value.project_id !== PROJECT_ID ||
     value.recovery_id !== id || !uuid(id) || value.generation !== 1 || !nullableUuid(value.prior_pending_operation_id) ||
@@ -195,8 +236,10 @@ export async function loadControl(txn) {
       control.version !== 1 || control.project_id !== PROJECT_ID || control.binding_hash !== binding.binding_hash ||
       !['serving', 'pending', 'quarantined'].includes(control.state) || !nullableUuid(control.pending_operation_id) || !nullableUuid(control.recovery_generation_id)) fail(503, 'journal_integrity_failed');
   try { validateMarker(control.marker); } catch { fail(503, 'journal_integrity_failed'); }
-  if (control.marker.database_id !== binding.database_id || control.marker.incarnation_id !== binding.initial_marker.incarnation_id ||
-      binding.initial_marker.cursor.sequence !== 0 && control.state !== 'quarantined' ||
+  const incarnation=await activeIncarnation(txn);
+  if (control.marker.database_id !== binding.database_id || control.marker.incarnation_id !== (incarnation?.marker.incarnation_id??binding.initial_marker.incarnation_id) ||
+      incarnation&&control.marker.checkpoint.revision<incarnation.marker.checkpoint.revision ||
+      !incarnation&&binding.initial_marker.cursor.sequence !== 0 && control.state !== 'quarantined' ||
       control.state === 'serving' && control.pending_operation_id !== null || control.state === 'pending' && control.pending_operation_id === null) fail(503, 'journal_integrity_failed');
   if (control.state === 'quarantined') {
     if (!exact(control.quarantine, ['reason', 'detected_at', 'observed_marker_hash']) || !reasons.has(control.quarantine.reason) ||
@@ -206,7 +249,7 @@ export async function loadControl(txn) {
   const latestCommits = await txn.list({ prefix: 'commit:', reverse: true, limit: 1 });
   if (!equal(lastCommit.marker, control.marker) || latestCommits.size !== 1 || !latestCommits.has(commitKey(control.marker.checkpoint.revision))) fail(503, 'journal_integrity_failed');
   const latestPrepared = await txn.list({ prefix: 'prepare:', reverse: true, limit: 1 });
-  if (control.pending_operation_id !== null || control.marker.checkpoint.revision > 0) {
+  if (control.pending_operation_id !== null || control.marker.checkpoint.revision > 0 && lastCommit.version!==2) {
     const revision = control.marker.checkpoint.revision + (control.pending_operation_id === null ? 0 : 1);
     const prepared = latestPrepared.get(prepareKey(revision));
     if (latestPrepared.size !== 1 || !exact(prepared, ['operation_id', 'plan_hash']) || !uuid(prepared.operation_id) || !digest(prepared.plan_hash)) fail(503, 'journal_integrity_failed');
@@ -214,11 +257,11 @@ export async function loadControl(txn) {
     if (!operation || operation.plan_hash !== prepared.plan_hash || operation.plan.next.checkpoint.revision !== revision ||
         control.pending_operation_id !== null && (prepared.operation_id !== control.pending_operation_id || !equal(operation.plan.expected, control.marker)) ||
         control.pending_operation_id === null && (prepared.operation_id !== lastCommit.operation_id || prepared.plan_hash !== lastCommit.plan_hash)) fail(503, 'journal_integrity_failed');
-  } else if (latestPrepared.size) fail(503, 'journal_integrity_failed');
+  } else if (latestPrepared.size && lastCommit.version!==2) fail(503, 'journal_integrity_failed');
   if (control.recovery_generation_id !== null) {
     const recovery = await checkedRecovery(txn, control.recovery_generation_id);
     if (control.state !== 'quarantined' || !equal(recovery.prior_marker, control.marker) || recovery.prior_pending_operation_id !== control.pending_operation_id) fail(503, 'journal_integrity_failed');
-  } else await noRecords(txn, ['recovery:']);
+  } else if(!incarnation) await noRecords(txn, ['recovery:']);
   return control;
 }
 
@@ -235,11 +278,15 @@ async function quarantine(txn, control, reason, observed, now) {
   }
   return { denied: 'serving_quarantined', status: 409 };
 }
-async function operationView(txn, operation, control) {
+export async function operationView(txn, operation, control) {
+  const restoreOutcome=await recoveredOperationOutcome(txn,operation);
+  if(restoreOutcome)return {...operation,status:'recovered',committed_at:restoreOutcome.recorded_at};
+  const recovered=await checkedReconciliation(txn,operation.plan.operation_id,operation);
+  if(recovered)return {...operation,status:'recovered',committed_at:recovered.recorded_at};
   const commit = await txn.get(commitKey(operation.plan.next.checkpoint.revision));
   if (commit === undefined) {
     if (control.pending_operation_id !== operation.plan.operation_id || control.marker.checkpoint.revision >= operation.plan.next.checkpoint.revision) fail(503, 'journal_integrity_failed');
-    return { ...operation, status: 'pending', committed_at: null };
+    return { ...operation, status: await manifestPreparing(txn, operation) ? 'preparing' : 'pending', committed_at: null };
   }
   if (!exact(commit, ['version', 'project_id', 'marker', 'operation_id', 'plan_hash', 'committed_at']) ||
       commit.version !== 1 || commit.project_id !== PROJECT_ID || commit.operation_id !== operation.plan.operation_id ||
@@ -350,6 +397,8 @@ export async function acknowledgeOperation(storage, id, value, now = Date.now) {
     const view = await operationView(txn, operation, control);
     // A historical acknowledgement is an idempotent receipt lookup. It never
     // changes a newer checkpoint or clears any independent quarantine.
+    if (view.status === 'recovered') return { ...envelope(control), operation: view };
+    if (view.status === 'preparing') fail(409, 'manifest_incomplete');
     if (view.status === 'committed') return { ...envelope(control), operation: view };
     if (control.state === 'quarantined') return { denied: 'serving_quarantined', status: 409 };
     if (control.state !== 'pending' || control.pending_operation_id !== id || !equal(control.marker, operation.plan.expected) ||
@@ -392,10 +441,29 @@ export async function handleOperationRequest(request, env, storage, { now = Date
     if (!target) fail(404, 'route_unavailable');
     let result;
     if (target.kind === 'control') result = await readControl(storage);
+    else if (target.kind === 'effect-lookup') result=await lookupEffect(storage,target.operation_id);
+    else if (target.kind === 'recovery-v2-read') result=await readFullRecovery(storage,target.operation_id);
     else if (target.kind === 'lookup') result = await lookupOperation(storage, target.operation_id);
     else {
       const input = await readJson(request, MAX_OPERATION_BYTES, 'operation');
-      if (target.kind === 'bootstrap') result = await bootstrapControl(storage, input, now);
+      if (target.kind === 'recovery-begin-v2') result=await beginFullRecovery(storage,input,now);
+      else if (target.kind === 'recovery-v2-replay') result=await acknowledgeReplay(storage,target.operation_id,input);
+      else if (target.kind === 'recovery-v2-refresh-effects') result=await refreshEffectCut(storage,target.operation_id,input);
+      else if (target.kind === 'recovery-v2-effect') result=await acknowledgeEffectProof(storage,target.operation_id,input,now);
+      else if (target.kind === 'recovery-v2-retire-authority') result=await acknowledgeAuthorityRetirement(storage,target.operation_id,input);
+      else if (target.kind === 'recovery-v2-prepare-clearance') result=await prepareRecoveryClearance(storage,target.operation_id,input,now);
+      else if (target.kind === 'recovery-v2-complete') result=await completeRecovery(storage,target.operation_id,input,now);
+      else if (target.kind === 'effect-register') result=await registerEffect(storage,input,now);
+      else if (target.kind === 'effect-dispatch') result=await dispatchEffect(storage,target.operation_id,input,now);
+      else if (target.kind === 'effect-observe') result=await observeEffect(storage,target.operation_id,input,now);
+      else if (target.kind === 'effect-page') result=await readEffectPage(storage,input);
+      else if (target.kind === 'replay-page') result=await readRestrictionPage(storage,input);
+      else if (target.kind === 'reconcile') result=await reconcilePreparedOperation(storage,target.operation_id,input,now);
+      else if (target.kind === 'manifest-begin') result = await beginManifest(storage, input, now);
+      else if (target.kind === 'manifest-chunk') result = await uploadManifestChunk(storage, target.operation_id, input);
+      else if (target.kind === 'manifest-prepare') result = await prepareManifest(storage, target.operation_id, input);
+      else if (target.kind === 'manifest-continue') result = await continueManifest(storage, target.operation_id, input);
+      else if (target.kind === 'bootstrap') result = await bootstrapControl(storage, input, now);
       else if (target.kind === 'admission') result = await admitDatabase(storage, input, now);
       else if (target.kind === 'prepare') result = await prepareOperation(storage, input, now);
       else if (target.kind === 'acknowledge') result = await acknowledgeOperation(storage, target.operation_id, input, now);

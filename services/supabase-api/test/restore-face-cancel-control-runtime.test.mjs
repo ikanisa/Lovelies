@@ -1,3 +1,4 @@
+import {planEvents} from './restore-plan-fixture.mjs';
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { randomUUID } from 'node:crypto';
@@ -11,7 +12,7 @@ const AUTH_POLICY = 'face-policy-fixture-v1';
 const PHOTO_POLICY = 'photo-policy-fixture-v1';
 const controlIntent = () => ({ key: 'lfl_' + encode(crypto.getRandomValues(new Uint8Array(32))), operationKey: randomUUID() });
 const fact = (account, id) => ({ kind: 'consent-withdrawn', scope: { account_id: account, consent_id: id, purpose: 'face_authentication' } });
-const exactFacts = plan => plan.plan.events.map(({ kind, scope }) => ({ kind, scope }));
+const exactFacts = async (f,plan) => (await planEvents(f,plan)).map(({ kind, scope }) => ({ kind, scope }));
 const intentHash = body => { const { device_signature, request_nonce, request_expires_at, ...durable } = body; return digest(stable(durable)); };
 
 async function cancellationFixture(t, { initialControl = true } = {}) {
@@ -93,7 +94,7 @@ async function assertPlan(f, id, facts, { committed = true, hash } = {}) {
   assert.deepEqual(saved.plan.allocations, {});
   if (hash) assert.equal(saved.plan.input_hash, hash);
   const ordered = [...facts].sort((a, b) => a.scope.consent_id < b.scope.consent_id ? -1 : 1);
-  assert.deepEqual(exactFacts(saved), ordered);
+  assert.deepEqual(await exactFacts(f,saved), ordered);
   const text = JSON.stringify(saved.plan);
   for (const value of [f.control.key, f.person.faceHandle, f.before.template_key, f.before.template_digest])
     assert(!text.includes(value), 'Restriction facts contain no private control/reference material');
@@ -195,23 +196,12 @@ for (const caller of ['cancel', 'renew', 'action']) for (const invalid of ['othe
     assert.equal(await f.journal.lookup(id), null); assert.equal(await cursor(f), 0);
   });
 
-for (const count of [32, 33]) test('renewal handles ' + count + ' old consent facts atomically without a prefix truncation', async t => {
-  const f = await cancellationFixture(t), selected = [];
-  for (let n = 0; n < count; n++) selected.push(await f.pending());
-  await f.expire(); const intent = await f.renewBody(), before = { consents: await consents(f), operations: await operations(f), control: await control(f) };
-  f.trace.length = 0;
-  if (count === 32) {
-    await f.renew(intent); await assertPlan(f, await renewalID(f, intent), selected.map(row => fact(f.person.accountId, row.consentID)));
-    assert.equal(await cursor(f), 32); assert((await operations(f)).every(row => row.state === 'cancelled'));
-  } else {
-    assert.equal((await f.renew(intent, 503)).error.code, 'face_profile_restriction_capacity');
-    assert.deepEqual(await consents(f), before.consents); assert.deepEqual(await operations(f), before.operations); assert.deepEqual(await control(f), before.control);
-    assert.equal(await f.journal.lookup(await renewalID(f, intent)), null); assert.equal(await cursor(f), 0);
-    const writes = f.trace.filter(value => value.kind === 'sql' && /^(INSERT|UPDATE|DELETE) /.test(value.sql));
-    const rate = value => value.sql.startsWith('DELETE FROM request_limits WHERE expires_at<') || value.sql.startsWith('INSERT INTO request_limits(key,hits,expires_at) VALUES(');
-    assert.equal(writes.filter(rate).length, 2);
-    assert(!writes.some(value => !rate(value) && !value.sql.startsWith('UPDATE restore_control ')));
-  }
+for(const count of [32,33,65])test('renewal handles '+count+' old consent facts atomically without a prefix truncation',async t=>{
+ const f=await cancellationFixture(t),selected=[];
+ for(let n=0;n<count;n++)selected.push(await f.pending());
+ await f.expire();const intent=await f.renewBody();await f.renew(intent);
+ await assertPlan(f,await renewalID(f,intent),selected.map(row=>fact(f.person.accountId,row.consentID)));
+ assert.equal(await cursor(f),count);assert((await operations(f)).every(row=>row.state==='cancelled'));
 });
 
 for (const caller of ['cancel', 'renew']) for (const mode of ['outage', 'prepare-after', 'commit-result-loss', 'ack-before', 'ack-after'])
@@ -255,8 +245,10 @@ for (const caller of ['cancel', 'renew']) for (const mode of ['outage', 'prepare
       assert.deepEqual(await consents(f), before.consents); assert.deepEqual(await operations(f), before.operations); assert.deepEqual(await control(f), before.control);
       if (mode === 'outage') { assert.equal(saved, null); f.faults.control = false; await send(); }
       else {
-        assert.equal(saved.status, 'pending'); await assert.rejects(() => f.db.one('SELECT id FROM accounts LIMIT 1'), unavailable);
-        await sendUncertain(); assert.deepEqual(await f.journal.lookup(id), saved); return;
+        assert.equal(saved.status,'pending');await f.db.one('SELECT id FROM accounts LIMIT 1');
+        const recovered=await f.journal.lookup(id);assert.equal(recovered.status,'recovered');assert.deepEqual(recovered.plan,saved.plan);assert.equal(recovered.plan_hash,saved.plan_hash);
+        assert.equal((await consents(f)).find(row=>row.id===pending.consentID).status,'revoked');
+        assert.deepEqual(await control(f),before.control,'negative replay cannot create a renewed control key');return;
       }
     } else {
       if (mode === 'commit-result-loss') {
@@ -264,7 +256,7 @@ for (const caller of ['cancel', 'renew']) for (const mode of ['outage', 'prepare
         assert.equal(committedBeforeReplyLoss.journal.status, 'pending');
         assert.equal(committedBeforeReplyLoss.operation.state, 'cancelled');
         assert.equal(committedBeforeReplyLoss.consent.status, 'revoked');
-        assert.deepEqual(exactFacts(committedBeforeReplyLoss.journal), [fact(f.person.accountId, pending.consentID)]);
+        assert.deepEqual(await exactFacts(f,committedBeforeReplyLoss.journal), [fact(f.person.accountId, pending.consentID)]);
         if (caller === 'renew') assert.equal(committedBeforeReplyLoss.control.control_operation_key, intent.selected.operationKey);
         else assert.deepEqual(committedBeforeReplyLoss.control, before.control);
         assert.equal(f.faults.commitReply, false, 'The synthetic lost commit reply was consumed');

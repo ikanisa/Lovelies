@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="audience_annual_review_title">Review your eligibility</string>
+    <string name="audience_annual_review_required">Your annual eligibility review is due. Face setup and photos stay paused until the required review is complete.</string>
+    <string name="audience_annual_review_detail">Review is required at least once a year. Renewing eligibility does not restore photo matching, photo processing or old sharing permissions.</string>
+    <string name="audience_confirm_adult">I confirm I am 18 or over.</string>
+    <string name="audience_confirm_auth">I explicitly consent to using my registered face reference for face sign-in under the displayed policy.</string>
+    <string name="audience_confirm_guardian">I confirm that parent or legal guardian approval is still required for me.</string>
+    <string name="audience_review_policy">Face policy: %1$s</string>
+    <string name="audience_review_due">Next review: %1$s</string>
+    <string name="audience_renew_eligibility">Renew eligibility</string>
+    <string name="audience_renew_guardian">Renew eligibility and request guardian review</string>
+    <string name="audience_device_status_only">This device check does not sign you in or allow camera or photo access.</string>
+    <string name="audience_check_device_review">Review eligibility for this device</string>
+    <string name="audience_continue_sign_in">Continue to face sign-in</string>
+    <string name="audience_profile_recovery">Your saved device cannot restore a retired face reference by itself. Use the existing profile recovery control or your recovery backup, or contact support. Keep this account and its saved requests.</string>
+    <string name="audience_open_profile_recovery">Open face profile recovery</string>
+    <string name="audience_use_recovery_backup">Use recovery backup</string>
+    <string name="audience_check_retained_control">Check retained management control</string>
+    <string name="audience_retained_control_pending">Your original control renewal is saved. Retry that same review; it cannot be replaced by a different consent or account.</string>
+    <string name="audience_retry_retained_control">Retry saved control renewal</string>
+    <string name="audience_retained_control_detail">Renew access to this retained management control with a fresh face-authentication choice. This does not sign you in or grant photo matching. Continue the separate face-profile recovery after renewal.</string>
+    <string name="audience_renew_retained_control">Renew retained management control</string>
+</resources>

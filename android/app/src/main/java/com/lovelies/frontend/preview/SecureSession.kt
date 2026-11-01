@@ -11,20 +11,10 @@ import java.security.KeyStore
 import java.security.Signature
 import java.security.interfaces.ECPublicKey
 import java.security.spec.ECGenParameterSpec
-import java.util.concurrent.atomic.AtomicLong
 import javax.crypto.Cipher
 import javax.crypto.KeyGenerator
 import javax.crypto.SecretKey
 import javax.crypto.spec.GCMParameterSpec
-
-data class SessionScope(val epoch: Long,val accountId: String?)
-class SessionFence {
-    private val epoch=AtomicLong(0)
-    @Volatile private var account: String? = null
-    @Synchronized fun switch(accountId: String?): SessionScope { account=accountId;return SessionScope(epoch.incrementAndGet(),accountId) }
-    fun scope() = SessionScope(epoch.get(),account)
-    fun assert(scope: SessionScope) { if(scope.epoch!=epoch.get() || scope.accountId!=account)throw LiveFailure("session_changed") }
-}
 
 /** No exported private key, plaintext tokens, backup or shared external storage. */
 class SecureSession(context: Context,endpoint: String) {
@@ -33,6 +23,12 @@ class SecureSession(context: Context,endpoint: String) {
     private val file=SessionAtomicStorage(PlatformSessionAtomicFile(File(context.noBackupFilesDir,"lovelies-session-v2-${NativeProtocol.sha256(endpoint.toByteArray()).take(16)}.bin")))
     private val aad="${context.packageName}:$endpoint:v2".toByteArray(Charsets.UTF_8)
     private val deviceScope=NativeProtocol.sha256("$endpoint:${context.noBackupFilesDir.absolutePath}".toByteArray()).take(16)
+    internal val authorityKey="${context.noBackupFilesDir.canonicalPath}:$endpoint"
+    private val authorityFile=SessionAtomicStorage(PlatformSessionAtomicFile(File(context.noBackupFilesDir,"lovelies-authority-$deviceScope.bin")))
+    private val authorityAad=aad+":authority-v1".toByteArray(Charsets.UTF_8)
+    // This monitor is deliberately different from the session ciphertext monitor.
+    private val authorityLock=SessionStorageCoordinator.forVault(authorityKey).authority
+    private val keyLock=SessionStorageCoordinator.forVault("lovelies-keystore:$alias").authority
     private val uploadDirectory=File(context.noBackupFilesDir,"photo-uploads-$deviceScope")
     private fun uploadFile(id: String)=AtomicFile(File(uploadDirectory,"${NativeProtocol.id(id)}.bin"))
     private fun uploadAad(account: String,batch: String,id: String)=aad+":photo:${NativeProtocol.id(account)}:${NativeProtocol.id(batch)}:${NativeProtocol.id(id)}".toByteArray()
@@ -66,14 +62,35 @@ class SecureSession(context: Context,endpoint: String) {
     fun hasUnreferencedEnrollmentKeys(known: Set<String>)=store.aliases().asSequence().any {
         it.startsWith("lovelies.device.") && it.contains(".$deviceScope.") && it !in known
     }
-    private fun secret(create: Boolean=true): SecretKey {
+    private fun secret(create: Boolean=true): SecretKey = synchronized(keyLock) {
         (store.getKey(alias,null) as? SecretKey)?.let { return it }
         if(!create)throw LiveFailure("secure_storage_reset")
-        return KeyGenerator.getInstance(KeyProperties.KEY_ALGORITHM_AES,"AndroidKeyStore").apply {
+        KeyGenerator.getInstance(KeyProperties.KEY_ALGORITHM_AES,"AndroidKeyStore").apply {
             init(KeyGenParameterSpec.Builder(alias,KeyProperties.PURPOSE_ENCRYPT or KeyProperties.PURPOSE_DECRYPT)
                 .setBlockModes(KeyProperties.BLOCK_MODE_GCM).setEncryptionPaddings(KeyProperties.ENCRYPTION_PADDING_NONE)
                 .setKeySize(256).setRandomizedEncryptionRequired(true).build())
         }.generateKey()
+    }
+    internal fun loadAuthority(): WireObject?=synchronized(authorityLock) {
+        val sealed=authorityFile.read() ?: return@synchronized null
+        try {
+            if(sealed.size !in 30..2097152 || sealed[0].toInt()!=1)throw LiveFailure("session_authority_invalid",503,true)
+            val cipher=Cipher.getInstance("AES/GCM/NoPadding")
+            cipher.init(Cipher.DECRYPT_MODE,secret(create=false),GCMParameterSpec(128,sealed.copyOfRange(1,13)));cipher.updateAAD(authorityAad)
+            val plain=cipher.doFinal(sealed.copyOfRange(13,sealed.size))
+            try { jsonMap(JSONObject(plain.toString(Charsets.UTF_8))) } finally { plain.fill(0) }
+        } catch(problem: Exception) { authorityFile.hold();throw LiveFailure("session_authority_invalid",503,true) }
+        finally { sealed.fill(0) }
+    }
+    internal fun saveAuthority(value: WireObject)=synchronized(authorityLock) {
+        loadAuthority()
+        val plain=NativeProtocol.canonical(value).toByteArray(Charsets.UTF_8)
+        if(plain.size>1572864)throw LiveFailure("session_retirement_storage_full",503,true)
+        try {
+            val cipher=Cipher.getInstance("AES/GCM/NoPadding");cipher.init(Cipher.ENCRYPT_MODE,secret());cipher.updateAAD(authorityAad)
+            val sealed=byteArrayOf(1)+cipher.iv+cipher.doFinal(plain)
+            try { authorityFile.write(sealed) } finally { sealed.fill(0) }
+        } finally { plain.fill(0) }
     }
     @Synchronized fun load(): WireObject {
         val encrypted=file.read() ?: return emptyMap()

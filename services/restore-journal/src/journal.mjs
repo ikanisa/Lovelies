@@ -25,12 +25,31 @@ export const SCOPE_FIELDS = Object.freeze({
   'consent-withdrawn': ['account_id', 'consent_id', 'purpose'],
   'profile-retired': ['account_id', 'profile_id', 'profile_revision'],
   'guardian-approval-retired': ['child_account_id', 'guardian_request_id', 'guardian_approval_id', 'purpose'],
+  'guardian-request-retired': ['child_account_id', 'guardian_request_id', 'request_revision', 'terminal_state'],
   'sharing-request-retired': ['sender_id', 'recipient_id', 'request_id'],
   'session-retired': ['account_id', 'session_id'],
   'device-retired': ['account_id', 'device_id', 'device_revision'],
   'asset-retired': ['owner_id', 'asset_id', 'asset_version'],
   'pair-blocked': ['blocker_id', 'blocked_id', 'block_operation_id'],
   'pair-block-ended': ['blocker_id', 'blocked_id', 'block_operation_id'],
+  'operator-capability-retired': ['account_id', 'grant_id', 'capability'],
+  'media-grant-retired': ['owner_id', 'recipient_id', 'grant_id', 'request_id', 'asset_id'],
+  'store-entitlement-retired': ['account_id','subscription_id','subscription_version'],
+  'privacy-export-grant-retired': ['account_id','grant_id','request_id','session_id'],
+  'privacy-export-publication-retired': ['account_id','publication_id','request_id'],
+  'push-device-retired': ['account_id', 'device_id', 'token_hash'],
+  'candidate-retired': ['owner_id', 'recipient_id', 'candidate_id', 'candidate_version'],
+  'account-moderation-restricted': ['account_id', 'hold_id'],
+  'asset-moderation-restricted': ['owner_id', 'asset_id', 'hold_id'],
+  'moderation-restriction-ended': ['hold_id'],
+  'account-authority-retired': ['account_id', 'auth_epoch'],
+  'notification-setting-retired': ['account_id', 'setting', 'updated_at'],
+  'global-retention-hold-started': ['hold_id'],
+  'global-retention-hold-ended': ['hold_id'],
+  'asset-retention-hold-started': ['owner_id','asset_id','hold_id'],
+  'asset-retention-hold-ended': ['owner_id','asset_id','hold_id'],
+  'privacy-hold-started': ['account_id','request_id','hold_id'],
+  'privacy-hold-ended': ['account_id','request_id','hold_id'],
 });
 
 export class JournalError extends Error {
@@ -62,6 +81,12 @@ export function validateEvent(value) {
     if (typeof item !== 'string') return true;
     if (field === 'purpose') return !purposes.has(item);
     if (field === 'decision') return !['approved', 'rejected'].includes(item);
+    if (field === 'terminal_state') return !['withdrawn','expired','rejected'].includes(item);
+    if (field === 'request_revision' || field === 'subscription_version') return !/^[1-9][0-9]{0,15}$/.test(item) || !Number.isSafeInteger(Number(item)+1);
+    if (field === 'capability') return !/^(overview\.read|users\.(read|sessions\.revoke)|support\.(read|review)|safety\.(read|review)|guardian\.(read|review)|privacy\.(read|review)|uploads\.(read|recover)|retention\.(read|manage))$/.test(item);
+    if (field === 'token_hash') return !hashPattern.test(item);
+    if (field === 'auth_epoch' || field === 'updated_at') return !/^(0|[1-9][0-9]{0,15})$/.test(item) || !Number.isSafeInteger(Number(item));
+    if (field === 'setting') return !['match_alerts','payment_alerts','support_alerts'].includes(item);
     return field.endsWith('_id') ? !uuidPattern.test(item) : !opaquePattern.test(item);
   })) fail(400, 'event_scope_invalid');
   if (value.kind.startsWith('pair-block') && value.scope.blocker_id === value.scope.blocked_id ||

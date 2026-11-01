@@ -1,18 +1,19 @@
 // Explicitly invoked deployment operation. Defaults to a read-only inspection.
 // Credentials come only from the process environment and are never printed.
-const projectUrl=process.env.SUPABASE_URL??'https://ltqfplqevxztlswlzexn.supabase.co';
-const project=new URL(projectUrl);
-if(project.hostname!=='ltqfplqevxztlswlzexn.supabase.co'&&!['localhost','127.0.0.1'].includes(project.hostname))throw new Error('Unexpected Supabase project');
+import {internalEndpoint,internalEndpointPolicy} from '../src/endpoint-configuration.ts';
+const projectUrl=process.env.INTERNAL_SUPABASE_URL;
+if(!projectUrl)throw new Error('INTERNAL_SUPABASE_URL must be explicitly configured');
+const project=internalEndpoint(projectUrl,internalEndpointPolicy(process.env.LOVELIES_INTERNAL_SERVICE_ORIGINS));
 const secret=process.env.LOVELIES_STORAGE_SECRET??process.env.SUPABASE_SERVICE_ROLE_KEY;
 if(!secret)throw new Error('Provide a server-only Storage secret through the process environment');
 const apply=process.argv.includes('--apply');
 if(process.argv.slice(2).some(arg=>arg!=='--apply'))throw new Error('Only --apply is supported');
 const headers={apikey:secret,'Content-Type':'application/json',...(secret.split('.').length===3?{Authorization:'Bearer '+secret}:{})};
 for(const [id,types] of [['lovelies-photos',['image/jpeg','image/png','image/webp','application/octet-stream']],['lovelies-quarantine',['image/jpeg','image/png','image/webp']],['lovelies-privacy-exports',['application/json']]]){
- const read=await fetch(project.origin+'/storage/v1/bucket/'+id,{headers,redirect:'error'});
+ const read=await fetch(project.origin+'/storage/v1/bucket/'+id,{headers,redirect:'error',signal:AbortSignal.timeout(10000)});
  if(read.status===404){
   if(!apply){console.log(id+': missing; requires --apply to create private bucket');continue;}
-  const created=await fetch(project.origin+'/storage/v1/bucket',{method:'POST',headers,redirect:'error',body:JSON.stringify({id,name:id,public:false,file_size_limit:20971520,allowed_mime_types:types})});
+  const created=await fetch(project.origin+'/storage/v1/bucket',{method:'POST',headers,redirect:'error',signal:AbortSignal.timeout(10000),body:JSON.stringify({id,name:id,public:false,file_size_limit:20971520,allowed_mime_types:types})});
   if(!created.ok)throw new Error(id+': bucket creation failed, HTTP '+created.status);
   await created.body?.cancel();console.log(id+': created private bucket');
  }else{

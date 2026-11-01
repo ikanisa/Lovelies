@@ -1,4 +1,7 @@
-import { ApiError, JSON_BODY_LIMITS, jsonBody, type PrivateBucket, type PrivateObject } from './types.ts';
+import type {RestoreStorageEffects} from './restore-effects.ts';
+import {readPrivateBytes} from './private-body.ts';
+import { internalEndpoint, type InternalEndpointPolicy } from './endpoint-configuration.ts';
+import { ApiError, digest, JSON_BODY_LIMITS, jsonBody, type PrivateBucket, type PrivateObject } from './types.ts';
 
 const MAX_STORAGE_ERROR_BYTES=2048;
 const MAX_STORAGE_ERROR_CHUNKS=256;
@@ -65,8 +68,8 @@ async function missingObjectEnvelope(response:Response,signal?:AbortSignal):Prom
  * current-session/grant checks; no public or signed Storage URL escapes. */
 export class SupabasePrivateBucket implements PrivateBucket {
   private readonly base:string;
-  constructor(projectUrl:string,private readonly secret:string,private readonly bucket:string,private readonly fetcher:typeof fetch=fetch){
-    const url=new URL(projectUrl);if(url.protocol!=='https:'&&!(url.protocol==='http:'&&['127.0.0.1','localhost','::1','[::1]'].includes(url.hostname)))throw new Error('HTTPS Storage required');
+  constructor(projectUrl:string,private readonly secret:string,private readonly bucket:string,private readonly fetcher:typeof fetch=fetch,private readonly effects?:RestoreStorageEffects,policy:InternalEndpointPolicy={}){
+    const url=internalEndpoint(projectUrl,policy);
     this.base=url.origin+'/storage/v1';
     if(!/^[a-z0-9-]+$/.test(bucket)||!secret)throw new Error('Storage configuration missing');
   }
@@ -159,12 +162,45 @@ export class SupabasePrivateBucket implements PrivateBucket {
     if(downloadEtag&&downloadEtag!==initial.etag){discardResponseBody(response);throw new ApiError(409,'private_object_changed');}
     return {...initial,body:response.body,arrayBuffer:()=>response.arrayBuffer()};
   }
+  /** Recovery-only bounded namespace inventory. Folder entries are explicit;
+   * a missing/denied bucket never becomes an empty listing. */
+  async list(prefix:string,offset=0,limit=32):Promise<readonly {name:string;folder:boolean}[]>{
+    if(prefix&&(!prefix.endsWith('/')||prefix.startsWith('/')||prefix.split('/').slice(0,-1).some(part=>!part||part==='.'||part==='..'))||
+      !Number.isSafeInteger(offset)||offset<0||!Number.isInteger(limit)||limit<1||limit>32)throw new ApiError(500,'restore_storage_inventory_invalid');
+    const controller=new AbortController();let timer:ReturnType<typeof setTimeout>|undefined;
+    const expired=new Promise<never>((_,reject)=>{timer=setTimeout(()=>{controller.abort();reject(new ApiError(503,'restore_storage_inventory_timeout'));},30000);});
+    let reader:ReadableStreamDefaultReader<Uint8Array>|undefined,body:unknown;
+    try{
+      const pending=this.request('/object/list/'+this.bucket,{method:'POST',signal:controller.signal,headers:{'Content-Type':'application/json'},body:JSON.stringify({prefix,offset,limit,sortBy:{column:'name',order:'asc'}})});
+      void pending.then(late=>{if(controller.signal.aborted)discardResponseBody(late);},()=>{});
+      const response=await Promise.race([pending,expired]);reader=response.body?.getReader();if(!reader)throw new ApiError(503,'restore_storage_inventory_invalid');
+      const buffer=new Uint8Array(262144);let size=0,fragments=0;
+      try{for(;;){const next=await Promise.race([reader.read(),expired]);if(next.done)break;if(++fragments>4096||size+next.value.byteLength>buffer.length)throw new ApiError(503,'restore_storage_inventory_invalid');buffer.set(next.value,size);size+=next.value.byteLength;}
+        body=JSON.parse(new TextDecoder('utf-8',{fatal:true}).decode(buffer.subarray(0,size)));
+      }finally{buffer.fill(0);}
+    }finally{clearTimeout(timer);controller.abort();if(reader){void reader.cancel().catch(()=>{});reader.releaseLock();}}
+    if(!Array.isArray(body)||body.length>limit)throw new ApiError(503,'restore_storage_inventory_invalid');
+    const seen=new Set<string>();return body.map(value=>{
+      if(!value||typeof value!=='object'||typeof value.name!=='string'||!value.name||value.name.includes('/')||value.name==='.'||value.name==='..'||/[\\\u0000-\u001f]/.test(value.name)||seen.has(value.name)||
+        !(value.id===null||typeof value.id==='string'&&value.id.length>0))throw new ApiError(503,'restore_storage_inventory_invalid');
+      seen.add(value.name);return {name:value.name,folder:value.id===null};
+    });
+  }
   async put(key:string,value:ArrayBuffer|Uint8Array,options:Parameters<PrivateBucket['put']>[2]={}):Promise<void>{
-    const metadata=options?.customMetadata??{};
-    const encoded=btoa(JSON.stringify(metadata));
-    const response=await this.request('/object/'+this.path(key),{method:'POST',headers:{'Content-Type':options?.httpMetadata?.contentType??'application/octet-stream','Cache-Control':'no-store','x-upsert':'false','x-metadata':encoded},body:new Uint8Array(value instanceof ArrayBuffer?value:value.buffer.slice(value.byteOffset,value.byteOffset+value.byteLength)) as unknown as BodyInit});
-    if(!response.ok)throw new ApiError(503,'private_storage_write_failed');
-    await finishPutResponse(response);
+    const bytes=new Uint8Array(value instanceof ArrayBuffer?value:value.buffer.slice(value.byteOffset,value.byteOffset+value.byteLength));
+    const lease=await this.effects?.prepare(key,bytes,options);
+    if(lease?.replay){
+      const existing=await this.get(key);if(!existing||existing.size!==bytes.byteLength)throw new ApiError(503,'restore_effect_reconciliation_required');
+      const stored=await readPrivateBytes(existing.body,bytes.byteLength,bytes.byteLength);
+      try{const actual=await digest(stored),expected=await digest(bytes);if(actual!==expected)throw new ApiError(409,'private_object_changed');await lease.materialized(actual,stored.byteLength,existing.etag);return;}
+      finally{stored.fill(0);}
+    }
+    try{
+      const metadata=options?.customMetadata??{},encoded=btoa(JSON.stringify(metadata));
+      const response=await this.request('/object/'+this.path(key),{method:'POST',headers:{'Content-Type':options?.httpMetadata?.contentType??'application/octet-stream','Cache-Control':'no-store','x-upsert':'false','x-metadata':encoded},body:bytes as unknown as BodyInit});
+      if(!response.ok)throw new ApiError(503,'private_storage_write_failed');
+      await finishPutResponse(response);await lease?.succeed(response.status);
+    }catch(error){await lease?.unknown().catch(()=>{});throw error;}
   }
   async delete(keys:string|string[]):Promise<void>{
     const names=typeof keys==='string'?[keys]:keys;if(!names.length)return;for(const key of names)this.path(key);

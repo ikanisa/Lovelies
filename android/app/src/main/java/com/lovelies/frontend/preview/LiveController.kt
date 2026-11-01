@@ -3,10 +3,14 @@ package com.lovelies.frontend.preview
 import android.content.Context
 import android.graphics.Bitmap
 import android.net.Uri
+import android.net.ConnectivityManager
+import android.net.Network
 import androidx.compose.runtime.*
 import kotlinx.coroutines.*
+import kotlinx.coroutines.flow.collect
 import java.util.UUID
 import kotlinx.coroutines.sync.withLock
+import kotlinx.coroutines.flow.collect
 
 class LiveController(private val state: PreviewState,private val context: Context) {
     val repository=BackgroundTransfers.repository(context.applicationContext)
@@ -27,6 +31,7 @@ class LiveController(private val state: PreviewState,private val context: Contex
                 val next=withContext(Dispatchers.IO) {
                     synchronized(repository.fence) {
                         val now=System.currentTimeMillis()
+                        val export=runCatching { repository.pruneExportDelivery(now) }.getOrElse { 60_000L }
                         val shared=PrivateTemporaryMedia.sweep(context.cacheDir,PrivateTemporaryMedia.Kind.SHARED,now)
                         val camera=if(cameraInventoryReady) {
                             val protected=PrivateTemporaryMedia.cameraRecoveryNames(repository.saved("photo_uploads"),repository.saved("upload_draft"),
@@ -36,7 +41,7 @@ class LiveController(private val state: PreviewState,private val context: Contex
                             // re-evaluated on the next lifecycle/journal change.
                             protected?.let { PrivateTemporaryMedia.sweep(context.cacheDir,PrivateTemporaryMedia.Kind.CAMERA,now,it) }
                         } else null
-                        listOfNotNull(shared.nextDelay,camera?.nextDelay).minOrNull()
+                        listOfNotNull(shared.nextDelay,camera?.nextDelay,export).minOrNull()
                     }
                 }
                 if(next==null)break
@@ -50,6 +55,11 @@ class LiveController(private val state: PreviewState,private val context: Contex
     var photoPolicy by mutableStateOf<WireObject>(emptyMap());private set
     val photos=mutableStateListOf<LivePhoto>()
     val inbox=mutableStateListOf<WireObject>()
+    var inboxCursor by mutableStateOf<String?>(null);private set
+    var outgoingCursor by mutableStateOf<String?>(null);private set
+    var notificationCursor by mutableStateOf<String?>(null);private set
+    private val collectionOwners=mutableMapOf<String,String>()
+    private val collectionCursors=mutableMapOf<String,MutableSet<String>>()
     val favorites=mutableStateListOf<String>()
     val picked=mutableStateListOf<Uri>()
     val selectedUploads=mutableStateListOf<Uri>()
@@ -57,7 +67,13 @@ class LiveController(private val state: PreviewState,private val context: Contex
     var uploadBatch by mutableStateOf<String?>(null);private set
     var uploadStatus by mutableStateOf("");private set
     var uploadRecovery by mutableStateOf<PhotoUploadBatch?>(null);private set
-    var selectedPhoto by mutableStateOf<LivePhoto?>(null)
+    private var selectedPhotoState by mutableStateOf<LivePhoto?>(null)
+    var selectedPhoto: LivePhoto?
+        get()=selectedPhotoState
+        set(value) {
+            if(selectedPhotoState?.id!=value?.id || selectedPhotoState?.source!=value?.source)retireOriginal()
+            selectedPhotoState=value
+        }
     var focusedPerson by mutableStateOf<String?>(null)
     var snapshot by mutableStateOf<LiveSnapshot?>(null);private set
     var draft by mutableStateOf(LiveDraft(1,emptySet(),emptySet(),emptySet()));private set
@@ -104,6 +120,8 @@ class LiveController(private val state: PreviewState,private val context: Contex
     val galleryPositions=mutableStateMapOf<Int,GalleryPosition>()
     val viewerRows=mutableStateListOf<LivePhoto>()
     val supportRequests=mutableStateListOf<WireObject>()
+    var supportCursor by mutableStateOf<String?>(null);private set
+    private val supportCursors=mutableSetOf<String>()
     var supportSubject by mutableStateOf("")
     var supportDetails by mutableStateOf("")
     var supportSubmitted by mutableStateOf<String?>(null);private set
@@ -112,42 +130,157 @@ class LiveController(private val state: PreviewState,private val context: Contex
     var purchaseVisible by mutableStateOf(false);private set
     var mediaStatus by mutableStateOf("");private set
     var shareIntent by mutableStateOf<android.content.Intent?>(null);private set
-    private var interruptedOriginal: Pair<LivePhoto,Boolean>?=null
+    private enum class OriginalPhase { PERMISSION,PURCHASE,READY,RUNNING,HANDOFF }
+    private data class OriginalRequest(val owner: PhotoActionOwner,val photo: LivePhoto,val share: Boolean,val phase: OriginalPhase)
+    @Volatile private var originalRequest: OriginalRequest?=null
+    private var pendingShare: OriginalMedia.Share?=null
+    private fun photoActionContext()=PhotoActionContext(repository.credentials?.account,repository.credentials?.token,repository.identity?.device,
+        selectedPhoto?.id,selectedPhoto?.source,state.route)
+    private fun ownsOriginal(request: OriginalRequest)=originalRequest?.owner==request.owner && request.owner.matches(photoActionContext())
+    private fun retireOriginal() {
+        originalRequest=null;mediaStatus="";purchaseVisible=false;shareIntent=null
+        val discarded=pendingShare;pendingShare=null
+        if(discarded!=null)scope.launch(Dispatchers.IO) { PrivateTemporaryMedia.discard(context.cacheDir,discarded.file) }
+    }
+    private fun requestOriginal(photo: LivePhoto,share: Boolean,phase: OriginalPhase): OriginalRequest? {
+        if(busy || !registered || selectedPhoto?.id!=photo.id || selectedPhoto?.source!=photo.source)return null
+        retireOriginal()
+        val owner=PhotoActionOwner.create(photoActionContext()) ?: return null
+        return OriginalRequest(owner,photo,share,phase).also { originalRequest=it }
+    }
+    fun requestOriginalSavePermission(photo: LivePhoto): String?=requestOriginal(photo,false,OriginalPhase.PERMISSION)?.owner?.id
+    fun originalSavePermission(id: String?,granted: Boolean) {
+        val held=originalRequest?.takeIf { it.owner.id==id && it.phase==OriginalPhase.PERMISSION } ?: return
+        if(!granted || !ownsOriginal(held)) { retireOriginal();return }
+        originalRequest=held.copy(phase=OriginalPhase.READY);resumeOriginalIfReady()
+    }
+    private fun resumeOriginalIfReady() {
+        val held=originalRequest?.takeIf { it.phase==OriginalPhase.READY } ?: return
+        if(!ownsOriginal(held)) { retireOriginal();return }
+        if(!foregroundActive || busy || !registered)return
+        performOriginal(held)
+    }
     val purchases=PlayPurchases(context,repository) {
         entitlement=repository.get("/me/entitlements")
         if(entitlement["download_photos"]==true) {
             purchaseVisible=false
-            val resume=interruptedOriginal;interruptedOriginal=null
-            if(resume!=null && foregroundActive)original(resume.first,resume.second)
+            originalRequest?.takeIf { it.phase==OriginalPhase.PURCHASE }?.let { held->
+                if(ownsOriginal(held))originalRequest=held.copy(phase=OriginalPhase.READY) else retireOriginal()
+            }
+            resumeOriginalIfReady()
         }
     }
-    fun dismissPurchases() { purchaseVisible=false }
-    fun clearShareIntent() { shareIntent=null }
+    fun dismissPurchases() { retireOriginal() }
+    fun cancelOriginalAction() { retireOriginal() }
+    internal fun claimShareHandoff(): OriginalMedia.Share? {
+        val held=originalRequest
+        if(held==null || held.phase!=OriginalPhase.HANDOFF || !ownsOriginal(held) || !foregroundActive) { retireOriginal();return null }
+        val share=pendingShare ?: return null
+        // The receiving app may open the read grant after ON_PAUSE. Keep the proven-owned file until its deadline.
+        pendingShare=null;shareIntent=null;originalRequest=null
+        return share
+    }
+    internal fun failedShareHandoff(share: OriginalMedia.Share) { scope.launch(Dispatchers.IO) { PrivateTemporaryMedia.discard(context.cacheDir,share.file) } }
     fun original(photo: LivePhoto,share: Boolean=false) {
-        if(busy || !registered)return
+        requestOriginal(photo,share,OriginalPhase.READY) ?: return
+        resumeOriginalIfReady()
+    }
+    private fun performOriginal(request: OriginalRequest) {
+        originalRequest=request.copy(phase=OriginalPhase.RUNNING)
         run(false) {
             val owned=repository.currentScope();mediaStatus=context.getString(R.string.controller_30f58b93760b)
+            fun assertCurrent() { repository.fence.assert(owned);if(!ownsOriginal(request) || !foregroundActive)throw LiveFailure("photo_action_changed") }
+            var output: OriginalMedia.Share?=null;var published=false
             try {
-                val bytes=repository.original(photo)
+                val bytes=repository.original(request.photo)
                 try {
-                    repository.fence.assert(owned)
-                    val output=withContext(Dispatchers.IO) {
-                        if(share)OriginalMedia.share(context,photo.id,bytes) { repository.fence.assert(owned) }
-                        else { OriginalMedia.save(context,photo.id,bytes) { repository.fence.assert(owned) };null }
+                    assertCurrent()
+                    withContext(Dispatchers.IO) {
+                        if(request.share)output=OriginalMedia.share(context,request.photo.id,bytes,::assertCurrent)
+                        else OriginalMedia.save(context,request.photo.id,bytes,::assertCurrent)
                     }
-                    repository.fence.assert(owned)
-                    if(share) { shareIntent=output;mediaStatus=context.getString(R.string.controller_15669a062c47);maintainTemporaryMedia() }
-                    else mediaStatus=context.getString(R.string.controller_ad87b0a11a23)
+                    assertCurrent()
+                    if(request.share) {
+                        pendingShare=output;originalRequest=request.copy(phase=OriginalPhase.HANDOFF);shareIntent=output?.intent;published=true
+                        mediaStatus=context.getString(R.string.controller_15669a062c47);maintainTemporaryMedia()
+                    } else { originalRequest=null;mediaStatus=context.getString(R.string.controller_ad87b0a11a23) }
                 } finally { bytes.fill(0) }
             } catch(problem: LiveFailure) {
-                mediaStatus=readableError(problem.code,context)
-                if(problem.code=="missing_entitlement") { interruptedOriginal=photo to share;purchaseVisible=true;purchases.load() }
-                else throw problem
-            } catch(problem: java.io.IOException) { mediaStatus=context.getString(R.string.controller_57d25e1f7252);throw LiveFailure("save_failed") }
+                if(ownsOriginal(request))mediaStatus=readableError(problem.code,context)
+                if(problem.code=="missing_entitlement") {
+                    if(ownsOriginal(request)) { originalRequest=request.copy(phase=OriginalPhase.PURCHASE);purchaseVisible=true;purchases.load() }
+                } else if(problem.code!="photo_action_changed")throw problem // Auth/audience failures still reach the central invalidation handler.
+            } catch(problem: java.io.IOException) { if(ownsOriginal(request))mediaStatus=context.getString(R.string.controller_57d25e1f7252);throw LiveFailure("save_failed") }
+            finally {
+                if(!published)output?.let { share->withContext(NonCancellable+Dispatchers.IO) { PrivateTemporaryMedia.discard(context.cacheDir,share.file) } }
+                if(originalRequest?.owner==request.owner && originalRequest?.phase==OriginalPhase.RUNNING) {
+                    originalRequest=null
+                    if(!currentCoroutineContext().isActive)mediaStatus=""
+                }
+            }
         }
     }
     val push=PushRegistration(context,repository)
+    private var pushMaintenance:Job?=null
+    private var pushSettingAction:Boolean?=null
+    private val pushConnectivity=context.getSystemService(ConnectivityManager::class.java)
+    private val pushNetworkCallback=object:ConnectivityManager.NetworkCallback() {
+        override fun onAvailable(network:Network) { scope.launch { requestPushSynchronization() } }
+    }
+    init {
+        scope.launch { PushConfiguration.changes.collect { requestPushSynchronization() } }
+        runCatching { pushConnectivity?.registerDefaultNetworkCallback(pushNetworkCallback) }
+    }
+    /** Firebase callbacks only mark work. Network/keyed mutations run under
+     * current foreground account authority, independently of UI pending forms. */
+    private fun requestPushSynchronization() {
+        if(!foregroundActive || !registered || pushMaintenance?.isActive==true)return
+        val epoch=uiEpoch;val account=repository.credentials?.account;val device=repository.identity?.device
+        pushMaintenance=scope.launch {
+            try {
+            for(wait in listOf(0L,5_000L,15_000L,30_000L,60_000L,120_000L)) {
+                if(wait>0)delay(wait)
+                if(!foregroundActive || epoch!=uiEpoch || repository.credentials?.account!=account || repository.identity?.device!=device || !registered)return@launch
+                if(busy)continue
+                try {
+                    val requested=pushSettingAction;pushSettingAction=null
+                    BackgroundTransfers.lease.withLock { reconcilePushState(requested) }
+                    if(!foregroundActive || epoch!=uiEpoch || repository.credentials?.account!=account)return@launch
+                    if(!PushConfiguration.rotationPending(context))return@launch
+                } catch(problem:CancellationException) { throw problem }
+                catch(problem:LiveFailure) {
+                    if(epoch==uiEpoch && repository.credentials?.account==account)pushStatus=readableError(problem.code,context)
+                    if(problem.status in setOf(401,403) || problem.code=="session_changed")return@launch
+                } catch(_:Exception) {
+                    if(epoch==uiEpoch && repository.credentials?.account==account)pushStatus=readableError("connection_unavailable",context)
+                }
+            }
+            } finally { pushMaintenance=null;if(pushReconciliationPending)reconcilePushIfNeeded() }
+        }
+    }
     var pushStatus by mutableStateOf("");private set
+    var pushEnabled by mutableStateOf(false);private set
+    private var pushReconciliationPending=false
+    private fun updatePushState() { pushEnabled=PushConfiguration.optedIn(context) && PushConfiguration.permitted(context) }
+    private suspend fun reconcilePushState(enable:Boolean?=null) {
+        updatePushState();pushStatus=context.getString(R.string.controller_17d1551e8be5)
+        try {
+            push.sync(enable);updatePushState()
+            pushStatus=when {
+                PushConfiguration.optedIn(context) && !PushConfiguration.permitted(context)->context.getString(R.string.push_system_disabled)
+                pushEnabled->context.getString(R.string.controller_995526390e92)
+                else->context.getString(R.string.controller_9efb2f41cf2d)
+            }
+        } catch(problem: LiveFailure) {
+            updatePushState()
+            pushStatus=if(problem.code.startsWith("push_operation_"))context.getString(R.string.push_status_pending) else readableError(problem.code,context)
+            if(problem.status==401 || problem.code in AudienceProtocol.gateErrors || problem.code in setOf("session_revoked","registered_face_required","authentication_required"))throw problem
+        }
+    }
+    private fun reconcilePushIfNeeded() {
+        if(!pushReconciliationPending || !foregroundActive || !registered || busy || pushMaintenance?.isActive==true)return
+        pushReconciliationPending=false;requestPushSynchronization()
+    }
     var pendingLink by mutableStateOf<AppLink?>(null);private set
     var backgroundUploads by mutableStateOf(false);private set
     fun configureBackgroundUploads(enabled: Boolean) {
@@ -156,10 +289,13 @@ class LiveController(private val state: PreviewState,private val context: Contex
         if(record!=null)repository.remember("background_upload",mapOf("enabled" to enabled,"account" to record.account,"device" to record.device,"batch" to record.batch))
         if(!enabled)BackgroundTransfers.cancel(context)
     }
-    fun enablePush(enabled: Boolean)=run(false) {
-        pushStatus=context.getString(R.string.controller_17d1551e8be5)
-        try { push.sync(enabled);pushStatus=if(enabled)context.getString(R.string.controller_995526390e92) else context.getString(R.string.controller_9efb2f41cf2d) }
-        catch(problem: LiveFailure) { pushStatus=readableError(problem.code,context);throw problem }
+    fun enablePush(enabled: Boolean) {
+        if(enabled && !registered) { pushStatus=readableError("registered_face_required",context);return }
+        val saved=runCatching { PushConfiguration.setOptedIn(context,enabled) }.getOrDefault(false)
+        if(!enabled)runCatching { PushConfiguration.disableAutoInitIfInitialized(context) }
+        updatePushState()
+        if(!saved) { pushStatus=readableError("push_preference_unavailable",context);return }
+        pushSettingAction=enabled;pushReconciliationPending=true;reconcilePushIfNeeded()
     }
     fun receiveLink(value: AppLink) { pendingLink=value;if(registered && !busy)openPendingLink() }
     private fun openPendingLink() {
@@ -169,8 +305,9 @@ class LiveController(private val state: PreviewState,private val context: Contex
         run(false) {
             if(value.kind=="requests") { focusedReceipt=repository.communityRead("receipt",mapOf("request_id" to value.id));state.navigate(35) }
             else {
-                val current=NativeProtocol.rows(repository.get("/me/notifications")["items"]).firstOrNull { it["id"]==value.id } ?: throw LiveFailure("notification_unavailable",404)
-                notifications.clear();notifications.addAll(NativeProtocol.rows(repository.get("/me/notifications")["items"]))
+                val current=NativeProtocol.obj(repository.get("/me/notifications/${NativeProtocol.id(value.id)}")["notification"])
+                if(current["id"]!=value.id)throw LiveFailure("notification_unavailable",404)
+                loadAccountCollection("notifications",true)
                 state.navigate(18)
                 if(current["kind"]=="support")state.navigate(45)
             }
@@ -183,6 +320,10 @@ class LiveController(private val state: PreviewState,private val context: Contex
     var recoveryKeyMetadata by mutableStateOf<RecoveryKeyReceipt?>(null);private set
     var faceProfile by mutableStateOf<FaceLifecycleMetadata?>(null);private set
     var audience by mutableStateOf<AudienceState?>(null);private set
+    var deviceAudience by mutableStateOf<AudienceDeviceStatus?>(null);private set
+    var audienceRenewalContinuation by mutableStateOf<String?>(null);private set
+    var audienceReviewPolicy by mutableStateOf("");private set
+    val hasAudienceDevice get()=repository.identity!=null || repository.saved("device")!=null
     var audienceVisible by mutableStateOf(false);private set
     var guardianClaim by mutableStateOf<GuardianRequest?>(null);private set
     val audienceOperationPending get()=repository.audienceOperationPending
@@ -194,15 +335,20 @@ class LiveController(private val state: PreviewState,private val context: Contex
     val guardianReference get()=runCatching { repository.guardianReference() }.getOrNull()
     val identityAuthenticated get()=repository.accountDeletion==null && !repository.cameraLoginHeld && !lifecycleHold && repository.accountRecovery==null && repository.enrollment==null && repository.credentials?.method=="registered_face" && me["authenticated"]==true
     private fun clearAudienceMedia() {
+        clearAccountCollections()
         photoPickerOwnership.clear();invalidateCameraReview();BackgroundTransfers.cancel(context);repository.invalidateReads()
-        OriginalMedia.prune(context,true);shareIntent=null;interruptedOriginal=null;purchaseVisible=false
+        matchingConsent=false;processingConsent=false;receiveMatches=false;photoPolicy=emptyMap()
+        retireOriginal();OriginalMedia.prune(context,true)
         clearImages();photos.clear();inbox.clear();picked.clear();selectedUploads.clear();snapshot=null;preview=null;outcome=null;focusedReceipt=null;focusedPerson=null
         faceChallenge=null;captureCount=0;cameraForUpload=false;cameraUploadId=null;cameraReady=false
     }
     private suspend fun refreshAudienceInternal(epoch: Long=uiEpoch): AudienceState {
         val next=repository.audienceStatus()
         if(epoch!=uiEpoch)throw CancellationException("Audience UI changed")
-        audience=next
+        audience=next;deviceAudience=null
+        val currentPolicy=if(next.band=="18_plus" && next.reviewRequired)repository.audienceReviewPolicy() else ""
+        if(epoch!=uiEpoch)throw CancellationException("Audience policy UI changed")
+        audienceReviewPolicy=currentPolicy
         val reference=repository.guardianReference()
         if(reference!=null) {
             guardianClaim=null
@@ -216,11 +362,13 @@ class LiveController(private val state: PreviewState,private val context: Contex
         return next
     }
     private suspend fun requireAudience(purpose: String,epoch: Long=uiEpoch): AudienceState {
+        if(audienceRenewalContinuation!=null)throw LiveFailure("audience_profile_recovery_required",403)
         val next=refreshAudienceInternal(epoch)
         if(ownGuardianWithdrawalPending) { audienceVisible=true;clearAudienceMedia();throw LiveFailure("guardian_withdrawal_pending",403) }
+        if(repository.audienceDeviceRenewalPending) { audienceVisible=true;clearAudienceMedia();throw LiveFailure("audience_renewal_pending",409) }
         if(!next.allows(purpose)) {
             audienceVisible=true;clearAudienceMedia()
-            throw LiveFailure(when(next.band) { "under13"->"age_not_supported";"unknown"->"audience_required";else->"guardian_approval_required" },403)
+            throw LiveFailure(when { next.band=="under13"->"age_not_supported";next.band=="unknown"->"audience_required";next.band=="18_plus" && next.reviewRequired->"audience_review_required";else->"guardian_approval_required" },403)
         }
         return next
     }
@@ -239,7 +387,62 @@ class LiveController(private val state: PreviewState,private val context: Contex
         clearAudienceMedia();audienceVisible=true;state.navigate(5)
         refreshAudience()
     }
-    fun refreshAudience()=run(false) { refreshAudienceInternal() }
+    fun refreshAudience() {
+        if(deviceAudience!=null || audienceRenewalContinuation!=null && hasAudienceDevice || repository.credentials==null && hasAudienceDevice)checkDeviceAudience()
+        else run(false) { refreshAudienceInternal() }
+    }
+    fun checkDeviceAudience()=run(false) {
+        val epoch=uiEpoch;clearAudienceMedia();audienceVisible=true
+        val value=repository.audienceDeviceStatus()
+        val currentPolicy=if(value.renewalAvailable && value.decision.guardianRequired==false)repository.audienceReviewPolicy() else ""
+        if(epoch!=uiEpoch)throw CancellationException("Device eligibility UI changed")
+        audience=null;deviceAudience=value;audienceReviewPolicy=currentPolicy;audienceRenewalContinuation=null;state.navigate(5)
+    }
+    fun renewEligibility(adultConfirmed: Boolean,authenticationConsented: Boolean)=run(false) {
+        val epoch=uiEpoch;val policy=audienceReviewPolicy
+        if(!adultConfirmed || !authenticationConsented || policy.isBlank())throw LiveFailure("audience_choice_required")
+        val heldDevice=deviceAudience
+        if(heldDevice!=null) {
+            if(heldDevice.decision.band!="18_plus" || !heldDevice.renewalAvailable)throw LiveFailure("audience_review_required",403)
+            val value=repository.renewDeviceAudience(heldDevice.decision.version,policy)
+            if(epoch!=uiEpoch)throw CancellationException("Device eligibility UI changed")
+            deviceAudience=value;audience=null;audienceReviewPolicy="";clearAudienceMedia()
+        } else {
+            val held=audience ?: throw LiveFailure("audience_status_required")
+            if(held.band!="18_plus" || !held.reviewRequired)throw LiveFailure("audience_review_required",403)
+            val result=repository.renewAudience(held.version,policy)
+            if(epoch!=uiEpoch)throw CancellationException("Eligibility UI changed")
+            clearAudienceMedia();audience=result.audience;audienceRenewalContinuation=result.nextStep;audienceVisible=true;state.navigate(5)
+        }
+    }
+    fun renewMinorEligibility(confirmed: Boolean)=run(false) {
+        if(!confirmed)throw LiveFailure("audience_choice_required")
+        val epoch=uiEpoch;val heldDevice=deviceAudience
+        if(heldDevice!=null) {
+            if(heldDevice.decision.band!="13_17" || !heldDevice.guardianReviewAvailable)throw LiveFailure("guardian_approval_required",403)
+            val value=repository.renewDeviceAudience(heldDevice.decision.version,null,guardianRequired=true)
+            if(epoch!=uiEpoch)throw CancellationException("Guardian review UI changed")
+            deviceAudience=value;audience=null;audienceReviewPolicy="";clearAudienceMedia()
+        } else {
+            val held=audience ?: throw LiveFailure("audience_status_required")
+            if(held.band!="13_17" || !(held.reviewRequired || held.status=="guardian_pending" && held.request?.state=="approved"))throw LiveFailure("guardian_approval_required",403)
+            repository.declareAudience("13_17",held.version)
+            if(epoch!=uiEpoch)throw CancellationException("Guardian review UI changed")
+            clearAudienceMedia();refreshAudienceInternal(epoch)
+        }
+    }
+    fun continueDeviceAudience() {
+        if(busy || audienceOperationPending)return
+        val held=deviceAudience ?: return
+        if(held.decision.needsReview() || held.decision.status!="eligible")return
+        when(held.nextStep) {
+            "face_login"->{ deviceAudience=null;audienceVisible=false;beginFace(held.account) }
+            "profile_recovery"->{
+                if(hasLifecycle) { deviceAudience=null;audienceVisible=false;state.navigate(38);checkRetainedFaceControl() }
+                else { error=LiveFailure("audience_profile_recovery_required");audienceVisible=true }
+            }
+        }
+    }
     fun declareAudience(band: String)=run(false) {
         val epoch=uiEpoch;val held=audience ?: throw LiveFailure("audience_status_required")
         val result=repository.declareAudience(band,held.version)
@@ -254,10 +457,17 @@ class LiveController(private val state: PreviewState,private val context: Contex
         audience=result.audience ?: throw LiveFailure("audience_response_invalid");refreshAudienceInternal(epoch)
     }
     fun retryAudienceChange()=run(false) {
-        val epoch=uiEpoch;val result=repository.retryAudienceOperation()
+        val epoch=uiEpoch
+        if(repository.audienceDeviceRenewalPending) {
+            val value=repository.renewDeviceAudience(0,null,retryOriginal=true)
+            if(epoch!=uiEpoch)throw CancellationException("Device eligibility UI changed")
+            audience=null;deviceAudience=value;audienceReviewPolicy="";clearAudienceMedia();return@run
+        }
+        val result=repository.retryAudienceOperation()
         if(epoch!=uiEpoch)throw CancellationException("Guardian UI changed")
         result.request?.let { if(it.child!=repository.credentials?.account)guardianClaim=it }
-        result.audience?.let { audience=it };refreshAudienceInternal(epoch)
+        result.audience?.let { audience=it }
+        if(result.nextStep!=null) { clearAudienceMedia();audienceRenewalContinuation=result.nextStep;audienceVisible=true;state.navigate(5) } else refreshAudienceInternal(epoch)
     }
     fun checkGuardianRequest(id: String)=run(false) {
         val epoch=uiEpoch;val result=repository.guardianStatus(id)
@@ -286,13 +496,20 @@ class LiveController(private val state: PreviewState,private val context: Contex
         refreshAudienceInternal(epoch)
     }
     fun continueAfterAudience() {
-        if(busy || ownGuardianWithdrawalPending || audience?.allows("face_authentication")!=true)return
+        if(busy || audienceRenewalContinuation!=null || ownGuardianWithdrawalPending || audience?.allows("face_authentication")!=true)return
         audienceVisible=false;state.navigate(if(identityAuthenticated)13 else 5)
+    }
+    fun continueAudienceRenewal() {
+        if(busy || audienceRenewalContinuation==null)return
+        if(hasAudienceDevice) { checkDeviceAudience();return }
+        if(repository.credentials?.method=="anonymous") { audienceRenewalContinuation=null;continueAfterAudience();return }
+        if(hasLifecycle) { audienceRenewalContinuation=null;audienceVisible=false;state.navigate(38);checkRetainedFaceControl();return }
+        error=LiveFailure("audience_profile_recovery_required",403)
     }
     val hasAccountRecovery get()=repository.accountRecovery!=null
     val hasLifecycle get()=repository.faceLifecycle!=null
     val lifecycleHold get()=repository.faceLifecycle?.blocksPrivate==true
-    val registered get()=identityAuthenticated && !audienceVisible && !ownGuardianWithdrawalPending && audience?.account==repository.credentials?.account && audience?.allows("face_authentication")==true
+    val registered get()=identityAuthenticated && audienceRenewalContinuation==null && !audienceVisible && !ownGuardianWithdrawalPending && audience?.account==repository.credentials?.account && audience?.allows("face_authentication")==true
     val hasGuestDeletion get()=guestDeletion!=null || repository.guestDeletion!=null
     val canDeleteGuest get()=!registered && !hasGuestDeletion && !hasLifecycle && repository.credentials?.method=="anonymous" && !hasAccountRecovery && repository.enrollment?.state !in setOf("registered","credentials_pending")
     val name get()=(me["name"] as? String)?.takeIf { it.isNotBlank() } ?: context.getString(R.string.controller_528d89ad72cb)
@@ -306,6 +523,27 @@ class LiveController(private val state: PreviewState,private val context: Contex
             try { BackgroundTransfers.lease.withLock { block() } }
             catch(error: CancellationException) { throw error }
             catch(problem: LiveFailure) { if(epoch==uiEpoch) {
+                if(problem.status==409 && problem.code=="audience_operation_recovered_without_result") {
+                    audience=null;deviceAudience=null;audienceReviewPolicy="";audienceRenewalContinuation=null;audienceVisible=true;clearAudienceMedia();state.navigate(5)
+                    // This read describes current eligibility only. The negative
+                    // operation tombstone stays durable and no renewal is sent.
+                    runCatching {
+                        if(repository.credentials!=null)refreshAudienceInternal(epoch)
+                        else if(hasAudienceDevice) {
+                            val current=repository.audienceDeviceStatus()
+                            val policy=if(current.renewalAvailable && current.decision.guardianRequired==false)repository.audienceReviewPolicy() else ""
+                            if(epoch!=uiEpoch || !foregroundActive)throw CancellationException("Audience UI changed")
+                            deviceAudience=current;audienceReviewPolicy=policy
+                        }
+                    }.onFailure { if(it is CancellationException)throw it }
+                    if(epoch!=uiEpoch || !foregroundActive)return@launch
+                }
+                if(problem.status==409 && problem.code=="operation_recovered_without_result") {
+                    val owner=repository.currentScope();clearAudienceMedia()
+                    val latest=runCatching { repository.get("/privacy/center") }.getOrNull()
+                    if(epoch!=uiEpoch || !foregroundActive || owner!=repository.currentScope())return@launch
+                    if(latest!=null)privacyCenter=latest
+                }
                 if(problem.status==401 || problem.code in listOf("session_revoked","registered_face_required","authentication_required")) {
                     loseAuthentication()
                 }
@@ -315,7 +553,7 @@ class LiveController(private val state: PreviewState,private val context: Contex
                 error=problem;if(destinationOnError && !audienceVisible)state.navigate(48)
             } }
             catch(problem: Exception) { if(epoch==uiEpoch) { error=LiveFailure("connection_unavailable");if(destinationOnError)state.navigate(48) } }
-            finally { if(epoch==uiEpoch) { busy=false;if(pendingLink!=null && registered)openPendingLink() } }
+            finally { if(epoch==uiEpoch) { busy=false;if(pendingLink!=null && registered)openPendingLink();resumeOriginalIfReady();resumeExportSave();reconcilePushIfNeeded() } }
         }
     }
     fun start() {
@@ -346,6 +584,7 @@ class LiveController(private val state: PreviewState,private val context: Contex
                 state.navigate(6)
                 try { restoreFace(epoch) } catch(problem: LiveFailure) { error=problem;faceChallenge=null }
             } else if(registered) {
+                pushReconciliationPending=true
                 restoreReview();restoreUi();refreshData()
                 restoreUploads()
                 if(repository.pending?.action=="sharing.commit") { state.navigate(35);reconcileShareInternal() }
@@ -356,12 +595,11 @@ class LiveController(private val state: PreviewState,private val context: Contex
     private suspend fun refreshData() {
         if(!registered)return
         loadLibraryInternal(reset=true)
-        val requests=repository.communityRead("inbox")
+        loadAccountCollection("inbox",true)
         photoPolicy=repository.photoPreferences()
         receiveMatches=photoPolicy["receive_matches"]==true
         matchingConsent=photoPolicy["matching_enabled"]==true || photoPolicy["photo_matching_consent"]==true
         processingConsent=photoPolicy["processing_enabled"]==true || photoPolicy["processing_consent"]==true
-        inbox.clear();inbox.addAll(NativeProtocol.rows(requests["items"]))
         favorites.clear();favorites.addAll((repository.saved("favorites") as? List<*>)?.mapNotNull { it as? String } ?: emptyList())
         mediaGeneration++
     }
@@ -425,16 +663,22 @@ class LiveController(private val state: PreviewState,private val context: Contex
         }
     }
     private fun loseAuthentication() {
+        repository.authenticationLost()
         libraryEpoch++;queryJob?.cancel();libraryLoading=false;libraryCursor=null
         BackgroundTransfers.cancel(context);PushConfiguration.setOptedIn(context,false);purchases.clearAccount();purchaseVisible=false
-        repository.authenticationLost();clearGuestPresentation();viewerRows.clear();outgoing.clear();supportRequests.clear()
+        clearGuestPresentation();viewerRows.clear();outgoing.clear();supportRequests.clear()
         supportSubject="";supportDetails="";supportSubmitted=null;entitlement=emptyMap();restoredUi=false;galleryPositions.clear()
     }
     fun persistNavigation() {
         if(!registered || restoringNavigation)return
-        repository.remember("ui_context",mapOf("account" to repository.credentials!!.account,"route" to state.route,"query" to search,
-            "category" to state.category,"viewer" to selectedPhoto?.id,"positions" to galleryPositions.mapKeys { it.key.toString() }.mapValues { it.value.wire() }))
-        repository.remember("support_draft",mapOf("account" to repository.credentials!!.account,"subject" to supportSubject,"details" to supportDetails))
+        val actor=repository.credentials ?: return;val owned=repository.currentScope()
+        val navigation=mapOf("account" to actor.account,"route" to state.route,"query" to search,
+            "category" to state.category,"viewer" to selectedPhoto?.id,"positions" to galleryPositions.mapKeys { it.key.toString() }.mapValues { it.value.wire() })
+        val draft=mapOf("account" to actor.account,"subject" to supportSubject,"details" to supportDetails)
+        scope.launch(Dispatchers.IO) { runCatching {
+            repository.remember("ui_context",navigation,owned)
+            repository.remember("support_draft",draft,owned)
+        } }
     }
     private var restoredRoute=10
     private fun restoreUi() {
@@ -486,6 +730,8 @@ class LiveController(private val state: PreviewState,private val context: Contex
         return destination
     }
     fun onRoute(destination: Int) {
+        if(destination!=12)retireOriginal()
+        if(destination!=44) { exportSaveRequest=null;exportDestination=null }
         if(destination !in setOf(6,7))invalidateCameraReview()
         if(destination==38 && !busy && (registered || hasLifecycle))checkFaceProfile()
         if(destination==6 && !cameraForUpload && faceChallenge==null && !busy)beginFace()
@@ -493,7 +739,7 @@ class LiveController(private val state: PreviewState,private val context: Contex
         if(destination==35 && outcome==null)(repository.saved("last_outcome") as? Map<*,*>)?.let { outcome=NativeProtocol.obj(it) }
         if(destination==45 && !busy && registered)refreshSupport()
         if(destination==17 && !busy && registered)run(false) { refreshData() }
-        if(destination==18 && !busy && registered)run { notifications.clear();notifications.addAll(NativeProtocol.rows(repository.get("/me/notifications")["items"])) }
+        if(destination==18 && !busy && registered)run(false) { loadAccountCollection("notifications",true) }
         if(destination==42 && !busy && registered)run { notificationSettings=repository.get("/me/notification-settings") }
         if(destination==44 && !busy && repository.accountDeletion!=null)checkAccountDeletion()
         if(destination==44 && !busy && weakRegisteredSession)run(false) { privacyCenter=repository.get("/privacy/center") }
@@ -508,11 +754,12 @@ class LiveController(private val state: PreviewState,private val context: Contex
     }
     fun refreshOwnSecurity()=run(false) { loadOwnSecurity() }
     private fun audienceTargetAccount(): String?=repository.faceLifecycle?.account ?: repository.accountRecovery?.account ?: repository.enrollment?.account ?: repository.identity?.account ?: repository.credentials?.account
-    private suspend fun restoreFace(epoch: Long) {
+    private suspend fun restoreFace(epoch: Long,signedAudienceAccount: String?=null) {
         if(ownGuardianWithdrawalPending)throw LiveFailure("guardian_withdrawal_pending",403)
         // A retained logged-out key may obtain only a target-bound server capture authority.
         // It cannot declare a new age or supply general product/purpose eligibility.
-        if(repository.credentials!=null && repository.credentials?.account==audienceTargetAccount())requireAudience("face_authentication",epoch)
+        if(signedAudienceAccount!=null && signedAudienceAccount!=audienceTargetAccount())throw LiveFailure("session_changed")
+        if(signedAudienceAccount==null && repository.credentials!=null && repository.credentials?.account==audienceTargetAccount())requireAudience("face_authentication",epoch)
 
         cameraForUpload=false
         val restored=repository.faceChallenge()
@@ -529,17 +776,29 @@ class LiveController(private val state: PreviewState,private val context: Contex
             audienceVisible=false;faceChallenge=restored;captureCount=repository.faceCaptureCount;state.selfieCount=captureCount;cameraReady=false
         }
     }
-    fun beginFace() {
+    fun beginFace(signedAudienceAccount: String?=null) {
         if(busy)return
         invalidateCameraReview();uiEpoch++;repository.invalidateReads();faceChallenge=null;captureCount=0;cameraReady=false
         cameraForUpload=false;cameraUploadId=null
-        run(false) { restoreFace(uiEpoch) }
+        run(false) { restoreFace(uiEpoch,signedAudienceAccount) }
     }
     fun checkFaceProfile()=run(false) {
         val epoch=uiEpoch;val result=repository.lifecycleStatus()
         if(epoch!=uiEpoch)throw CancellationException("Profile UI changed")
         faceProfile=result
         if(!result.authenticationEnabled)clearLifecyclePresentation()
+    }
+    fun checkRetainedFaceControl()=run(false) {
+        val epoch=uiEpoch;val result=repository.lifecycleControlStatus()
+        if(epoch!=uiEpoch)throw CancellationException("Profile control UI changed")
+        clearLifecyclePresentation();faceProfile=result;state.navigate(38)
+    }
+    fun renewRetainedFaceControl(consented: Boolean,retryOriginal: Boolean=false)=run(false) {
+        if(!retryOriginal && !consented)throw LiveFailure("face_policy_required")
+        val epoch=uiEpoch;val policy=faceProfile?.authPolicy ?: repository.faceLifecycle?.metadata?.authPolicy
+        val result=repository.lifecycleControlRenew(if(retryOriginal)null else policy,retryOriginal)
+        if(epoch!=uiEpoch)throw CancellationException("Profile control UI changed")
+        clearLifecyclePresentation();faceProfile=result;state.navigate(38)
     }
     fun verifyFaceProfile() {
         if(busy || hasGuestDeletion)return
@@ -570,7 +829,8 @@ class LiveController(private val state: PreviewState,private val context: Contex
         }
     }
     private fun clearLifecyclePresentation() {
-        OriginalMedia.prune(context,true);shareIntent=null;interruptedOriginal=null
+        clearAccountCollections()
+        retireOriginal();OriginalMedia.prune(context,true)
         invalidateCameraReview()
         clearImages();photos.clear();inbox.clear();snapshot=null;preview=null;outcome=null;focusedReceipt=null;focusedPerson=null;me=emptyMap()
         picked.clear();selectedUploads.clear();uploadIds.clear();uploadBatch=null;uploadStatus="";uploadRecovery=null;caption=""
@@ -963,14 +1223,54 @@ class LiveController(private val state: PreviewState,private val context: Contex
     }
     fun openPhoto(photo: LivePhoto,rows: List<LivePhoto> = photos.toList()) { viewerRows.clear();viewerRows.addAll(rows);selectedPhoto=photo;state.navigate(12) }
     fun movePhoto(delta: Int) { selectedPhoto?.let { current->adjacentPhoto(viewerRows,current.id,delta)?.let { selectedPhoto=it;persistNavigation() } } }
-    fun refreshHistory()=run(false) { outgoing.clear();outgoing.addAll(NativeProtocol.rows(repository.communityRead("history")["items"])) }
-    fun refreshSupport()=run(false) { supportRequests.clear();supportRequests.addAll(NativeProtocol.rows(repository.get("/support/requests")["support_requests"])) }
+    private fun clearAccountCollections() {
+        inbox.clear();outgoing.clear();notifications.clear();inboxCursor=null;outgoingCursor=null;notificationCursor=null
+        supportRequests.clear();supportCursor=null;supportCursors.clear()
+        collectionOwners.clear();collectionCursors.clear()
+    }
+    private suspend fun loadAccountCollection(collection: String,reset: Boolean) {
+        val cursor=when(collection) { "inbox"->inboxCursor;"history"->outgoingCursor;"notifications"->notificationCursor;else->throw LiveFailure("collection_page_invalid") }
+        if(!reset && cursor==null)return
+        val request=AccountCollectionRequest.create(repository.currentScope(),cursor,collectionOwners[collection],reset)
+        val response=if(collection=="notifications")repository.get(AccountCollectionPage.path("/me/notifications",request.cursor))
+            else repository.communityRead(collection,AccountCollectionPage.request(request.cursor))
+        request.assertCurrent(repository.currentScope())
+        if(!registered || repository.credentials?.account!=request.scope.accountId)throw LiveFailure("collection_account_changed")
+        val page=AccountCollectionPage.parse(response,requested=request.cursor,seen=if(reset)emptySet() else collectionCursors[collection] ?: emptySet())
+        val rows=when(collection) { "inbox"->inbox;"history"->outgoing;else->notifications }
+        val merged=page.appending(if(reset)emptyList() else rows.toList())
+        rows.clear();rows.addAll(merged)
+        if(reset)collectionCursors.remove(collection)
+        request.cursor?.let { collectionCursors.getOrPut(collection) { mutableSetOf() }.add(it) }
+        collectionOwners[collection]=request.scope.accountId!!
+        when(collection) { "inbox"->inboxCursor=page.nextCursor;"history"->outgoingCursor=page.nextCursor;else->notificationCursor=page.nextCursor }
+    }
+    fun moreInbox()=run(false) { loadAccountCollection("inbox",false) }
+    fun moreNotifications()=run(false) { loadAccountCollection("notifications",false) }
+    fun moreHistory()=run(false) { loadAccountCollection("history",false) }
+    fun refreshInbox()=run(false) { loadAccountCollection("inbox",true) }
+    fun refreshNotifications()=run(false) { loadAccountCollection("notifications",true) }
+    fun refreshHistory()=run(false) { loadAccountCollection("history",true) }
+    private suspend fun loadSupport(reset: Boolean) {
+        val cursor=if(reset)null else (supportCursor ?: return)
+        val request=AccountCollectionRequest.create(repository.currentScope(),cursor,collectionOwners["support"],reset)
+        val result=repository.get(AccountCollectionPage.path("/support/requests",cursor))
+        request.assertCurrent(repository.currentScope())
+        if(!registered || repository.credentials?.account!=request.scope.accountId)throw LiveFailure("collection_account_changed")
+        val page=AccountCollectionPage.parse(result,"support_requests",cursor,if(reset)emptySet() else supportCursors)
+        val merged=page.appending(if(reset)emptyList() else supportRequests.toList())
+        if(reset) { supportRequests.clear();supportCursors.clear() }
+        if(cursor!=null)supportCursors.add(cursor)
+        supportRequests.clear();supportRequests.addAll(merged);supportCursor=page.nextCursor;collectionOwners["support"]=request.scope.accountId!!
+    }
+    fun refreshSupport()=run(false) { loadSupport(true) }
+    fun moreSupport()=run(false) { loadSupport(false) }
     fun submitSupport()=run(false) {
         val subject=supportSubject.trim();val details=supportDetails.trim()
         if(subject.length !in 3..160 || details.length !in 5..4000)throw LiveFailure("invalid_support_request")
         val result=repository.mutate("support.create",mapOf("subject" to subject,"details" to details),"support",path="/support/requests")
         supportSubmitted=NativeProtocol.id(result["id"]);supportSubject="";supportDetails="";persistNavigation()
-        supportRequests.clear();supportRequests.addAll(NativeProtocol.rows(repository.get("/support/requests")["support_requests"]))
+        loadSupport(true)
     }
     fun openPerson(id: String) { focusedPerson=id;state.navigate(28) }
     fun toggleFavorite(id: String) { if(id in favorites)favorites.remove(id) else favorites.add(id);repository.remember("favorites",favorites.toList()) }
@@ -990,7 +1290,7 @@ class LiveController(private val state: PreviewState,private val context: Contex
         outcome=response;repository.remember("last_outcome",response)
     }
     fun block(id: String,value: Boolean)=run {
-        OriginalMedia.prune(context,true);shareIntent=null
+        retireOriginal();OriginalMedia.prune(context,true)
         repository.mutate("safety.block",emptyMap(),"safety",path="/me/blocks/$id",method=if(value)"POST" else "DELETE")
         blocked.clear();blocked.addAll(NativeProtocol.rows(repository.get("/me/blocks")["items"]));snapshot=null;preview=null;repository.remember("review",null);refreshData()
     }
@@ -1017,7 +1317,38 @@ class LiveController(private val state: PreviewState,private val context: Contex
         refreshData();state.navigate(37)
     }
     fun rename(name: String)=run { val response=repository.mutate("account.profile.update",mapOf("name" to name),"account",path="/me/profile",method="PATCH");me=me+mapOf("name" to response["name"]);state.navigate(37) }
-    fun saveExport(id: String,destination: Uri)=run(false) { repository.saveExport(id,destination);privacyCenter=repository.get("/privacy/center");state.info(context.getString(R.string.controller_0a0d775d7d14),context.getString(R.string.controller_eaec755aa61d)) }
+    private data class ExportSaveRequest(val action: String,val request: String,val account: String,val tokenHash: String)
+    private var exportSaveRequest: ExportSaveRequest?=null
+    private var exportDestination: Uri?=null
+    fun beginExportSave(id: String): String? {
+        if(busy || !weakRegisteredSession || state.route!=44)return null
+        val actor=repository.credentials ?: return null
+        val request=ExportSaveRequest(UUID.randomUUID().toString(),NativeProtocol.id(id),actor.account,NativeProtocol.sha256(actor.token.toByteArray(Charsets.UTF_8)))
+        exportSaveRequest=request;exportDestination=null;return request.action
+    }
+    fun saveExport(action: String,destination: Uri) {
+        if(exportSaveRequest?.action!=action)return
+        exportDestination=destination;resumeExportSave()
+    }
+    private fun resumeExportSave() {
+        val request=exportSaveRequest ?: return;val destination=exportDestination ?: return
+        if(busy || !foregroundActive)return
+        exportSaveRequest=null;exportDestination=null
+        val actor=repository.credentials
+        if(state.route!=44 || actor==null || actor.account!=request.account || NativeProtocol.sha256(actor.token.toByteArray(Charsets.UTF_8))!=request.tokenHash) {
+            error=LiveFailure("privacy_export_session_changed");return
+        }
+        run(false) {
+            try {
+                val generation=uiEpoch;val owner=repository.currentScope()
+                repository.saveExport(request.request,destination,request.tokenHash)
+                if(!foregroundActive || generation!=uiEpoch || owner!=repository.currentScope())throw LiveFailure("session_changed")
+                val current=repository.get("/privacy/center")
+                if(!foregroundActive || generation!=uiEpoch || owner!=repository.currentScope())throw LiveFailure("session_changed")
+                privacyCenter=current;state.info(context.getString(R.string.controller_0a0d775d7d14),context.getString(R.string.controller_eaec755aa61d))
+            } finally { maintainTemporaryMedia() }
+        }
+    }
     fun refreshPrivacy()=run(false) { privacyCenter=repository.get("/privacy/center") }
     fun requestExport()=run(false) { repository.requestPrivacyExport();privacyCenter=repository.get("/privacy/center");state.info(context.getString(R.string.controller_a50a0663baa7),context.getString(R.string.controller_6834ba087c0b)) }
     var accountDeletion by mutableStateOf<GuestDeletionRecord?>(null);private set
@@ -1039,13 +1370,14 @@ class LiveController(private val state: PreviewState,private val context: Contex
         }
     }
     private fun clearGuestPresentation() {
-        OriginalMedia.prune(context,true);shareIntent=null;interruptedOriginal=null
+        clearAccountCollections();supportCursor=null;supportCursors.clear();supportRequests.clear()
+        retireOriginal();OriginalMedia.prune(context,true)
         context.contentResolver.persistedUriPermissions.forEach { permission -> runCatching {
             context.contentResolver.releasePersistableUriPermission(permission.uri,android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION)
         } }
         clearImages();photos.clear();inbox.clear();picked.clear();selectedUploads.clear();uploadIds.clear()
         uploadBatch=null;uploadStatus="";uploadRecovery=null;caption="";search="";snapshot=null;preview=null;outcome=null;focusedReceipt=null;focusedPerson=null
-        faceChallenge=null;captureCount=0;state.selfieCount=0;cameraForUpload=false;cameraUploadId=null;cameraReady=false;me=emptyMap();photoPolicy=emptyMap();audience=null;guardianClaim=null;audienceVisible=false
+        faceChallenge=null;captureCount=0;state.selfieCount=0;cameraForUpload=false;cameraUploadId=null;cameraReady=false;me=emptyMap();photoPolicy=emptyMap();audience=null;deviceAudience=null;audienceRenewalContinuation=null;audienceReviewPolicy="";guardianClaim=null;audienceVisible=false
         matchingConsent=false;processingConsent=false;receiveMatches=false
         sessions.clear();devices.clear();notifications.clear();favorites.clear();privacyCenter=emptyMap();notificationSettings=emptyMap();blocked.clear()
         OriginalMedia.pruneCamera(context,true)
@@ -1086,8 +1418,13 @@ class LiveController(private val state: PreviewState,private val context: Contex
         notificationSettings=repository.mutate("notification.settings",mapOf(key to value),"account",path="/me/notification-settings",method="PATCH")
     }
     fun readNotification(row: WireObject)=run {
-        repository.mutate("notification.read",emptyMap(),"account",path="/me/notifications/${NativeProtocol.id(row["id"])}/read")
-        notifications.clear();notifications.addAll(NativeProtocol.rows(repository.get("/me/notifications")["items"]))
+        val id=NativeProtocol.id(row["id"])
+        repository.mutate("notification.read",emptyMap(),"account",path="/me/notifications/$id/read")
+        val scope=repository.currentScope();val changed=NativeProtocol.obj(repository.get("/me/notifications/$id")["notification"])
+        repository.fence.assert(scope)
+        if(changed["id"]!=id)throw LiveFailure("notification_unavailable",404)
+        val index=notifications.indexOfFirst { it["id"]==id }
+        if(index>=0)notifications[index]=changed else loadAccountCollection("notifications",true)
     }
     fun revoke(row: WireObject,device: Boolean)=run {
         val response=repository.post(if(device)"/auth/device/revoke" else "/auth/session/revoke",mapOf((if(device)"device_id" else "session_id") to NativeProtocol.id(row["id"])))
@@ -1098,12 +1435,15 @@ class LiveController(private val state: PreviewState,private val context: Contex
         }
     }
     fun logout(revokeIdentity: Boolean=false) {
+        val owned=repository.retireSessionAuthority()
+        clearAccountCollections()
+        pushMaintenance?.cancel();pushMaintenance=null
         libraryEpoch++;libraryLoading=false
-        persistNavigation();queryJob?.cancel();purchases.clearAccount();BackgroundTransfers.cancel(context);PushConfiguration.setOptedIn(context,false);purchaseVisible=false;interruptedOriginal=null;OriginalMedia.prune(context,true);shareIntent=null;restoredUi=false;galleryPositions.clear();viewerRows.clear();supportRequests.clear();supportSubject="";supportDetails="";outgoing.clear();libraryCursor=null;libraryError=null;search="";
+        retireOriginal();exportSaveRequest=null;exportDestination=null;queryJob?.cancel();purchases.clearAccount();BackgroundTransfers.cancel(context);PushConfiguration.setOptedIn(context,false);OriginalMedia.prune(context,true);restoredUi=false;galleryPositions.clear();viewerRows.clear();supportRequests.clear();supportCursor=null;supportCursors.clear();supportSubject="";supportDetails="";outgoing.clear();libraryCursor=null;libraryError=null;search="";
         photoPickerOwnership.clear()
         context.contentResolver.persistedUriPermissions.forEach { permission -> runCatching { context.contentResolver.releasePersistableUriPermission(permission.uri,android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION) } }
-        invalidateCameraReview();uiEpoch++;work?.cancel();work=null;busy=true;val owned=repository.cancelFace();clearImages();photos.clear();inbox.clear();picked.clear();selectedUploads.clear();uploadIds.clear()
-        snapshot=null;preview=null;outcome=null;focusedReceipt=null;faceChallenge=null;captureCount=0;me=emptyMap();audience=null;guardianClaim=null;audienceVisible=false;started=false;uploadRecovery=null;uploadBatch=null;uploadStatus="";caption=""
+        invalidateCameraReview();uiEpoch++;work?.cancel();work=null;busy=true;clearImages();photos.clear();inbox.clear();picked.clear();selectedUploads.clear();uploadIds.clear()
+        snapshot=null;preview=null;outcome=null;focusedReceipt=null;faceChallenge=null;captureCount=0;me=emptyMap();audience=null;deviceAudience=null;audienceRenewalContinuation=null;audienceReviewPolicy="";guardianClaim=null;audienceVisible=false;started=false;uploadRecovery=null;uploadBatch=null;uploadStatus="";caption=""
         cameraForUpload=false;cameraUploadId=null
         recoveryBackupDisplay=null;recoveryImportVisible=false;recoveryKeyMetadata=null
         sessions.clear();devices.clear();notifications.clear();favorites.clear();privacyCenter=emptyMap();notificationSettings=emptyMap()
@@ -1116,12 +1456,15 @@ class LiveController(private val state: PreviewState,private val context: Contex
     }
     fun clearImages() { selectedPhoto=null;mediaGeneration++ }
     fun leaveForReview() { photoPickerOwnership.clear();invalidateCameraReview();uiEpoch++;work?.cancel();busy=false;started=false;foregroundActive=false;repository.invalidateReads();clearImages();me=emptyMap();photos.clear();inbox.clear() }
-    fun background(): Unit = synchronized(repository.fence) {
+    fun background() {
+        repository.invalidateReads()
+        pushMaintenance?.cancel();pushMaintenance=null
         persistNavigation();queryJob?.cancel()
         val pickerBefore=photoPickerOwnership.opened?.capture?.requestId?.let(::photoPickerContext)
-        foregroundActive=false;invalidateCameraReview();uiEpoch++;work?.cancel();busy=false
+        foregroundActive=false;deviceAudience=null;audienceReviewPolicy="";invalidateCameraReview();uiEpoch++;work?.cancel();busy=false
+        if(originalRequest?.phase in setOf(OriginalPhase.RUNNING,OriginalPhase.HANDOFF))retireOriginal()
         if(uploadRecovery?.let { !it.finished && !it.cancelled }==true)runCatching { repository.pausePhotoUploads()?.let(::presentUpload) }
-        repository.invalidateReads();mediaGeneration++;cameraReady=false
+        mediaGeneration++;cameraReady=false
         photoPickerOwnership.background(pickerBefore,pickerBefore?.capture?.requestId?.let(::photoPickerContext))
         recoveryBackupDisplay=null;recoveryImportVisible=false
         if(repository.enrollment!=null || repository.accountRecovery!=null || hasLifecycle)faceChallenge=null
@@ -1133,12 +1476,15 @@ class LiveController(private val state: PreviewState,private val context: Contex
         if(BackgroundTransfers.running)repository.invalidateReads()
         maintainTemporaryMedia()
         foregroundActive=true
+        updatePushState();pushReconciliationPending=true
+        resumeOriginalIfReady()
         if(state.route==44 && weakRegisteredSession && !busy) { if(repository.accountDeletion!=null)checkAccountDeletion() else refreshPrivacy();return }
         if(state.route==46 && weakRegisteredSession && !busy) { refreshOwnSecurity();return }
         if(photoPickerOwnership.opened!=null)return
         if(!hasGuestDeletion && (repository.enrollment!=null || repository.accountRecovery!=null || repository.faceLifecycle?.intent?.capture==true || repository.faceLifecycle?.loginKey!=null || repository.cameraLoginHeld) && state.route==6 && !busy)beginFace()
         else if(hasLifecycle && state.route==38 && !busy)checkFaceProfile()
         else if(identityAuthenticated && !busy)run(false) { requireAudience("face_authentication");refreshData() }
+        reconcilePushIfNeeded()
     }
-    fun dispose() { photoPickerOwnership.clear();invalidateCameraReview();uiEpoch++;repository.invalidateReads();scope.cancel();purchases.dispose();clearImages() }
+    fun dispose() { runCatching { pushConnectivity?.unregisterNetworkCallback(pushNetworkCallback) };photoPickerOwnership.clear();invalidateCameraReview();uiEpoch++;repository.invalidateReads();scope.cancel();purchases.dispose();clearImages() }
 }

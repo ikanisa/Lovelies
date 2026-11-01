@@ -9,6 +9,12 @@ import java.util.Base64
 class LiveFailure(val code: String, val status: Int = 0, val ambiguous: Boolean = false) : Exception(code)
 typealias WireObject = Map<String, Any?>
 
+/** Only these exact status/code pairs prove recovery retired the original input. */
+internal object OperationRetirement {
+    fun isTerminal(problem:LiveFailure)=problem.status==409 && problem.code=="operation_recovered_without_result" ||
+        problem.status==410 && problem.code=="operation_retired_by_recovery"
+}
+
 object NativeProtocol {
     private val ids = Regex("^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$")
     fun id(value: Any?): String = (value as? String)?.takeIf { ids.matches(it) }?.lowercase() ?: throw LiveFailure("invalid_response")
@@ -64,9 +70,14 @@ object NativeProtocol {
     fun baseUrl(raw: String, debug: Boolean): String {
         val uri = runCatching { URI(raw) }.getOrElse { throw LiveFailure("invalid_api_endpoint") }
         val local = uri.host in setOf("10.0.2.2", "localhost", "127.0.0.1")
-        if (uri.userInfo != null || uri.fragment != null || uri.query != null || uri.host.isNullOrEmpty()
+        if (raw != raw.trim() || uri.normalize()!=uri || uri.rawPath!=uri.path || uri.userInfo != null || uri.fragment != null || uri.query != null || uri.host.isNullOrEmpty()
             || uri.path !in listOf("", "/", "/functions/v1/lovelies-api", "/functions/v1/lovelies-api/") || (uri.scheme != "https" && !(debug && local && uri.scheme == "http"))) throw LiveFailure("invalid_api_endpoint")
         return raw.trimEnd('/')
+    }
+    fun productionBaseUrl(raw: String): String {
+        val value=baseUrl(raw,false);val uri=URI(value)
+        if(uri.port !in setOf(-1,443) || uri.rawPath!="/functions/v1/lovelies-api")throw LiveFailure("invalid_api_endpoint")
+        return value
     }
     /** Capability URLs remain on the configured API and cannot escape the Edge Function prefix. */
     fun downloadPath(raw: String,base: String): String {

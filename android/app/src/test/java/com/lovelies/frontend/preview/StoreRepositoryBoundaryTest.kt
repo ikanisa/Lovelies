@@ -25,11 +25,15 @@ class StoreRepositoryBoundaryTest {
     private fun result(value: StorePurchaseJournal): WireObject=mapOf("active" to true,"billing_environment" to "production",
         "expires_at" to "2026-11-29T12:00:00.000Z","financial_eligible" to true,"original_transaction_id" to value.credentialSha256,
         "product_id" to value.product,"provider" to "google_play","stale" to false,"transaction_id" to "same-subject-order-1")
-    private fun receipt(value: StorePurchaseJournal): WireObject=mapOf("protocol" to "lovelies-store-operation-receipt-v1","actor_id" to account,
+    private fun receipt(value: StorePurchaseJournal): WireObject=mapOf("protocol" to "lovelies-store-operation-receipt-v1","actor_id" to value.account,
         "operation_key" to value.key,"status" to "committed","action" to "store.google","source" to "store","payload_hash" to value.inputHash("digest-v1"),
         "input_scheme" to "digest-v1","credential_sha256" to value.credentialSha256,"receipt_scope" to "historical","result" to result(value))
-    private fun unknown(value: StorePurchaseJournal): WireObject=mapOf("protocol" to "lovelies-store-operation-receipt-v1","actor_id" to account,"operation_key" to value.key,"status" to "unknown")
+    private fun unknown(value: StorePurchaseJournal): WireObject=mapOf("protocol" to "lovelies-store-operation-receipt-v1","actor_id" to value.account,"operation_key" to value.key,"status" to "unknown")
     private class Disk(initial: WireObject=emptyMap()): RepositoryVault {
+        @Volatile private var authority: WireObject?=null
+        override fun loadAuthority()=authority?.toMap()
+        override fun saveAuthority(value: WireObject) { authority=value.toMap() }
+
         @Volatile private var disk=copy(initial)
         @Volatile var beforeWrite: ((WireObject)->Unit)?=null
         @Volatile var afterWrite: ((WireObject)->Unit)?=null
@@ -48,6 +52,72 @@ class StoreRepositoryBoundaryTest {
         disk.load()["google_store_write_uncertainty"]?.let { StorePurchaseJournal.restore(it,origin) })!!
     private fun failure(block: suspend ()->Unit): Throwable=try { runBlocking { block() };throw AssertionError("Expected a retained operation") } catch(problem: Throwable) { if(problem is AssertionError)throw problem;problem }
     private fun await(latch: CountDownLatch) { assertTrue("Bounded boundary wait",latch.await(4,TimeUnit.SECONDS)) }
+
+    @Test fun completedPreviousAccountReceiptIsArchivedBeforeNewAccountPurchase()=runBlocking {
+        val completed=journal().let { it.copy(receipt=receipt(it)) }
+        val nextAccount="00000000-0000-4000-8000-000000000002"
+        val nextSession=session.copy(account=nextAccount,wire=mapOf("account_id" to nextAccount,"auth_method" to "registered_face"))
+        val disk=Disk(mapOf("google_store_operation" to completed.wire()));val dispatches=AtomicInteger()
+        val repo=CloudflareRepository(origin,RepositoryBoundary(disk,{path,scope,_,_,_,_ ->
+            assertEquals(nextAccount,scope.accountId)
+            val current=stored(disk);assertEquals(nextAccount,current.account)
+            assertEquals(completed.wire(),NativeProtocol.rows(disk.load()["google_store_history"]).single())
+            when(path) { "/subscriptions/google/transactions"->{dispatches.incrementAndGet();result(current)}
+                "/me/store-operations"->receipt(current);else->error("Unexpected boundary") }
+        },initialStorage=disk.load(),initialSession=nextSession))
+        repo.verifyGooglePurchase(product,"new-account-purchase-token-0002")
+        assertEquals(1,dispatches.get());assertEquals(nextAccount,stored(disk).account)
+        assertEquals(completed.wire(),NativeProtocol.rows(disk.load()["google_store_history"]).single())
+    }
+
+    @Test fun unresolvedForeignPurchaseAndReusingItsCredentialNeverDispatchForNewAccount() {
+        val nextAccount="00000000-0000-4000-8000-000000000002"
+        val nextSession=session.copy(account=nextAccount,wire=mapOf("account_id" to nextAccount,"auth_method" to "registered_face"))
+        listOf(journal(),journal().let { it.copy(receipt=receipt(it)) }).forEach { original->
+            val disk=Disk(mapOf("google_store_operation" to original.wire()));val calls=AtomicInteger()
+            val repo=CloudflareRepository(origin,RepositoryBoundary(disk,{_,_,_,_,_,_->calls.incrementAndGet();error("No foreign credential dispatch")},initialStorage=disk.load(),initialSession=nextSession))
+            assertEquals("store_operation_account_changed",(failure { repo.verifyGooglePurchase(product,token) } as LiveFailure).code)
+            assertEquals(0,calls.get());assertEquals(original.wire(),disk.load()["google_store_operation"])
+        }
+    }
+
+    @Test fun archivedForeignCredentialCannotBeReassignedByChangingProduct() {
+        val nextAccount="00000000-0000-4000-8000-000000000002"
+        val nextSession=session.copy(account=nextAccount,wire=mapOf("account_id" to nextAccount,"auth_method" to "registered_face"))
+        listOf(product,"lovelies.pro.yearly").forEach { requestedProduct ->
+            val original=journal()
+            val disk=Disk(mapOf("google_store_history" to listOf(original.wire())));val calls=AtomicInteger()
+            val repo=CloudflareRepository(origin,RepositoryBoundary(disk,{_,_,_,_,_,_->calls.incrementAndGet();error("No archived foreign credential dispatch")},initialStorage=disk.load(),initialSession=nextSession))
+            assertEquals("store_operation_account_changed",(failure { repo.verifyGooglePurchase(requestedProduct,token) } as LiveFailure).code)
+            assertEquals(0,calls.get());assertEquals(0,disk.writes.get())
+            assertEquals(listOf(original.wire()),disk.load()["google_store_history"])
+        }
+    }
+
+    @Test fun lostPortfolioWriteRetainsPriorReceiptAndNewMarkerWithoutDispatchOnRestart() {
+        val completed=journal().let { it.copy(receipt=receipt(it)) }
+        val nextAccount="00000000-0000-4000-8000-000000000002"
+        val nextSession=session.copy(account=nextAccount,wire=mapOf("account_id" to nextAccount,"auth_method" to "registered_face"))
+        listOf(false,true).forEach { lostAfterWrite ->
+            val disk=Disk(mapOf("google_store_operation" to completed.wire()));val fired=AtomicBoolean();val dispatches=AtomicInteger()
+            // The reconciled roster first archives foreign evidence without an
+            // active slot, then writes the new marker. Inject only at that marker.
+            val fail: (WireObject)->Unit={ value->if(value["google_store_operation"]?.let { NativeProtocol.obj(it)["account"] }==nextAccount && fired.compareAndSet(false,true))throw IOException("Synthetic portfolio write ambiguity") }
+            if(lostAfterWrite)disk.afterWrite=fail else disk.beforeWrite=fail
+            val json: RepositoryJsonBoundary={path,_,_,_,_,_->
+                if(path=="/subscriptions/google/transactions"){dispatches.incrementAndGet();error("Ambiguous marker cannot dispatch")}
+                assertEquals("/me/store-operations",path);unknown(stored(disk))
+            }
+            val repo=CloudflareRepository(origin,RepositoryBoundary(disk,json,initialStorage=disk.load(),initialSession=nextSession))
+            assertEquals("store_operation_storage_requires_status",(failure { repo.verifyGooglePurchase(product,"new-account-purchase-token-0002") } as LiveFailure).code)
+            disk.beforeWrite=null;disk.afterWrite=null;repo.remember("support_draft","Retain both records")
+            assertEquals(completed.wire(),NativeProtocol.rows(disk.load()["google_store_history"]).single())
+            assertEquals(nextAccount,stored(disk).account)
+            val restarted=CloudflareRepository(origin,RepositoryBoundary(disk,json,initialStorage=disk.load(),initialSession=nextSession))
+            assertEquals("store_operation_requires_status",(failure { restarted.recoverGooglePurchase() } as LiveFailure).code)
+            assertEquals(0,dispatches.get())
+        }
+    }
 
     @Test fun actualStoreMarkerAndUnrelatedRememberShareOneSnapshotWritePublicationBoundary() {
         val disk=Disk();val entered=CountDownLatch(1);val release=CountDownLatch(1);val rememberAttempt=CountDownLatch(1);val rememberDone=CountDownLatch(1)
@@ -211,6 +281,22 @@ class StoreRepositoryBoundaryTest {
         repo.logout(revokeIdentity=true);assertEquals(legacy.wire(),disk.load()["pending"])
         val restarted=CloudflareRepository(origin,RepositoryBoundary(disk,noJson));restarted.bootstrap()
         assertTrue(restarted.guestDeletion!!.receipt!!.completed);assertEquals(legacy,restarted.pending)
+    }
+    @Test fun staleCompletedGuestProofCannotOverwriteADifferentNewerDeletionIntentDuringLogout()=runBlocking {
+        val legacy=storeVariants().first();val (completed,disk)=completedGuest(legacy)
+        val calls=AtomicInteger()
+        val repo=CloudflareRepository(origin,RepositoryBoundary(disk,{_,_,_,_,_,_->calls.incrementAndGet();error("No dispatch is allowed")}))
+        repo.bootstrap();assertEquals(completed,repo.guestDeletion)
+        val replacement=GuestDeletionRecord.create(origin,account).let { it.copy(receipt=GuestDeletionReceipt.parse(deletionResponse(it,false),it)) }
+        assertNotEquals(completed.operationKey,replacement.operationKey)
+        // Another repository has replaced the slot after this repository loaded its completed proof.
+        val newer=disk.load()+mapOf("guest_deletion" to replacement.wire());disk.save(newer)
+        val writes=disk.writes.get()
+        val problem=failure { repo.logout(revokeIdentity=true) }
+        assertTrue(problem is LiveFailure);assertEquals("deletion_scope_changed",(problem as LiveFailure).code)
+        assertEquals(newer,disk.load());assertEquals(writes,disk.writes.get())
+        assertNull(repo.credentials);assertNull(repo.currentScope().accountId);assertTrue(repo.retirementPending)
+        assertEquals(0,calls.get())
     }
     @Test fun actualLogoutRetainsEveryStoreSafetyPredicateWithOrWithoutRestoredMemory()=runBlocking {
         for(intent in storeVariants())for(revoke in listOf(false,true))for(restored in listOf(false,true)) {

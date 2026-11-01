@@ -1,8 +1,10 @@
 import { asyncFilter, asyncMap } from './async-collections.ts';
 import { ApiError, jsonBody, ok, record, stable, uuid, type Actor, type AppContext } from './types.ts';
-import { assertOperationReceiptAvailable, executeOperation, prepareOperation } from './operations.ts';
+import { assertGenericOperationNotRecovered, assertOperationNotRecovered, assertOperationReceiptAvailable, executeOperation, prepareOperation } from './operations.ts';
+import { assertOperatorOperationCapability } from './operator-capabilities.ts';
 import { enqueueNotification } from './notifications.ts';
 import { assertMediaActor, assetMetadata, availableGrant, currentAsset, currentPair, eligibleBindings, galleryAction, idList, mediaSource, protectedRendition, sameBinding, sourceAllowed, type MatchBinding, type MediaSource, type Asset } from './gallery.ts';
+import { accountCursor, accountPage } from './account-pagination.ts';
 const PROTOCOL = 'reviewed-sharing-v1';
 const sourceWire = (source: MediaSource) => ({ source });
 const edgeKey = (pair: {
@@ -326,6 +328,7 @@ async function requestDecisionOperation(payload: Record<string, unknown>, ctx: A
     const key = payload.operation_key;
     return ctx.db.read(async () => {
         await assertMediaActor(ctx, actor);
+        await assertOperationNotRecovered(ctx, actor.accountId, 'personal', key);
         const row = await ctx.db.one<{ action: string; payload_hash: string; payload_json: string; response_json: string }>(
             'SELECT action,payload_hash,payload_json,response_json FROM operations WHERE actor_id=? AND source=? AND operation_key=?', actor.accountId, 'personal', key);
         if (!row) {
@@ -393,35 +396,43 @@ export async function handleSharing(request: Request, ctx: AppContext): Promise<
             (await assertMediaActor(ctx, actor));
             if (typeof payload.operation_key !== 'string' || payload.operation_key.length < 8 || payload.operation_key.length > 200)
                 throw new ApiError(400, 'invalid_operation_key');
-            const rows = (await ctx.db.all<{
-                action: string;
-                payload_json: string;
-                response_json: string;
-                source: string;
-            }>('SELECT action,payload_json,response_json,source FROM operations WHERE actor_id=? AND operation_key=?', actor.accountId, payload.operation_key));
-            // A store receipt needs its typed, input-bound recovery contract.
-            // Do not release an unvalidated row or a definitive retired/conflict
-            // result through this generic route, including mixed-source keys.
-            if (rows.some(row => row.source === 'store' || row.action === 'store.apple' || row.action === 'store.google'))
-                throw new ApiError(503, 'store_operation_receipt_unavailable');
-            if (rows.length > 1)
-                throw new ApiError(409, 'operation_source_ambiguous');
-            if (!rows.length)
-                return { status: 'unknown' };
-            assertOperationReceiptAvailable(rows[0]);
-            const stored = JSON.parse(rows[0].response_json);
-            const result = rows[0].action === 'sharing.commit' && stored.status !== 'changed' && stored.preview_id
-                ? (await outcome(ctx, actor, stored.preview_id, payload.operation_key)) : stored;
-            (await assertMediaActor(ctx, actor));
-            return result;
+            try {
+                const rows = (await ctx.db.all<{
+                    action: string;
+                    payload_json: string;
+                    response_json: string;
+                    source: string;
+                }>('SELECT action,payload_json,response_json,source FROM operations WHERE actor_id=? AND operation_key=?', actor.accountId, payload.operation_key));
+                // A store receipt needs its typed, input-bound recovery contract.
+                // Do not release an unvalidated row or a definitive retired/conflict
+                // result through this generic route, including mixed-source keys.
+                if (rows.some(row => row.source === 'store' || row.action === 'store.apple' || row.action === 'store.google'))
+                    throw new ApiError(503, 'store_operation_receipt_unavailable');
+                await assertGenericOperationNotRecovered(ctx, actor.accountId, payload.operation_key, rows.map(row => row.source));
+                if (rows.length > 1)
+                    throw new ApiError(409, 'operation_source_ambiguous');
+                for (const row of rows) await assertOperatorOperationCapability(ctx, actor, row.action, row.source);
+                if (!rows.length)
+                    return { status: 'unknown' };
+                assertOperationReceiptAvailable(rows[0]);
+                const stored = JSON.parse(rows[0].response_json);
+                return rows[0].action === 'sharing.commit' && stored.status !== 'changed' && stored.preview_id
+                    ? await outcome(ctx, actor, stored.preview_id, payload.operation_key) : stored;
+            } finally {
+                // Unknown, recovered, ambiguous and retired receipts must retain
+                // the same current-account authority as successful result reads.
+                await assertMediaActor(ctx, actor);
+            }
         })));
     if (action === 'inbox' || action === 'requests' || action === 'history')
         return ok((await ctx.db.transaction(async () => {
             (await assertMediaActor(ctx, actor));
-            const rows = (await ctx.db.all<{
-                id: string;
-            }>("SELECT id FROM sharing_requests WHERE " + (action === 'history' ? 'sender_id' : 'recipient_id') + "=? AND source='personal' ORDER BY created_at DESC,id LIMIT 100", actor.accountId));
-            const result = { items: (await asyncMap(rows, async (row) => (await receipt(ctx, actor, row.id)))) };
+            const scope=action==='history'?'sharing.history':'sharing.inbox',column=action==='history'?'sender_id':'recipient_id';
+            const {limit,cursor}=accountPage(payload,actor.accountId,scope);
+            const rows=await ctx.db.all<{id:string;created_at:number}>(`SELECT id,created_at FROM sharing_requests WHERE ${column}=? AND source='personal'
+                AND (? IS NULL OR created_at<? OR (created_at=? AND id<?)) ORDER BY created_at DESC,id DESC LIMIT ?`,actor.accountId,cursor?.created_at??null,cursor?.created_at??null,cursor?.created_at??null,cursor?.id??null,limit+1);
+            const selected=rows.slice(0,limit),total=(await ctx.db.one<{n:number}>(`SELECT count(*) n FROM sharing_requests WHERE ${column}=? AND source='personal'`,actor.accountId))!.n;
+            const result={items:await asyncMap(selected,async row=>receipt(ctx,actor,row.id)),page:{limit,total,next_cursor:rows.length>limit?accountCursor(selected.at(-1)!,actor.accountId,scope):null}};
             (await assertMediaActor(ctx, actor));
             return result;
         })));

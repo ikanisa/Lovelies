@@ -3,6 +3,7 @@ import { randomUUID } from 'node:crypto';
 import { test } from 'node:test';
 import { PostgresDatabase } from '../src/database.ts';
 import { RestoreDatabaseFence } from '../src/restore-database.ts';
+import { planEvents } from './restore-plan-fixture.mjs';
 import {
   fixture, databaseConnection, controlRow, intent, insertAccount, unavailable,
   seedAccount, privateRows, asBackend,
@@ -81,19 +82,33 @@ test('actual PostgreSQL second pool can acknowledge and advance before the origi
   }
 });
 
-test('actual PostgreSQL snapshot rollback after confirmed COMMIT is reread before acknowledgement and cannot certify the cached successor', actualPostgres, async t => {
+test('actual PostgreSQL snapshot rollback rejects cached acknowledgement then reconciles only exact restrictions', actualPostgres, async t => {
   const f = await fixture(t), id = await seedAccount(f.h), operation = intent();
   const original = await controlRow(f.h);
+  const accountBefore = (await privateRows(f.h, 'SELECT * FROM lovelies_private.accounts WHERE id=$1', [id]))[0];
   const schemaBefore = await privateRows(f.h, 'SELECT max(version) AS version FROM lovelies_private.schema_versions');
-  let callbacks = 0, rollbackApplied = false;
+  let callbacks = 0, rollbackApplied = false, unfencedRejected = false, accepted;
   f.faults.afterCommit = async () => {
     delete f.faults.afterCommit;
     // First verify the real mutation and checkpoint reached committed storage.
     const committed = await controlRow(f.h);
     assert.equal(committed.checkpoint_revision, 1);
     assert.equal(committed.last_operation_id, operation.operation_id);
-    assert.equal((await privateRows(f.h, 'SELECT name FROM lovelies_private.accounts WHERE id=$1', [id]))[0].name, 'Value after backup');
-    assert.equal((await f.journal.lookup(operation.operation_id)).status, 'pending');
+    const committedAccount = (await privateRows(f.h, 'SELECT * FROM lovelies_private.accounts WHERE id=$1', [id]))[0];
+    assert.equal(committedAccount.name, 'Value after backup');assert.equal(committedAccount.disabled_at, 1_000);
+    accepted = await f.journal.lookup(operation.operation_id);assert.equal(accepted.status, 'pending');
+
+    // A normal raw backend writer must still fail in this bound database. This
+    // explicit rejection precedes the fixture's privileged snapshot restore.
+    await asBackend(f.h.engine, async () => {
+      const settings = (await f.h.engine.query("SELECT current_setting('lovelies.restore_replay',true) replay,current_setting('lovelies.writer_protocol',true) writer")).rows[0];
+      assert.notEqual(settings.replay, 'on');assert.notEqual(settings.writer, '2');
+      await assert.rejects(() => f.h.engine.query('UPDATE lovelies_private.accounts SET name=$1 WHERE id=$2', ['Unfenced writer must fail', id]),
+        error => error.code === '55000' && error.message === 'restore_writer_fence_required');
+      unfencedRejected = true;
+    });
+    assert.deepEqual((await privateRows(f.h, 'SELECT * FROM lovelies_private.accounts WHERE id=$1', [id]))[0], committedAccount);
+    assert.deepEqual(await controlRow(f.h), committed);
 
     // Reinstall only this disposable fixture's earlier data/control snapshot in
     // one actual PG transaction. The independently current journal is retained.
@@ -101,7 +116,8 @@ test('actual PostgreSQL snapshot rollback after confirmed COMMIT is reread befor
     await asBackend(f.h.engine, async () => {
       await f.h.engine.exec('BEGIN');
       try {
-        await f.h.engine.query('UPDATE lovelies_private.accounts SET name=$1 WHERE id=$2', ['Preserved synthetic account', id]);
+        await f.h.engine.query("SELECT set_config('lovelies.restore_replay','on',true)");
+        await f.h.engine.query('UPDATE lovelies_private.accounts SET name=$1,disabled_at=$2 WHERE id=$3', [accountBefore.name, accountBefore.disabled_at, id]);
         await f.h.engine.query(`UPDATE lovelies_private.restore_control SET
           project_id=$1,database_id=$2,incarnation_id=$3,checkpoint_revision=$4,checkpoint_hash=$5,
           journal_sequence=$6,journal_hash=$7,last_operation_id=$8,last_plan_hash=$9 WHERE singleton=1`,
@@ -113,25 +129,54 @@ test('actual PostgreSQL snapshot rollback after confirmed COMMIT is reread befor
         await f.h.engine.exec('ROLLBACK');
         throw error;
       }
+      assert.notEqual((await f.h.engine.query("SELECT current_setting('lovelies.restore_replay',true) replay")).rows[0].replay, 'on', 'snapshot privilege must end with its transaction');
     });
   };
 
-  await assert.rejects(() => f.db.transaction(async () => {
+  const callback = async () => {
     callbacks++;
-    await f.db.run('UPDATE accounts SET name=? WHERE id=?', 'Value after backup', id);
+    // Commit a positive profile field and one exact restrictive fact together.
+    // Recovery may preserve the restriction, never reconstruct the name edit.
+    await f.db.run('UPDATE accounts SET name=?,disabled_at=? WHERE id=?', 'Value after backup', 1_000, id);
     return { outcome: 'must_not_escape' };
-  }, operation), unavailable);
+  };
+  await assert.rejects(() => f.db.transaction(callback, operation), unavailable);
   assert.equal(rollbackApplied, true);
+  assert.equal(unfencedRejected, true);
   assert.equal(callbacks, 1);
   assert.equal(ackCalls(f.trace, operation), 0, 'a confirmed former commit is insufficient after the local marker rolled back');
   assert.deepEqual(await controlRow(f.h), original);
   assert.deepEqual(await privateRows(f.h, 'SELECT max(version) AS version FROM lovelies_private.schema_versions'), schemaBefore);
-  assert.equal((await privateRows(f.h, 'SELECT name FROM lovelies_private.accounts WHERE id=$1', [id]))[0].name, 'Preserved synthetic account');
-  assert.equal((await f.journal.lookup(operation.operation_id)).status, 'pending');
-  // The known predecessor of a pending operation remains fenced, rather than
-  // being inferred aborted or automatically replayed/acknowledged.
+  assert.deepEqual((await privateRows(f.h, 'SELECT * FROM lovelies_private.accounts WHERE id=$1', [id]))[0], accountBefore);
+  assert.deepEqual(await f.journal.lookup(operation.operation_id), accepted);
   assert.equal((await f.journal.control()).state, 'pending');
-  await assert.rejects(() => f.db.one('SELECT name FROM accounts WHERE id=?', id), unavailable);
+  const events = await planEvents(f, accepted);
+  assert.deepEqual(events.map(({kind,scope})=>({kind,scope})), [{kind:'account-authority-retired',scope:{account_id:id,auth_epoch:String(accountBefore.auth_epoch)}}]);
+  assert.equal(accepted.plan.input_hash, operation.input_hash);assert.deepEqual(accepted.plan.allocations, operation.allocations);
+
+  // A fresh admission now replays the independently accepted restriction and
+  // records a terminal negative outcome. It cannot certify the lost positive
+  // callback or use the originating pool's cached COMMIT marker as authority.
+  const after = await f.db.one('SELECT * FROM accounts WHERE id=?', id);
+  assert(Number.isSafeInteger(after.disabled_at) && after.disabled_at >= accepted.plan.prepared_at);
+  assert.deepEqual(after, {...accountBefore,disabled_at:after.disabled_at});
+  const recovered = await f.journal.lookup(operation.operation_id);
+  assert.equal(recovered.status, 'recovered');assert.equal(recovered.plan_hash, accepted.plan_hash);assert.deepEqual(recovered.plan, accepted.plan);
+  assert.deepEqual(await f.h.db.one('SELECT operation_id,input_hash,plan_hash,outcome FROM restore_recovered_operations WHERE operation_id=?',operation.operation_id),
+    {operation_id:operation.operation_id,input_hash:operation.input_hash,plan_hash:accepted.plan_hash,outcome:'restricted-abort'});
+  const receipts = await f.journal.restrictionPage(accepted.plan.expected.cursor,accepted.plan.next.cursor);
+  const replayed = await privateRows(f.h,'SELECT sequence,hash,operation_id,kind,scope_json FROM lovelies_private.restore_replay_facts ORDER BY sequence');
+  assert.deepEqual(replayed.map(row=>({...row,scope_json:JSON.parse(row.scope_json)})),receipts.map(row=>({sequence:row.sequence,hash:row.hash,operation_id:row.event.operation_id,kind:row.event.kind,scope_json:row.event.scope})));
+  const next = accepted.plan.next;
+  assert.deepEqual(await controlRow(f.h),{...original,checkpoint_revision:next.checkpoint.revision,checkpoint_hash:next.checkpoint.hash,
+    journal_sequence:next.cursor.sequence,journal_hash:next.cursor.hash,last_operation_id:operation.operation_id,last_plan_hash:accepted.plan_hash});
+  const serving = await f.journal.control();assert.equal(serving.state,'serving');assert.deepEqual(serving.marker,next);
+  await assert.rejects(() => f.db.transaction(callback,operation),error=>error.status===410&&error.code==='operation_retired_by_recovery');
+  await assert.rejects(() => f.db.transaction(callback,{...operation,input_hash:'f'.repeat(64)}),error=>error.status===409&&error.code==='operation_key_conflict');
   assert.equal(callbacks, 1);
   assert.equal(ackCalls(f.trace, operation), 0);
+  assert.equal(f.trace.filter(entry=>entry.kind==='journal'&&entry.path==='/v1/operations/'+operation.operation_id+'/reconcile').length,1);
+  assert.equal(f.trace.filter(entry=>entry.kind==='journal'&&entry.path==='/v1/operations/prepare').length,1);
+  assert.deepEqual(await f.db.one('SELECT * FROM accounts WHERE id=?',id),after);
+  assert.deepEqual(await f.journal.lookup(operation.operation_id),recovered);
 });

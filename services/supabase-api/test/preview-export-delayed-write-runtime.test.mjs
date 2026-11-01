@@ -45,7 +45,7 @@ pgliteTest('generated preview: acknowledged synthetic write settles and permits 
  try{await within(processPhotoJob({attempt_id:complete.attempt_id},h.app));assert.equal(fake.writes.length,1);const target=fake.writes[0].key,state=await facts(h,owner,'PHOTOS',target);assert.equal(state.writers.length,1);assert.equal(state.writers[0].status,'settled');assert(state.writers[0].settled_at!==null);const counts=await publicationCounts(h,reservation.asset_id);assert.equal(counts.renditions,1);assert.equal(counts.completed,1);assert.equal(counts.candidates+counts.match_origins+counts.media_grants,0);const row=(await h.storage.exec('SELECT object_key,checksum_sha256 FROM renditions WHERE asset_id=? AND status=\'ready\'',reservation.asset_id))[0];assert.equal(row.object_key,target);assert.equal(row.checksum_sha256,fake.writes[0].sha256);const response=await h.request(`/community/media/${reservation.asset_id}/preview`,{token:owner.token});assert.equal(response.status,200);assert.equal(await sha256(await response.arrayBuffer()),fake.writes[0].sha256);const peer=await h.request(`/community/media/${reservation.asset_id}/preview`,{token:reviewer.token});assert.equal(peer.status,403);await peer.body?.cancel();assert(await memory.head(target));assert.equal(fake.events.some(e=>e.kind==='delete'&&e.key===target),false);}finally{await within(fake.release());}
 });
 
-async function exported(t,mode){const f=await setup(t),{h,owner,reviewer}=f;const request=(await h.json('/privacy/export',{token:owner.token,body:{operation_key:key()}},201)).privacy_request;await h.json(`/privacy-requests/${request.id}/approve`,{token:reviewer.token,body:{operation_key:key()}});const memory=h.env.PRIVACY_EXPORTS,fake=delayedPrivateMedia(memory,{bucket:'privacy-exports',prefix:`privacy/${owner.accountId}/${request.id}/`,mode});h.env.PRIVACY_EXPORTS=fake.bucket;const row=(await h.storage.exec('SELECT expires_at FROM privacy_requests WHERE id=?',request.id))[0];return {...f,request,memory,fake,expiresAt:row.expires_at};}
+async function exported(t,mode){const f=await setup(t),{h,owner,reviewer}=f;const request=(await h.json('/privacy/export',{token:owner.token,body:{operation_key:key()}},201)).privacy_request;await h.json(`/privacy-requests/${request.id}/approve`,{token:reviewer.token,body:{operation_key:key()}});const memory=h.env.PRIVACY_EXPORTS,fake=delayedPrivateMedia(memory,{bucket:'privacy-exports',prefix:`privacy/${owner.accountId}/${request.id}/`,mode,maximumWrites:mode==='acknowledged'?2:1});h.env.PRIVACY_EXPORTS=fake.bucket;const row=(await h.storage.exec('SELECT expires_at FROM privacy_requests WHERE id=?',request.id))[0];return {...f,request,memory,fake,expiresAt:row.expires_at};}
 async function exportPublication(h,id){return {request:(await h.storage.exec('SELECT status,completed_at,export_key FROM privacy_requests WHERE id=?',id))[0],exports:await h.storage.exec('SELECT id,object_key,status FROM privacy_exports WHERE request_id=? ORDER BY id',id),grants:Number((await h.storage.exec('SELECT count(*) n FROM privacy_export_grants WHERE request_id=?',id))[0].n)};}
 pgliteTest('privacy export: rejected write stays pending after real cleanup and delayed remote arrival',{timeout:60000},async t=>{
  const f=await exported(t,'ambiguous'),{h,owner,reviewer,request,memory,fake}=f;
@@ -70,7 +70,18 @@ pgliteTest('privacy export: rejected write stays pending after real cleanup and 
 });
 pgliteTest('privacy export: acknowledged synthetic write settles and permits its session-bound download',{timeout:60000},async t=>{
  const f=await exported(t,'acknowledged'),{h,owner,reviewer,request,fake,memory}=f;
- try{const completed=await h.json(`/privacy-requests/${request.id}/process`,{token:reviewer.token,body:{}});assert.equal(completed.privacy_request.status,'completed');assert.equal(fake.writes.length,1);const target=fake.writes[0].key,state=await facts(h,owner,'PRIVACY_EXPORTS',target);assert.equal(state.writers.length,1);assert.equal(state.writers[0].status,'settled');assert(state.writers[0].settled_at!==null);const publication=await exportPublication(h,request.id);assert.equal(publication.request.export_key,target);assert.equal(publication.exports.length,1);assert.equal(publication.exports[0].status,'published');const grant=await h.json(`/privacy-exports/${request.id}/grant`,{token:owner.token,body:{}});const response=await h.request(grant.grant_path,{token:owner.token});assert.equal(response.status,200);const bytes=new Uint8Array(await response.arrayBuffer());assert.equal(await sha256(bytes),fake.writes[0].sha256);assert.equal(JSON.parse(new TextDecoder().decode(bytes)).subject_user_id,owner.accountId);bytes.fill(0);await h.json(grant.grant_path,{token:owner.token},401);assert.equal(await memory.head(target),null);const retired=await facts(h,owner,'PRIVACY_EXPORTS',target);assert(retired.cleanup.some(row=>row.status==='verified'));}finally{await within(fake.release());}
+ try{
+  const completed=await h.json(`/privacy-requests/${request.id}/process`,{token:reviewer.token,body:{}});assert.equal(completed.privacy_request.status,'completed');
+  const publication=await exportPublication(h,request.id),target=publication.request.export_key,write=fake.writes.find(row=>row.key===target);
+  assert(write,'the actual published root must have an acknowledged PUT');assert.equal(fake.writes.filter(row=>row.key===target).length,1);
+  const chunks=(await h.db.one('SELECT count(*) n FROM privacy_export_chunks WHERE publication_id=?',publication.exports[0].id)).n;
+  assert(chunks>=1);assert.equal(fake.writes.length,chunks+1,'bounded staging chunks and the compatible flat root each have one actual PUT');
+  const state=await facts(h,owner,'PRIVACY_EXPORTS',target);assert.equal(state.writers.length,1);assert.equal(state.writers[0].status,'settled');assert(state.writers[0].settled_at!==null);
+  assert.equal(publication.exports.length,1);assert.equal(publication.exports[0].status,'published');
+  const grant=await h.json(`/privacy-exports/${request.id}/grant`,{token:owner.token,body:{}}),response=await h.request(grant.grant_path,{token:owner.token});assert.equal(response.status,200);
+  const bytes=new Uint8Array(await response.arrayBuffer());assert.equal(await sha256(bytes),write.sha256);assert.equal(JSON.parse(new TextDecoder().decode(bytes)).subject_user_id,owner.accountId);bytes.fill(0);
+  await h.json(grant.grant_path,{token:owner.token},401);assert.equal(await memory.head(target),null);const retired=await facts(h,owner,'PRIVACY_EXPORTS',target);assert(retired.cleanup.some(row=>row.status==='verified'));
+ }finally{await within(fake.release());}
 });
 
 // Simulate a local response being lost only after the selected SQL transaction
@@ -106,12 +117,12 @@ pgliteTest('privacy export: lost publication reply preserves the committed one-t
  try{
   const response=await h.request(`/privacy-requests/${request.id}/process`,{token:reviewer.token,body:{}});
   assert(response.status>=500);await response.body?.cancel();assert(fault.injected(),'must lose a reply after actual publication commit');fault.restore();
-  const target=fake.writes[0].key,state=await exportPublication(h,request.id);
+  const state=await exportPublication(h,request.id),target=state.request.export_key,write=fake.writes.find(row=>row.key===target);assert(write);
   assert.equal(state.request.status,'completed');assert.equal(state.request.export_key,target);assert.equal(state.exports[0].status,'published');
   await within(h.db.invocation(()=>flushPrivacyCleanup(h.app)));assert(await memory.head(target));
   const grant=await h.json(`/privacy-exports/${request.id}/grant`,{token:owner.token,body:{}});
   const download=await h.request(grant.grant_path,{token:owner.token});assert.equal(download.status,200);
-  assert.equal(await sha256(await download.arrayBuffer()),fake.writes[0].sha256);
+  assert.equal(await sha256(await download.arrayBuffer()),write.sha256);
  }finally{fault.restore();await within(fake.release());}
 });
 
@@ -184,15 +195,19 @@ pgliteTest('generated preview: lost writer registration reply dispatches no PUT 
  }finally{fault.restore();await within(fake.release());}
 });
 
-pgliteTest('privacy export: lost writer registration reply dispatches no PUT or cleanup',{timeout:60000},async t=>{
+pgliteTest('privacy export: lost writer registration reply dispatches no PUT and retains exact cleanup',{timeout:60000},async t=>{
  const f=await exported(t,'acknowledged'),{h,owner,reviewer,request,fake}=f;
  const fault=loseCommitReply(h,'INSERT INTO media_write_intents');
  try{
   const response=await h.request(`/privacy-requests/${request.id}/process`,{token:reviewer.token,body:{}});
   assert(response.status>=500);await response.body?.cancel();assert(fault.injected());fault.restore();
   const rows=await h.storage.exec("SELECT object_key,status,settled_at FROM media_write_intents WHERE account_id=? AND bucket='PRIVACY_EXPORTS'",owner.accountId);
-  assert.equal(rows.length,1);assert.equal(rows[0].status,'pending');assert.equal(rows[0].settled_at,null);assert.equal(fake.writes.length,0);
-  const state=await facts(h,owner,'PRIVACY_EXPORTS',rows[0].object_key);assert.equal(state.cleanup.length,0);
+  assert.equal(rows.length,1);assert.equal(rows[0].status,'settled');assert(rows[0].settled_at!==null);assert.equal(fake.writes.length,0);
+  // This exact invocation knows it did not call PUT. No successor may dispatch
+  // its private attempt ID, so the proven-undispatched writer can settle while
+  // preserving the registered exact-key cleanup for ordinary reconciliation.
+  const state=await facts(h,owner,'PRIVACY_EXPORTS',rows[0].object_key);assert.equal(state.cleanup.length,1);assert.equal(state.cleanup[0].status,'pending');
+  assert(!fake.events.some(event=>event.kind==='delete'&&event.key===rows[0].object_key));
   const grant=await h.request(`/privacy-exports/${request.id}/grant`,{token:owner.token,body:{}});assert.equal(grant.status,404);await grant.body?.cancel();
  }finally{fault.restore();await within(fake.release());}
 });

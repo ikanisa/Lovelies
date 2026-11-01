@@ -993,3 +993,48 @@
 "Your sign-in state changed. Authenticate again to check the original request." = "Your sign-in state changed. Authenticate again to check the original request.";
 "Device authorization expired. Authenticate again to continue the original request." = "Device authorization expired. Authenticate again to continue the original request.";
 "Confirm access on this device to continue your Lovelies request. Your selfies are verified separately." = "Confirm access on this device to continue your Lovelies request. Your selfies are verified separately.";
+
+/* Recoverable delivery, retirement and library scope. */
+"Favorites are saved on this device. Only photos your account can currently access are shown." = "Favorites are saved on this device. Only photos your account can currently access are shown.";
+"Review the available privacy policy and terms before subscribing." = "Review the available privacy policy and terms before subscribing.";
+"Sign-out is not durably confirmed. Unlock this device and retry before closing the app." = "Sign-out is not durably confirmed. Unlock this device and retry before closing the app.";
+"This export delivery expired. Request a new export from the privacy center." = "This export delivery expired. Request a new export from the privacy center.";
+"This export was already delivered and its local copy is unavailable. Request a new export from the privacy center." = "This export was already delivered and its local copy is unavailable. Request a new export from the privacy center.";
+
+"This App Store environment cannot grant a live Lovelies entitlement." = "This App Store environment cannot grant a live Lovelies entitlement.";
+
+"Deletion is confirmed by the server. Secure cleanup on this device still needs to finish; your receipt is retained for retry." = "Deletion is confirmed by the server. Secure cleanup on this device still needs to finish; your receipt is retained for retry.";
+
+"Finish device cleanup" = "Finish device cleanup";
+
+"Choose Save to Files in the system share sheet. If delivery is interrupted, reopen this export to continue. Keep the saved copy private." = "Choose Save to Files in the system share sheet. If delivery is interrupted, reopen this export to continue. Keep the saved copy private.";
+"Purchase verification ended without confirmation. Choose Restore purchases to try again." = "Purchase verification ended without confirmation. Choose Restore purchases to try again.";
+
+/* Annual eligibility review. Kinyarwanda wording requires human release review. */
+"Review eligibility for this device" = "Review eligibility for this device";
+"Next eligibility review" = "Next eligibility review";
+"Review your eligibility" = "Review your eligibility";
+"Review is required at least once a year. Renewing eligibility does not restore photo matching, photo processing or old sharing permissions." = "Review is required at least once a year. Renewing eligibility does not restore photo matching, photo processing or old sharing permissions.";
+"I confirm I am 18 or over." = "I confirm I am 18 or over.";
+"I explicitly consent to using my registered face reference for face sign-in under the displayed policy." = "I explicitly consent to using my registered face reference for face sign-in under the displayed policy.";
+"Renew eligibility" = "Renew eligibility";
+"I confirm that parent or legal guardian approval is still required for me." = "I confirm that parent or legal guardian approval is still required for me.";
+"Renew eligibility and request guardian review" = "Renew eligibility and request guardian review";
+"Eligibility for this device" = "Eligibility for this device";
+"This device check does not sign you in or allow camera or photo access." = "This device check does not sign you in or allow camera or photo access.";
+"Continue to face sign-in" = "Continue to face sign-in";
+"Your saved device cannot restore a retired face reference by itself. Use the existing profile recovery control or your recovery backup, or contact support. Keep this account and its saved requests." = "Your saved device cannot restore a retired face reference by itself. Use the existing profile recovery control or your recovery backup, or contact support. Keep this account and its saved requests.";
+"Your saved device cannot restore the retired face reference by itself. Use your existing recovery backup or contact support; keep this account and its saved requests." = "Your saved device cannot restore the retired face reference by itself. Use your existing recovery backup or contact support; keep this account and its saved requests.";
+"Open face profile recovery" = "Open face profile recovery";
+"Use recovery backup" = "Use recovery backup";
+"Your annual eligibility review is due. Face setup and photos stay paused until the required review is complete." = "Your annual eligibility review is due. Face setup and photos stay paused until the required review is complete.";
+
+/* Retained-control renewal; Kinyarwanda copy requires human release review. */
+"Check retained management control" = "Check retained management control";
+"Your original control renewal is saved. Retry that same review; it cannot be replaced by a different consent or account." = "Your original control renewal is saved. Retry that same review; it cannot be replaced by a different consent or account.";
+"Retry saved control renewal" = "Retry saved control renewal";
+"Renew access to this retained management control with a fresh face-authentication choice. This does not sign you in or grant photo matching. Continue the separate face-profile recovery after renewal." = "Renew access to this retained management control with a fresh face-authentication choice. This does not sign you in or grant photo matching. Continue the separate face-profile recovery after renewal.";
+"Renew retained management control" = "Renew retained management control";
+"Eligibility review is complete. Continue with a fresh face sign-in or the existing face-profile recovery for this same account. Previous photo purposes remain off." = "Eligibility review is complete. Continue with a fresh face sign-in or the existing face-profile recovery for this same account. Previous photo purposes remain off.";
+"Continue with this account" = "Continue with this account";
+"Your retained face reference is unavailable. Use your existing face-profile recovery control or recovery backup. This device cannot create a replacement account." = "Your retained face reference is unavailable. Use your existing face-profile recovery control or recovery backup. This device cannot create a replacement account.";

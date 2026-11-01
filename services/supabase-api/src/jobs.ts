@@ -1,6 +1,6 @@
 import { maintainAudience } from './audience.ts';
 import { unsupportedCleanupScanCounts } from './cleanup-scan.ts';
-import { ApiError, digest, stable, record, type AppContext, type Database } from './types.ts';
+import { ApiError, digest, stable, record, type AppContext, type Database, type QueueAdmission } from './types.ts';
 import { cleanupFaceProofs } from './face-auth.ts';
 import { finishLifecycleCleanup } from './face-profile.ts';
 import { processPhotoJob, flushPhotoOutbox } from './processing.ts';
@@ -9,23 +9,68 @@ import { processNotificationJob, flushNotificationOutbox } from './notifications
 import { expireUploads } from './upload-transfers.ts';
 import { runRetention } from './retention.ts';
 import { pruneRefreshDeliveries } from './refresh-delivery.ts';
+import { maintainManagedAuth } from './managed-auth.ts';
 
 export class PostgresJobQueue {
   constructor(private readonly db:Database,private readonly now=Date.now){}
-  async send(input:unknown):Promise<void>{
+  async send(input:unknown):Promise<QueueAdmission>{
     const message=record(input);
     if(!['photo','privacy','notification'].includes(message.category)||!message.payload||Object.keys(message).some(key=>!['category','payload'].includes(key)))throw new ApiError(500,'invalid_job');
     const payload=stable(message.payload);if(payload.length>16384)throw new ApiError(500,'job_too_large');
     const id=await digest(stable(message));
-    await this.db.run("INSERT INTO job_queue(id,category,payload_json,state,available_at,created_at) VALUES(?,?,?,'pending',?,?) ON CONFLICT(id) DO NOTHING",id,message.category,payload,this.now(),this.now());
+    return this.db.transaction(async()=>{
+      const inserted=await this.db.one<{id:string}>("INSERT INTO job_queue(id,category,payload_json,state,available_at,created_at) VALUES(?,?,?,'pending',?,?) ON CONFLICT(id) DO NOTHING RETURNING id",id,message.category,payload,this.now(),this.now());
+      const row=await this.db.one<{category:string;payload_json:string;state:QueueAdmission['state']}>('SELECT category,payload_json,state FROM job_queue WHERE id=?',id);
+      if(!row||row.category!==message.category||row.payload_json!==payload||!['pending','processing','completed','failed'].includes(row.state))
+        throw new ApiError(503,'job_queue_binding_invalid');
+      const terminal=row.state==='completed'||row.state==='failed';
+      let domain_terminal=false;
+      if(terminal){
+        const body=record(message.payload);
+        // Verify the exact domain identity. A missing or still-live record is
+        // unresolved; a terminal queue state alone cannot acknowledge handoff.
+        if(message.category==='photo'&&Object.keys(body).length===1&&typeof body.attempt_id==='string'){
+          const domain=await this.db.one<{status:string}>('SELECT status FROM processing_attempts WHERE id=?',body.attempt_id);
+          domain_terminal=!!domain&&['completed','failed','cancelled'].includes(domain.status);
+        }else if(message.category==='privacy'&&Object.keys(body).length===1&&typeof body.request_id==='string'){
+          const domain=await this.db.one<{status:string}>('SELECT status FROM privacy_requests WHERE id=?',body.request_id);
+          domain_terminal=!!domain&&['completed','rejected','cancelled'].includes(domain.status);
+        }else if(message.category==='notification'&&Object.keys(body).length===1&&typeof body.notification_id==='string'){
+          const domain=await this.db.one<{status:string}>('SELECT status FROM notification_jobs WHERE notification_id=?',body.notification_id);
+          domain_terminal=!!domain&&['accepted','cancelled','inbox_only'].includes(domain.status)&&!await jobDomainPending(this.db,'notification',body);
+        }
+      }
+      return {id,state:row.state,admission:terminal?'terminal':inserted?'queued':'existing',domain_terminal};
+    });
   }
+}
+/** Reads durable domain state. Queue completion never substitutes for an
+ * export/erasure/publication/provider receipt, including after transport loss. */
+export async function jobDomainPending(db:Database,category:string,payload:unknown):Promise<boolean>{
+  const body=record(payload),field=category==='photo'?'attempt_id':category==='privacy'?'request_id':category==='notification'?'notification_id':null;
+  if(!field||Object.keys(body).length!==1||typeof body[field]!=='string')throw new ApiError(500,'job_handoff_unverified');
+  if(category==='photo'){
+    const row=await db.one<{status:string}>('SELECT status FROM processing_attempts WHERE id=?',body[field]);
+    if(row&&!['queued','running','completed','failed','cancelled'].includes(row.status))throw new ApiError(503,'job_domain_state_unverified');
+    return !!row&&['queued','running'].includes(row.status);
+  }
+  if(category==='privacy'){
+    const row=await db.one<{status:string}>('SELECT status FROM privacy_requests WHERE id=?',body[field]);
+    if(row&&!['pending_approval','queued','approved','processing','failed','completed','rejected','cancelled'].includes(row.status))throw new ApiError(503,'job_domain_state_unverified');
+    return !!row&&['queued','approved','processing','failed'].includes(row.status);
+  }
+  const row=await db.one<{status:string}>('SELECT status FROM notification_jobs WHERE notification_id=?',body[field]);
+  if(!row)return false;
+  if(!['queued','dispatched','ambiguous','accepted','cancelled','inbox_only'].includes(row.status))throw new ApiError(503,'job_domain_state_unverified');
+  if(['queued','dispatched','ambiguous'].includes(row.status))return true;
+  return !!await db.one("SELECT id FROM notification_deliveries WHERE notification_id=? AND (status IN('dispatching','ambiguous') OR status='queued' AND (attempts>0 OR provider_receipt IS NOT NULL OR lease_token IS NOT NULL OR lease_until IS NOT NULL)) LIMIT 1",body[field]);
 }
 
 type Job={id:string;category:string;payload_json:string;attempts:number;lease_token:string|null};
 /** Leases survive isolate death. Commit-before-ack + stable IDs make queue delivery
  * at least once; each domain handler revalidates its own bound durable state. */
-export async function drainJobs(ctx:AppContext,limit=8):Promise<{processed:number;failed:number}>{
-  let processed=0,failed=0;
+export async function drainJobs(ctx:AppContext,limit=8):Promise<{processed:number;failed:number;pending?:number}>{
+  let processed=0,failed=0,pending=0;
   for(let i=0;i<limit;i++){
     const outcome=await ctx.db.invocation(async()=>{
       const job=await ctx.db.transaction(async()=>{
@@ -37,13 +82,33 @@ export async function drainJobs(ctx:AppContext,limit=8):Promise<{processed:numbe
       if(!job)return null;
       try{
         const payload=JSON.parse(job.payload_json);
-        if(job.category==='photo')await processPhotoJob(payload,ctx);
+        const photoProgress=job.category==='photo'?await processPhotoJob(payload,ctx):undefined;
+        if(job.category==='photo'){
+          if(photoProgress?.pending){
+            // A complete, durably sealed page is useful progress, not overall
+            // completion or a failed execution. Undo only this invocation's
+            // attempt increment; retain previous failure count/error evidence.
+            const continued=await ctx.db.transaction(async()=>{
+              const domain=await ctx.db.one<{status:string}>('SELECT status FROM processing_attempts WHERE id=?',payload.attempt_id);
+              if(!domain||domain.status!=='queued'||!await ctx.db.one('SELECT attempt_id FROM processing_match_progress WHERE attempt_id=? AND next_ordinal>0',payload.attempt_id))
+                throw new ApiError(503,'matching_progress_changed');
+              return ctx.db.one<{id:string}>(`UPDATE job_queue SET state='pending',lease_token=NULL,lease_until=NULL,
+                attempts=CASE WHEN attempts>0 THEN attempts-1 ELSE 0 END,available_at=?
+                WHERE id=? AND state='processing' AND lease_token=? RETURNING id`,ctx.now(),job.id,job.lease_token);
+            });
+            return continued?'pending' as const:'failed' as const;
+          }
+        }
+
         else if(job.category==='privacy')await processPrivacyJob(payload,ctx);
         else if(job.category==='notification')await processNotificationJob(payload,ctx);
         else throw new ApiError(500,'invalid_job');
         // A reclaimed job belongs to its successor. Report completion only
         // when this worker actually commits its own processing lease.
-        const completed=await ctx.db.transaction(()=>ctx.db.one<{id:string}>("UPDATE job_queue SET state='completed',lease_token=NULL,lease_until=NULL,completed_at=?,error_code=NULL WHERE id=? AND state='processing' AND lease_token=? RETURNING id",ctx.now(),job.id,job.lease_token));
+        const completed=await ctx.db.transaction(async()=>{
+          if(await jobDomainPending(ctx.db,job.category,payload))return ctx.db.one<{id:string}>("UPDATE job_queue SET state='pending',lease_token=NULL,lease_until=NULL,available_at=?,completed_at=NULL WHERE id=? AND state='processing' AND lease_token=? RETURNING id",ctx.now()+30000,job.id,job.lease_token);
+          return ctx.db.one<{id:string}>("UPDATE job_queue SET state='completed',lease_token=NULL,lease_until=NULL,completed_at=?,error_code=NULL WHERE id=? AND state='processing' AND lease_token=? RETURNING id",ctx.now(),job.id,job.lease_token);
+        });
         return completed?'processed' as const:'failed' as const;
       }catch(error){
         const code=error instanceof ApiError?error.code:'job_execution_failed';
@@ -51,9 +116,9 @@ export async function drainJobs(ctx:AppContext,limit=8):Promise<{processed:numbe
       }
     });
     if(outcome===null)break;
-    if(outcome==='processed')processed++;else failed++;
+    if(outcome==='processed')processed++;else if(outcome==='pending')pending++;else failed++;
   }
-  return {processed,failed};
+  return {processed,failed,...(pending?{pending}:{})};
 }
 
 const DAY=86400000;
@@ -170,6 +235,9 @@ export async function maintain(ctx:AppContext):Promise<{processed:number;failed:
       }
     }
     const jobs=await drainJobs(ctx);
+    let managed_auth:{retired:number;unresolved:number}|null=null;
+    try{managed_auth=await maintainManagedAuth(ctx);if(managed_auth.unresolved)maintenance_errors++;}
+    catch(error){if(error instanceof ApiError&&error.code.startsWith('restore_'))throw error;maintenance_errors++;}
     let privacy_health:PrivacyHealth,scan_integrity:ScanIntegrity|null=null;
     try{
       privacy_health=await readPrivacyHealth(ctx,value=>{scan_integrity=value;});
@@ -184,6 +252,6 @@ export async function maintain(ctx:AppContext):Promise<{processed:number;failed:
       privacy_health={protocol:'lovelies-maintenance-health-v1',status:'unavailable',observed_at:new Date(ctx.now()).toISOString(),deadlines_seconds:healthDeadlines,
         holds:null,deletion_requests:null,cleanup:null,writers:null,scan_integrity,backups:backupQualification};
     }
-    return {...jobs,maintenance_errors,retention,privacy_health};
+    return {...jobs,maintenance_errors,retention,privacy_health,managed_auth};
   });
 }

@@ -143,7 +143,7 @@ test('guardian purge keeps active approvals and minimizes every positively bound
     const h = await startHarness({faceVerifier: faceVerifierFixture, consumeQueue: false});
     try {
         const child = await h.anonymous(), guardian = await enroll(h), reviewer = await administrator(h);
-        await h.json('/me/audience', {method: 'PUT', token: child.access_token, body: {age_band: '13_17', expected_version: 0, policy_version: AUDIENCE_POLICY, operation_key: key()}});
+        await h.json('/me/audience', {method: 'PUT', token: child.access_token, body: {at_least_13:true,guardian_required:true, expected_version: 0, policy_version: AUDIENCE_POLICY, operation_key: key()}});
         const create = {expected_version: 1, policy_version: AUDIENCE_POLICY, operation_key: key()};
         const request = (await h.json('/me/guardian-requests', {token: child.access_token, body: create}, 201)).guardian_request;
         const claim = {expected_revision: 1, relationship_attested: true, purposes: ['face_authentication'], policy_version: AUDIENCE_POLICY, operation_key: key()};
@@ -178,7 +178,7 @@ test('adult review retirement requires an unambiguous exact evidence tuple and l
     const h = await startHarness({faceVerifier: faceVerifierFixture, consumeQueue: false});
     try {
         const person = await h.anonymous(), reviewer = await administrator(h);
-        await h.json('/me/audience', {method: 'PUT', token: person.access_token, body: {age_band: 'under13', expected_version: 0, policy_version: AUDIENCE_POLICY, operation_key: key()}});
+        await h.json('/me/audience', {method: 'PUT', token: person.access_token, body: {at_least_13:false,guardian_required:false, expected_version: 0, policy_version: AUDIENCE_POLICY, operation_key: key()}});
         const body = {expected_version: 1, policy_version: AUDIENCE_POLICY, evidence_method: 'independent_live_review', evidence_reference: 'review-' + key(), adult_verified: true, operation_key: key()};
         await h.json(`/admin/audience/${person.account_id}/adult-review`, {token: reviewer.token, body});
         const review = await h.db.one('SELECT * FROM audience_adult_reviews WHERE account_id=?', person.account_id), duplicate = key();
@@ -192,7 +192,7 @@ test('adult review retirement requires an unambiguous exact evidence tuple and l
         await pruneUntil(h, async () => await h.db.one('SELECT id FROM audience_adult_reviews WHERE id=?', review.id) === null);
         assert.equal(await h.db.one('SELECT id FROM audience_adult_reviews WHERE id=?', review.id), null);
         retired(await saved(h, body.operation_key));
-        assert.equal((await h.json('/me/audience', {token: person.access_token})).audience.age_band, '18_plus');
+        assert.equal((await h.json('/me/audience', {token: person.access_token})).audience.guardian_required, false);
         await h.json(`/admin/audience/${person.account_id}/adult-review`, {token: reviewer.token, body}, 410);
     } finally { await h.close(); }
 });
@@ -203,10 +203,10 @@ test('distinct legitimate adult/minor/adult reviews for one account/reviewer ret
         const reviewer = await administrator(h), scenarios = [];
         for (const bothDue of [false, true]) {
             const person = await h.anonymous();
-            await h.json('/me/audience', {method: 'PUT', token: person.access_token, body: {age_band: 'under13', expected_version: 0, policy_version: AUDIENCE_POLICY, operation_key: key()}});
+            await h.json('/me/audience', {method: 'PUT', token: person.access_token, body: {at_least_13:false,guardian_required:false, expected_version: 0, policy_version: AUDIENCE_POLICY, operation_key: key()}});
             const firstBody = {expected_version: 1, policy_version: AUDIENCE_POLICY, evidence_method: 'independent_live_review', evidence_reference: 'first-cycle-' + key(), adult_verified: true, operation_key: key()};
             await h.json(`/admin/audience/${person.account_id}/adult-review`, {token: reviewer.token, body: firstBody});
-            await h.json('/me/audience', {method: 'PUT', token: person.access_token, body: {age_band: '13_17', expected_version: 2, policy_version: AUDIENCE_POLICY, operation_key: key()}});
+            await h.json('/me/audience', {method: 'PUT', token: person.access_token, body: {at_least_13:true,guardian_required:true, expected_version: 2, policy_version: AUDIENCE_POLICY, operation_key: key()}});
             const secondBody = {expected_version: 3, policy_version: AUDIENCE_POLICY, evidence_method: 'independent_document_review', evidence_reference: 'second-cycle-' + key(), adult_verified: true, operation_key: key()};
             await h.json(`/admin/audience/${person.account_id}/adult-review`, {token: reviewer.token, body: secondBody});
             const first = await h.db.one('SELECT * FROM audience_adult_reviews WHERE evidence_reference=?', firstBody.evidence_reference);
@@ -231,7 +231,7 @@ test('distinct legitimate adult/minor/adult reviews for one account/reviewer ret
             (await h.db.one('SELECT id FROM audience_adult_reviews WHERE id=?', scenarios[1].second.id)) === null);
         for (const scenario of scenarios) {
             retired(await saved(h, scenario.firstBody.operation_key));
-            assert.equal((await h.json('/me/audience', {token: scenario.person.access_token})).audience.age_band, '18_plus');
+            assert.equal((await h.json('/me/audience', {token: scenario.person.access_token})).audience.guardian_required, false);
             if (scenario.bothDue) retired(await saved(h, scenario.secondBody.operation_key));
         }
         assert.deepEqual(await h.db.one('SELECT * FROM audience_adult_reviews WHERE id=?', recent.second.id), recent.recentSource);
@@ -246,9 +246,9 @@ test('persisted adult receipt scans pass more than twenty intact recent reviews 
     const h = await startHarness({faceVerifier: faceVerifierFixture, consumeQueue: false});
     try {
         const reviewer = await administrator(h), person = await h.anonymous(), records = [], now = Date.now();
-        await h.json('/me/audience', {method: 'PUT', token: person.access_token, body: {age_band: 'under13', expected_version: 0, policy_version: AUDIENCE_POLICY, operation_key: key()}});
+        await h.json('/me/audience', {method: 'PUT', token: person.access_token, body: {at_least_13:false,guardian_required:false, expected_version: 0, policy_version: AUDIENCE_POLICY, operation_key: key()}});
         async function nextReview(index) {
-            if (index) await h.json('/me/audience', {method: 'PUT', token: person.access_token, body: {age_band: '13_17', expected_version: index * 2, policy_version: AUDIENCE_POLICY, operation_key: key()}});
+            if (index) await h.json('/me/audience', {method: 'PUT', token: person.access_token, body: {at_least_13:true,guardian_required:true, expected_version: index * 2, policy_version: AUDIENCE_POLICY, operation_key: key()}});
             const body = {expected_version: index * 2 + 1, policy_version: AUDIENCE_POLICY, evidence_method: 'independent_live_review', evidence_reference: 'receipt-scan-' + key(), adult_verified: true, operation_key: key()};
             await h.json(`/admin/audience/${person.account_id}/adult-review`, {token: reviewer.token, body});
             const review = await h.db.one('SELECT * FROM audience_adult_reviews WHERE evidence_reference=?', body.evidence_reference);
@@ -293,7 +293,7 @@ test('persisted adult receipt scans pass more than twenty intact recent reviews 
         }
         const current = await h.db.one('SELECT * FROM account_audience WHERE account_id=?', person.account_id);
         assert.equal(current.version, declaration.version + 2);
-        assert.equal(current.age_band, '18_plus');
+        assert.equal(current.at_least_13, 1); assert.equal(current.guardian_required, 0);
     } finally { await h.close(); }
 });
 
@@ -302,7 +302,7 @@ test('known terminal privacy operation copies retire without removing minimal re
     try {
         const owner = await enroll(h), admin = await administrator(h);
         const body = {reason: 'Private export explanation ' + key(), operation_key: key()};
-        const request = (await h.json('/privacy/export', {token: owner.token, body}, 201)).privacy_request;
+        const created = await h.json('/privacy/export', {token: owner.token, body}, 201), request = created.privacy_request;
         const review = {reason: 'Private review explanation ' + key(), operation_key: key()};
         await h.json(`/privacy-requests/${request.id}/reject`, {token: admin.token, body: review});
         await h.db.run('UPDATE privacy_requests SET created_at=?,reviewed_at=? WHERE id=?', Date.now() - 367 * DAY, Date.now() - 366 * DAY, request.id);
@@ -310,16 +310,32 @@ test('known terminal privacy operation copies retire without removing minimal re
         const pendingBody = {reason: 'Keep unresolved request', operation_key: key()};
         const pending = (await h.json('/privacy/export', {token: owner.token, body: pendingBody}, 201)).privacy_request;
         await h.db.run('UPDATE privacy_requests SET created_at=? WHERE id=?', Date.now() - 400 * DAY, pending.id);
+        const before = [await saved(h, body.operation_key), await saved(h, review.operation_key)], pendingBefore = await saved(h, pendingBody.operation_key);
+        const links = await h.db.all("SELECT * FROM operation_subjects WHERE source='privacy' AND operation_key IN(?,?) ORDER BY actor_id,operation_key,subject_id", body.operation_key, review.operation_key);
+        assert.equal(before[0].action, 'privacy.request.export');
+        assert.deepEqual(await h.json(`/privacy/operations/${body.operation_key}`, {token: owner.token}), created);
+        // This is a rejected request, with no published export or grant. Its
+        // original full operation can prove its input and historical result.
+        for (const table of ['privacy_exports', 'privacy_export_grants']) assert.equal((await h.db.one(`SELECT count(*) n FROM ${table} WHERE subject_id=?`, owner.accountId)).n, 0);
         await prune(h);
-        retired(await saved(h, body.operation_key)); retired(await saved(h, review.operation_key));
+        for (const [index, operation] of [body.operation_key, review.operation_key].entries()) {
+            const row = await saved(h, operation); retired(row); assert.deepEqual(identity(row), identity(before[index]));
+        }
+        assert.deepEqual(await h.db.all("SELECT * FROM operation_subjects WHERE source='privacy' AND operation_key IN(?,?) ORDER BY actor_id,operation_key,subject_id", body.operation_key, review.operation_key), links);
         assert.deepEqual(await h.db.one('SELECT * FROM privacy_requests WHERE id=?', request.id), facts);
         assert.equal((await h.db.one('SELECT status FROM privacy_requests WHERE id=?', pending.id)).status, 'pending_approval');
         assert.notEqual((await saved(h, pendingBody.operation_key)).payload_json, retiredOperationInput);
-        await h.json(`/privacy/operations/${body.operation_key}`, {token: owner.token}, 410);
+        // The privacy namespace also contains protected export grants. A
+        // key-only tombstone cannot verify the original input/action hash, so
+        // this lookup remains unresolved; the exact-body retry below can prove
+        // the original hash and return the retired disposition safely.
+        await h.json(`/privacy/operations/${body.operation_key}`, {token: owner.token}, 503);
         await h.community(owner.token, 'operation', {operation_key: body.operation_key}, 410);
-        await h.json('/privacy/export', {token: owner.token, body}, 410);
-        await h.json('/privacy/export', {token: owner.token, body: {...body, reason: 'Changed reason'}}, 409);
+        assert.equal((await h.json('/privacy/export', {token: owner.token, body}, 410)).error.code, 'operation_receipt_retired');
+        assert.equal((await h.json('/privacy/export', {token: owner.token, body: {...body, reason: 'Changed reason'}}, 409)).error.code, 'operation_key_conflict');
         assert.equal((await h.json(`/privacy-requests/${request.id}`, {token: owner.token})).privacy_request.status, 'rejected');
+        assert.deepEqual(await h.db.one('SELECT * FROM privacy_requests WHERE id=?', request.id), facts);
+        assert.deepEqual(await saved(h, pendingBody.operation_key), pendingBefore);
     } finally { await h.close(); }
 });
 
@@ -389,7 +405,7 @@ test('hash-intact linked copies with missing or wrongly typed known-contract fie
         for (const body of [item.body, startReview, supportReview]) retired(await saved(h, body.operation_key));
 
         const child = await h.anonymous();
-        await h.json('/me/audience', {method: 'PUT', token: child.access_token, body: {age_band: '13_17', expected_version: 0, policy_version: AUDIENCE_POLICY, operation_key: key()}});
+        await h.json('/me/audience', {method: 'PUT', token: child.access_token, body: {at_least_13:true,guardian_required:true, expected_version: 0, policy_version: AUDIENCE_POLICY, operation_key: key()}});
         const create = {expected_version: 1, policy_version: AUDIENCE_POLICY, operation_key: key()};
         const guardian = (await h.json('/me/guardian-requests', {token: child.access_token, body: create}, 201)).guardian_request;
         const claim = {expected_revision: 1, relationship_attested: true, purposes: ['face_authentication'], policy_version: AUDIENCE_POLICY, operation_key: key()};
@@ -423,7 +439,7 @@ test('hash-intact linked copies with missing or wrongly typed known-contract fie
         ]);
 
         const adult = await h.anonymous();
-        await h.json('/me/audience', {method: 'PUT', token: adult.access_token, body: {age_band: 'under13', expected_version: 0, policy_version: AUDIENCE_POLICY, operation_key: key()}});
+        await h.json('/me/audience', {method: 'PUT', token: adult.access_token, body: {at_least_13:false,guardian_required:false, expected_version: 0, policy_version: AUDIENCE_POLICY, operation_key: key()}});
         const adultBody = {expected_version: 1, policy_version: AUDIENCE_POLICY, evidence_method: 'independent_live_review', evidence_reference: 'adult-' + key(), adult_verified: true, operation_key: key()};
         await h.json(`/admin/audience/${adult.account_id}/adult-review`, {token: admin.token, body: adultBody});
         const adultRecord = await h.db.one('SELECT id FROM audience_adult_reviews WHERE account_id=?', adult.account_id);

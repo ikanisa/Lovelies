@@ -317,6 +317,25 @@ export async function protectedRendition(ctx: AppContext, actor: Actor, assetId:
     return { asset, rendition, authority };
 }
 export async function galleryAction(action: string, payload: Record<string, any>, ctx: AppContext, actor: Actor): Promise<unknown | null> {
+    if (action === 'photos.lookup') return ctx.db.read(async () => {
+        await assertMediaActor(ctx, actor);
+        const ids = idList(payload.asset_ids), source = payload.source ?? 'all';
+        if (!['all', 'received', 'contributions'].includes(source)) throw new ApiError(400, 'invalid_source');
+        const items: Record<string, unknown>[] = [], unavailable_ids: string[] = [];
+        for (const id of ids) {
+            try {
+                const { asset, rendition } = await protectedRendition(ctx, actor, id);
+                const actualSource = asset.owner_id === actor.accountId ? 'contributions' : 'received';
+                if (source !== 'all' && source !== actualSource) { unavailable_ids.push(id); continue; }
+                items.push({ ...assetMetadata(asset, rendition), source: actualSource });
+            } catch (error) {
+                if (!(error instanceof ApiError) || ![403, 404].includes(error.status)) throw error;
+                unavailable_ids.push(id);
+            }
+        }
+        await assertMediaActor(ctx, actor);
+        return { items, unavailable_ids };
+    });
     if (['people', 'person', 'person.photos', 'photo.people'].includes(action))
         return (await ctx.db.transaction(async () => {
             (await assertMediaActor(ctx, actor));

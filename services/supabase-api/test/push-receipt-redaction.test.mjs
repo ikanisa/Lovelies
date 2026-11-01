@@ -1,7 +1,7 @@
 /** Synthetic same-account in-process handlers only; never contacts a provider. */
 import assert from 'node:assert/strict';import {test} from 'node:test';import {randomUUID} from 'node:crypto';
 import {startHarness,enroll,faceVerifierFixture} from './runtime-harness.mjs';
-import {fixture as journalFixture,unavailable} from './restore-database-fixture.mjs';
+import {fixture as journalFixture} from './restore-database-fixture.mjs';
 import {createApp,createHandler} from '../src/index.ts';import {createApp as legacyApp,createHandler as legacyHandler} from './fixtures/push-receipt/index-legacy.ts';
 import {prepareOperation,retiredOperationInput,retiredOperationResponse} from '../src/operations.ts';import {restoreOperationID} from '../src/restore-transaction.ts';import {digest} from '../src/types.ts';
 const localTest=process.env.TEST_DATABASE_URL===undefined?test:test.skip;
@@ -18,6 +18,30 @@ async function setup(t,{journal=false}={}){
  const row=async b=>h.db.one("SELECT action,payload_hash,payload_json,response_json FROM operations WHERE actor_id=? AND source='notification' AND operation_key=?",owner.accountId,b.operation_key);
  return {h,db,j,owner,current,legacy,body,row,send:(which,b)=>request(which,owner,b)};
 }
+function loseRegistrationPrepare(f,operation){
+ const prepare=f.j.journal.prepare.bind(f.j.journal),one=f.db.one.bind(f.db);let armed=true,callbacks=0,prepares=0;
+ // This is the first registration-only query in both handler versions. Count
+ // entry into the callback, including its initially rolled-back invocation.
+ f.db.one=async(sql,...args)=>{if(sql==='SELECT device_id FROM sessions WHERE id=?')callbacks++;return one(sql,...args);};
+ f.j.journal.prepare=async input=>{
+  if(input.operation_id===operation){prepares++;if(armed){armed=false;f.j.faults.reply={path:'/v1/operations/prepare',stage:'after'};}}
+  return prepare(input);
+ };
+ return()=>{assert.equal(armed,false);assert.equal(callbacks,1,'recovery and retries must not reenter the registration callback');assert.equal(prepares,1);};
+}
+async function assertRecoveredRegistration(f,body,operation,accepted,inputHash){
+ assert.equal(accepted.plan.operation_id,operation);assert.equal(accepted.plan.input_hash,inputHash);
+ assert.deepEqual(accepted.plan.allocations,{});assert.deepEqual(accepted.plan.events,[]);
+ const recovered=await f.j.journal.lookup(operation);assert.equal(recovered.status,'recovered');
+ assert.equal(recovered.plan_hash,accepted.plan_hash);assert.deepEqual(recovered.plan,accepted.plan);
+ const receipt=await f.h.db.one('SELECT operation_id,input_hash,plan_hash,outcome FROM restore_recovered_operations WHERE operation_id=?',operation);
+ assert.deepEqual(receipt,{operation_id:operation,input_hash:inputHash,plan_hash:accepted.plan_hash,outcome:'restricted-abort'});
+ assert.equal(await f.row(body),null);assert.deepEqual(await f.h.db.all('SELECT * FROM push_devices WHERE account_id=?',f.owner.accountId),[]);
+ assert.equal(JSON.stringify([...f.j.storage.rows]).includes(body.push_token),false,'the journal must not retain a raw registration token');
+ assert.equal(JSON.stringify(receipt).includes(body.push_token),false);
+ return recovered;
+}
+async function expectError(response,status,code){assert.equal(response.status,status);assert.equal((await response.json()).error.code,code);}
 localTest('new registration stores a versioned token digest and exactly retries',{timeout:30000},async t=>{
  const f=await setup(t),body=f.body(),response=await f.send(f.current,body);assert.equal(response.status,200);const first=await response.json(),row=await f.row(body);
  assert(row);assert.equal(row.payload_json.includes(body.push_token),false);const payload=JSON.parse(row.payload_json);
@@ -54,18 +78,38 @@ localTest('an old server cannot replay a new-format receipt but does not registe
  const before=await f.row(body),retry=await f.send(f.legacy,body);assert.equal(retry.status,409);assert.equal((await retry.json()).error.code,'operation_key_conflict');
  assert.deepEqual(await f.row(body),before);assert.equal((await f.h.db.one('SELECT count(*) n FROM push_devices WHERE account_id=?',f.owner.accountId)).n,1);
 });
-localTest('lost legacy prepare remains fenced and retains its original journal input hash',{timeout:30000},async t=>{
- const f=await setup(t,{journal:true}),body=f.body(),operation=await restoreOperationID(f.owner.accountId,'notification',body.operation_key),legacy=await prepareOperation('notification./me/push-devices.POST',body,'notification');
- const prepare=f.j.journal.prepare.bind(f.j.journal);let armed=true;f.j.journal.prepare=async input=>{if(armed&&input.operation_id===operation){armed=false;f.j.faults.reply={path:'/v1/operations/prepare',stage:'after'};}return prepare(input);};
+localTest('lost legacy prepare recovers its original raw-input hash without registering again',{timeout:30000},async t=>{
+ const f=await setup(t,{journal:true}),token=value(),body=f.body(token,token),operation=await restoreOperationID(f.owner.accountId,'notification',body.operation_key),legacy=await prepareOperation('notification./me/push-devices.POST',body,'notification');
+ const redacted=await prepareOperation(legacy.action,{protocol:'lovelies-push-registration-receipt-v1',operation_key:body.operation_key,platform:body.platform,push_token_sha256:await digest(body.push_token)},'notification');
+ assert.notEqual(legacy.hash,redacted.hash);const assertOnce=loseRegistrationPrepare(f,operation);
  const first=await f.send(f.legacy,body);assert(first.status>=500);await first.body?.cancel();const pending=await f.j.journal.lookup(operation);assert.equal(pending.status,'pending');assert.equal(pending.plan.input_hash,legacy.hash);assert.equal(await f.row(body),null);
- await assert.rejects(()=>f.db.one('SELECT id FROM accounts LIMIT 1'),unavailable);const retry=await f.send(f.current,body);assert(retry.status>=500);await retry.body?.cancel();assert.deepEqual(await f.j.journal.lookup(operation),pending);
+ assert.deepEqual(await f.h.db.all('SELECT * FROM push_devices WHERE account_id=?',f.owner.accountId),[]);assertOnce();
+ assert(await f.db.one('SELECT id FROM accounts LIMIT 1'));
+ const recovered=await assertRecoveredRegistration(f,body,operation,pending,legacy.hash);
+ await expectError(await f.send(f.current,body),410,'operation_retired_by_recovery');
+ await expectError(await f.send(f.legacy,body),410,'operation_retired_by_recovery');
+ await expectError(await f.send(f.current,{...body,push_token:value()}),409,'operation_key_conflict');
+ await expectError(await f.send(f.current,{...body,platform:'android'}),409,'operation_key_conflict');
+ const session=JSON.parse(Buffer.from(f.owner.token.split('.')[1],'base64url').toString()).jti;
+ await f.h.db.run('UPDATE sessions SET revoked_at=? WHERE id=?',f.h.app.now(),session);
+ const denied=await f.send(f.current,body);assert.equal(denied.status,401);await denied.body?.cancel();
+ assert.deepEqual(await assertRecoveredRegistration(f,body,operation,pending,legacy.hash),recovered);assertOnce();
 });
-localTest('lost new prepare stays fenced without persisting a raw token',{timeout:30000},async t=>{
- const f=await setup(t,{journal:true}),body=f.body(),operation=await restoreOperationID(f.owner.accountId,'notification',body.operation_key),prepare=f.j.journal.prepare.bind(f.j.journal);let armed=true;
- f.j.journal.prepare=async input=>{if(armed&&input.operation_id===operation){armed=false;f.j.faults.reply={path:'/v1/operations/prepare',stage:'after'};}return prepare(input);};
+localTest('lost new prepare recovers its redacted input without persisting a raw token',{timeout:30000},async t=>{
+ const f=await setup(t,{journal:true}),body=f.body(),operation=await restoreOperationID(f.owner.accountId,'notification',body.operation_key),assertOnce=loseRegistrationPrepare(f,operation);
  const first=await f.send(f.current,body);assert(first.status>=500);await first.body?.cancel();const pending=await f.j.journal.lookup(operation);assert.equal(pending.status,'pending');assert.equal(await f.row(body),null);
  const payload={protocol:'lovelies-push-registration-receipt-v1',operation_key:body.operation_key,platform:body.platform,push_token_sha256:await digest(body.push_token)},safe=await prepareOperation('notification./me/push-devices.POST',payload,'notification');assert.equal(pending.plan.input_hash,safe.hash);
- const retry=await f.send(f.current,body);assert(retry.status>=500);await retry.body?.cancel();assert.deepEqual(await f.j.journal.lookup(operation),pending);
+ assert.notEqual(safe.hash,(await prepareOperation(safe.action,body,'notification')).hash);
+ assert.deepEqual(await f.h.db.all('SELECT * FROM push_devices WHERE account_id=?',f.owner.accountId),[]);assertOnce();
+ await expectError(await f.send(f.current,body),410,'operation_retired_by_recovery');
+ const recovered=await assertRecoveredRegistration(f,body,operation,pending,safe.hash);
+ await expectError(await f.send(f.current,{...body,push_token:value()}),409,'operation_key_conflict');
+ await expectError(await f.send(f.current,{...body,platform:'android'}),409,'operation_key_conflict');
+ await expectError(await f.send(f.legacy,body),409,'operation_key_conflict');
+ const session=JSON.parse(Buffer.from(f.owner.token.split('.')[1],'base64url').toString()).jti;
+ await f.h.db.run('UPDATE sessions SET revoked_at=? WHERE id=?',f.h.app.now(),session);
+ const denied=await f.send(f.current,body);assert.equal(denied.status,401);await denied.body?.cancel();
+ assert.deepEqual(await assertRecoveredRegistration(f,body,operation,pending,safe.hash),recovered);assertOnce();
 });
 localTest('lost legacy commit reconciles before replaying the original legacy receipt',{timeout:30000},async t=>{
  const f=await setup(t,{journal:true}),body=f.body(),operation=await restoreOperationID(f.owner.accountId,'notification',body.operation_key),raw=await prepareOperation('notification./me/push-devices.POST',body,'notification'),prepare=f.j.journal.prepare.bind(f.j.journal);let armed=true;

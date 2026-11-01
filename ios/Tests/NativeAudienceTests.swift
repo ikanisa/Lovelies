@@ -4,6 +4,7 @@ import CryptoKit
 // Isolated protocol, protected-journal and actor-fence fixtures. These do not
 // establish hosted guardian review, legal age, camera or physical-device proof.
 private final class AudienceSecrets: NativeSecretStore, @unchecked Sendable {
+    let authorityNamespace = "fixture-" + UUID().uuidString.lowercased()
     private let lock = NSLock()
     private var values: [String: Data] = [:]
     private var refuseJournal = false
@@ -32,10 +33,16 @@ private enum AudienceFixture {
         .object(["id": .string(request), "child_account_id": .string(child), "state": .string(state), "revision": .integer(1), "policy_version": .string(NativeAudienceProjection.policy), "created_at": iso(Date().addingTimeInterval(-60)), "expires_at": iso(expiry), "purposes": capabilities(enabled)])
     }
     static func projection(band: String = "unknown", status: String = "unknown", version: Int = 0, enabled: Bool = false, request: WireValue = .null, review: WireValue = .null, account: String = account) -> WireValue {
-        .object(["protocol": .string(NativeAudienceProjection.protocolName), "policy_version": .string(NativeAudienceProjection.policy), "account_id": .string(account),
-                 "audience": .object(["age_band": .string(band), "status": .string(status), "version": .integer(version), "policy_version": band == "unknown" ? .null : .string(NativeAudienceProjection.policy), "next_review_at": review]),
-                 "guardian_request": request, "capabilities": capabilities(enabled)])
+        let known = band != "unknown", deadline = review == .null && known ? iso(Date().addingTimeInterval(600)) : review
+        let authority = enabled ? (request["expires_at"] == .null ? deadline : iso(min((try? NativeRefreshDeliveryRecord.date(deadline)) ?? .distantPast, (try? NativeRefreshDeliveryRecord.date(request["expires_at"])) ?? .distantPast))) : .null
+        return .object(["protocol": .string(NativeAudienceProjection.protocolName), "policy_version": .string(NativeAudienceProjection.policy), "account_id": .string(account),
+            "audience": .object(["at_least_13": known ? .bool(band != "under13") : .null, "guardian_required": known ? .bool(band == "13_17") : .null,
+                "status": .string(status), "version": .integer(version), "policy_version": known ? .string(NativeAudienceProjection.policy) : .null,
+                "source": known ? .string("self_declaration") : .null, "rule_version": known ? .string("audience-13-plus-guardian-v1") : .null, "territory": known ? .string("global") : .null,
+                "declared_at": known ? iso(Date().addingTimeInterval(-60)) : .null, "next_review_at": deadline, "review_required": .bool(false)]),
+            "guardian_request": request, "capabilities": capabilities(enabled), "authority_expires_at": authority])
     }
+
     static func credential(account: String = account, method: String = "anonymous") throws -> NativeCredentials {
         let claims: WireValue = .object(["sub": .string(account), "auth_method": .string(method), "exp": .integer(Int(Date().timeIntervalSince1970) + 900)])
         return try NativeCredentials(.object(["access_token": .string("fixture." + (try claims.encoded()).base64URL + ".fixture"), "refresh_token": .string("audience-fixture-refresh"), "account_id": .string(account), "auth_method": .string(method), "expires_in": .integer(900), "roles": .strings(["user"])]))
@@ -85,7 +92,7 @@ private actor AudienceTransport: NativeTransport {
                 guard saved.0 == data else { return try reply(.object(["error": .object(["code": .string("operation_key_conflict")])]), status: 409) }
                 return try reply(saved.1)
             }
-            let band = try body.text("age_band")
+            let band = body["at_least_13"].bool == false ? "under13" : body["guardian_required"].bool == true ? "13_17" : "18_plus"
             value = AudienceFixture.projection(band: band, status: band == "under13" ? "blocked" : band == "13_17" ? "guardian_pending" : "eligible", version: 1, enabled: band == "18_plus")
             acknowledged[key] = (data, value)
             if loseMutation { loseMutation = false; throw URLError(.networkConnectionLost) }
@@ -150,7 +157,7 @@ private actor AudienceTransport: NativeTransport {
         try rejects("Wrong challenge purpose accepted") { _ = try NativeAudienceChallengeAuthority(AudienceFixture.changing(AudienceFixture.authority(), "purpose", .string("registration")), challenge: challenge) }
         try rejects("Authority outlived challenge") { _ = try NativeAudienceChallengeAuthority(AudienceFixture.authority(expiry: challenge.expiresAt.addingTimeInterval(1)), challenge: challenge) }
         try rejects("Expired capture authority accepted") { try NativeAudienceChallengeAuthority(AudienceFixture.authority(expiry: Date().addingTimeInterval(-1)), challenge: challenge).requireCurrent() }
-        let declaration: WireValue = .object(["age_band": .string("13_17"), "expected_version": .integer(0), "policy_version": .string(NativeAudienceProjection.policy)])
+        let declaration: WireValue = .object(["at_least_13": .bool(true), "guardian_required": .bool(true), "expected_version": .integer(0), "policy_version": .string(NativeAudienceProjection.policy)])
         let record = try NativeAudienceMutationRecord(origin: AudienceFixture.origin, accountID: AudienceFixture.account, path: "/me/audience", method: "PUT", body: declaration)
         try require(try JSONDecoder().decode(NativeAudienceMutationRecord.self, from: JSONEncoder().encode(record)) == record, "Exact journal did not survive restart encoding")
         try rejects("Journal origin substitution accepted") { try record.validate(origin: URL(string: "https://foreign.invalid")!) }
@@ -159,7 +166,7 @@ private actor AudienceTransport: NativeTransport {
         _ = try await repo.audience(); await transport.interruptNextMutation()
         try await rejectsAsync("Lost declaration reply claimed success") { _ = try await repo.declareAudience(.adult, expectedVersion: 0) }
         let journal = try await repo.pendingAudienceMutation()
-        try require(journal?.body["age_band"].string == "18_plus", "Original declaration key/body missing")
+        try require(journal?.body["at_least_13"].bool == true && journal?.body["guardian_required"].bool == false && journal?.body["age_band"] == .null, "Original declaration key/body missing")
         try await rejectsAsync("New declaration replaced uncertain mutation") { _ = try await repo.declareAudience(.teen, expectedVersion: 0) }
         try require(try secrets.read("audience-mutation-journal") != nil, "Uncertain journal was removed")
         try await repo.logout()

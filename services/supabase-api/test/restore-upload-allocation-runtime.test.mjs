@@ -80,7 +80,7 @@ async function uploadFixture(t, { peer = false } = {}) {
     request, json, body, reserve, uncertain, failAfterNext: stage => { failAfter = stage; } };
 }
 async function assertPlan(f, body, status = 'committed', account = f.person.accountId) {
-  const saved = await planFor(f, body, account); assert(saved); assert.equal(saved.status, status);
+  const saved = await planFor(f, body, account); assert(saved);if(Array.isArray(status))assert(status.includes(saved.status));else assert.equal(saved.status, status);
   const expected = await allocationsFor(f, body, account);
   assert.deepEqual(saved.plan.allocations, expected); assert.deepEqual(saved.plan.events, []);
   assert.notEqual(expected.id_0, expected.id_1); assert.notEqual(expected.id_0, saved.plan.operation_id);
@@ -218,10 +218,12 @@ for (const stage of ['before', 'after']) test('prepare reply loss ' + stage + ' 
     assert.equal(await planFor(f, body), null); const result = await f.reserve(body); await assertStored(f, body, result); await assertPlan(f, body);
     assert.deepEqual(f.insertions.map(row => ({ id_0: row.id, id_1: row.version })), [expected, expected]);
   } else {
-    const saved = await assertPlan(f, body, 'pending');
-    await assert.rejects(() => f.db.one('SELECT id FROM accounts LIMIT 1'), unavailable);
-    await f.uncertain(body); await f.uncertain({ ...body, operation_key: randomUUID() });
-    assert.equal(f.insertions.length, 1); assert.deepEqual(await snapshot(f), before); assert.deepEqual(await planFor(f, body), saved);
+    const saved = await assertPlan(f, body, ['pending','recovered']);
+    await f.db.one('SELECT id FROM accounts LIMIT 1');const recovered=await planFor(f,body);assert.equal(recovered.status,'recovered');assert.equal(recovered.plan_hash,saved.plan_hash);assert.deepEqual(recovered.plan,saved.plan);
+    await f.reserve(body,410);await f.reserve({...body,title:'changed original input'},409);
+    assert.equal(f.insertions.length,1);assert.deepEqual(await snapshot(f),before);assert.equal(await receiptFor(f,body),null);
+    const fresh={...body,operation_key:randomUUID()},result=await f.reserve(fresh);await assertStored(f,fresh,result);assert.notEqual(result.asset_id,expected.id_0);
+    assert.equal((await assets(f)).some(row=>row.id===expected.id_0),false);assert.equal((await f.journal.control()).state,'serving');
   }
 });
 
@@ -232,8 +234,9 @@ test('accepted prepare with rejected SQL COMMIT retains the original allocation 
     if (armed && input.operation_id === id) { armed = false; f.faults.beforeCommit = true; } return result; };
   await f.uncertain(body); assert.equal(armed, false); assert.equal(f.faults.beforeCommit, false);
   assert.deepEqual(await snapshot(f), before); assert.equal(await receiptFor(f, body), null);
-  const saved = await assertPlan(f, body, 'pending'); await f.uncertain(body);
-  assert.equal(f.insertions.length, 1); assert.deepEqual(await planFor(f, body), saved); assert.deepEqual(await snapshot(f), before);
+  const saved = await assertPlan(f, body, ['pending','recovered']);await f.db.one('SELECT id FROM accounts LIMIT 1');
+  const recovered=await planFor(f,body);assert.equal(recovered.status,'recovered');assert.equal(recovered.plan_hash,saved.plan_hash);assert.deepEqual(recovered.plan,saved.plan);
+  await f.reserve(body,410);assert.equal(f.insertions.length,1);assert.deepEqual(await snapshot(f),before);assert.equal(await receiptFor(f,body),null);
 });
 
 for (const mode of ['commit', 'ack-before', 'ack-after']) test(mode + ' reply loss retains committed metadata/receipt and never reserves a second identity', async t => {

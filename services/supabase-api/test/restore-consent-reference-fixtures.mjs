@@ -86,6 +86,9 @@ export async function historicalRevokedNull(f, consentID) {
   const constraint = exact[0], name = '"' + constraint.conname.replaceAll('"', '""') + '"';
   await f.h.engine.exec('BEGIN');
   try {
+    // This is deliberate historical snapshot seeding, not a production writer.
+    // Keep the bypass transaction-local while restoring the canonical CHECK.
+    await f.h.engine.query("SELECT set_config('lovelies.restore_replay','on',true)");
     await f.h.engine.exec('ALTER TABLE lovelies_private.consents DROP CONSTRAINT ' + name);
     await f.h.engine.query("UPDATE lovelies_private.consents SET revoked_at=NULL WHERE id=$1 AND status='revoked'", [consentID]);
     await f.h.engine.exec('ALTER TABLE lovelies_private.consents ADD CONSTRAINT ' + name + ' ' + constraint.definition + ' NOT VALID');

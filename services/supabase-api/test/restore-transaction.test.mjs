@@ -1,3 +1,4 @@
+import {planEvents} from './restore-plan-fixture.mjs';
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { randomUUID } from 'node:crypto';
@@ -70,24 +71,18 @@ test('invalid or mixed registration poisons the SQL transaction even when applic
   await assert.rejects(() => readOnly.seal(), invalid);
 });
 
-test('32 exact restrictions commit atomically while a caught 33rd registration cannot truncate a mutation', async t => {
-  const f = await fixture(t), first = identity();
-  await f.db.transaction(async restore => {
-    restore.operation(first);
-    for (let index = 0; index < 32; index++) await restore.restrict('sharing-request-retired', scope());
-  });
-  const saved = await f.journal.lookup(first.operation_id);
-  assert.equal(saved.plan.events.length, 32); assert.equal(new Set(saved.plan.events.map(event => event.operation_id)).size, 32);
-  assert.equal((await controlRow(f.h)).journal_sequence, 32);
-  const second = identity(), id = randomUUID();
-  await assert.rejects(() => f.db.transaction(async restore => {
-    restore.operation(second);
-    for (let index = 0; index < 32; index++) await restore.restrict('sharing-request-retired', scope());
-    try { await restore.restrict('sharing-request-retired', scope()); } catch {}
-    await insertAccount(f.db, id);
-  }), invalid);
-  assert.equal(await f.journal.lookup(second.operation_id), null); assert.equal(await rowCount(f.h, 'accounts'), 0);
-  assert.equal((await controlRow(f.h)).journal_sequence, 32);
+for(const count of [32,33,97])test(count+' exact restrictions commit atomically with a complete immutable manifest',async t=>{
+ const f=await fixture(t),operation=identity(),id=randomUUID(),expected=[];
+ await f.db.transaction(async restore=>{
+  restore.operation(operation);
+  for(let index=0;index<count;index++){const selected=scope();expected.push(selected);await restore.restrict('sharing-request-retired',selected);}
+  await insertAccount(f.db,id);
+ });
+ const saved=await f.journal.lookup(operation.operation_id),events=await planEvents(f,saved);
+ assert.equal(saved.status,'committed');assert.equal(saved.plan.version,count>32?2:1);
+ assert.equal(events.length,count);assert.equal(new Set(events.map(event=>event.operation_id)).size,count);
+ assert.deepEqual(events.map(event=>event.scope),expected);
+ assert.equal((await controlRow(f.h)).journal_sequence,count);assert.equal(await rowCount(f.h,'accounts'),1);
 });
 
 test('logical key identity is stable across payload changes and independent changed-input reuse rolls back SQL', async t => {

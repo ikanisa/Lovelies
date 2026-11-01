@@ -1,11 +1,13 @@
 import { ApiError, digest, stable } from './types.ts';
+import { applyRestrictionReceipt } from './restore-replay.ts';
+import { restoreCapturedRestrictionID } from './restore-transaction.ts';
 import type { DatabaseFence, DatabaseLineage, SqlConnection } from './database.ts';
 import {
-  RESTORE_PROJECT_ID, validateRestoreMarker, validateRestoreOperationInput,
+  RESTORE_PROJECT_ID, validateRestoreMarker, validateRestoreOperationInput, validateRestoreRestrictionEvent,
   type RestoreJournalClient, type RestoreMarker, type RestoreOperationInput, type RestoreOperationRecord,
 } from './restore-journal.ts';
 
-type JournalPort=Pick<RestoreJournalClient,'control'|'admission'|'prepare'|'lookup'|'acknowledge'>;
+type JournalPort=Pick<RestoreJournalClient,'control'|'admission'|'prepare'|'lookup'|'acknowledge'> & Partial<Pick<RestoreJournalClient,'finishPreparation'|'restrictionPage'|'acknowledgeRecovery'>>;
 export type RestoreTransactionIntent=Omit<RestoreOperationInput,'version'|'project_id'|'expected'>;
 type ControlRow={project_id:string;database_id:string;incarnation_id:string;checkpoint_revision:number;checkpoint_hash:string;
   journal_sequence:number;journal_hash:string;last_operation_id:string|null;last_plan_hash:string|null};
@@ -40,23 +42,62 @@ export class RestoreDatabaseFence implements DatabaseFence{
     // before it. This includes automatic READ ONLY and direct jobs/controls.
     const admission=await this.local(connection),control=await this.journal.control();
     if(control.state==='pending'&&control.pending_operation_id!==null&&control.pending_operation_id===admission.row.last_operation_id){
-      const prior=await this.journal.lookup(control.pending_operation_id);
+      let prior=await this.journal.lookup(control.pending_operation_id);
+      if(prior?.status==='preparing'&&this.journal.finishPreparation)prior=await this.journal.finishPreparation(prior);
       if(prior?.status==='pending'&&prior.plan_hash===admission.row.last_plan_hash&&equal(prior.plan.next,admission.marker)){
         // COMMIT may have succeeded before its result/ack was lost. Only the
         // exact atomic PG marker + operation/hash can reconcile that commit.
-        await this.journal.acknowledge(prior.plan.operation_id,prior.plan_hash,admission.marker);
+        const captured=await connection.query<{present:string|null}>("SELECT to_regclass('lovelies_private.restore_recovered_operations')::text AS present",[]);
+        const recovered=captured[0]?.present?await connection.query<{plan_hash:string}>('SELECT plan_hash FROM restore_recovered_operations WHERE operation_id=$1',[prior.plan.operation_id]):[];
+        if(recovered.length){if(recovered.length!==1||recovered[0].plan_hash!==prior.plan_hash||!this.journal.acknowledgeRecovery)return unavailable();await this.journal.acknowledgeRecovery(prior);}
+        else await this.journal.acknowledge(prior.plan.operation_id,prior.plan_hash,admission.marker);
       }
+    }
+    if(control.state==='pending'&&control.pending_operation_id!==null&&equal(control.marker,admission.marker)&&this.journal.restrictionPage&&this.journal.acknowledgeRecovery){
+      const tables=await connection.query<{present:string|null}>("SELECT to_regclass('lovelies_private.restore_recovered_operations')::text AS present",[]);
+      if(tables[0]?.present)throw new ApiError(503,'restore_pending_reconciliation');
     }
     await this.journal.admission(admission.marker);
     this.admissions.add(admission);
     this.lineages.set(admission,Object.freeze({database_id:admission.marker.database_id,incarnation_id:admission.marker.incarnation_id}));
     return admission;
   }
+  async reconcile(connection:SqlConnection):Promise<void>{
+    if(!this.journal.restrictionPage||!this.journal.acknowledgeRecovery)return unavailable();
+    const local=await this.local(connection),control=await this.journal.control();
+    if(control.state!=='pending'||!control.pending_operation_id||!equal(local.marker,control.marker))return unavailable();
+    let operation=await this.journal.lookup(control.pending_operation_id);
+    if(operation?.status==='preparing'&&this.journal.finishPreparation)operation=await this.journal.finishPreparation(operation);
+    if(!operation||operation.status!=='pending'||!equal(operation.plan.expected,local.marker))return unavailable();
+    await connection.query("SELECT set_config('lovelies.restore_replay','on',true)",[]);
+    let cursor=operation.plan.expected.cursor;
+    while(cursor.sequence<operation.plan.next.cursor.sequence){
+      const records=await this.journal.restrictionPage(cursor,operation.plan.next.cursor);
+      for(const receipt of records)await applyRestrictionReceipt(connection,receipt,Math.max(Date.now(),operation.plan.prepared_at));
+      const last=records.at(-1);if(!last)return unavailable();cursor={sequence:last.sequence,hash:last.hash};
+    }
+    if(!equal(cursor,operation.plan.next.cursor))return unavailable();
+    await connection.query("INSERT INTO restore_recovered_operations(operation_id,input_hash,plan_hash,outcome,recovered_at) VALUES($1,$2,$3,'restricted-abort',$4) ON CONFLICT(operation_id) DO NOTHING",[operation.plan.operation_id,operation.plan.input_hash,operation.plan_hash,Date.now()]);
+    const next=operation.plan.next;
+    await connection.query('UPDATE restore_control SET checkpoint_revision=$1,checkpoint_hash=$2,journal_sequence=$3,journal_hash=$4,last_operation_id=$5,last_plan_hash=$6 WHERE singleton=1',[next.checkpoint.revision,next.checkpoint.hash,next.cursor.sequence,next.cursor.hash,operation.plan.operation_id,operation.plan_hash]);
+    // The caller commits SQL first. A normal subsequent enter verifies these
+    // exact marker/outcome rows, then acknowledges the independent recovery.
+  }
   lineage(rawAdmission:unknown):DatabaseLineage {
     if(!rawAdmission||typeof rawAdmission!=='object'||!this.admissions.has(rawAdmission))return unavailable();
     const lineage=this.lineages.get(rawAdmission);
     if(!lineage)return unavailable();
     return lineage;
+  }
+  async checkIntent(connection:SqlConnection,rawAdmission:unknown,intent:unknown):Promise<void>{
+    if(!rawAdmission||typeof rawAdmission!=='object'||!this.admissions.has(rawAdmission)||!intent||typeof intent!=='object'||Array.isArray(intent))return unavailable();
+    const input=validateRestoreOperationInput({version:1,project_id:RESTORE_PROJECT_ID,...intent,expected:(rawAdmission as Admission).marker},{manifest:true});
+    const exists=await connection.query<{present:string|null}>("SELECT to_regclass('lovelies_private.restore_recovered_operations')::text AS present",[]);
+    if(!exists[0]?.present)return;
+    const rows=await connection.query<{input_hash:string}>('SELECT input_hash FROM restore_recovered_operations WHERE operation_id=$1',[input.operation_id]);
+    if(!rows.length)return;
+    if(rows.length!==1||rows[0].input_hash!==input.input_hash)throw new ApiError(409,'operation_key_conflict');
+    throw new ApiError(410,'operation_retired_by_recovery');
   }
   async prepare(connection:SqlConnection,rawAdmission:unknown,rawIntent?:unknown):Promise<unknown>{
     if(!rawAdmission||typeof rawAdmission!=='object'||!this.admissions.has(rawAdmission))return unavailable();
@@ -70,9 +111,23 @@ export class RestoreDatabaseFence implements DatabaseFence{
     const operationId=crypto.randomUUID();
     const intent=rawIntent===undefined?{operation_id:operationId,input_hash:await digest('lovelies-database-mutation-v1:'+operationId),allocations:{},events:[]}:rawIntent;
     if(!intent||typeof intent!=='object'||Array.isArray(intent)||Object.keys(intent).sort().join(',')!=='allocations,events,input_hash,operation_id')return unavailable();
-    const input=validateRestoreOperationInput({version:1,project_id:RESTORE_PROJECT_ID,...intent,expected:admission.marker});
+    const raw=validateRestoreOperationInput({version:1,project_id:RESTORE_PROJECT_ID,...intent,expected:admission.marker},{manifest:true});
+    const exists=await connection.query<{present:string|null}>("SELECT to_regclass('lovelies_private.restore_transaction_facts')::text AS present",[]);
+    const events=[...raw.events], seen=new Set(events.map(event=>stable({kind:event.kind,scope:event.scope})));
+    if(exists[0]?.present){
+      const captured=await connection.query<{kind:string;scope_json:string}>('SELECT kind,scope_json FROM restore_transaction_facts WHERE transaction_id=txid_current()::text ORDER BY kind,scope_json,id',[]);
+      for(const fact of captured){
+        let scope:Record<string,string>;try{scope=JSON.parse(fact.scope_json);}catch{return unavailable();}
+        const key=stable({kind:fact.kind,scope});if(seen.has(key))continue;
+        events.push(validateRestoreRestrictionEvent({version:1,project_id:RESTORE_PROJECT_ID,
+          operation_id:await restoreCapturedRestrictionID(raw.operation_id,fact.kind,scope),kind:fact.kind,scope}));seen.add(key);
+      }
+      await connection.query('DELETE FROM restore_transaction_facts WHERE transaction_id=txid_current()::text',[]);
+    }
+    const input=validateRestoreOperationInput({...raw,events},{manifest:true});
     const operation=await this.journal.prepare(input);
     // A historical receipt is never permission to rerun this SQL callback.
+    if(operation.status==='recovered')throw new ApiError(410,'operation_retired_by_recovery');
     if(operation.status!=='pending'||!equal(operation.plan.expected,admission.marker))return unavailable();
     const next=operation.plan.next;
     const updated=await connection.query<{singleton:number}>(`UPDATE restore_control SET

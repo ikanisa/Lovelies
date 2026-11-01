@@ -1,11 +1,15 @@
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import {OperatorSession} from './operator-session.mjs';
-import {AUDIENCE_POLICY} from './audience.mjs';
+import {AUDIENCE_POLICY,AUDIENCE_RULE} from './audience.mjs';
+const adultDecision={at_least_13:true,guardian_required:false};
 
 function projection(account,declared=false) {
-  return {protocol:'lovelies-audience-v1',policy_version:AUDIENCE_POLICY,account_id:account,
-    audience:{age_band:declared?'18_plus':'unknown',status:declared?'eligible':'unknown',version:declared?1:0,policy_version:declared?AUDIENCE_POLICY:null,next_review_at:null},
+  return {protocol:'lovelies-audience-v2',policy_version:AUDIENCE_POLICY,account_id:account,
+    authority_expires_at:declared?new Date(Date.now()+3600000).toISOString():null,
+    audience:{at_least_13:declared?true:null,guardian_required:declared?false:null,status:declared?'eligible':'unknown',version:declared?1:0,policy_version:declared?AUDIENCE_POLICY:null,
+      source:declared?'self_declaration':null,rule_version:declared?AUDIENCE_RULE:null,territory:declared?'global':null,declared_at:declared?new Date(Date.now()-1000).toISOString():null,
+      next_review_at:declared?new Date(Date.now()+86400000).toISOString():null,review_required:false},
     capabilities:{face_authentication:declared,photo_matching:declared,photo_processing:declared},guardian_request:null};
 }
 function fixture(fetch) {
@@ -15,9 +19,11 @@ function fixture(fetch) {
   return {account,vault,session};
 }
 
-test('operator enrollment needs a separate explicit adult declaration before any request',async()=>{
+test('operator enrollment needs a neutral selection and separate explicit declaration before any request',async()=>{
   let requests=0;const {session}=fixture(()=>{requests++;throw Error('unexpected');});
-  await assert.rejects(session.startEnrollment(true),{code:'operator_adult_declaration_required'});
+  await assert.rejects(session.startEnrollment(true),{code:'audience_confirmation_required'});
+  await assert.rejects(session.startEnrollment(true,undefined,true),{code:'audience_selection_required'});
+  await assert.rejects(session.startEnrollment(true,true,true),{code:'audience_selection_required'});
   assert.equal(requests,0);
 });
 
@@ -26,14 +32,14 @@ test('anonymous audience refresh preserves account, epoch and persisted exact mu
   const {session,account,vault}=fixture(({account,vault,options})=>{
     if(options.method==='GET')return ++reads===1?Response.json({error:{code:'session_expired'}},{status:401}):Response.json(projection(account));
     body=JSON.parse(options.body);
-    assert.deepEqual(vault.value.pendingAudience,{accountId:account,body});
+    assert.deepEqual(vault.value.pendingAudience,{version:2,kind:'declaration',accountId:account,body});
     assert.equal(options.headers.authorization,'Bearer refreshed');
     return Response.json(projection(account,true));
   });
-  session.refreshAnonymous=async()=>{refreshes++;session.state.anonymous.access_token='refreshed';};
-  await session.declareOperatorAudience();
+  session.refreshAnonymous=async()=>{refreshes++;session.state.anonymous.access_token='refreshed';return session.state.anonymous;};
+  await session.declareOperatorAudience(adultDecision);
   assert.equal(refreshes,1);assert.equal(session.epoch,0);assert.equal(session.state.anonymous.account_id,account);
-  assert.equal(body.expected_version,0);assert.equal(body.age_band,'18_plus');assert.equal(vault.value.pendingAudience,null);
+  assert.equal(body.expected_version,0);assert.equal(body.at_least_13,true);assert.equal(body.guardian_required,false);assert(!Object.hasOwn(body,'age_band'));assert.equal(vault.value.pendingAudience,null);
 });
 
 test('lost audience mutation reply retains the same operation across vault recovery',async()=>{
@@ -43,7 +49,7 @@ test('lost audience mutation reply retains the same operation across vault recov
     bodies.push(JSON.parse(options.body));if(lose){lose=false;throw Error('reply_lost');}
     return Response.json(projection(account,true));
   });
-  await assert.rejects(session.declareOperatorAudience(),/reply_lost/);
+  await assert.rejects(session.declareOperatorAudience(adultDecision),/reply_lost/);
   const original=structuredClone(vault.value.pendingAudience);
   session.state=structuredClone(vault.value);await session.declareOperatorAudience();
   assert.deepEqual(bodies,[original.body,original.body]);assert.equal(vault.value.pendingAudience,null);
@@ -56,8 +62,8 @@ test('expired audience mutation retries the persisted key once after refresh',as
     bodies.push(JSON.parse(options.body));
     return bodies.length===1?Response.json({error:{code:'expired'}},{status:401}):Response.json(projection(account,true));
   });
-  session.refreshAnonymous=async()=>{refreshed++;session.state.anonymous.access_token='new';};
-  await session.declareOperatorAudience();assert.equal(refreshed,1);assert.deepEqual(bodies[0],bodies[1]);
+  session.refreshAnonymous=async()=>{refreshed++;session.state.anonymous.access_token='new';return session.state.anonymous;};
+  await session.declareOperatorAudience(adultDecision);assert.equal(refreshed,1);assert.deepEqual(bodies[0],bodies[1]);
 });
 
 test('logout while refreshing audience prevents declaration dispatch',async()=>{
@@ -67,7 +73,7 @@ test('logout while refreshing audience prevents declaration dispatch',async()=>{
     return Response.json({error:{code:'expired'}},{status:401});
   });
   session.refreshAnonymous=async()=>{enter();await new Promise(resolve=>release=resolve);};
-  const operation=session.declareOperatorAudience();await ready;session.cancelCapture();release();
+  const operation=session.declareOperatorAudience(adultDecision);await ready;session.cancelCapture();release();
   await assert.rejects(operation,{code:'session_changed'});assert.equal(mutations,0);
 });
 
@@ -147,4 +153,41 @@ test('capture expiry, cancellation and exact challenge replacement during persis
     release();await assert.rejects(work,{code:change==='expiry'?'audience_challenge_invalid':change==='cancel'?'session_changed':'capture_scope_changed'});
     assert.equal(dispatches,0);assert.equal(signatures,stage==='save'?0:1);assert.equal(session.captureBusy,false);
   });
+});
+
+test('unknown operator audience never defaults to adulthood and an explicit unsupported range cannot reach a camera',async()=>{
+  const sent=[];let decided=false;
+  const {session,vault}=fixture(({account,url,options})=>{
+    sent.push({url,method:options.method,body:options.body?JSON.parse(options.body):null});
+    if(options.method==='GET')return Response.json(projection(account));
+    decided=true;const value=projection(account,true);Object.assign(value.audience,{at_least_13:false,guardian_required:false,status:'blocked'});
+    value.authority_expires_at=null;value.capabilities={face_authentication:false,photo_matching:false,photo_processing:false};return Response.json(value);
+  });
+  await assert.rejects(session.declareOperatorAudience(),{code:'audience_selection_required'});assert.equal(decided,false);assert.equal(vault.value,undefined);
+  await assert.rejects(session.startEnrollment(true,'under13',true),{code:'operator_adult_required'});assert.equal(decided,true);
+  const mutation=sent.find(x=>x.method==='PUT');assert.equal(mutation.body.at_least_13,false);assert.equal(mutation.body.guardian_required,false);assert(!Object.hasOwn(mutation.body,'age_band'));
+  assert.equal(session.challenge,null);assert.equal(vault.value.pendingAudience,null);assert(sent.every(x=>x.url.endsWith('/me/audience')));
+});
+test('a same-account anonymous credential replacement during an audience read cannot dispatch a decision',async()=>{
+  let enter,release,mutations=0;const ready=new Promise(resolve=>enter=resolve),gate=new Promise(resolve=>release=resolve);
+  const {session}=fixture(async({account,options})=>{
+    if(options.method==='GET'){enter();await gate;return Response.json(projection(account));}
+    mutations++;throw Error('wrong_session_dispatch');
+  });
+  const work=session.declareOperatorAudience(adultDecision);await ready;session.state.anonymous.access_token='new-same-account-token';release();
+  await assert.rejects(work,{code:'private_state_scope_changed'});assert.equal(mutations,0);assert.equal(session.state.pendingAudience,null);
+});
+test('a proven old declaration receipt clears only that operation and presents a now-due annual review',async()=>{
+  const sent=[];
+  const {session,account,vault}=fixture(({account,options})=>{
+    sent.push(JSON.parse(options.body));const value=projection(account,true),deadline=Date.now()-1000;
+    Object.assign(value.audience,{status:'suspended',declared_at:new Date(deadline-365*86400000).toISOString(),next_review_at:new Date(deadline).toISOString(),review_required:true});
+    value.authority_expires_at=null;value.capabilities={face_authentication:false,photo_matching:false,photo_processing:false};return Response.json(value);
+  });
+  const body={age_band:'18_plus',policy_version:AUDIENCE_POLICY,expected_version:0,operation_key:crypto.randomUUID()};
+  session.state.pendingAudience={accountId:account,body};
+  assert.equal(await session.recoverOperatorAudience(),null);assert.deepEqual(sent,[body]);
+  assert.equal(vault.value.pendingAudience,null);assert.equal(session.state.pendingAudience,null);
+  assert.equal(session.audienceReview.kind,'anonymous');assert.equal(session.audienceReview.current.reviewRequired,true);
+  assert.equal(session.challenge,null);assert.equal(session.credentials,null);assert.equal(session.operator,null);
 });

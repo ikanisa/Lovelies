@@ -4,8 +4,11 @@ import android.content.Context
 
 /** Narrow injectable local/HTTP boundaries. Production always supplies Android Keystore/AtomicFile and HTTPS transport. */
 internal interface RepositoryVault {
+    val authorityKey: Any get()=this
     fun load(): WireObject
     fun save(value: WireObject)
+    fun loadAuthority(): WireObject?=throw LiveFailure("session_authority_unavailable",503,true)
+    fun saveAuthority(value: WireObject): Unit=throw LiveFailure("session_authority_unavailable",503,true)
     fun createDevice(alias: String): WireObject=throw LiveFailure("device_key_unavailable")
     fun deleteDevice(alias: String?) {}
     fun enrollmentAlias(account: String): String=throw LiveFailure("device_key_unavailable")
@@ -21,8 +24,11 @@ internal interface RepositoryVault {
 }
 internal class AndroidRepositoryVault(context: Context,endpoint: String): RepositoryVault {
     private val delegate=SecureSession(context,endpoint)
+    override val authorityKey: Any=delegate.authorityKey
     override fun load()=delegate.load()
     override fun save(value: WireObject)=delegate.save(value)
+    override fun loadAuthority()=delegate.loadAuthority()
+    override fun saveAuthority(value: WireObject)=delegate.saveAuthority(value)
     override fun createDevice(alias: String)=delegate.createDevice(alias)
     override fun deleteDevice(alias: String?)=delegate.deleteDevice(alias)
     override fun enrollmentAlias(account: String)=delegate.enrollmentAlias(account)
@@ -42,7 +48,7 @@ internal data class RepositoryBoundary(val vault: RepositoryVault,val json: Repo
 
 /** Financial recovery evidence has no sign-in or photo-access authority and is not discarded by account cleanup. */
 internal object StoreRecoveryRetention {
-    val fields=setOf("google_store_operation","google_store_write_uncertainty","google_store_history","completed_registered_deletions","registered_deletion_write_uncertainty")
+    val fields=setOf("google_store_operation","google_store_write_uncertainty","google_store_history","completed_registered_deletions","registered_deletion_write_uncertainty","push_operations","push_write_uncertainty","push_terminal_operations","audience_device_renewals","audience_terminal_operations","operation_terminal_operations")
     fun isStore(value: Any?): Boolean {
         val row=value as? Map<*,*> ?: return false
         return row["source"]=="store" || (row["action"] as? String)?.startsWith("store.")==true
@@ -63,8 +69,9 @@ internal object StoreRecoveryRetention {
     fun heldPending(previous: WireObject,memory: PendingIntent?): PendingIntent? =
         previous["pending"]?.takeIf(::isStore)?.let(::restorePending) ?: pending(memory)
     fun keep(previous: WireObject,candidate: WireObject): WireObject {
+        fun recoveryPending(value:Any?):Boolean = isStore(value) || ((value as? Map<*,*>)?.get("path") as? String)?.let { it=="/me/push-devices" || it.startsWith("/me/push-devices/") }==true
         val retained=previous.filterKeys { it in fields }+
-            (previous["pending"]?.takeIf(::isStore)?.let { mapOf("pending" to it) } ?: emptyMap())
+            (previous["pending"]?.takeIf(::recoveryPending)?.let { mapOf("pending" to it) } ?: emptyMap())
         // Preserve exact original bytes/fields; cleanup is not qualified financial disposition.
         return candidate+retained
     }
@@ -79,7 +86,11 @@ internal object StoreRecoveryRetention {
     }
     fun completedRegistered(record: GuestDeletionRecord,previous: WireObject,keepActive: Boolean): WireObject {
         record.assertRestartAllowed()
-        val base=keep(previous,record.restartStorage(previous))
+        var base=keep(previous,record.restartStorage(previous))
+        for(field in listOf("push_operations","push_write_uncertainty","push_terminal_operations","audience_device_renewals","audience_terminal_operations","operation_terminal_operations")) {
+            val kept=NativeProtocol.rows(base[field] ?: emptyList<WireObject>(),128).filter { it["account"]!=record.account }
+            base=if(kept.isEmpty())base-field else base+mapOf(field to kept)
+        }
         if(keepActive)return base+mapOf("registered_deletion" to record.wire())
         val history=NativeProtocol.rows(previous["completed_registered_deletions"] ?: emptyList<WireObject>(),64)
         val found=history.firstOrNull { it["operation_key"]==record.operationKey }

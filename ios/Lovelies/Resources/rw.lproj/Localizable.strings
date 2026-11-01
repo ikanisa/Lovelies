@@ -993,3 +993,48 @@
 "Your sign-in state changed. Authenticate again to check the original request." = "Uko winjiye byahindutse. Ongera wemeze uburenganzira bwawe kugira ngo ugenzure icyifuzo cya mbere.";
 "Device authorization expired. Authenticate again to continue the original request." = "Uburenganzira bwo gukoresha iki gikoresho bwarangiye. Ongera wemeze uburenganzira bwawe kugira ngo ukomeze icyifuzo cya mbere.";
 "Confirm access on this device to continue your Lovelies request. Your selfies are verified separately." = "Emeza uburenganzira bwawe kuri iki gikoresho kugira ngo ukomeze icyifuzo cyawe muri Lovelies. Selfie zawe zigenzurwa ukwazo.";
+
+/* Recoverable delivery, retirement and library scope. */
+"Favorites are saved on this device. Only photos your account can currently access are shown." = "Urutonde rw’amafoto ukunda rubikwa kuri iki gikoresho. Hagaragazwa gusa amafoto konti yawe yemerewe kureba ubu.";
+"Review the available privacy policy and terms before subscribing." = "Mbere yo gufata ifatabuguzi, banza usome politiki y’ibanga n’amabwiriza ahari.";
+"Sign-out is not durably confirmed. Unlock this device and retry before closing the app." = "Ntibirashoboka kwemeza ko gusohoka muri konti kwabitswe. Fungura iki gikoresho wongere ugerageze mbere yo gufunga porogaramu.";
+"This export delivery expired. Request a new export from the privacy center." = "Igihe cyo gufata iyi dosiye cyarangiye. Ongera usabe dosiye y’amakuru yawe mu gice cy’ibanga.";
+"This export was already delivered and its local copy is unavailable. Request a new export from the privacy center." = "Iyi dosiye yamaze gutangwa, kandi kopi yayo kuri iki gikoresho ntikiboneka. Ongera usabe dosiye y’amakuru yawe mu gice cy’ibanga.";
+
+"This App Store environment cannot grant a live Lovelies entitlement." = "Ubu buryo bwa App Store ntibushobora gutanga uburenganzira bwo gukoresha Lovelies mu buryo busanzwe.";
+
+"Deletion is confirmed by the server. Secure cleanup on this device still needs to finish; your receipt is retained for retry." = "Seriveri yemeje ko gusiba byarangiye. Gusukura amakuru kuri iki gikoresho mu buryo butekanye biracyakomeje; icyemezo cyawe kirabikwa kugira ngo wongere ugerageze.";
+
+"Finish device cleanup" = "Soza gusukura amakuru ku gikoresho";
+
+"Choose Save to Files in the system share sheet. If delivery is interrupted, reopen this export to continue. Keep the saved copy private." = "Hitamo Save to Files mu idirishya ryo gusangiza rya sisitemu. Iyo kwakira amakuru bihagaze, ongera ufungure ubu busabe bwo kohereza amakuru kugira ngo ukomeze. Bika kopi wabitse mu ibanga.";
+"Purchase verification ended without confirmation. Choose Restore purchases to try again." = "Kugenzura ibyo waguze byarangiye bitaremezwa. Hitamo Garura ibyo waguze kugira ngo wongere ugerageze.";
+
+/* Annual eligibility review. Kinyarwanda wording requires human release review. */
+"Review eligibility for this device" = "Suzuma uburenganzira bw’iki gikoresho";
+"Next eligibility review" = "Isuzuma rikurikira ry’uburenganzira";
+"Review your eligibility" = "Ongera usuzume uburenganzira bwo gukoresha";
+"Review is required at least once a year. Renewing eligibility does not restore photo matching, photo processing or old sharing permissions." = "Isuzuma risabwa nibura rimwe mu mwaka. Kuvugurura uburenganzira ntibisubizaho kugereranya amafoto, kuyatunganya cyangwa uburenganzira bwo gusangiza bwa mbere.";
+"I confirm I am 18 or over." = "Ndemeza ko mfite imyaka 18 cyangwa irenga.";
+"I explicitly consent to using my registered face reference for face sign-in under the displayed policy." = "Nemeye ku buryo bweruye ko amakuru y’isura yanjye yanditswe akoreshwa mu kwinjira nkurikije politiki yerekanwe.";
+"Renew eligibility" = "Vugurura uburenganzira bwo gukoresha";
+"I confirm that parent or legal guardian approval is still required for me." = "Ndemeza ko ngikeneye uruhushya rw’umubyeyi cyangwa umurera wemewe n’amategeko.";
+"Renew eligibility and request guardian review" = "Vugurura uburenganzira usabe isuzuma ry’umubyeyi";
+"Eligibility for this device" = "Uburenganzira bw’iki gikoresho";
+"This device check does not sign you in or allow camera or photo access." = "Iri suzuma ry’igikoresho ntirikwinjiza kandi ntirikwemerera kamera cyangwa amafoto.";
+"Continue to face sign-in" = "Komeza kwinjira ukoresheje isura";
+"Your saved device cannot restore a retired face reference by itself. Use the existing profile recovery control or your recovery backup, or contact support. Keep this account and its saved requests." = "Igikoresho cyabitswe ntigishobora cyonyine gusubizaho amakuru y’isura yakuweho. Koresha uburyo bwo kugarura umwirondoro cyangwa kopi yo kugarura konti, cyangwa ubaze ubufasha. Bika iyi konti n’ibisabwa byayo byabitswe.";
+"Your saved device cannot restore the retired face reference by itself. Use your existing recovery backup or contact support; keep this account and its saved requests." = "Igikoresho cyabitswe ntigishobora cyonyine gusubizaho amakuru y’isura yakuweho. Koresha kopi yo kugarura konti cyangwa ubaze ubufasha; bika iyi konti n’ibisabwa byayo byabitswe.";
+"Open face profile recovery" = "Fungura uburyo bwo kugarura umwirondoro w’isura";
+"Use recovery backup" = "Koresha kopi yo kugarura konti";
+"Your annual eligibility review is due. Face setup and photos stay paused until the required review is complete." = "Igihe cyo gusuzuma uburenganzira bwa buri mwaka cyageze. Kwandikisha isura n’amafoto birahagaritswe kugeza isuzuma rirangiye.";
+
+/* Retained-control renewal; Kinyarwanda copy requires human release review. */
+"Check retained management control" = "Reba uburenganzira bwo gucunga bwabitswe";
+"Your original control renewal is saved. Retry that same review; it cannot be replaced by a different consent or account." = "Icyifuzo cyawe cya mbere cyo kuvugurura uburenganzira kirabitswe. Ongera ugerageze icyo cyifuzo; ntigishobora gusimbuzwa indi konti cyangwa irindi hitamo.";
+"Retry saved control renewal" = "Ongera ugerageze ivugurura ryabitswe";
+"Renew access to this retained management control with a fresh face-authentication choice. This does not sign you in or grant photo matching. Continue the separate face-profile recovery after renewal." = "Hitamo bundi bushya kwemera kwinjira ukoresheje isura kugira ngo uvugurure ubu burenganzira bwo gucunga bwabitswe. Ibi ntibikwinjiza muri konti kandi ntibyemerera guhuza amafoto. Nyuma komeza inzira yihariye yo kugarura isura yawe.";
+"Renew retained management control" = "Vugurura uburenganzira bwo gucunga bwabitswe";
+"Eligibility review is complete. Continue with a fresh face sign-in or the existing face-profile recovery for this same account. Previous photo purposes remain off." = "Isuzuma ryemeza niba wemerewe rirangiye. Komeza winjira ukoresheje isura bundi bushya cyangwa inzira isanzwe yo kugarura isura kuri iyi konti. Uburenganzira bwa kera bwo gukoresha amafoto ntibwongeye gukora.";
+"Continue with this account" = "Komeza ukoresheje iyi konti";
+"Your retained face reference is unavailable. Use your existing face-profile recovery control or recovery backup. This device cannot create a replacement account." = "Isura yawe yabitswe ntiboneka. Koresha uburenganzira busanzwe bwo kugarura isura cyangwa urufunguzo rwo kugarura konti wabitswe. Iki gikoresho ntigishobora gukora indi konti isimbura iyi.";

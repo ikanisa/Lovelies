@@ -69,6 +69,13 @@ const requestStatus = async f => (await f.h.db.one('SELECT status FROM sharing_r
 const planFor = async (f, payload, actor = f.owner) => f.journal.lookup(await restoreOperationID(actor.accountId, 'personal', payload.operation_key));
 const cursor = async f => (await f.journal.control()).marker.cursor.sequence;
 const targetEvent = f => ({ sender_id: f.owner.accountId, recipient_id: f.recipient.accountId, request_id: f.requestID });
+async function assertRetirementFacts(f,saved){
+  assert.equal(saved.plan.events[0].kind,'sharing-request-retired');assert.deepEqual(saved.plan.events[0].scope,targetEvent(f));
+  const grants=await f.h.db.all('SELECT id,owner_id,recipient_id,request_id,asset_id FROM media_grants WHERE request_id=? ORDER BY id',f.requestID);
+  assert.deepEqual(saved.plan.events.slice(1).map(e=>({kind:e.kind,scope:e.scope})).sort((a,b)=>a.scope.grant_id.localeCompare(b.scope.grant_id)),
+    grants.map(g=>({kind:'media-grant-retired',scope:{owner_id:g.owner_id,recipient_id:g.recipient_id,grant_id:g.id,request_id:g.request_id,asset_id:g.asset_id}})));
+  return 1+grants.length;
+}
 
 for (const decision of ['decline', 'withdraw', 'revoke']) test(`actual sharing ${decision} commits one exact independent retirement and never widens the affected request`, async t => {
   const f = await sharingFixture(t, { requested: decision !== 'revoke', second: decision === 'revoke' });
@@ -77,18 +84,17 @@ for (const decision of ['decline', 'withdraw', 'revoke']) test(`actual sharing $
   assert.equal(result.status, ({ decline: 'declined', withdraw: 'withdrawn', revoke: 'revoked' })[decision]);
   const operation = await planFor(f, payload, actor);
   assert.equal(operation.status, 'committed'); assert.deepEqual(operation.plan.allocations, {});
-  assert.equal(operation.plan.events.length, 1); assert.equal(operation.plan.events[0].kind, 'sharing-request-retired');
-  assert.deepEqual(operation.plan.events[0].scope, targetEvent(f)); assert.equal(await cursor(f), 1);
+  const count=await assertRetirementFacts(f,operation);assert.equal(operation.plan.events.length,count);assert.equal(await cursor(f),count);
   if (decision === 'revoke') {
     const rows = await grants(f);
     assert.equal(rows.find(row => row.request_id === f.requestID).active, 0);
     assert.equal(rows.find(row => row.request_id === f.otherRequestID).active, 1);
   }
-  assert.deepEqual(await f.decide(payload, actor.token), result); assert.equal(await cursor(f), 1);
+  assert.deepEqual(await f.decide(payload, actor.token), result); assert.equal(await cursor(f), count);
   assert.equal((await f.decide({ ...payload, operation_key: key('already-terminal') }, actor.token)).status, result.status);
-  assert.equal(await cursor(f), 1);
+  assert.equal(await cursor(f), count);
   await f.decide({ ...payload, decision: 'accept' }, actor.token, 409);
-  assert.equal(await cursor(f), 1);
+  assert.equal(await cursor(f), count);
 });
 
 test('acceptance, unauthorized role and invalid transitions create no restriction; a valid accept still grants only the reviewed pair', async t => {
@@ -113,16 +119,20 @@ for (const stage of ['before', 'after']) test(`targeted prepare reply loss ${sta
     return prepare(value);
   };
   await f.decide(payload, f.owner.token, 503);
-  assert.equal(await requestStatus(f), 'accepted'); assert.equal((await grants(f))[0].active, 1);
   const saved = await f.journal.lookup(id);
   if (stage === 'before') {
+    assert.equal(await requestStatus(f), 'accepted'); assert.equal((await grants(f))[0].active, 1);
     assert.equal(saved, null); assert.equal((await f.journal.control()).state, 'serving');
-    await f.decide(payload); assert.equal(await requestStatus(f), 'revoked'); assert.equal(await cursor(f), 1);
+    await f.decide(payload); assert.equal(await requestStatus(f), 'revoked'); assert.equal(await cursor(f), 2);
   } else {
-    assert.equal(saved.status, 'pending'); assert.deepEqual(saved.plan.events[0].scope, targetEvent(f));
-    await assert.rejects(() => f.db.one('SELECT id FROM accounts LIMIT 1'), unavailable);
-    await f.decide(payload, f.owner.token, 503); assert.equal((await f.journal.lookup(id)).plan.events.length, 1);
-    assert.equal(f.trace.filter(value => value.kind === 'sql' && value.sql.startsWith('UPDATE sharing_requests SET status=')).length, 1);
+    assert(['pending','recovered'].includes(saved.status));await assertRetirementFacts(f,saved);
+    if(saved.status==='pending'){assert.equal(await requestStatus(f),'accepted');assert.equal((await grants(f))[0].active,1);}
+    await f.db.one('SELECT id FROM accounts LIMIT 1');const recovered=await f.journal.lookup(id);
+    assert.equal(recovered.status,'recovered');assert.deepEqual(recovered.plan,saved.plan);assert.equal(recovered.plan_hash,saved.plan_hash);
+    assert.equal(await requestStatus(f),'revoked');assert.equal((await grants(f))[0].active,0);assert.equal((await f.journal.control()).state,'serving');
+    assert.equal(await f.h.db.one('SELECT operation_key FROM operations WHERE actor_id=? AND source=? AND operation_key=?',f.owner.accountId,'personal',payload.operation_key),null);
+    await f.decide(payload, f.owner.token, 410);await f.decide({...payload,decision:'accept'},f.owner.token,409);
+    assert.equal(f.trace.filter(value => value.kind === 'sql' && value.sql.startsWith('UPDATE sharing_requests SET status=$1')).length, 1);
   }
 });
 
@@ -136,7 +146,7 @@ for (const mode of ['commit', 'ack-before', 'ack-after']) test(`sharing ${mode} 
   assert.equal(await requestStatus(f), 'revoked'); assert.equal((await grants(f))[0].active, 0);
   assert.equal((await f.decide(payload)).status, 'revoked');
   const operation = await f.journal.lookup(id);
-  assert.equal(operation.status, 'committed'); assert.equal(operation.plan.events.length, 1); assert.equal(await cursor(f), 1);
+  assert.equal(operation.status, 'committed');assert.equal(await assertRetirementFacts(f,operation),2);assert.equal(await cursor(f),2);
   assert.equal(f.trace.filter(value => value.kind === 'sql' && value.sql.startsWith('UPDATE sharing_requests SET status=')).length, 1);
 });
 

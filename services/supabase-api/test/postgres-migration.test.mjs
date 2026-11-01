@@ -89,6 +89,38 @@ test('private schema migration succeeds under a non-superuser CREATEROLE databas
   await local.engine.exec('SET ROLE '+backend);
   assert.equal(Number((await local.engine.query('SELECT max(version) version FROM lovelies_private.schema_versions')).rows[0].version),13);
   assert.equal(Number((await local.engine.query('SELECT count(*) n FROM lovelies_private.restore_control')).rows[0].n),0,'v13 does not seed restore authority');
+  // Keep every historical-stage assertion above, then qualify the current
+  // additive chain under the same non-superuser schema owner and backend role.
+  const currentStages=[
+   {version:14,file:'20261029120000_delivery_reliability.sql',count:71,tables:['privacy_export_deliveries','processing_profile_batches']},
+   {version:15,file:'20261029130000_restore_recovery_protocol.sql',count:76,tables:['restore_transaction_facts','restore_recovery_runs','restore_replay_facts','restore_recovered_operations','restore_cleanup_objects']},
+   {version:16,file:'20261029140000_chunked_privacy_exports.sql',count:79,tables:['privacy_export_snapshots','privacy_export_snapshot_rows','privacy_export_chunks']},
+   {version:17,file:'20261029150000_operator_capabilities.sql',count:81,tables:['operator_access_versions','operator_capability_grants']},
+   {version:18,file:'20261101012732_audience_and_delivery_reconciliation.sql',count:86,tables:['audience_review_retirements','processing_attempt_profiles','processing_match_progress','notification_dispatch_plans','notification_recovered_receipts']},
+   {version:19,file:'20261101013223_managed_auth_session_custody.sql',count:87,tables:['managed_auth_bindings']},
+  ];
+  for(const stage of currentStages){
+   await local.engine.exec('SET ROLE '+owner);
+   const source=fs.readFileSync(new URL('../../../supabase/migrations/'+stage.file,import.meta.url),'utf8').replaceAll('lovelies_api',backend);
+   await local.engine.exec(source);
+   assert.equal((await local.engine.query('SELECT current_user role')).rows[0].role,owner,'each migration restores the original non-superuser role');
+   assert.equal((await local.engine.query("SELECT count(*)::int n FROM pg_tables WHERE schemaname='lovelies_private'")).rows[0].n,stage.count);
+   for(const table of stage.tables){
+    const protection=(await local.engine.query('SELECT relrowsecurity,relforcerowsecurity FROM pg_class WHERE oid=$1::regclass',['lovelies_private.'+table])).rows[0];
+    assert.deepEqual(protection,{relrowsecurity:true,relforcerowsecurity:true},table+' must force row security');
+    const policies=(await local.engine.query("SELECT policyname,roles,qual,with_check FROM pg_policies WHERE schemaname='lovelies_private' AND tablename=$1",[table])).rows;
+    assert.deepEqual([...policies].map(row=>({...row,roles:[...row.roles]})),[{policyname:'backend_only',roles:[backend],qual:'true',with_check:'true'}]);
+    for(const client of ['anon','authenticated'])assert.equal((await local.engine.query(
+     'SELECT has_table_privilege($1,$2,$3) permitted',[client,'lovelies_private.'+table,'SELECT,INSERT,UPDATE,DELETE,TRUNCATE,REFERENCES,TRIGGER'])).rows[0].permitted,false);
+   }
+   await local.engine.exec('SET ROLE '+backend);
+   assert.equal(Number((await local.engine.query('SELECT max(version) version FROM lovelies_private.schema_versions')).rows[0].version),stage.version);
+   for(const table of stage.tables)assert.equal(Number((await local.engine.query('SELECT count(*) n FROM lovelies_private.'+table)).rows[0].n),0,table+' must not seed authority or customer records');
+   assert.equal(Number((await local.engine.query('SELECT count(*) n FROM lovelies_private.restore_control')).rows[0].n),0,'additive migrations do not bootstrap serving authority');
+  }
+  assert.deepEqual((await local.engine.query('SELECT version FROM lovelies_private.schema_versions ORDER BY version')).rows.map(row=>Number(row.version)),Array.from({length:13},(_,index)=>index+7));
+  assert.equal(Number((await local.engine.query('SELECT count(*) n FROM lovelies_private.accounts')).rows[0].n),0,'schema19 grants no account or operator access');
+  assert.deepEqual((await local.engine.query("SELECT scan,entity_id,last_at,last_id FROM lovelies_private.retention_scan_cursors WHERE entity_id=''")).rows[0],cursorRow,'current migrations preserve the historical default retention cursor');
   await local.engine.exec('RESET ROLE');
   assert.equal((await local.engine.query('SELECT pg_has_role($1,$2,$3) permitted',['postgres',backend,'MEMBER'])).rows[0].permitted,true);
  }finally{

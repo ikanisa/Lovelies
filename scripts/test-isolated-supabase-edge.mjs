@@ -1,6 +1,8 @@
-/** Actual cached Supabase Edge Runtime -> unchanged production entrypoint,
+/** Actual cached Supabase Edge Runtime -> current production entrypoint,
  * isolated PostgreSQL database, owned real private Storage and external pinned
  * real ML HTTP. Node owns setup/transports/HTTP cron only, never app authority.
+ * Explicit APP_ENV=test leaves managed Auth outside this component fixture. Use
+ * local-supabase-qualify.mjs for the real self-hosted Auth/custody topology.
  *
  * node --experimental-transform-types scripts/test-isolated-supabase-edge.mjs \
  *   --services-dir <existing-owned-services> --output <new-directory> \
@@ -29,13 +31,11 @@ import {startRestoreJournalHTTPSFixture} from '../services/supabase-api/test/res
 const root=fileURLToPath(new URL('../',import.meta.url));
 const EDGE='public.ecr.aws/supabase/edge-runtime:v1.77.8@sha256:178c041398a33ded8219344382d0672a90051d1babbf0af03425cafe20039a75';
 const CLIENT='public.ecr.aws/supabase/storage-api:v1.68.10';
-const POSTGRES='public.ecr.aws/supabase/postgres:17.6.1.158';
-const ARTIFACT='173b43d8f5d259f022f4fd83b7c658fc7ade3070e36321965436cd59f2da909f';
-const PROCESSING='e5366532fe94660257f2228e59e5d6032fd35d45ee41733d82c84aee440a26fa';
-// Registry image manifest and package artifact are deliberately distinct.
-// Root supplies/verifies the external image receipt; /ready verifies the loaded
-// artifact, processing generation, model hashes, capabilities and limits here.
-const EXTERNAL_IMAGE_MANIFEST='d815c57f43cb4f1e26d624e68d8b5f43db5a76723e1c1de8d88a341273b68ffe';
+const POSTGRES='supabase/postgres:17.11.0.003@sha256:7374d196da7e301512cc5329e18040e0f7bb856287b323777cdadecccbc6c7e4';
+// Inference pins must describe the newly built integrated candidate. Historical
+// Cloudflare/container hashes cannot qualify changed local inference source.
+let ARTIFACT,PROCESSING,EXTERNAL_IMAGE_MANIFEST;
+const SCHEMA_VERSION=19;
 const BUCKETS=['lovelies-photos','lovelies-quarantine','lovelies-privacy-exports'];
 const FILE_LIMIT=20*1024*1024;
 const MIGRATIONS=[
@@ -44,6 +44,12 @@ const MIGRATIONS=[
   '20261024190000_retention_scan_cursors.sql',
   '20261026132612_restore_control.sql',
   '20261026224211_lovelies_media_authority.sql',
+  '20261029120000_delivery_reliability.sql',
+  '20261029130000_restore_recovery_protocol.sql',
+  '20261029140000_chunked_privacy_exports.sql',
+  '20261029150000_operator_capabilities.sql',
+  '20261101012732_audience_and_delivery_reconciliation.sql',
+  '20261101013223_managed_auth_session_custody.sql',
 ];
 const JOURNAL_CA_TARGET='/run/lovelies-journal/ca.pem';
 const JOURNAL_ORIGIN='https://127.0.0.1:54324';
@@ -108,10 +114,11 @@ const report={schema:1,kind:'lovelies-isolated-native-supabase-edge-v1',status:'
     max_workers:3,worker_memory_mib:256,worker_cpu_ms:2000,worker_timeout_ms:150000,
     worker_policy:'per_request',cpu_budget_scope:'per_request',
     worker_timeout_semantics:'Pinned per_request runtime resets its timeout while requests remain active; this is not an absolute HTTP wall deadline.'},
-  external_image:{expected_manifest_sha256:EXTERNAL_IMAGE_MANIFEST,verification:'root_receipt_required_separately'},
+  external_image:{verification:'actual_candidate_image_receipt_required_separately'},
+  managed_auth:{mode:'explicit_APP_ENV_test_fixture_without_managed_provider',qualification:'not_established'},
   maintenance:{interval_after_completion_ms:1000,calls:0,failures:0},commands:[],
   does_not_establish:['Hosted deployment','Optical camera capture','Representative recognition accuracy','Store distribution',
-    'Independent journal provider persistence/EU custody','Backup restoration/replay/object cleanup or recovery clearance'],
+    'Managed Supabase Auth lifecycle','Independent local custody durability/placement','Backup restoration/replay/object cleanup or recovery clearance'],
 };
 async function save(){
   const path=join(directory,'runtime.json'),temporary=path+'.tmp';
@@ -400,6 +407,12 @@ try{
   const mlEnvironment=await privateEnvironment(argumentsMap.get('--ml-env'));
   assert(environments.TEST_DATABASE_URL&&environments.TEST_STORAGE_API_URL&&environments.TEST_STORAGE_SERVICE_KEY,'Owned service fields required');
   assert(mlEnvironment.ML_INFERENCE_URL&&mlEnvironment.ML_INFERENCE_SECRET?.length>=32,'Private ML HTTP fields required');
+  ARTIFACT=mlEnvironment.ML_INFERENCE_ARTIFACT_SHA256;
+  PROCESSING=mlEnvironment.ML_INFERENCE_PROCESSING_SHA256;
+  EXTERNAL_IMAGE_MANIFEST=mlEnvironment.ML_INFERENCE_IMAGE_SHA256;
+  assert([ARTIFACT,PROCESSING,EXTERNAL_IMAGE_MANIFEST].every(value=>/^[a-f0-9]{64}$/.test(value??'')),
+    'Exact candidate ML artifact, processing and image SHA-256 pins required');
+  report.external_image.expected_manifest_sha256=EXTERNAL_IMAGE_MANIFEST;
   const ml=localOrigin(mlEnvironment.ML_INFERENCE_URL),adminUrl=new URL(environments.TEST_DATABASE_URL);
   assert(['postgres:','postgresql:'].includes(adminUrl.protocol)&&['127.0.0.1','localhost','[::1]'].includes(adminUrl.hostname)&&
     Number(adminUrl.port)===info.postgresPort&&adminUrl.pathname==='/postgres'&&adminUrl.username==='supabase_admin'&&adminUrl.password&&!adminUrl.search&&!adminUrl.hash,
@@ -445,7 +458,7 @@ try{
   redactions.push(database.url);
   for(const name of MIGRATIONS){shutdown.signal.throwIfAborted();await database.engine.exec(await readFile(join(root,'supabase/migrations',name),'utf8'));}
   const versions=(await database.engine.query('SELECT version FROM lovelies_private.schema_versions ORDER BY version')).rows.map(row=>Number(row.version));
-  assert.deepEqual(versions,[7,8,9,10,11,12,13],'All seven canonical migrations required');report.database.schema_version=13;report.database.applied_versions=versions;
+  assert.deepEqual(versions,[7,8,9,10,11,12,13,14,15,16,17,18,19],'All thirteen canonical migrations required');report.database.schema_version=SCHEMA_VERSION;report.database.applied_versions=versions;
   shutdown.signal.throwIfAborted();journal=await startRestoreJournalHTTPSFixture();redactions.push(journal.token);
   assert(Number.isSafeInteger(journal.port)&&journal.port>=1024&&journal.port<=65535,'Bounded exact HTTPS fixture port required');
   assert.equal(journal.url,'https://127.0.0.1:'+journal.port,'Only the controlled local HTTPS fixture may be relayed');
@@ -494,6 +507,9 @@ try{
     MEDIA_SIGNING_SECRET:randomBytes(32).toString('hex'),INTERNAL_MAINTENANCE_SECRET:maintenanceSecret,
     FACE_AUTH_POLICY_VERSION:'face-policy-fixture-v1',PHOTO_MODEL_VERSION:'opencv-yunet-sface-2021dec-v1',
     PHOTO_CONSENT_POLICY_VERSION:'photo-policy-fixture-v1',PUBLIC_API_BASE_URL:publicOrigin,
+    // Explicit isolated-fixture budgets; these are not production capacity recommendations.
+    UPLOAD_MAX_INFLIGHT:'100',UPLOAD_MAX_RESERVED_SOURCE_BYTES:'2147483648',
+    UPLOAD_MAX_DAILY_SOURCE_BYTES:'2147483648',UPLOAD_MAX_DAILY_RESERVATIONS:'1000',PHOTO_MAX_DAILY_ATTEMPTS:'1000',
     ALLOWED_ORIGINS:'http://127.0.0.1:8765',PUBLIC_APP_BASE_URL:'http://127.0.0.1:8765',
     ML_INFERENCE_URL:'http://127.0.0.1:54323',ML_INFERENCE_SECRET:mlEnvironment.ML_INFERENCE_SECRET,
     ML_INFERENCE_ARTIFACT_SHA256:ARTIFACT,ML_INFERENCE_PROCESSING_SHA256:PROCESSING,DENO_DIR:'/tmp/deno',
@@ -526,12 +542,12 @@ try{
     }catch{}
     await pause(250);
   }
-  assert(health?.status==='ok'&&health.database==='supabase_postgresql'&&health.database_ready===true&&health.schema_version===13,
-    'Only production PostgreSQL/schema-13 health can establish API readiness');
+  assert(health?.status==='ok'&&health.database==='supabase_postgresql'&&health.database_ready===true&&health.schema_version===SCHEMA_VERSION,
+    'Current PostgreSQL/schema-19 fixture health required');
   const readyResponse=await fetch(apiOrigin+'/ready',{redirect:'manual',signal:AbortSignal.timeout(20000)});
-  assert.equal(readyResponse.status,200,'Production Edge readiness required');readiness=await boundedJson(readyResponse);
-  assert(readiness.status==='ok'&&readiness.database==='supabase_postgresql'&&readiness.schema_version===13&&
-    readiness.inference_ready===true&&Array.isArray(readiness.missing)&&readiness.missing.length===0,'Complete production inference readiness required');
+  assert.equal(readyResponse.status,200,'Current Edge fixture readiness required');readiness=await boundedJson(readyResponse);
+  assert(readiness.status==='ok'&&readiness.database==='supabase_postgresql'&&readiness.schema_version===SCHEMA_VERSION&&
+    readiness.inference_ready===true&&Array.isArray(readiness.missing)&&readiness.missing.length===0,'Complete fixture inference readiness required');
   const currentControl=(await journal.control()).control;
   assert(currentControl.state==='serving'&&currentControl.marker.database_id===initial.database_id&&currentControl.marker.incarnation_id===initial.incarnation_id,
     'The actual Edge worker must retain its exact independent fixture binding');

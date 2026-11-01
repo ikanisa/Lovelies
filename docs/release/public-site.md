@@ -48,9 +48,11 @@ introduce OTP or automate deletion from an unverified message.
 All pages visibly say Review draft, give a preparation date rather than an
 effective policy date, and retain the unresolved inference operator/location,
 retention/backup, audience/territory, controller/legal and support-operation gates.
-Supabase Ireland and the selected private Cloudflare EU/WEUR inference service
-are described as the selected architecture. Production qualification, actual
-operation, enabled processors and their retention remain explicit publication inputs.
+The current draft describes locally hosted Supabase and authenticated local
+inference. The earlier Supabase Ireland/Cloudflare EU/WEUR description is
+historical and cannot establish the operator or location of the selected host.
+Production qualification, actual operation, enabled processors, host location
+and their retention remain explicit publication inputs.
 
 ## Local checks completed
 

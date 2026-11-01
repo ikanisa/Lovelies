@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
-<resources>
+<resources xmlns:tools="http://schemas.android.com/tools">
     <string name="app_name">Lovelies</string>
     <string name="search_photos">Search your photos</string>
     <string name="add_photos">Add Photos</string>
@@ -33,8 +33,12 @@
     <string name="include_person">Include %1$s</string>
     <string name="open_person">Open %1$s</string>
     <string name="photo_of_total">Photo %1$d of %2$d</string>
-    <string name="selected">Selected</string>
-    <string name="not_selected">Not selected</string>
+    <!-- Deliberate Compose UI 1.9.4 accessibility overrides: the library has no
+         Kinyarwanda selection-state resources. These private names preserve our
+         paired English/Kinyarwanda labels in its accessibility delegate.
+         Recheck both private names and library translations on Compose upgrades. -->
+    <string name="selected" tools:override="true">Selected</string>
+    <string name="not_selected" tools:override="true">Not selected</string>
     <plurals name="photo_count"><item quantity="one">%d photo</item><item quantity="other">%d photos</item></plurals>
     <plurals name="person_count"><item quantity="one">%d person</item><item quantity="other">%d people</item></plurals>
     <string name="a11y_close">Close</string>
@@ -77,6 +81,7 @@
     <string name="audience_withdraw">Withdraw guardian permission</string>
     <string name="audience_withdraw_detail">This stops the approved purposes and retires affected photo access. Later approval does not restore old consent or sharing permissions.</string>
     <string name="audience_saved_change">A saved permission change has an unconfirmed result. Check status or retry that exact saved change before submitting another.</string>
+    <string name="audience_change_retired">The saved permission change ended without a confirmed result after service recovery. Review your current eligibility and confirm a fresh choice to continue.</string>
     <string name="audience_retry_saved">Retry saved permission change</string>
     <string name="audience_privacy_deletion">Privacy and deletion</string>
     <string name="audience_check_sign_in">Check face sign-in permission</string>
@@ -94,4 +99,15 @@
     <string name="audience_withdrawal_pending">Guardian withdrawal is saved, but completion is not confirmed. Check status or retry the same saved withdrawal. Other permission changes will not replace it.</string>
     <string name="audience_retry_withdrawal">Retry saved withdrawal</string>
     <string name="service_temporarily_unavailable">Lovelies is temporarily unavailable. Please try again later.</string>
+    <string name="push_system_disabled">Android notifications are off for Lovelies or its updates channel. Open notification settings to allow them.</string>
+    <string name="push_status_pending">This device’s notification change is awaiting confirmation. Open Lovelies again to check its saved status. Your current on/off preference is preserved.</string>
+    <string name="push_open_settings">Open notification settings</string>
+    <string name="support_load_more">Load more requests</string>
+    <string name="export_session_changed">Your session changed while preparing the export. Choose Save again from your current account.</string>
+    <string name="export_delivery_expired">This private export delivery has expired or its staged copy is unavailable. Refresh your requests; if the export was already delivered, request a new export.</string>
+    <string name="export_delivery_pending">Finish saving the pending export before choosing another request.</string>
+    <string name="export_storage_unavailable">The export’s local save status could not be confirmed. Keep this app’s data and retry from this account.</string>
+    <string name="notifications_load_more">Load more notifications</string>
+    <string name="collection_page_error">This list could not be continued safely. Refresh it to load the current requests or notifications.</string>
+    <string name="session_retirement_unconfirmed">Sign-out is not durably confirmed. Keep the app open and retry after unlocking the device.</string>
 </resources>

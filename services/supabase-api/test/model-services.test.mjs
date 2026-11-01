@@ -56,6 +56,30 @@ async function faceForm(mode='first_registration'){
 const sendFace=async(h,form,signal)=>h.services.face.fetch(new Request('https://private/v1/face-auth/verify',{method:'POST',body:form,signal}));
 const photoReply=async input=>({...binding(input),model_version:INFERENCE_MODEL_ID,
   preview:{bytes_base64:'cHJldmlldw==',content_type:'image/jpeg',width:1,height:1},matches:[]});
+test('bounded photo ranking transport uses the new protocol with exact request binding and no page-local matches',async()=>{
+  const h=harness(async(input,request,wire)=>{
+    assert.equal(new URL(request.url).pathname,'/consumer/internal/photo-batch');
+    assert.equal(input.ranking_protocol,'lovelies-photo-ranking-page-v1');assert.equal(input.include_preview,false);
+    const unhashed={...input};delete unhashed.request_sha256;
+    assert.equal(input.request_sha256,await digest(stable(unhashed)));
+    return {...binding(input),model_version:INFERENCE_MODEL_ID,ranking:{protocol:input.ranking_protocol,
+      query_sha256:'c'.repeat(64),threshold:.42,review_margin:.05,faces:[]}};
+  });
+  const {input}=await photoFixture(h,2);input.ranking_protocol='lovelies-photo-ranking-page-v1';input.include_preview=false;
+  const response=await h.services.photo.fetch('https://private/process-batch',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify(input)});
+  assert.equal(response.status,200);const result=await response.json();
+  assert.equal(result.ranking.protocol,input.ranking_protocol);assert.equal(result.engine_identity,generation);
+  assert(!Object.hasOwn(result,'matches'));assert(!Object.hasOwn(result,'preview'));
+});
+
+test('photo ranking refuses overfull pages and legacy replies rather than independently accepting page winners',async()=>{
+  const h=harness(photoReply),large=await photoFixture(h,129);
+  large.input.ranking_protocol='lovelies-photo-ranking-page-v1';large.input.include_preview=true;
+  const send=input=>h.services.photo.fetch('https://private/process-batch',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify(input)});
+  let response=await send(large.input);assert.equal(response.status,409);assert.equal(h.observed.length,0);
+  const small=await photoFixture(h,2);small.input.ranking_protocol='lovelies-photo-ranking-page-v1';small.input.include_preview=false;
+  response=await send(small.input);assert.equal(response.status,503);assert.equal((await response.json()).error.code,'processor_result_invalid');
+});
 async function photoFixture(h,count=1){
   const source=new TextEncoder().encode('synthetic-guarded-private-photo'),checksum=await digest(source),version=crypto.randomUUID();
   h.quarantine.put('source/authority-contract',source,{httpMetadata:{contentType:'image/jpeg'},customMetadata:{source_version:version,source_checksum_sha256:checksum}});
@@ -450,6 +474,8 @@ test('public API readiness reports a sanitized live-probe boolean and health rem
   const h=harness(),env={APP_ENV:'test',PHOTOS:h.photos,QUARANTINE:h.quarantine,PRIVACY_EXPORTS:{},PHOTO_JOBS:{},
     FACE_AUTH_VERIFIER:h.services.face,PHOTO_PROCESSOR:h.services.photo,MODEL_SERVICE_READINESS:h.services.ready,
     INFERENCE_ENGINE_IDENTITY:h.services.generation(),
+    UPLOAD_MAX_INFLIGHT:'10',UPLOAD_MAX_RESERVED_SOURCE_BYTES:'104857600',UPLOAD_MAX_DAILY_SOURCE_BYTES:'104857600',
+    UPLOAD_MAX_DAILY_RESERVATIONS:'100',PHOTO_MAX_DAILY_ATTEMPTS:'100',
     AUTH_SIGNING_SECRET:secret,MEDIA_SIGNING_SECRET:secret,INTERNAL_MAINTENANCE_SECRET:secret,
     FACE_AUTH_POLICY_VERSION:'registered-face-opencv-v1',PHOTO_MODEL_VERSION:INFERENCE_MODEL_ID,PUBLIC_API_BASE_URL:'https://api.example'};
   // Bounded unfenced readiness unit port; this supplies no restore-admission
@@ -458,6 +484,14 @@ test('public API readiness reports a sanitized live-probe boolean and health rem
   const live=await handler(new Request('https://api.example/ready'));assert.equal(live.status,200);
   const value=await live.json();assert.equal(value.inference_ready,true);assert.equal(value.hosted_provider_acceptance,false);
   for(const key of [...bindingNames,'model_hashes','processing_fingerprint','capabilities'])assert(!Object.hasOwn(value,key));
+  const validBudget=env.UPLOAD_MAX_INFLIGHT;
+  for(const invalidBudget of [undefined,'0']){
+    if(invalidBudget===undefined)delete env.UPLOAD_MAX_INFLIGHT;else env.UPLOAD_MAX_INFLIGHT=invalidBudget;
+    const denied=await handler(new Request('https://api.example/ready'));assert.equal(denied.status,503);
+    assert((await denied.json()).missing.includes('UPLOAD_MAX_INFLIGHT'));
+    assert.equal((await handler(new Request('https://api.example/health'))).status,200);
+  }
+  env.UPLOAD_MAX_INFLIGHT=validBudget;
   env.MODEL_SERVICE_READINESS=async()=>false;assert.equal((await handler(new Request('https://api.example/ready'))).status,503);
   env.MODEL_SERVICE_READINESS=async()=>{throw new Error('synthetic-private-failure');};assert.equal((await handler(new Request('https://api.example/ready'))).status,503);
   delete env.MODEL_SERVICE_READINESS;assert.equal((await handler(new Request('https://api.example/ready'))).status,503);

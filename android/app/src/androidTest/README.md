@@ -148,11 +148,13 @@ node --experimental-transform-types scripts/test-isolated-supabase-edge.mjs \
 This runs the unchanged production entrypoint in pinned Edge Runtime v1.77.8
 (`sha256:178c041398a33ded8219344382d0672a90051d1babbf0af03425cafe20039a75`),
 using actual owned private Storage, authenticated real ML HTTP and a **new
-PostgreSQL database**. It applies all five production migrations through schema
-11: private core, refresh delivery, audience/retention, inference generation and
-retention scan cursors. `--fixtures-dir` reuses and verifies the existing 19 JPEGs
+PostgreSQL database**. It applies all eleven production migrations, covering
+schemas 7–17: private core, refresh delivery, audience/retention, inference
+generation, retention scan cursors, restore control, media authority, delivery
+reliability, restore recovery, chunked privacy exports and operator capabilities.
+`--fixtures-dir` reuses and verifies the existing 19 JPEGs
 and `openface-native-journey.json` without rewriting them. Wait for `runtime.json`
-to report `status=ready`, schema 11 and actual inference readiness. The worker
+to report `status=ready`, schema 17 and actual inference readiness. The worker
 uses **`per_request`, 256 MiB and 2,000 ms CPU**, with at most three workers
 inside a bounded 1 GiB/one-CPU local container. Its configured 150-second worker
 timeout is not an absolute HTTP deadline: this runtime resets it while requests

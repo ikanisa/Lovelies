@@ -1,0 +1,334 @@
+{
+  "repository": "https://github.com/supabase/supabase",
+  "commit": "a05e7ec1d79e67cba65e3871b7caf105db27f8b1",
+  "commit_date": "2026-10-31T11:44:36Z",
+  "source_url": "https://github.com/supabase/supabase/tree/a05e7ec1d79e67cba65e3871b7caf105db27f8b1/docker",
+  "retrieved_on": "2026-11-01",
+  "files": [
+    {
+      "path": ".env.example",
+      "sha256": "57f837916e1a6118468f08d23f051f28669e1ea0fcfde372e6e066073fe3e3a2",
+      "upstream_path": "docker/.env.example"
+    },
+    {
+      "path": ".gitattributes",
+      "sha256": "d4e04d7bf92ac4139c6e5b3d0e9f487619769aec27bc7f939bdf190cd5ee7359",
+      "upstream_path": "docker/.gitattributes"
+    },
+    {
+      "path": ".gitignore",
+      "sha256": "70924bc1b93a97d5d799d4ca48118286de1af0f848cfee34f09d4f379d989efc",
+      "upstream_path": "docker/.gitignore"
+    },
+    {
+      "path": "CHANGELOG.md",
+      "sha256": "65e11ac33d7a546583ef1bd98355ffd6f2b1331b7ebb91e94490bb495787965a",
+      "upstream_path": "docker/CHANGELOG.md"
+    },
+    {
+      "path": "CONFIG.md",
+      "sha256": "31f191c6333f630b49cde8ea6ef995677725239b71131f0121b8db108f63cba4",
+      "upstream_path": "docker/CONFIG.md"
+    },
+    {
+      "path": "LICENSE",
+      "sha256": "c29468abcd629e248c2f76848155c386b733872bcabcc4cf65ef1e7c61431042",
+      "upstream_path": "LICENSE"
+    },
+    {
+      "path": "README.md",
+      "sha256": "b326e2a0de29f02e3c109cf5008872a4764a5f1048ec44e343634f42258614ac",
+      "upstream_path": "docker/README.md"
+    },
+    {
+      "path": "dev/data.sql",
+      "sha256": "b844e55d1369b8847294176d348b339bc8689f0fc56448968575403b0857b96d",
+      "upstream_path": "docker/dev/data.sql"
+    },
+    {
+      "path": "dev/docker-compose.dev.yml",
+      "sha256": "62fe7cdef0c880b6185cf793f155630a4893d7467de9dd47fed32b5eac5f335d",
+      "upstream_path": "docker/dev/docker-compose.dev.yml"
+    },
+    {
+      "path": "docker-compose.caddy.yml",
+      "sha256": "efd31215990e16d8ac1ef77777a79e06aba3ced6578e555a2839f38e972a1c9b",
+      "upstream_path": "docker/docker-compose.caddy.yml"
+    },
+    {
+      "path": "docker-compose.envoy.yml",
+      "sha256": "3ad4ba2e257b66c4824e3fc69d9d0cd30d628431c01090ec4a8efb1705612b19",
+      "upstream_path": "docker/docker-compose.envoy.yml"
+    },
+    {
+      "path": "docker-compose.kong.yml",
+      "sha256": "267c18cea5e41b8549a2c7a09ebd1d4e3b6851f22bcbe8f94ff3d4d119a96446",
+      "upstream_path": "docker/docker-compose.kong.yml"
+    },
+    {
+      "path": "docker-compose.logs.yml",
+      "sha256": "7bb54170e0f016fe981b4e954c89bf4164b254656ae605532533b16b3325f741",
+      "upstream_path": "docker/docker-compose.logs.yml"
+    },
+    {
+      "path": "docker-compose.nginx.yml",
+      "sha256": "042f02d9f36965c285ea0e6cbdb69c50c5169a7e58c7069374dbb45e2a8f24cd",
+      "upstream_path": "docker/docker-compose.nginx.yml"
+    },
+    {
+      "path": "docker-compose.pg15.yml",
+      "sha256": "00d21617e4c989adb0936571c0a07a6f6648a5393be8735602bebf2726c1bb4f",
+      "upstream_path": "docker/docker-compose.pg15.yml"
+    },
+    {
+      "path": "docker-compose.pg17.yml",
+      "sha256": "bd61c0d7ea268d9c3dbe103277899266a5adeaeb1645a3a35198fed35a617112",
+      "upstream_path": "docker/docker-compose.pg17.yml"
+    },
+    {
+      "path": "docker-compose.pgbouncer.yml",
+      "sha256": "91bb9ce394dd3adfe1f7f59b413daf046ab1c19443d47f61ca3c17fc8aa5f133",
+      "upstream_path": "docker/docker-compose.pgbouncer.yml"
+    },
+    {
+      "path": "docker-compose.rustfs.yml",
+      "sha256": "0de698268fa307bc6491e30ea447a395d020321f7c18e4017ec24bb755457b37",
+      "upstream_path": "docker/docker-compose.rustfs.yml"
+    },
+    {
+      "path": "docker-compose.s3.yml",
+      "sha256": "489f09f0280c0a63fa97fb70bbc4d48ea95344f772a3eaad6fd1525e3d2697af",
+      "upstream_path": "docker/docker-compose.s3.yml"
+    },
+    {
+      "path": "docker-compose.yml",
+      "sha256": "8a75b7bdba9dec1f21814118431ca3469c1a43f4aed542379bb3d356602a67ea",
+      "upstream_path": "docker/docker-compose.yml"
+    },
+    {
+      "path": "reset.sh",
+      "sha256": "a7b42301b76544957f95113aebbff4974cba3f11db1ac21b71ac35420315648f",
+      "upstream_path": "docker/reset.sh"
+    },
+    {
+      "path": "run.sh",
+      "sha256": "839b4e11c685cb4f876ce2fe5e329037cefcb0cc7aed22c1cd14fcd921d9c68e",
+      "upstream_path": "docker/run.sh"
+    },
+    {
+      "path": "setup.sh",
+      "sha256": "b063655b6388924b33f331633e800c12179a48b53d217c059f674ec8b8e27189",
+      "upstream_path": "docker/setup.sh"
+    },
+    {
+      "path": "tests/docker-compose.rustfs.test.yml",
+      "sha256": "2717d9601b1df25e22459994128938c0be88aa7457dfe1233e464dfbf6642201",
+      "upstream_path": "docker/tests/docker-compose.rustfs.test.yml"
+    },
+    {
+      "path": "tests/docker-compose.s3.test.yml",
+      "sha256": "4bd9129a118328de4425af125b6783612ba0b1a041e1c34dcdd559feb8c88825",
+      "upstream_path": "docker/tests/docker-compose.s3.test.yml"
+    },
+    {
+      "path": "tests/test-auth-keys.sh",
+      "sha256": "b34bf2bdc9afc131f034ee56a7961877da80f305e7deca17b2930d950bdc3b77",
+      "upstream_path": "docker/tests/test-auth-keys.sh"
+    },
+    {
+      "path": "tests/test-container-logs.sh",
+      "sha256": "854903da3f1f7608891e9191e6948189ac8009fb57b1da89adf7e205e526b226",
+      "upstream_path": "docker/tests/test-container-logs.sh"
+    },
+    {
+      "path": "tests/test-pg17-upgrade.sh",
+      "sha256": "8d461dd67b046f65438d99d7cad2836c6ddd66f6b48d8747d81e0261add9ad64",
+      "upstream_path": "docker/tests/test-pg17-upgrade.sh"
+    },
+    {
+      "path": "tests/test-s3-backend.sh",
+      "sha256": "1ded4eec34668667a656544cc7394f3c00194611cb3a963ccd1305c0e3e20648",
+      "upstream_path": "docker/tests/test-s3-backend.sh"
+    },
+    {
+      "path": "tests/test-s3.sh",
+      "sha256": "aaaaa08f3f8313aee13a7b2e92a74254da00ac15def9471054df2bb1913c07ae",
+      "upstream_path": "docker/tests/test-s3.sh"
+    },
+    {
+      "path": "tests/test-self-hosted.sh",
+      "sha256": "d416872f8e51d221ae761d985c41cba493bf0ad25ac1697c87c964a13760dc5f",
+      "upstream_path": "docker/tests/test-self-hosted.sh"
+    },
+    {
+      "path": "tests/test-update.sh",
+      "sha256": "02da0e6f9f383aacc87584f0b293410d088d9f6f6ca9c5cc3f6307c17e29bf8e",
+      "upstream_path": "docker/tests/test-update.sh"
+    },
+    {
+      "path": "tests/test-upgrades-manifest.sh",
+      "sha256": "0e45c1728da72533d1728422be3fad1c947bf7ae498003c0e086c0a027261dbf",
+      "upstream_path": "docker/tests/test-upgrades-manifest.sh"
+    },
+    {
+      "path": "update.sh",
+      "sha256": "a0c8f1630af9a076a8fd723444de88eda5a91b3284199acb500d0da72cb7fdd6",
+      "upstream_path": "docker/update.sh"
+    },
+    {
+      "path": "upgrades.json",
+      "sha256": "282e6fafeff4340283f490194e1eb82c73dfd6339c9b3fc5e084bd0fa69d342e",
+      "upstream_path": "docker/upgrades.json"
+    },
+    {
+      "path": "utils/add-new-auth-keys.sh",
+      "sha256": "afeddcb0c4e2f6a4ee5775a357d90ae7e804a6ff3e5160725468ce7ac0daad0f",
+      "upstream_path": "docker/utils/add-new-auth-keys.sh"
+    },
+    {
+      "path": "utils/db-passwd.sh",
+      "sha256": "8ed0b3b97532a1309379fba0f28ee3aefcdc01e1d1d48d28ac7ff4955228f87c",
+      "upstream_path": "docker/utils/db-passwd.sh"
+    },
+    {
+      "path": "utils/generate-keys.sh",
+      "sha256": "6299efc24ce94d771ca4abb8ac96b67624cc4ac9a4b13ee0c2a8f0071aa3d619",
+      "upstream_path": "docker/utils/generate-keys.sh"
+    },
+    {
+      "path": "utils/reassign-owner.sh",
+      "sha256": "ac91162f0144e899c9a9f2b58818485a1c9ccd390b3942ad9bb52c41e7944171",
+      "upstream_path": "docker/utils/reassign-owner.sh"
+    },
+    {
+      "path": "utils/rotate-new-api-keys.sh",
+      "sha256": "4955fc70b856174dea9014bb461d5d6e0ff271c2925561f24c855c357bde628d",
+      "upstream_path": "docker/utils/rotate-new-api-keys.sh"
+    },
+    {
+      "path": "utils/upgrade-pg17.sh",
+      "sha256": "0a3fd8a6bd095c9982418aae544ce4143190c0872757f1a57faa72091a4bf220",
+      "upstream_path": "docker/utils/upgrade-pg17.sh"
+    },
+    {
+      "path": "versions.md",
+      "sha256": "3b950039315a233c2449bcfc0dd7818d2681871aabdc938a7f42130c46d3f2f0",
+      "upstream_path": "docker/versions.md"
+    },
+    {
+      "path": "volumes/api/envoy/cds.yaml",
+      "sha256": "1d7514b891370ed27c25911df008887402e16ab09273e6e433225bb7f09f7905",
+      "upstream_path": "docker/volumes/api/envoy/cds.yaml"
+    },
+    {
+      "path": "volumes/api/envoy/docker-entrypoint.sh",
+      "sha256": "8a0c9503764de32ba39e0d81e73629457b13ec42ef19897e30e4918c996d0508",
+      "upstream_path": "docker/volumes/api/envoy/docker-entrypoint.sh"
+    },
+    {
+      "path": "volumes/api/envoy/envoy.yaml",
+      "sha256": "3697f23b0be9ec5b829f937c600eb9b878f1f778ab510b42ad5e4f14742447e9",
+      "upstream_path": "docker/volumes/api/envoy/envoy.yaml"
+    },
+    {
+      "path": "volumes/api/envoy/lds.template.yaml",
+      "sha256": "f6b7e2c7a58abf54fe0f5eba6ad144c9f0d2a8c445ab66e05b298fb64bf6fa32",
+      "upstream_path": "docker/volumes/api/envoy/lds.template.yaml"
+    },
+    {
+      "path": "volumes/api/kong-entrypoint.sh",
+      "sha256": "aacdadade6adde6284163ea79e0d88decce0276796ae4749a15f018d56eda933",
+      "upstream_path": "docker/volumes/api/kong-entrypoint.sh"
+    },
+    {
+      "path": "volumes/api/kong.yml",
+      "sha256": "0f71e5c471ae8a5c9f78cfdf10235bf1095506bd179e45c3575dbc68a7751925",
+      "upstream_path": "docker/volumes/api/kong.yml"
+    },
+    {
+      "path": "volumes/db/_supabase.sql",
+      "sha256": "9dce462adc04137d6afabcf28efa60a6c355270a4b32d7af58891ac4eb964c5f",
+      "upstream_path": "docker/volumes/db/_supabase.sql"
+    },
+    {
+      "path": "volumes/db/init/data.sql",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "upstream_path": "docker/volumes/db/init/data.sql"
+    },
+    {
+      "path": "volumes/db/jwt.sql",
+      "sha256": "c1d3f5c01e44646c2e533c5a1c111821cc49cb5a4c2534e08cddad61d8fb0339",
+      "upstream_path": "docker/volumes/db/jwt.sql"
+    },
+    {
+      "path": "volumes/db/logs.sql",
+      "sha256": "f0463ce5030907acef49326d2bffd36002df0718035071be7c99bd7fc897c63d",
+      "upstream_path": "docker/volumes/db/logs.sql"
+    },
+    {
+      "path": "volumes/db/pooler.sql",
+      "sha256": "df97ebe148d94cfb92a5e37ebf972dfd496be195f0915ecf14396b2cf50efecb",
+      "upstream_path": "docker/volumes/db/pooler.sql"
+    },
+    {
+      "path": "volumes/db/realtime.sql",
+      "sha256": "7e9e442e7fc4dae05544c07b67bede37a00d84644304dfce4d937134cb4c8f88",
+      "upstream_path": "docker/volumes/db/realtime.sql"
+    },
+    {
+      "path": "volumes/db/roles.sql",
+      "sha256": "3ad717b225daa38aa982da26750f35641eb404e1eb5e69a763c22236ab96c1b2",
+      "upstream_path": "docker/volumes/db/roles.sql"
+    },
+    {
+      "path": "volumes/db/webhooks.sql",
+      "sha256": "05a61316b899374253891cbba66ce073d9273f33983c3f47961eda3aa26c2823",
+      "upstream_path": "docker/volumes/db/webhooks.sql"
+    },
+    {
+      "path": "volumes/functions/deno.jsonc",
+      "sha256": "a9a29da36c2576f755dd868b9f553a02afdf7d7bccf52e97e65c7f68cf36bfef",
+      "upstream_path": "docker/volumes/functions/deno.jsonc"
+    },
+    {
+      "path": "volumes/functions/hello/index.ts",
+      "sha256": "65e7d7ce5d898dd285e660cbab54521fca4bf990c41370f51fad5b4d4cae5f42",
+      "upstream_path": "docker/volumes/functions/hello/index.ts"
+    },
+    {
+      "path": "volumes/functions/main/index.ts",
+      "sha256": "ed402c31abf346198d71cc7bab3b7eead03b91d6b9d638b30fc5e5fada25802b",
+      "upstream_path": "docker/volumes/functions/main/index.ts"
+    },
+    {
+      "path": "volumes/logs/vector.yml",
+      "sha256": "8f9fa080e3cd8107ac3e6d3bf8d6aa8959b6845d3cd8d5144fb8f28a45607a41",
+      "upstream_path": "docker/volumes/logs/vector.yml"
+    },
+    {
+      "path": "volumes/pooler/pooler.exs",
+      "sha256": "d844e49f8915021ccbf6af6b769fef7909a723346bfc8f94ddb0433a328e49b1",
+      "upstream_path": "docker/volumes/pooler/pooler.exs"
+    },
+    {
+      "path": "volumes/proxy/caddy/Caddyfile",
+      "sha256": "a5116edc1ec748e0b0533ff1c6cce49b9372b5a96b036aa37a0bc3679aa3ec1e",
+      "upstream_path": "docker/volumes/proxy/caddy/Caddyfile"
+    },
+    {
+      "path": "volumes/proxy/nginx/supabase-nginx.conf.tpl",
+      "sha256": "742638cca4b1defdd50df7b0924630e1369090fe7976e8e1b1be575ff99e9d86",
+      "upstream_path": "docker/volumes/proxy/nginx/supabase-nginx.conf.tpl"
+    },
+    {
+      "path": "volumes/snippets/.gitkeep",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "upstream_path": "docker/volumes/snippets/.gitkeep"
+    },
+    {
+      "path": "volumes/storage/.gitkeep",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "upstream_path": "docker/volumes/storage/.gitkeep"
+    }
+  ]
+}

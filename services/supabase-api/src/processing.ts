@@ -1,24 +1,20 @@
+import { assertUploadBudget, assertPhotoAttemptBudget } from './upload-budgets.ts';
 import { UploadBodyReader, UPLOAD_BODY_SOURCE_TOTAL_MS, UPLOAD_MAX_SOURCE_BYTES } from './upload-body.ts';
-import { audienceContext, assertAudienceCapability } from './audience.ts';
+import { assertAudienceCapability } from './audience.ts';
 import { accountRoles } from './auth.ts';
 import { ApiError, digest, jsonBody, ok, stable, uuid, type Actor, type AppContext } from './types.ts';
 import { assertMediaActor, currentAsset, hasConsent, currentPhotoPolicy, mediaSource, sourceAllowed, type Asset, type MediaSource } from './gallery.ts';
-import { beginMediaWrite, completeUndispatchedMediaWrite, executeOperation, executeUploadReservationOperation, prepareOperation, settleMediaWrite } from './operations.ts';
+import { assertOperationNotRecovered, beginMediaWrite, completeUndispatchedMediaWrite, executeOperation, executeUploadReservationOperation, prepareOperation, settleMediaWrite } from './operations.ts';
 import { assembleUpload, cancelUpload, createUploadTransfer, retireUploadKey, uploadChunk, uploadStatusAsset, uploadStatusFields, uploadTransfer, validateResumable } from './upload-transfers.ts';
 import { selectedGeneration, assertGeneration } from './inference-generation.ts';
+import { requireQueueAdmission } from './queue-admission.ts';
+import { captureProfilePlan, profileIsCurrent, matchPlan, planSeed, loadProfilePage, capturedProfile,
+    parseRanks, mergeRanks, matchedIdentities, MATCH_RANK_PROTOCOL,
+    type CapturedProfile, type MatchPlan, type MatchProgress, type FaceRanking } from './photo-matching.ts';
 const MAX_SOURCE_BYTES = UPLOAD_MAX_SOURCE_BYTES;
 const MAX_PREVIEW_BYTES = 4 * 1024 * 1024;
-type CapturedProfile = {
-    profile_id: string;
-    account_id: string;
-    revision: string;
-    model_id: string;
-    template_key: string;
-    template_digest: string;
-    matching_consent_id: string;
-    audience_context: string;
-};
 type Attempt = {
+    profile_batch_count?: number;
     id: string;
     asset_id: string;
     source_version: string;
@@ -178,9 +174,8 @@ async function preferences(request: Request, ctx: AppContext, actor: Actor): Pro
         (await assertMediaActor(ctx, actor));
         assertCurrentPolicy();
         const plan = await preferencePlan(ctx, actor.accountId, payload), facts = preferenceFacts(plan);
-        // One saved preference action is atomic. Preserve the complete old
-        // episodes; do not silently fit a prefix into a bounded journal plan.
-        if (facts.length > 32) throw new ApiError(503, 'photo_preference_restriction_capacity');
+        // The independent journal seals the complete manifest in bounded pages.
+        // Preserve every old episode; a successful preference is still atomic.
         for (const fact of facts) await restore.restrict(fact.kind, fact.scope);
         if (stable(await preferencePlan(ctx, actor.accountId, payload)) !== stable(plan))
             throw new ApiError(409, 'photo_preference_authority_changed');
@@ -264,6 +259,7 @@ async function reserve(request: Request, ctx: AppContext, actor: Actor): Promise
         (await assertMediaActor(ctx, actor));
         if (!(await hasConsent(ctx, actor.accountId, 'photo_processing')))
             throw new ApiError(403, 'processing_consent_required');
+        await assertUploadBudget(ctx, actor.accountId, size);
         const objectKey = `source/${actor.accountId}/${id}/${version}`;
         (await ctx.db.run(`INSERT INTO assets(id,owner_id,source,batch_id,status,object_key,content_type,byte_size,version,title,captured_at,created_at)
       VALUES(?,?,?,?,'uploading',?,?,?,?,?,?,?)`, id, actor.accountId, source, batch, objectKey, type, size, version, payload.title ?? null, captured, ctx.now()));
@@ -349,32 +345,21 @@ async function sourceBytes(request: Request, ctx: AppContext, actor: Actor, id: 
             (await ctx.db.transaction(async () => (await retireUploadKey(ctx, actor.accountId, writtenKey!))));
     }
 }
-async function profilesForCapture(ctx: AppContext, ownerId: string, model: string): Promise<CapturedProfile[]> {
-    const profiles = (await ctx.db.all<CapturedProfile>(`SELECT fp.id profile_id,fp.account_id,fp.revision,fp.model_id,
-    fp.template_key,fp.template_digest,fp.consent_id matching_consent_id FROM face_profiles fp
-    JOIN accounts a ON a.id=fp.account_id AND a.disabled_at IS NULL AND a.identity_state='registered_face'
-    JOIN account_preferences p ON p.account_id=fp.account_id AND p.receive_matches=1
-    JOIN consents c ON c.id=fp.consent_id AND c.account_id=fp.account_id AND c.purpose='photo_matching'
-      AND c.status='granted' AND c.policy_version=? AND c.revoked_at IS NULL AND (c.expires_at IS NULL OR c.expires_at>?)
-    WHERE fp.status='active' AND NOT EXISTS(SELECT 1 FROM face_profile_states lifecycle WHERE lifecycle.account_id=fp.account_id AND lifecycle.matching_paused=1) AND fp.model_id=? AND fp.account_id<>?
-      AND NOT EXISTS(SELECT 1 FROM blocks b WHERE (b.blocker_id=? AND b.blocked_id=fp.account_id)
-        OR (b.blocker_id=fp.account_id AND b.blocked_id=?)) ORDER BY fp.account_id LIMIT 1001`, currentPhotoPolicy(ctx), ctx.now(), model, ownerId, ownerId, ownerId));
-    if (profiles.length > 1000)
-        throw new ApiError(409, 'matching_scope_too_large');
-    const eligible: CapturedProfile[] = [];
-    for (const profile of profiles) {
-        const audience_context = await audienceContext(ctx, profile.account_id, 'photo_matching');
-        if (audience_context) eligible.push({ ...profile, audience_context });
-    }
-    return eligible;
-}
 async function complete(request: Request, ctx: AppContext, actor: Actor, id: string): Promise<Response> {
     const payload = await jsonBody(request);
     if (!ctx.env.PHOTO_PROCESSOR || !ctx.env.PHOTO_MODEL_VERSION)
         throw new ApiError(503, 'photo_processor_unavailable');
-    const initial = (await ctx.db.transaction(async () => (await sourceAsset(ctx, actor, id))));
+    const {initial,intent}=await ctx.db.read(async()=>{
+        const initial=await sourceAsset(ctx,actor,id);
+        const intent=await prepareOperation('photo.upload.complete',{...payload,asset_id:id},initial.source);
+        // A proven rollback is terminal for this original operation. Inspect
+        // it under current authority before even reading external Storage;
+        // an outage there must not turn that disposition back into ambiguity.
+        try{await assertOperationNotRecovered(ctx,actor.accountId,intent.source,intent.key,intent.hash);}
+        finally{await assertMediaActor(ctx,actor);}
+        return {initial,intent};
+    });
     const head = await ctx.env.QUARANTINE.head(initial.object_key);
-    const intent = await prepareOperation('photo.upload.complete', { ...payload, asset_id: id }, initial.source);
     const response = (await executeOperation(ctx, actor, intent, async () => {
         const asset = (await sourceAsset(ctx, actor, id));
         if (asset.version !== initial.version || asset.checksum_sha256 !== initial.checksum_sha256)
@@ -395,10 +380,13 @@ async function complete(request: Request, ctx: AppContext, actor: Actor, id: str
         if (!['uploaded', 'failed'].includes(asset.status) || !asset.checksum_sha256)
             throw new ApiError(409, 'upload_incomplete');
         const model = ctx.env.PHOTO_MODEL_VERSION!;
-        const profiles = (await profilesForCapture(ctx, actor.accountId, model));
-        const attempt = crypto.randomUUID();
+        await assertPhotoAttemptBudget(ctx, actor.accountId);
+        const attempt = crypto.randomUUID(), processorNonce = crypto.randomUUID(), generation = selectedGeneration(ctx.env);
         (await ctx.db.run(`INSERT INTO processing_attempts(id,asset_id,source_version,source_checksum_sha256,model_version,status,captured_at,expires_at,
-      owner_id,owner_session_id,owner_auth_epoch,source,profiles_json,processor_nonce,engine_identity) VALUES(?,?,?,?,?,'queued',?,?,?,?,?,?,?,?,?)`, attempt, id, asset.version, asset.checksum_sha256, model, ctx.now(), ctx.now() + 15 * 60000, actor.accountId, actor.sessionId, actor.authEpoch, asset.source, stable(profiles), crypto.randomUUID(), selectedGeneration(ctx.env)));
+      owner_id,owner_session_id,owner_auth_epoch,source,profiles_json,processor_nonce,engine_identity) VALUES(?,?,?,?,?,'queued',?,?,?,?,?,?,?,?,?)`, attempt, id, asset.version, asset.checksum_sha256, model, ctx.now(), ctx.now() + 15 * 60000, actor.accountId, actor.sessionId, actor.authEpoch, asset.source, '[]', processorNonce, generation));
+        const profiles = await captureProfilePlan(ctx, actor.accountId, model, { id: attempt, source_version: asset.version,
+            source_checksum_sha256: asset.checksum_sha256, model_version: model, engine_identity: generation, processor_nonce: processorNonce });
+        await ctx.db.run('UPDATE processing_attempts SET profiles_json=? WHERE id=?', stable(profiles), attempt);
         (await ctx.db.run(`INSERT INTO photo_job_outbox(id,attempt_id,asset_id,status,created_at) VALUES(?,?,?,'pending',?)`, crypto.randomUUID(), attempt, id, ctx.now()));
         (await ctx.db.run(`UPDATE assets SET status='processing' WHERE id=?`, id));
         return { asset_id: id, attempt_id: attempt, status: 'processing', version: asset.version };
@@ -409,14 +397,29 @@ async function complete(request: Request, ctx: AppContext, actor: Actor, id: str
     return ok(response, response.status === 'processing' ? 202 : 200);
 }
 export async function flushPhotoOutbox(ctx: AppContext): Promise<void> {
-    const jobs = (await ctx.db.all<{
-        id: string;
-        attempt_id: string;
-    }>(`SELECT id,attempt_id FROM photo_job_outbox WHERE status='pending' ORDER BY created_at,id LIMIT 20`));
+    const jobs = await ctx.db.transaction(async () => {
+        const rows = await ctx.db.all<{ id: string; attempt_id: string }>(
+            `SELECT id,attempt_id FROM photo_job_outbox WHERE status='pending'
+             AND (last_examined_at IS NULL OR last_examined_at<=?)
+             ORDER BY coalesce(last_examined_at,0),created_at,id LIMIT 20`, ctx.now() - 60000);
+        // Advance examination independently of successful dispatch so a stopped
+        // queue job cannot monopolize every maintenance invocation.
+        for (const row of rows)
+            await ctx.db.run("UPDATE photo_job_outbox SET last_examined_at=? WHERE id=? AND status='pending'", ctx.now(), row.id);
+        return rows;
+    });
+    let firstError: unknown;
     for (const job of jobs) {
-        await ctx.env.PHOTO_JOBS.send({ category: 'photo', payload: { attempt_id: job.attempt_id } });
-        (await ctx.db.transaction(async () => (await ctx.db.run(`UPDATE photo_job_outbox SET status='dispatched',dispatched_at=? WHERE id=? AND status='pending'`, ctx.now(), job.id))));
+        try {
+            const receipt = await ctx.env.PHOTO_JOBS.send({ category: 'photo', payload: { attempt_id: job.attempt_id } });
+            requireQueueAdmission(receipt);
+            if (receipt?.admission === 'terminal')
+                await ctx.db.run("UPDATE photo_job_outbox SET status='settled' WHERE id=? AND status='pending'", job.id);
+            else
+                await ctx.db.run(`UPDATE photo_job_outbox SET status='dispatched',dispatched_at=? WHERE id=? AND status='pending'`, ctx.now(), job.id);
+        } catch (error) { firstError ??= error; }
     }
+    if (firstError) throw firstError;
 }
 async function attemptActor(ctx: AppContext, attempt: Attempt): Promise<Actor> {
     const session = (await ctx.db.one<any>(`SELECT s.*,a.roles_json FROM sessions s JOIN accounts a ON a.id=s.account_id
@@ -431,14 +434,148 @@ async function assertAttempt(ctx: AppContext, attempt: Attempt, actor: Actor, le
     const current = (await ctx.db.one<Attempt>('SELECT * FROM processing_attempts WHERE id=?', attempt.id));
     if (!current || current.status !== 'running' || current.lease_token !== lease || attempt.expires_at <= ctx.now()
         || asset.status !== 'processing' || asset.version !== attempt.source_version || asset.checksum_sha256 !== attempt.source_checksum_sha256
-        || ctx.env.PHOTO_MODEL_VERSION !== attempt.model_version)
+        || ctx.env.PHOTO_MODEL_VERSION !== attempt.model_version || current.profiles_json !== attempt.profiles_json
+        || current.processor_nonce !== attempt.processor_nonce)
         throw new ApiError(409, 'processing_origin_changed');
     assertGeneration(current.engine_identity, ctx.env);
     assertGeneration(attempt.engine_identity, ctx.env);
     return asset;
 }
+async function processorReply(ctx: AppContext, attempt: Attempt, actor: Actor, lease: string, source: Asset,
+    admitted: Map<string, CanonicalProfile>, includePreview?: boolean): Promise<Record<string, any>> {
+    if (!ctx.env.PHOTO_PROCESSOR) throw new ApiError(503, 'photo_processor_unavailable');
+    const batched = includePreview !== undefined;
+    await ctx.db.transaction(async () => { await assertAttempt(ctx, attempt, actor, lease); });
+    const provider = await ctx.env.PHOTO_PROCESSOR.fetch(new Request(`https://photo-processor.internal/${batched ? 'process-batch' : 'process'}`,
+        { method: 'POST', redirect: 'manual', headers: { 'Content-Type': 'application/json' },
+            body: stable({ attempt_id: attempt.id, nonce: attempt.processor_nonce, asset_id: attempt.asset_id,
+                source_version: attempt.source_version, source_checksum_sha256: attempt.source_checksum_sha256,
+                model_version: attempt.model_version, engine_identity: attempt.engine_identity, quarantine_key: source.object_key,
+                profiles: [...admitted.values()].map(entry => entry.profile),
+                ...(batched ? { ranking_protocol: MATCH_RANK_PROTOCOL, include_preview: includePreview } : {}) }) }), undefined,
+        async (stage, bound) => {
+            await ctx.db.transaction(async () => {
+                await assertAttempt(ctx, attempt, actor, lease);
+                if (bound) {
+                    const profile = admitted.get(bound.account_id)?.profile;
+                    if (!profile || profile.profile_id !== bound.profile_id || profile.revision !== bound.revision || profile.model_id !== bound.model_id ||
+                        !await profileIsCurrent(ctx, actor.accountId, profile)) throw new ApiError(409, 'matching_profile_changed');
+                }
+                if (stage === 'before_dispatch') {
+                    for (const { profile } of admitted.values())
+                        if (!await profileIsCurrent(ctx, actor.accountId, profile)) throw new ApiError(409, 'matching_profile_changed');
+                }
+                assertGeneration(attempt.engine_identity, ctx.env);
+            });
+        });
+    await ctx.db.transaction(async () => { await assertAttempt(ctx, attempt, actor, lease); });
+    if (!provider.ok || provider.redirected) {
+        const code = await processorFailureCode(provider, async () => {
+            await ctx.db.transaction(async () => { await assertAttempt(ctx, attempt, actor, lease); });
+        });
+        await ctx.db.transaction(async () => { await assertAttempt(ctx, attempt, actor, lease); });
+        throw new ApiError(code ? 409 : 503, code ?? 'photo_processing_unavailable');
+    }
+    const result = await jsonBody(provider as unknown as Request, 6 * 1024 * 1024);
+    await ctx.db.transaction(async () => { await assertAttempt(ctx, attempt, actor, lease); });
+    if (result.attempt_id !== attempt.id || result.nonce !== attempt.processor_nonce || result.asset_id !== attempt.asset_id ||
+        result.source_version !== attempt.source_version || result.source_checksum_sha256 !== attempt.source_checksum_sha256 ||
+        result.model_version !== attempt.model_version || result.engine_identity !== attempt.engine_identity)
+        throw new ApiError(409, 'processor_origin_unverified');
+    return result;
+}
+async function processMatchingPage(ctx: AppContext, attempt: Attempt, actor: Actor, lease: string, source: Asset, plan: MatchPlan): Promise<
+    { pending: true } | { pending: false; result: Record<string, any>; admitted: Map<string, CanonicalProfile> }> {
+    if (await planSeed(attempt) !== plan.initial_sha256) throw new ApiError(409, 'matching_plan_invalid');
+    const loaded = await ctx.db.transaction(async () => {
+        await assertAttempt(ctx, attempt, actor, lease);
+        const progress = await ctx.db.one<MatchProgress>('SELECT plan_sha256,next_ordinal,chain_sha256,query_sha256,ranks_json FROM processing_match_progress WHERE attempt_id=?', attempt.id);
+        if (!progress) throw new ApiError(409, 'matching_plan_invalid');
+        const page = await loadProfilePage(ctx, attempt.id, plan, progress);
+        const admitted = new Map<string, CanonicalProfile>();
+        for (const profile of page.profiles)
+            if (await profileIsCurrent(ctx, actor.accountId, profile)) admitted.set(profile.account_id, { profile, canonical: stable(profile) });
+        return { progress, page, admitted };
+    });
+    const finalPage = loaded.page.next === plan.profile_count;
+    const result = await processorReply(ctx, attempt, actor, lease, source, loaded.admitted, finalPage);
+    const ranking = result.ranking;
+    if (!ranking || typeof ranking !== 'object' || Array.isArray(ranking) ||
+        Object.keys(ranking).sort().join(',') !== 'faces,protocol,query_sha256,review_margin,threshold' ||
+        ranking.protocol !== MATCH_RANK_PROTOCOL || typeof ranking.query_sha256 !== 'string' || !/^[0-9a-f]{64}$/.test(ranking.query_sha256) ||
+        ranking.threshold !== 0.42 || ranking.review_margin !== 0.05 ||
+        loaded.progress.query_sha256 !== null && ranking.query_sha256 !== loaded.progress.query_sha256 ||
+        !finalPage && result.preview !== undefined)
+        throw new ApiError(409, 'matching_query_changed');
+    const incoming = parseRanks(ranking.faces, new Map([...loaded.admitted].map(([id, entry]) => [id, entry.profile])));
+    let ranks: FaceRanking[];
+    if (loaded.progress.query_sha256 === null) ranks = incoming;
+    else ranks = mergeRanks(parseRanks(JSON.parse(loaded.progress.ranks_json)), incoming);
+    if (!finalPage) {
+        await ctx.db.transaction(async () => {
+            await assertAttempt(ctx, attempt, actor, lease);
+            const changed = await ctx.db.one<{ attempt_id: string }>(`UPDATE processing_match_progress
+                SET next_ordinal=?,chain_sha256=?,query_sha256=?,ranks_json=?,updated_at=?
+                WHERE attempt_id=? AND next_ordinal=? AND chain_sha256=? AND plan_sha256=? RETURNING attempt_id`,
+                loaded.page.next, loaded.page.chain, ranking.query_sha256, stable(ranks), ctx.now(), attempt.id,
+                loaded.progress.next_ordinal, loaded.progress.chain_sha256, plan.root_sha256);
+            if (!changed) throw new ApiError(409, 'matching_progress_changed');
+            await ctx.db.run("UPDATE processing_attempts SET status='queued',lease_token=NULL,lease_until=NULL WHERE id=? AND lease_token=?", attempt.id, lease);
+        });
+        return { pending: true };
+    }
+    // The global winners and runners-up must still be the exact captured,
+    // currently eligible identities. If a top-two identity changed, refuse the
+    // whole result: the discarded third score cannot safely become a runner-up.
+    const retained = new Map(ranks.flatMap(face => face.candidates).map(row => [row.account_id, row]));
+    const admitted = await ctx.db.transaction(async () => {
+        await assertAttempt(ctx, attempt, actor, lease);
+        if (await ctx.db.one('SELECT ordinal FROM processing_attempt_profiles WHERE attempt_id=? AND ordinal>=? LIMIT 1', attempt.id, plan.profile_count))
+            throw new ApiError(409, 'matching_plan_invalid');
+        const profiles = new Map<string, CanonicalProfile>();
+        for (const rank of retained.values()) {
+            const row = await ctx.db.one<{ profile_json: string }>('SELECT profile_json FROM processing_attempt_profiles WHERE attempt_id=? AND account_id=?', attempt.id, rank.account_id);
+            if (!row) throw new ApiError(409, 'matching_profile_changed');
+            const profile = capturedProfile(JSON.parse(row.profile_json));
+            if (profile.profile_id !== rank.profile_id || profile.revision !== rank.profile_version || profile.model_id !== rank.model_version ||
+                !await profileIsCurrent(ctx, actor.accountId, profile)) throw new ApiError(409, 'matching_profile_changed');
+            profiles.set(profile.account_id, { profile, canonical: stable(profile) });
+        }
+        return profiles;
+    });
+    return { pending: false, admitted, result: { ...result, matches: matchedIdentities(ranks).map(rank => ({
+        recipient_id: rank.account_id, profile_id: rank.profile_id, profile_version: rank.profile_version, model_version: rank.model_version })) } };
+}
+/** DB-only evidence for an explicit operator queue repair. It admits the exact
+ * already-queued episode; it never revives a failed attempt or publishes media.
+ * Normal worker guards still revalidate every source/profile before dispatch. */
+export async function photoQueueRepairEvidence(ctx: AppContext, attemptID: string): Promise<Record<string, unknown>> {
+    const attempt = await ctx.db.one<Attempt & { rendition_key: string | null; matches_json: string | null;
+        completed_at: number | null; error_code: string | null }>('SELECT * FROM processing_attempts WHERE id=?', attemptID);
+    if (!attempt || (attempt.profile_batch_count ?? 0) > 0 || attempt.status !== 'queued' || attempt.lease_token !== null || attempt.lease_until !== null ||
+        attempt.completed_at !== null || attempt.rendition_key !== null || attempt.matches_json !== null || attempt.error_code !== null ||
+        attempt.expires_at <= ctx.now()) throw new ApiError(409, 'queue_photo_not_resumable');
+    const actor = await attemptActor(ctx, attempt), asset = await sourceAsset(ctx, actor, attempt.asset_id);
+    if (asset.status !== 'processing' || asset.version !== attempt.source_version || asset.checksum_sha256 !== attempt.source_checksum_sha256 ||
+        ctx.env.PHOTO_MODEL_VERSION !== attempt.model_version) throw new ApiError(409, 'queue_photo_source_changed');
+    assertGeneration(attempt.engine_identity, ctx.env);
+    const captured = JSON.parse(attempt.profiles_json), plan = matchPlan(captured);
+    const progress = await ctx.db.one<MatchProgress>('SELECT plan_sha256,next_ordinal,chain_sha256,query_sha256,ranks_json FROM processing_match_progress WHERE attempt_id=?', attempt.id);
+    if (plan) {
+        if (!progress || progress.plan_sha256 !== plan.root_sha256 || plan.initial_sha256 !== await planSeed(attempt) ||
+            !Number.isSafeInteger(progress.next_ordinal) || progress.next_ordinal < 0 || progress.next_ordinal >= plan.profile_count)
+            throw new ApiError(409, 'queue_photo_plan_changed');
+        parseRanks(JSON.parse(progress.ranks_json));
+        await loadProfilePage(ctx, attempt.id, plan, progress);
+    } else {
+        canonicalProfiles(captured);
+        if (progress) throw new ApiError(409, 'queue_photo_plan_changed');
+    }
+    return { attempt, asset, progress };
+}
+
 /** Called exclusively by the Worker queue binding, never by a public URL. */
-export async function processPhotoJob(message: unknown, ctx: AppContext): Promise<void> {
+export async function processPhotoJob(message: unknown, ctx: AppContext): Promise<void | { pending: true }> {
     const id = uuid((message as {
         attempt_id?: unknown;
     })?.attempt_id);
@@ -452,6 +589,7 @@ export async function processPhotoJob(message: unknown, ctx: AppContext): Promis
             const attempt = (await ctx.db.one<Attempt>('SELECT * FROM processing_attempts WHERE id=?', id));
             if (!attempt || ['completed', 'failed', 'cancelled'].includes(attempt.status))
                 return null;
+            if ((attempt.profile_batch_count ?? 0) > 0) throw new ApiError(409, 'matching_legacy_batch_plan_requires_review');
             const actor = (await attemptActor(ctx, attempt));
             (await sourceAsset(ctx, actor, attempt.asset_id));
             if (attempt.expires_at <= ctx.now())
@@ -493,57 +631,22 @@ export async function processPhotoJob(message: unknown, ctx: AppContext): Promis
         if (!sourceHead || sourceHead.size !== source.byte_size || sourceHead.customMetadata?.source_version !== attempt.source_version
             || sourceHead.customMetadata?.source_checksum_sha256 !== attempt.source_checksum_sha256)
             throw new ApiError(409, 'source_unverified');
-        const capturedProfiles = canonicalProfiles(JSON.parse(attempt.profiles_json));
-        const eligibleNow = canonicalProfiles(await profilesForCapture(ctx, actor.accountId, attempt.model_version));
-        // Only subtract from the immutable captured set before dispatch; an old
-        // queued attempt cannot acquire a newly consented/replaced profile.
-        const admitted = new Map([...capturedProfiles].filter(([account, entry]) => eligibleNow.get(account)?.canonical === entry.canonical));
-        const profiles = [...admitted.values()].map(entry => entry.profile);
-        (await ctx.db.transaction(async () => (await assertAttempt(ctx, attempt, actor, lease))));
-        const provider = await ctx.env.PHOTO_PROCESSOR.fetch(new Request('https://photo-processor.internal/process', { method: 'POST', redirect: 'manual',
-            headers: { 'Content-Type': 'application/json' }, body: stable({ attempt_id: attempt.id, nonce: attempt.processor_nonce,
-                asset_id: attempt.asset_id, source_version: attempt.source_version, source_checksum_sha256: attempt.source_checksum_sha256,
-                model_version: attempt.model_version, engine_identity: attempt.engine_identity, quarantine_key: source.object_key, profiles }) }), undefined, async (stage, bound) => {
-            await ctx.db.transaction(async () => {
-                await assertAttempt(ctx, attempt, actor, lease);
-                if (bound) {
-                    const entry = admitted.get(bound.account_id), captured = entry?.profile;
-                    if (!captured || captured.profile_id !== bound.profile_id || captured.revision !== bound.revision || captured.model_id !== bound.model_id ||
-                        await audienceContext(ctx, captured.account_id, 'photo_matching') !== captured.audience_context)
-                        throw new ApiError(409, 'matching_profile_changed');
-                    const actual = await ctx.db.one<CapturedProfile>(`SELECT fp.id profile_id,fp.account_id,fp.revision,fp.model_id,fp.template_key,fp.template_digest,fp.consent_id matching_consent_id FROM face_profiles fp
-                      JOIN accounts a ON a.id=fp.account_id AND a.disabled_at IS NULL AND a.identity_state='registered_face'
-                      JOIN account_preferences p ON p.account_id=fp.account_id AND p.receive_matches=1
-                      JOIN consents c ON c.id=fp.consent_id AND c.account_id=fp.account_id AND c.purpose='photo_matching' AND c.status='granted' AND c.policy_version=? AND c.revoked_at IS NULL AND (c.expires_at IS NULL OR c.expires_at>?)
-                      WHERE fp.account_id=? AND fp.status='active' AND NOT EXISTS(SELECT 1 FROM face_profile_states lifecycle WHERE lifecycle.account_id=fp.account_id AND lifecycle.matching_paused=1)
-                      AND NOT EXISTS(SELECT 1 FROM blocks b WHERE (b.blocker_id=? AND b.blocked_id=fp.account_id) OR (b.blocker_id=fp.account_id AND b.blocked_id=?))`,currentPhotoPolicy(ctx),ctx.now(),captured.account_id,actor.accountId,actor.accountId);
-                    if (!actual || stable({...actual,audience_context:captured.audience_context}) !== entry!.canonical)
-                        throw new ApiError(409, 'matching_profile_changed');
-                }
-                if (stage === 'before_dispatch') {
-                    const current = canonicalProfiles(await profilesForCapture(ctx, actor.accountId, attempt.model_version));
-                    if ([...admitted].some(([account, entry]) => current.get(account)?.canonical !== entry.canonical))
-                        throw new ApiError(409, 'matching_profile_changed');
-                }
-                assertGeneration(attempt.engine_identity, ctx.env);
-            });
-        });
-        (await ctx.db.transaction(async () => (await assertAttempt(ctx, attempt, actor, lease))));
-        if (!provider.ok || provider.redirected) {
-            const code = await processorFailureCode(provider, async () => {
-                await ctx.db.transaction(async () => { await assertAttempt(ctx, attempt, actor, lease); });
-            });
-            (await ctx.db.transaction(async () => (await assertAttempt(ctx, attempt, actor, lease))));
-            if (code)
-                throw new ApiError(409, code);
-            throw new ApiError(503, 'photo_processing_unavailable');
+        const captured = JSON.parse(attempt.profiles_json), plan = matchPlan(captured);
+        let admitted: Map<string, CanonicalProfile>, result: Record<string, any>;
+        if (plan) {
+            const page = await processMatchingPage(ctx, attempt, actor, lease, source, plan);
+            if (page.pending) return { pending: true };
+            admitted = page.admitted;
+            result = page.result;
+        } else {
+            const capturedProfiles = canonicalProfiles(captured);
+            admitted = new Map();
+            // Subtract from the immutable old snapshot. Unrelated growth and new
+            // consent episodes never enlarge an already admitted operation.
+            for (const [account, entry] of capturedProfiles)
+                if (await profileIsCurrent(ctx, actor.accountId, entry.profile)) admitted.set(account, entry);
+            result = await processorReply(ctx, attempt, actor, lease, source, admitted);
         }
-        const result = await jsonBody(provider as unknown as Request, 6 * 1024 * 1024);
-        (await ctx.db.transaction(async () => (await assertAttempt(ctx, attempt, actor, lease))));
-        if (result.attempt_id !== attempt.id || result.nonce !== attempt.processor_nonce || result.asset_id !== attempt.asset_id
-            || result.source_version !== attempt.source_version || result.source_checksum_sha256 !== attempt.source_checksum_sha256
-            || result.model_version !== attempt.model_version || result.engine_identity !== attempt.engine_identity)
-            throw new ApiError(409, 'processor_origin_unverified');
         const image = result.preview;
         if (!image || typeof image.bytes_base64 !== 'string' || image.bytes_base64.length > Math.ceil(MAX_PREVIEW_BYTES * 4 / 3) + 4)
             throw new ApiError(502, 'processor_preview_invalid');
@@ -588,9 +691,10 @@ export async function processPhotoJob(message: unknown, ctx: AppContext): Promis
             (await assertAttempt(ctx, attempt, actor, lease));
             if (!finalSource || finalSource.etag !== sourceHead.etag || finalSource.customMetadata?.source_checksum_sha256 !== attempt.source_checksum_sha256)
                 throw new ApiError(409, 'source_changed');
-            const currentProfiles = canonicalProfiles(await profilesForCapture(ctx, actor.accountId, attempt.model_version));
-            for (const profile of matches) {
-                if (currentProfiles.get(profile.account_id)?.canonical !== admitted.get(profile.account_id)?.canonical)
+            // For a paged plan recheck both global winners and runners-up after
+            // the Storage PUT too. A late withdrawal never changes confidence.
+            for (const profile of plan ? [...admitted.values()].map(entry => entry.profile) : matches) {
+                if (!await profileIsCurrent(ctx, actor.accountId, profile))
                     throw new ApiError(409, 'matching_profile_changed');
             }
             (await ctx.db.run(`UPDATE renditions SET status='retired' WHERE asset_id=? AND status='ready'`, attempt.asset_id));
@@ -607,6 +711,7 @@ export async function processPhotoJob(message: unknown, ctx: AppContext): Promis
             }
             const matchedTuples = matches.map(({ account_id, profile_id, revision, model_id }) => ({ account_id, profile_id, revision, model_id }));
             (await ctx.db.run(`UPDATE processing_attempts SET status='completed',completed_at=?,rendition_key=?,matches_json=?,lease_until=NULL WHERE id=? AND lease_token=?`, ctx.now(), publishedKey, stable(matchedTuples), attempt.id, lease));
+            if (plan) await ctx.db.run('DELETE FROM processing_match_progress WHERE attempt_id=?', attempt.id);
             // Width/height above describe normalized protected rendition pixels. Original
             // source dimensions remain unknown unless a qualified parser supplies them.
             (await ctx.db.run(`UPDATE assets SET status='ready' WHERE id=? AND version=?`, attempt.asset_id, attempt.source_version));

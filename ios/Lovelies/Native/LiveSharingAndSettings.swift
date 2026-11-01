@@ -351,6 +351,11 @@ struct LiveInboxView: View {
                         }.buttonStyle(LoveliesPressStyle())
                     }
                     if (store.screen == .sharedHistory ? live.outgoing : live.inbox).isEmpty { Text("No photo requests yet").foregroundStyle(LoveliesTheme.secondary).padding(40) }
+                    if store.screen == .sharedHistory ? live.hasMoreOutgoing : live.hasMoreInbox {
+                        QuietButton(title: String(localized: "Load more"), enabled: !live.busy) {
+                            if store.screen == .sharedHistory { live.refreshOutgoing(loadMore: true) } else { live.refreshInbox(loadMore: true) }
+                        }
+                    }
                 }.padding(.horizontal, 14)
             }.refreshable { do { if store.screen == .sharedHistory { try await live.loadOutgoing() } else { try await live.loadInbox() } } catch { live.error = error.localizedDescription } }
             BottomNavigation(active: .newMatches)
@@ -392,6 +397,7 @@ struct LiveNotificationsView: View {
                             }.frame(minHeight: 56).padding(12).background(LoveliesTheme.surface, in: RoundedRectangle(cornerRadius: 16))
                         }.buttonStyle(LoveliesPressStyle()).disabled(!live.canEdit)
                     }
+                    if live.hasMoreNotifications { QuietButton(title: String(localized: "Load more"), enabled: !live.busy) { live.loadNotifications(loadMore: true) } }
                     QuietButton(title: String(localized: "Photo requests")) { store.go(.activity, simulateProgress: false); live.refreshInbox() }
                 }.padding(.horizontal, 16)
             }
@@ -662,6 +668,7 @@ struct LiveFaceProfileManagementView: View {
     @State private var confirmingPolicy: String?
     @State private var matchingConsent = false
     @State private var authenticationConsent = false
+    @State private var retainedControlConsent = false
     var body: some View {
         VStack(spacing: 12) {
             PageHeader(title: String(localized: "Your registered face"), trailing: false, back: live.session?.authenticated == true)
@@ -676,6 +683,16 @@ struct LiveFaceProfileManagementView: View {
                         status(String(localized: "Photo processing"), enabled: value.metadata.processingEnabled)
                         if let operation = value.operation { Text("Saved action: \(label(operation.action)) · \(operation.serverState.map(NativeStatusCopy.faceOperation) ?? String(localized: "not confirmed"))").font(.footnote).foregroundStyle(LoveliesTheme.secondary).fixedSize(horizontal: false, vertical: true) }
                         PinkButton(title: String(localized: "Check status"), enabled: !live.busy) { live.checkFaceProfile() }
+                        QuietButton(title: String(localized: "Check retained management control"), enabled: !live.busy) { live.checkRetainedFaceControl() }
+                        if value.retainedControlRenewalPending {
+                            Text("Your original control renewal is saved. Retry that same review; it cannot be replaced by a different consent or account.").font(.footnote).foregroundStyle(LoveliesTheme.secondary)
+                            QuietButton(title: String(localized: "Retry saved control renewal"), enabled: !live.busy) { live.renewRetainedFaceControl(explicitlyConsented: false, retryOriginal: true) }
+                        } else if let control = value.metadata.controlRecovery, control.expiresAt <= Date() {
+                            Text("Renew access to this retained management control with a fresh face-authentication choice. This does not sign you in or grant photo matching. Continue the separate face-profile recovery after renewal.").font(.footnote).foregroundStyle(LoveliesTheme.secondary)
+                            Toggle("I agree to the current face-authentication policy", isOn: $retainedControlConsent).tint(LoveliesTheme.pink).disabled(live.busy)
+                            Text(value.metadata.authPolicy).font(.footnote).foregroundStyle(LoveliesTheme.secondary)
+                            QuietButton(title: String(localized: "Renew retained management control"), enabled: retainedControlConsent && !live.busy) { live.renewRetainedFaceControl(explicitlyConsented: retainedControlConsent); retainedControlConsent = false }
+                        }
                         if value.canRenewControl {
                             QuietButton(title: String(localized: "Renew expired management control"), enabled: !live.busy) { live.renewFaceManagementControl() }
                         }
@@ -730,6 +747,8 @@ struct LiveFaceProfileManagementView: View {
         }.foregroundStyle(.white)
             .onChange(of: live.faceLifecycle?.metadata.version) { _, _ in matchingConsent = false; authenticationConsent = false }
             .onChange(of: live.faceLifecycle?.metadata.authPolicy) { _, _ in authenticationConsent = false }
+            .onChange(of: live.faceLifecycle?.metadata.controlRecovery?.binding) { _, _ in retainedControlConsent = false }
+            .onChange(of: live.faceLifecycle?.metadata.authPolicy) { _, _ in retainedControlConsent = false }
             .onChange(of: live.faceLifecycle?.metadata.photoPolicy) { _, _ in matchingConsent = false }
             .confirmationDialog(confirming.map(label) ?? String(localized: "Manage face profile"), isPresented: Binding(get: { confirming != nil }, set: { if !$0 { confirming = nil } }), titleVisibility: .visible) {
                 if let action = confirming {

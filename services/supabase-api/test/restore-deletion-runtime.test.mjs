@@ -156,16 +156,20 @@ for (const stage of ['before', 'after']) test(`deletion prepare reply loss ${sta
     if (armed && value.operation_id === id) { armed = false; f.faults.reply = { path: '/v1/operations/prepare', stage }; }
     return prepare(value);
   };
-  await f.failedCreate(body); assert.equal((await rows(f)).length, 0);
+  await f.failedCreate(body);
   if (stage === 'before') {
+    assert.equal((await rows(f)).length,0);
     assert.equal(await f.journal.lookup(id), null); assert.equal(await facts(f), 0);
     assert.equal((await f.create(body)).privacy_request.id, expectedID);
     assert.deepEqual(f.insertIDs, [expectedID, expectedID]); await assertRequestedPlan(f, body, expectedID);
   } else {
-    const saved = await assertRequestedPlan(f, body, expectedID, { committed: false }); assert.equal(saved.status, 'pending');
-    await assert.rejects(() => f.db.one('SELECT id FROM accounts LIMIT 1'), unavailable);
-    await f.failedCreate(body); assert.deepEqual(f.insertIDs, [expectedID]);
-    assert.deepEqual(await f.journal.lookup(id), saved);
+    const saved = await assertRequestedPlan(f, body, expectedID, { committed: false });assert(['pending','recovered'].includes(saved.status));
+    if(saved.status==='pending')assert.equal((await rows(f)).length,0);
+    await f.db.one('SELECT id FROM accounts LIMIT 1');const recovered=await f.journal.lookup(id);assert.equal(recovered.status,'recovered');assert.equal(recovered.plan_hash,saved.plan_hash);assert.deepEqual(recovered.plan,saved.plan);
+    await f.create(body,f.actor.token,410);await f.create({...body,reason:'changed input'},f.actor.token,409);assert.deepEqual(f.insertIDs,[expectedID]);
+    assert.deepEqual((await rows(f)).map(r=>({id:r.id,subject_id:r.subject_id,status:r.status,reason:r.reason})),[{id:expectedID,subject_id:f.actor.accountID,status:'pending_approval',reason:null}]);
+    assert.equal(await f.h.db.one('SELECT request_id FROM privacy_deletion_status_receipts WHERE request_id=?',expectedID),null);
+    assert.equal(await f.h.db.one('SELECT operation_key FROM operations WHERE actor_id=? AND source=? AND operation_key=?',f.actor.accountID,'privacy',body.operation_key),null);
   }
 });
 
@@ -176,10 +180,14 @@ test('accepted independent deletion plan plus rejected SQL commit retains origin
     if (armed && value.operation_id === id) { armed = false; f.faults.beforeCommit = true; }
     return saved;
   };
-  await f.failedCreate(body); assert.equal((await rows(f)).length, 0);
+  await f.failedCreate(body);
   const expectedID = await restoreAllocationID(id, 'id_0');
-  const saved = await assertRequestedPlan(f, body, expectedID, { committed: false }); assert.equal(saved.status, 'pending');
-  await f.failedCreate(body); assert.deepEqual(f.insertIDs, [expectedID]); assert.deepEqual(await f.journal.lookup(id), saved);
+  const saved = await assertRequestedPlan(f, body, expectedID, { committed: false });assert(['pending','recovered'].includes(saved.status));
+  if(saved.status==='pending')assert.equal((await rows(f)).length,0);
+  await f.db.one('SELECT id FROM accounts LIMIT 1');const recovered=await f.journal.lookup(id);assert.equal(recovered.status,'recovered');assert.equal(recovered.plan_hash,saved.plan_hash);assert.deepEqual(recovered.plan,saved.plan);
+  await f.create(body,f.actor.token,410);assert.deepEqual(f.insertIDs,[expectedID]);
+  assert.equal((await rows(f))[0].id,expectedID);assert.equal((await rows(f))[0].status,'pending_approval');assert.equal((await rows(f))[0].reason,null);
+  assert.equal(await f.h.db.one('SELECT request_id FROM privacy_deletion_status_receipts WHERE request_id=?',expectedID),null);
 });
 
 for (const mode of ['commit', 'ack-before', 'ack-after']) test(`deletion ${mode} result loss preserves committed request/receipt and never allocates or records it again`, async t => {

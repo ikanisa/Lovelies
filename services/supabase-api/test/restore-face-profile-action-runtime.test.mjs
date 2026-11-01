@@ -1,3 +1,4 @@
+import {planEvents} from './restore-plan-fixture.mjs';
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { randomUUID } from 'node:crypto';
@@ -59,7 +60,8 @@ async function faceProfileFixture(t, { matching = true } = {}) {
       person.deviceId, device.revision, before.auth_epoch, consentID, h.app.now() + 86_400_000);
     return { consentID, operationKey };
   };
-  return { ...f, context, person, control, metadata, before, signed, request, apply, failedApply, intent, pending };
+  const originalSessions=await h.db.all('SELECT id FROM sessions WHERE account_id=? AND revoked_at IS NULL',person.accountId);
+  return { ...f, context, person, control, metadata, before, signed, request, apply, failedApply, intent, pending, originalSessions };
 }
 
 const logicalID = (f, intent) => restoreOperationID(f.person.accountId, 'face-profile.action-v1', intent.operation_key);
@@ -70,15 +72,16 @@ const consents = f => f.h.db.all('SELECT id,purpose,status,revoked_at,expires_at
 const consentFact = (f, id, purpose) => ({ kind: 'consent-withdrawn', scope: { account_id: f.person.accountId, consent_id: id, purpose } });
 const profileFact = f => ({ kind: 'profile-retired', scope: { account_id: f.person.accountId,
   profile_id: f.before.id, profile_revision: f.before.revision } });
-const exactFacts = saved => saved.plan.events.map(({ kind, scope }) => ({ kind, scope }));
+const exactFacts = async (f,saved) => (await planEvents(f,saved)).map(({ kind, scope }) => ({ kind, scope }));
 const ordered = facts => facts.sort((a, b) => stable(a) < stable(b) ? -1 : stable(a) > stable(b) ? 1 : 0);
 
 async function assertPlan(f, intent, facts, { committed = true } = {}) {
+  if(['remove','withdraw_authentication'].includes(intent.action))facts=[...facts,...f.originalSessions.map(row=>({kind:'session-retired',scope:{account_id:f.person.accountId,session_id:row.id}}))];
   const saved = await planFor(f, intent); assert(saved);
   if (committed) assert.equal(saved.status, 'committed');
   assert.deepEqual(saved.plan.allocations, {}, 'This bounded slice does not qualify cleanup/reference allocations');
-  assert.deepEqual(exactFacts(saved), ordered(facts));
-  assert.equal(new Set(saved.plan.events.map(event => event.operation_id)).size, facts.length);
+  assert.deepEqual(ordered(await exactFacts(f,saved)), ordered(facts));
+  assert.equal(new Set((await planEvents(f,saved)).map(event => event.operation_id)).size, facts.length);
   const receipt = await f.h.db.one('SELECT input_hash FROM face_profile_operations WHERE account_id=? AND operation_key=?',
     f.person.accountId, intent.operation_key);
   if (receipt) assert.equal(saved.plan.input_hash, receipt.input_hash);
@@ -104,7 +107,7 @@ for (const action of ['pause', 'resume']) test(`signed ${action} journals only o
     assert.notEqual(current.consent_id, f.before.consent_id);
     assert.equal(after.find(row => row.id === current.consent_id).status, 'granted');
     assert.equal(result.matching_enabled, true);
-    assert(!exactFacts(await planFor(f, intent)).some(fact => fact.scope.consent_id === current.consent_id));
+    assert(!(await exactFacts(f,await planFor(f, intent))).some(fact => fact.scope.consent_id === current.consent_id));
   } else {
     assert.equal(current.consent_id, null); assert.equal(result.matching_enabled, false);
     const resume = f.intent('resume', result.version), resumed = await f.apply(resume);
@@ -217,8 +220,10 @@ for (const stage of ['before', 'after']) test(`signed action prepare reply loss 
   } else {
     const saved = await assertPlan(f, intent, [consentFact(f, f.before.consent_id, 'photo_matching')], { committed: false });
     assert.equal(saved.status, 'pending');
-    await assert.rejects(() => f.db.one('SELECT id FROM accounts LIMIT 1'), unavailable);
-    await f.failedApply(intent); assert.deepEqual(await planFor(f, intent), saved);
+    await f.db.one('SELECT id FROM accounts LIMIT 1');
+    const recovered=await planFor(f,intent);assert.equal(recovered.status,'recovered');assert.deepEqual(recovered.plan,saved.plan);
+    assert.equal((await consents(f)).find(row=>row.id===f.before.consent_id).status,'revoked');
+    await f.apply(intent,410);assert.deepEqual((await planFor(f,intent)).plan,saved.plan);
   }
 });
 
@@ -232,7 +237,7 @@ test('callback failure rolls back signed action changes before journal preparati
     }
     return result;
   };
-  await f.failedApply(intent); assert.deepEqual(await consents(f), before); assert.deepEqual(await profile(f), f.before);
+  await f.failedApply(intent); assert.deepEqual(await consents(f),before);assert.deepEqual(await profile(f),f.before);
   assert.equal(await planFor(f, intent), null); await f.apply(intent);
   await assertPlan(f, intent, [consentFact(f, f.before.consent_id, 'photo_matching')]);
 });
@@ -252,7 +257,7 @@ test('fresh retirement decision change rolls back rather than committing an unre
   assert.deepEqual(await consents(f), before); assert.deepEqual(await profile(f), f.before); assert.equal(await planFor(f, intent), null);
 });
 
-test('accepted independent action plan and rejected PostgreSQL commit preserve pending facts and prohibit callback replay', async t => {
+test('accepted independent action plan and rejected PostgreSQL commit recover restrictions without the signed callback', async t => {
   const f = await faceProfileFixture(t), intent = f.intent('remove'), id = await logicalID(f, intent), before = await consents(f);
   const prepare = f.journal.prepare.bind(f.journal); let armed = true;
   f.journal.prepare = async value => {
@@ -260,10 +265,16 @@ test('accepted independent action plan and rejected PostgreSQL commit preserve p
     if (armed && value.operation_id === id) { armed = false; f.faults.beforeCommit = true; }
     return saved;
   };
-  await f.failedApply(intent); assert.deepEqual(await consents(f), before); assert.deepEqual(await profile(f), f.before);
+  await f.failedApply(intent);
+  // A later cleanup/read gate can already replay the accepted restrictive
+  // plan; it may never reconstruct the original signed action receipt.
+  await f.db.one('SELECT id FROM accounts LIMIT 1');
   const saved = await assertPlan(f, intent, [consentFact(f, f.before.auth_consent_id, 'face_authentication'),
     consentFact(f, f.before.consent_id, 'photo_matching'), profileFact(f)], { committed: false });
-  assert.equal(saved.status, 'pending'); await f.failedApply(intent); assert.deepEqual(await planFor(f, intent), saved);
+  assert.equal(saved.status,'recovered');
+  assert.equal((await profile(f)).status,'revoked');
+  assert((await consents(f)).filter(row=>['face_authentication','photo_matching'].includes(row.purpose)).every(row=>row.status==='revoked'));
+  assert.equal(await f.h.db.one('SELECT operation_key FROM face_profile_operations WHERE operation_key=?',intent.operation_key),null);
   assert.equal((await f.h.db.all('SELECT cleanup_id FROM face_profile_retirements WHERE account_id=?', f.person.accountId)).length, 0);
 });
 
@@ -290,30 +301,12 @@ for (const mode of ['commit', 'ack-before', 'ack-after']) test(`signed action ${
   assert.equal(matchingWithdrawals, 1, 'Receipt reconciliation must not execute another matching withdrawal');
 });
 
-for (const count of [32, 33]) test(`${count} mixed selected facts are ${count === 32 ? 'committed together' : 'rejected before any action mutation'}`, async t => {
-  const f = await faceProfileFixture(t), pending = [];
-  // These synthetic old pending episodes bypass neither current signed control
-  // nor journal admission; old timestamps avoid the unrelated attempt-rate gate.
-  for (let index = 0; index < count - 3; index++) pending.push(await f.pending());
-  const intent = f.intent('remove'), before = await consents(f);
-  f.trace.length = 0;
-  if (count === 32) {
-    await f.apply(intent);
-    await assertPlan(f, intent, [consentFact(f, f.before.auth_consent_id, 'face_authentication'),
-      consentFact(f, f.before.consent_id, 'photo_matching'), ...pending.map(row => consentFact(f, row.consentID, 'face_authentication')), profileFact(f)]);
-    assert.equal(await cursor(f), 32); assert.equal((await profile(f)).status, 'revoked');
-    assert((await consents(f)).filter(row => row.purpose === 'face_authentication').every(row => row.status === 'revoked'));
-  } else {
-    assert.equal((await f.apply(intent, 503)).error.code, 'face_profile_restriction_capacity');
-    assert.equal(await planFor(f, intent), null); assert.equal(await cursor(f), 0);
-    assert.deepEqual(await consents(f), before); assert.deepEqual(await profile(f), f.before);
-    assert.equal(await f.h.db.one('SELECT operation_key FROM face_profile_operations WHERE operation_key=?', intent.operation_key), null);
-    assert.equal((await f.h.db.all('SELECT cleanup_id FROM face_profile_retirements WHERE account_id=?', f.person.accountId)).length, 0);
-    const writes = f.trace.filter(value => value.kind === 'sql' && /^(INSERT|UPDATE|DELETE) /.test(value.sql));
-    const rateLimitWrite = value => value.sql.startsWith('DELETE FROM request_limits WHERE expires_at<') ||
-      value.sql.startsWith('INSERT INTO request_limits(key,hits,expires_at) VALUES(');
-    assert.equal(writes.filter(rateLimitWrite).length, 2, 'The existing pre-action rate-limit gate still runs');
-    assert(!writes.some(value => !rateLimitWrite(value) && !value.sql.startsWith('UPDATE restore_control ')),
-      'Capacity rejection precedes state/receipt/consent/cleanup mutations');
-  }
+for (const count of [32,33,65]) test(`${count} mixed selected facts commit the complete removal across bounded journal pages`, async t => {
+ const f=await faceProfileFixture(t),pending=[];
+ for(let index=0;index<count-3;index++)pending.push(await f.pending());
+ const intent=f.intent('remove');await f.apply(intent);
+ await assertPlan(f,intent,[consentFact(f,f.before.auth_consent_id,'face_authentication'),consentFact(f,f.before.consent_id,'photo_matching'),
+  ...pending.map(row=>consentFact(f,row.consentID,'face_authentication')),profileFact(f)]);
+ assert.equal(await cursor(f),count+f.originalSessions.length);assert.equal((await profile(f)).status,'revoked');
+ assert((await consents(f)).filter(row=>row.purpose==='face_authentication').every(row=>row.status==='revoked'));
 });

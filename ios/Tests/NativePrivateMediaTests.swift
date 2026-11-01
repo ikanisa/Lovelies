@@ -19,6 +19,7 @@ private final class MediaClockFixture: @unchecked Sendable {
     var clock: NativePrivateMediaClock { .init(read: { [self] in read() }) }
 }
 private final class MediaSecrets: NativeSecretStore, @unchecked Sendable {
+    let authorityNamespace = "fixture-" + UUID().uuidString.lowercased()
     private let lock = NSLock()
     private var values: [String: Data] = [:]
     func read(_ name: String) throws -> Data? { lock.lock(); defer { lock.unlock() }; return values[name] }
@@ -57,7 +58,7 @@ private actor MediaTransport: NativeTransport {
         case "/me": return try json(.object(["user_id": .string(Self.account), "auth_method": .string("registered_face"), "authenticated": .bool(true)]))
         case "/me/audience":
             return try json(.object(["protocol": .string(NativeAudienceProjection.protocolName), "policy_version": .string(NativeAudienceProjection.policy), "account_id": .string(Self.account),
-                "audience": .object(["age_band": .string("18_plus"), "status": .string("eligible"), "version": .integer(1), "policy_version": .string(NativeAudienceProjection.policy), "next_review_at": .null]),
+                "audience": .object(["at_least_13": .bool(true), "guardian_required": .bool(false), "status": .string("eligible"), "version": .integer(1), "policy_version": .string(NativeAudienceProjection.policy), "source": .string("self_declaration"), "rule_version": .string("audience-13-plus-guardian-v1"), "territory": .string("global"), "declared_at": .string(ISO8601DateFormatter().string(from: Date().addingTimeInterval(-60))), "next_review_at": .string(ISO8601DateFormatter().string(from: Date().addingTimeInterval(3600))), "review_required": .bool(false)]), "authority_expires_at": .string(ISO8601DateFormatter().string(from: Date().addingTimeInterval(3500))),
                 "guardian_request": .null, "capabilities": .object(["face_authentication": .bool(true), "photo_matching": .bool(true), "photo_processing": .bool(true)])]))
         case "/community/action":
             let body = try WireValue.decoded(request.httpBody!)

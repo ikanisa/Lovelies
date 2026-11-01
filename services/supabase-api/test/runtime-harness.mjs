@@ -30,13 +30,13 @@ export class MemoryBucket {
 }
 export async function startHarness({faceVerifier,photoProcessor,storeVerifier,pushService,mediaWriteGate,buckets,vars={},consumeQueue=true}={}){
   const localDatabase=process.env.TEST_DATABASE_URL?await isolatedPostgres(process.env.TEST_DATABASE_URL):null;
-  const engine=localDatabase?.engine??await PGlite.create();
+  let engine=localDatabase?.engine??await PGlite.create();
   try{
     if(!localDatabase)await engine.exec('CREATE ROLE anon; CREATE ROLE authenticated;');
-    const migrations=fs.readdirSync(new URL('../../../supabase/migrations/',import.meta.url)).filter(x=>/_lovelies_private_core\.sql$|_refresh_delivery\.sql$|_audience_retention\.sql$|_inference_generation\.sql$|_retention_scan_cursors\.sql$|_restore_control\.sql$|_lovelies_media_authority\.sql$/.test(x)).sort();
+    const migrations=fs.readdirSync(new URL('../../../supabase/migrations/',import.meta.url)).filter(x=>/_lovelies_private_core\.sql$|_refresh_delivery\.sql$|_audience_retention\.sql$|_inference_generation\.sql$|_retention_scan_cursors\.sql$|_restore_control\.sql$|_lovelies_media_authority\.sql$|_delivery_reliability\.sql$|_restore_recovery_protocol\.sql$|_chunked_privacy_exports\.sql$|_operator_capabilities\.sql$|_audience_and_delivery_reconciliation\.sql$|_managed_auth_session_custody\.sql$/.test(x)).sort();
     for(const migration of migrations)await engine.exec(fs.readFileSync(new URL('../../../supabase/migrations/'+migration,import.meta.url),'utf8'));
   }catch(error){
-    if(localDatabase)try{await engine.close();}catch(cleanupError){try{if(error instanceof Error&&Object.isExtensible(error))Object.defineProperty(error,'cleanupErrors',{value:[cleanupError],configurable:true});}catch{}}
+    try{await engine.close();}catch(cleanupError){try{if(error instanceof Error&&Object.isExtensible(error))Object.defineProperty(error,'cleanupErrors',{value:[cleanupError],configurable:true});}catch{}}
     throw error;
   }
   // PGlite embeds PostgreSQL itself but has no multiple backend processes. The
@@ -51,8 +51,9 @@ export async function startHarness({faceVerifier,photoProcessor,storeVerifier,pu
     const operation=tail.then(async()=>{await engine.exec('BEGIN');try{const value=await callback({query,begin:()=>{throw new Error('nested raw connection');}});await engine.exec('COMMIT');return value;}catch(error){await engine.exec('ROLLBACK');throw error;}});
     tail=operation.catch(()=>{});return operation;
   }};
-  const db=localDatabase?connectPostgres(localDatabase.url):new PostgresDatabase(connection);
+  const db=localDatabase?connectPostgres(localDatabase.url,undefined,undefined,{mode:'disable-internal',trustedPlaintextHosts:[new URL(localDatabase.url).hostname]}):new PostgresDatabase(connection);
   const env={INFERENCE_ENGINE_IDENTITY:fixtureInferenceGeneration,APP_ENV:'test',AUTH_SIGNING_SECRET:'local-fixture-only-auth-key-32-characters',MEDIA_SIGNING_SECRET:'local-fixture-only-media-key-32-characters',INTERNAL_MAINTENANCE_SECRET:'local-fixture-only-maintenance-key-32-characters',FACE_AUTH_POLICY_VERSION:'face-policy-fixture-v1',PHOTO_MODEL_VERSION:'face-model-fixture-v1',PHOTO_CONSENT_POLICY_VERSION:'photo-policy-fixture-v1',PUBLIC_API_BASE_URL:'http://localhost/functions/v1/lovelies-api',ALLOWED_ORIGINS:'http://127.0.0.1:8765',PUBLIC_APP_BASE_URL:'http://127.0.0.1:8765',...vars,
+    UPLOAD_MAX_INFLIGHT:'10000',UPLOAD_MAX_RESERVED_SOURCE_BYTES:'107374182400',UPLOAD_MAX_DAILY_SOURCE_BYTES:'107374182400',UPLOAD_MAX_DAILY_RESERVATIONS:'10000',PHOTO_MAX_DAILY_ATTEMPTS:'10000',...vars,
     PHOTOS:buckets?.PHOTOS??new MemoryBucket(),QUARANTINE:buckets?.QUARANTINE??new MemoryBucket(mediaWriteGate),PRIVACY_EXPORTS:buckets?.PRIVACY_EXPORTS??new MemoryBucket(),PHOTO_JOBS:new PostgresJobQueue(db)};
   const response=value=>value instanceof Response?value:Response.json(value);
   if(faceVerifier)env.FACE_AUTH_VERIFIER={fetch:async request=>{const form=await request.formData();return response(await faceVerifier(JSON.parse(String(form.get('envelope'))),form));}};
@@ -71,7 +72,17 @@ export async function startHarness({faceVerifier,photoProcessor,storeVerifier,pu
   const json=async(path,options={},expected=200)=>{const res=await request(path,options),value=await res.json();assert.equal(res.status,expected,`${options.method??'request'} ${path}: ${value?.error?.code??value?.status??'unexpected_response'}`);return value;};
   // Fixture setup/corruption is an explicit write transaction. Production
   // automatic all()/one() are PostgreSQL READ ONLY, including SELECT functions.
-  const harness={engine,db,app,env,request,json,databaseUrl:localDatabase?.url,storage:{exec:(sql,...bindings)=>db.transaction(()=>db.all(sql,...bindings))},anonymous:async({adult=false}={})=>{const guest=await json('/auth/anonymous',{body:{}},201);if(adult)await json('/me/audience',{token:guest.access_token,method:'PUT',body:{age_band:'18_plus',policy_version:'audience-2026-10-24-v1',expected_version:0,operation_key:crypto.randomUUID()}});return guest;},community:(token,action,payload={},expected=200)=>json('/community/action',{token,body:{action,payload}},expected),alarm:()=>maintain(app),mf:{getR2Bucket:async name=>env[name]},close:async()=>{instances.delete(harness);await Promise.allSettled([...pendingJobs]);await tail;await db.close?.();await engine.close();}};
+  let closing;
+  const harness={engine,db,app,env,request,json,databaseUrl:localDatabase?.url,storage:{exec:(sql,...bindings)=>db.transaction(()=>db.all(sql,...bindings))},anonymous:async({adult=false}={})=>{const guest=await json('/auth/anonymous',{body:{}},201);if(adult)await json('/me/audience',{token:guest.access_token,method:'PUT',body:{at_least_13:true,guardian_required:false,policy_version:'audience-2026-10-24-v1',expected_version:0,operation_key:crypto.randomUUID()}});return guest;},community:(token,action,payload={},expected=200)=>json('/community/action',{token,body:{action,payload}},expected),alarm:()=>maintain(app),mf:{getR2Bucket:async name=>env[name]},close:()=>closing??=(async()=>{instances.delete(harness);await Promise.allSettled([...pendingJobs]);await tail;await db.close?.();await engine.close();
+    // Node retains completed test contexts and their cleanup closures. Release
+    // the closed embedded engine so a long sequential file cannot retain a
+    // separate PostgreSQL WASM heap for every completed fixture.
+    engine=null;harness.engine=null;
+    // The local runner exposes GC so closed WASM memories are reclaimed
+    // between fixtures rather than competing with other test processes.
+    // This is fixture teardown only and never changes production behavior.
+    if(typeof globalThis.gc==='function')globalThis.gc();
+  })()};
   instances.add(harness);return harness;
 }
 export async function closeHarnesses(){await Promise.all([...instances].map(h=>h.close()));}

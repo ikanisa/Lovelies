@@ -1,3 +1,5 @@
+import {planEvents} from './restore-plan-fixture.mjs';
+import {assertRestrictedAbort} from './restore-restricted-abort.fixture.mjs';
 /** Prepared root-owned actual-PG qualification: synthetic tokens/face fixtures,
  * independent in-memory journal. Not hosted recovery or provider evidence. */
 import assert from 'node:assert/strict';
@@ -29,7 +31,7 @@ async function domain(f){const result={};for(const table of ['accounts','session
  const order=table==='refresh_delivery_receipts'?'original_session_id':table==='face_profile_operations'?'account_id,operation_key':'id';result[table]=await f.h.db.all('SELECT * FROM '+table+' ORDER BY '+order);}return result;}
 async function expectedPlan(f,extra=[]){const saved=await f.journal.lookup(await f.operation());assert(saved&&saved.status==='committed');assert.deepEqual(saved.plan.allocations,{});
  const facts=[sessionFact(f.account,f.oldID),...(f.nextID?[sessionFact(f.account,f.nextID)]:[]),...extra];
- assert.deepEqual(saved.plan.events.map(({kind,scope})=>({kind,scope})),sorted(facts));
+ assert.deepEqual((await planEvents(f,saved)).map(({kind,scope})=>({kind,scope})),sorted(facts));
  const raw=JSON.stringify(saved.plan);for(const value of [f.request.refresh_token,f.request.delivery_secret,f.next?.refresh_token].filter(Boolean))assert(!raw.includes(value));
  for(const field of ['refresh_hash','secret_hash','delivery_secret','refresh_token','ciphertext','iv','token_value'])assert(!raw.includes('"'+field+'"'));
  return saved;}
@@ -71,7 +73,9 @@ for(const mode of ['outage','prepare-before','prepare-after','commit-result-loss
  else f.faults.reply={path:'/v1/operations/'+operation+'/acknowledge',stage:mode.slice(4)};
  const response=await f.send();assert(response.status>=500&&response.status<=599);const saved=await f.journal.lookup(operation);
  if(mode==='outage'||mode==='prepare-before'){assert.deepEqual(await domain(f),before);assert.equal(saved,null);f.faults.control=false;await answer(f);await expectedPlan(f);return;}
- if(mode==='prepare-after'){assert.deepEqual(await domain(f),before);assert.equal(saved.status,'pending');await assert.rejects(()=>f.db.one('SELECT id FROM accounts LIMIT 1'),unavailable);return;}
+ if(mode==='prepare-after'){assert.deepEqual(await domain(f),before);assert.equal(saved.status,'pending');await f.db.one('SELECT id FROM accounts LIMIT 1');
+  const recovered=await f.journal.lookup(operation);assert.equal(recovered.status,'recovered');assert.deepEqual(recovered.plan,saved.plan);
+  for(const id of [f.oldID,f.nextID])assert.notEqual((await f.h.db.one('SELECT revoked_at FROM sessions WHERE id=?',id)).revoked_at,null);return;}
  assert.equal((await f.h.db.one('SELECT state FROM refresh_delivery_receipts WHERE original_session_id=?',f.oldID)).state,'cancelled');
  if(mode==='commit-result-loss'){assert.equal(atCommit.status,'pending');assert.equal(saved.status,'committed');}else assert.equal(saved.status,mode==='ack-before'?'pending':'committed');
  const terminal=await domain(f);await answer(f);assert.deepEqual(await domain(f),terminal);assert.equal((await f.journal.lookup(operation)).status,'committed');
@@ -85,18 +89,37 @@ async function seedPending(f,count,{duplicate=false}={}){
  if(duplicate&&ids.length)await f.h.db.run("INSERT INTO face_profile_operations(account_id,operation_key,action,input_hash,expected_version,control_device_id,control_revision,state,auth_epoch,consent_id,generation,created_at,expires_at) VALUES(?,?,'replace',?,1,?,?,'pending',?,?,0,?,?)",f.account,randomUUID(),'a'.repeat(64),device.id,device.revision,old.auth_epoch,ids[0],f.h.app.now(),f.h.app.now()+86400000);
  return ids;
 }
-for(const count of [31,32])test(`pre-dispatch cancellation ${count===31?'accepts exact 32-fact limit with deduplicated consent':'rejects 33 facts before effects'}`,async t=>{
- const f=await setup(t,{registered:true}),ids=await seedPending(f,count,{duplicate:count===31}),before=await domain(f);
- if(count===32){const response=await f.send();assert.equal(response.status,503);assert.equal(response.body.error.code,'refresh_cancel_restriction_capacity');assert.deepEqual(await domain(f),before);assert.equal(await f.journal.lookup(await f.operation()),null);return;}
+for(const count of [31,32,64])test(`pre-dispatch cancellation commits all ${count+1} exact deduplicated facts`,async t=>{
+ const f=await setup(t,{registered:true}),ids=await seedPending(f,count,{duplicate:true});
  await answer(f);await expectedPlan(f,ids.map(consent=>({kind:'consent-withdrawn',scope:{account_id:f.account,consent_id:consent,purpose:'face_authentication'}})));
  const rows=await f.h.db.all("SELECT id,status FROM consents WHERE account_id=? AND purpose='face_authentication' ORDER BY id",f.account);
  for(const consent of ids)assert.equal(rows.find(row=>row.id===consent).status,'revoked');
+ assert.equal((await f.journal.control()).marker.cursor.sequence,count+1);
 });
-test('SQL commit rejected after journal acceptance keeps plan pending and fences unsafe callback replay',async t=>{
- const f=await setup(t,{delivered:true}),before=await domain(f),operation=await f.operation(),prepare=f.journal.prepare.bind(f.journal);let armed=true;
- f.journal.prepare=async value=>{const saved=await prepare(value);if(armed&&value.operation_id===operation){armed=false;f.faults.beforeCommit=true;}return saved;};
- const response=await f.send();assert(response.status>=500&&response.status<=599);assert.equal(armed,false);assert.deepEqual(await domain(f),before);
- assert.equal((await f.journal.lookup(operation)).status,'pending');await assert.rejects(()=>f.db.one('SELECT id FROM accounts LIMIT 1'),unavailable);
+test('SQL commit rejected after journal acceptance recovers exact session retirements without the cancellation callback',async t=>{
+ const f=await setup(t,{delivered:true});
+ const snapshot=async current=>({...await domain(current),
+  operations:sorted(await current.h.db.all('SELECT * FROM operations')),
+  audit_events:await current.h.db.all('SELECT * FROM audit_events ORDER BY id')});
+ const before=await snapshot(f),operation=await f.operation(),prepare=f.journal.prepare.bind(f.journal),run=f.db.run.bind(f.db);let armed=true,accepted,cancellationWrites=0;
+ f.db.run=async(sql,...args)=>{if(sql.includes("UPDATE refresh_delivery_receipts SET state='cancelled'"))cancellationWrites++;return run(sql,...args);};
+ f.journal.prepare=async value=>{const saved=await prepare(value);if(armed&&value.operation_id===operation){armed=false;accepted=saved;f.faults.beforeCommit=true;}return saved;};
+ const response=await f.send();assert(response.status>=500&&response.status<=599);assert.equal(armed,false);assert.equal(f.faults.beforeCommit,false);
+ assert.equal(accepted.status,'pending');assert.equal(cancellationWrites,1);
+ const saved=await f.journal.lookup(operation);
+ // The handler's final admission read may already have reconciled the rejected
+ // commit. Neither boundary may claim a committed cancellation receipt.
+ assert(['pending','recovered'].includes(saved.status));assert.equal(saved.plan_hash,accepted.plan_hash);assert.deepEqual(saved.plan,accepted.plan);
+ assert.deepEqual((await planEvents(f,saved)).map(({kind,scope})=>({kind,scope})),sorted([sessionFact(f.account,f.oldID),sessionFact(f.account,f.nextID)]));
+ const {recovered,after}=await assertRestrictedAbort(f,{saved,before,snapshot});
+ assert.equal(cancellationWrites,1,'reconciliation must not reenter the cancellation callback');
+ assert.deepEqual(after.refresh_delivery_receipts,before.refresh_delivery_receipts,'the rolled-back cancellation must not publish a cancelled delivery receipt');
+ for(const sessionID of [f.oldID,f.nextID]){
+  const old=before.sessions.find(row=>row.id===sessionID),retired=after.sessions.find(row=>row.id===sessionID);
+  for(const field of ['revoked_at','refresh_consumed_at']){assert.notEqual(retired[field],null);if(old[field]!==null)assert.equal(retired[field],old[field]);}
+ }
+ await f.db.one('SELECT id FROM accounts LIMIT 1');assert.equal(cancellationWrites,1);
+ assert.deepEqual(await snapshot(f),after);assert.deepEqual(await f.journal.lookup(operation),recovered);
 });
 
 for(const mode of ['pre-dispatch','delivered'])for(const field of ['account','original','receipt',...(mode==='delivered'?['successor']:[])])test(`terminal ${mode} detects ${field} drift after tentative writes and rolls back`,async t=>{

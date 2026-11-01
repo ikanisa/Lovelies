@@ -1,11 +1,12 @@
 import assert from 'node:assert/strict';
+import { versionedPushFixture } from './notification-receipt-fixture.mjs';
 import {test,after} from 'node:test';
 import {startHarness,closeHarnesses,enroll,faceVerifierFixture} from './runtime-harness.mjs';
-import {enqueueNotification,processNotificationJob} from '../src/notifications.ts';
+import {enqueueNotification,processNotificationJob,flushNotificationOutbox} from '../src/notifications.ts';
 after(closeHarnesses);
 const key=()=>crypto.randomUUID();
 async function fixture(t,provider){
- const h=await startHarness({faceVerifier:faceVerifierFixture,pushService:provider,consumeQueue:false});
+ const h=await startHarness({faceVerifier:faceVerifierFixture,pushService:versionedPushFixture(provider),consumeQueue:false});
  t.after(()=>h.close());
  const owner=await enroll(h);
  const device=await h.json('/me/push-devices',{token:owner.token,body:{platform:'ios',push_token:'synthetic-token-'+key(),operation_key:key()}});
@@ -66,4 +67,24 @@ test('safe preflight retries stop at the durable attempt bound without claiming 
  await assert.rejects(f.process,/push_reconciliation_required/);
  await f.h.db.run('UPDATE notification_deliveries SET attempts=5 WHERE notification_id=?',f.notification);await f.process();assert.equal(sends,1);
  assert.equal((await f.h.db.one('SELECT status FROM notification_jobs WHERE notification_id=?',f.notification)).status,'inbox_only');
+});
+
+test('terminal aggregate cannot hide a bound attempted queued delivery or authorize a replacement send',async t=>{
+ const calls=[];let operation;
+ const f=await fixture(t,async request=>{
+  calls.push(request.method);
+  if(request.method==='POST'){operation=(await request.json()).operation_key;return {operation_key:operation,status:'ambiguous'};}
+  return {operation_key:operation,status:'accepted',provider_message_id:'synthetic-reconciled-queued-receipt'};
+ });
+ await assert.rejects(f.process,/push_reconciliation_required/);
+ const lease=key();await f.h.db.run("UPDATE notification_deliveries SET status='queued',lease_token=?,lease_until=? WHERE notification_id=?",lease,f.h.app.now()+60000,f.notification);
+ await f.h.db.run("UPDATE notification_jobs SET status='cancelled',dispatched_at=NULL WHERE notification_id=?",f.notification);
+ await f.h.json('/me/push-devices/'+f.device.id,{token:f.owner.token,method:'DELETE',body:{operation_key:key()}});
+ await flushNotificationOutbox(f.h.app);
+ assert.equal((await f.h.db.one("SELECT count(*) n FROM job_queue WHERE category='notification' AND json_extract(payload_json,'$.notification_id')=?",f.notification)).n,1);
+ await assert.rejects(f.process,/push_reconciliation_required/);assert.deepEqual(calls,['POST']);
+ assert.equal((await f.h.db.one('SELECT lease_token FROM notification_deliveries WHERE notification_id=?',f.notification)).lease_token,lease);
+ await f.h.db.run('UPDATE notification_deliveries SET lease_until=? WHERE notification_id=?',f.h.app.now()-1,f.notification);
+ await f.process();assert.deepEqual(calls,['POST','GET']);
+ assert.equal((await f.h.db.one('SELECT status FROM notification_jobs WHERE notification_id=?',f.notification)).status,'accepted');
 });

@@ -107,7 +107,7 @@ for(const [label,sqlTime] of [['negative','-1'],['unsafe large','900719925474099
 test('native PostgreSQL cleanup scan coordinates separate pools',{skip:process.env.LOVELIES_DISPOSABLE_PG_TEST!=='1',timeout:60000},async t=>{
  const target=new URL(process.env.TEST_DATABASE_URL??'');
  assert(['127.0.0.1','localhost','::1','[::1]'].includes(target.hostname),'native fixture must be loopback-only');
- const h=await startHarness({consumeQueue:false}),other=connectPostgres(h.databaseUrl);t.after(async()=>{await other.close();await h.close();});
+ const h=await startHarness({consumeQueue:false}),other=connectPostgres(h.databaseUrl,undefined,undefined,{mode:'disable-internal',trustedPlaintextHosts:[new URL(h.databaseUrl).hostname]});t.after(async()=>{await other.close();await h.close();});
  const owner=await h.anonymous(),ids=await seedIntents(h,owner.account_id,101,Date.now()-100000),second={...h.app,db:other};
  const pages=await Promise.all([nextCleanupIntents(h.app),nextCleanupIntents(second)]);
  assert.deepEqual(pages.map(page=>page.length).sort((a,b)=>a-b),[1,100]);

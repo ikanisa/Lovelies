@@ -28,6 +28,7 @@ private enum UploadHTTPJourneyFailure: Error, LocalizedError {
     var errorDescription: String? { if case .check(let value) = self { return value }; return nil }
 }
 private final class UploadHTTPMemorySecrets: NativeSecretStore, @unchecked Sendable {
+    let authorityNamespace = "fixture-" + UUID().uuidString.lowercased()
     let root: URL
     init(root: URL) throws { self.root = root; try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true); try FileManager.default.setAttributes([.posixPermissions: 0o700], ofItemAtPath: root.path) }
     func read(_ name: String) throws -> Data? {

@@ -3,11 +3,23 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
-  "engines": { "node": ">=24" },
+  "engines": {
+    "node": ">=24"
+  },
   "scripts": {
     "test": "node --test --test-concurrency=1 test/*.test.mjs",
-    "check": "node --check src/journal.mjs && node --check src/operations.mjs && node --check src/inventory-values.mjs && node --check src/inventory-descriptors-v2.mjs && node --check src/inventory.mjs && node --check src/worker.mjs",
-    "build": "wrangler deploy --dry-run --outdir ../../verification/restore-journal/worker-build"
+    "check": "node ../../scripts/check-service-source.mjs restore-journal",
+    "build": "pnpm check",
+    "build:cloudflare-legacy": "wrangler deploy --dry-run --outdir ../../verification/restore-journal/worker-build",
+    "start": "node src/server.mjs"
   },
-  "devDependencies": { "esbuild": "0.28.1", "miniflare": "4.20260714.0", "wrangler": "4.112.0" }
+  "devDependencies": {
+    "esbuild": "0.28.1",
+    "miniflare": "4.20260714.0",
+    "wrangler": "4.112.0",
+    "@electric-sql/pglite": "0.3.14"
+  },
+  "dependencies": {
+    "postgres": "3.4.7"
+  }
 }

@@ -138,7 +138,7 @@ for(const mode of ['commit-reply','ack-before','ack-after']) test(`fenced Apple 
  assert.equal(requested.filter(id=>id===operationID).length,1);
 });
 
-for(const mode of ['prepare-reply','sql-before-commit']) test(`fenced Apple ${mode} loss leaves a pending independent plan and fences ordinary replay`,{timeout:30000},async t=>{
+for(const mode of ['prepare-reply','sql-before-commit']) test(`fenced Apple ${mode} loss recovers the exact operation without another provider dispatch`,{timeout:30000},async t=>{
  const f=await setup(t),key=randomUUID(),operationID=await f.id(key),prepare=f.journal.prepare.bind(f.journal);let armed=true;
  f.journal.prepare=async value=>{
   if(armed&&value.operation_id===operationID&&mode==='prepare-reply'){
@@ -149,9 +149,21 @@ for(const mode of ['prepare-reply','sql-before-commit']) test(`fenced Apple ${mo
   return saved;
  };
  let r=await f.purchase(key,f.newer);assert(r.status>=500&&r.status<=599);await r.body?.cancel();
- assert.equal(await f.row(key),null);const snapshot=await f.snapshot();assert.equal(snapshot.subscriptions.length,0);assert.equal(snapshot.transactions.length,0);
+ assert.equal(armed,false);assert.equal(await f.row(key),null);const snapshot=await f.snapshot();assert.equal(snapshot.subscriptions.length,0);assert.equal(snapshot.transactions.length,0);assert.equal(snapshot.notifications.length,0);
  const pending=await plan(f,key,f.newer,'pending');assert.equal(f.calls,1);
- r=await f.purchase(key,f.newer);assert(r.status>=500&&r.status<=599);await r.body?.cancel();
- assert.deepEqual(await plan(f,key,f.newer,'pending'),pending);assert.deepEqual(await f.snapshot(),snapshot);assert.equal(await f.row(key),null);
- assert.equal(f.calls,1,'pending independent plan must fence another provider dispatch');
+ r=await f.purchase(key,f.newer);assert.equal(r.status,410);assert.equal((await r.json()).error.code,'operation_retired_by_recovery');
+ const recovered=await plan(f,key,f.newer,'recovered');assert.equal(recovered.plan_hash,pending.plan_hash);assert.deepEqual(recovered.plan,pending.plan);
+ assert.deepEqual(await f.h.db.one('SELECT input_hash,plan_hash,outcome FROM restore_recovered_operations WHERE operation_id=?',operationID),
+  {input_hash:pending.plan.input_hash,plan_hash:pending.plan_hash,outcome:'restricted-abort'});
+ assert.deepEqual(await f.snapshot(),snapshot);assert.equal(await f.row(key),null);
+ assert.equal(f.calls,1,'recovered original operation must be rejected before another provider dispatch');
+ r=await f.purchase(key,f.old);assert.equal(r.status,409);assert.equal((await r.json()).error.code,'operation_key_conflict');
+ assert.equal(f.calls,1,'changed input for a recovered key must be rejected before verifier dispatch');
+ f.trace.length=0;r=await f.lookup(key);assert.equal(r.status,409);assert.equal((await r.json()).error.code,'operation_recovered_without_result');
+ assertReadOnlyReceiptTrace(f);
+ assert.equal(await f.row(key),null,'a recovered prepare must not manufacture a committed purchase receipt');
+ await f.h.db.run('UPDATE sessions SET revoked_at=? WHERE account_id=? AND revoked_at IS NULL',f.h.app.now(),f.owner.accountId);
+ r=await f.purchase(key,f.newer);assert.equal(r.status,401);await r.body?.cancel();
+ assert.equal(f.calls,1,'current actor authorization precedes the terminal recovered outcome');
+ assert.deepEqual(await f.snapshot(),snapshot);assert.deepEqual(await plan(f,key,f.newer,'recovered'),recovered);
 });

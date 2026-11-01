@@ -19,6 +19,11 @@ internal fun <T> withLifecyclePhase(fence: SessionFence,scope: SessionScope,expe
 }
 private fun lifecycleText(value: Any?): String=NativeProtocol.text(value).takeIf { it.isNotBlank() }
     ?: throw LiveFailure("face_profile_response_changed")
+private fun lifecycleDate(value: Any?): Long?=value?.let { try { Instant.parse(lifecycleText(it)).toEpochMilli() } catch(_: Exception) { throw LiveFailure("face_profile_response_changed") } }
+private fun lifecycleConsent(policy: String): WireObject {
+    if(policy.isBlank() || policy.length>128)throw LiveFailure("face_policy_required")
+    return mapOf("purpose" to "face_authentication","policy_version" to policy,"granted" to true)
+}
 private fun lifecycleProfile(value: Any?): WireObject?=value?.let {
     val row=NativeProtocol.obj(it)
     mapOf("id" to NativeProtocol.id(row["id"]),"revision" to lifecycleText(row["revision"]),"model_id" to lifecycleText(row["model_id"]))
@@ -58,11 +63,14 @@ data class FaceLifecycleOperation(val key: String,val action: String,val state: 
 data class FaceLifecycleMetadata(val version: Long,val deviceRevision: String,val authPolicy: String,val photoPolicy: String,
     val profile: WireObject?,val authenticationEnabled: Boolean,val matchingEnabled: Boolean,val processingEnabled: Boolean,
     val receiveMatches: Boolean,val matchingPaused: Boolean,val removal: String,val operation: FaceLifecycleOperation?,val wire: WireObject) {
+    val controlRecovery get()=wire["control_recovery"]?.let(FaceControlRecovery::parse)
     companion object {
         val removalStates=setOf("none","pending","failed","blocked","completed")
         fun parse(value: WireObject,account: String,device: String,digest: String,revision: String?=null,nonce: String?=null,minimum: Long=1): FaceLifecycleMetadata {
             if(value["protocol"]!="lovelies-face-profile-v1" || value["authenticated"]!=false || value["account_id"]!=account || value["device_id"]!=device ||
-                value["public_key_digest"]!=digest || nonce!=null && value["request_nonce"]!=nonce)throw LiveFailure("face_profile_response_changed")
+                value["public_key_digest"]!=digest || nonce!=null && value["request_nonce"]!=nonce ||
+                setOf("access_token","refresh_token","face_handle","device_public_jwk","control_key","template_key","template_digest").any { value[it]!=null })throw LiveFailure("face_profile_response_changed")
+            value["control_recovery"]?.let(FaceControlRecovery::parse)
             val rev=lifecycleText(value["device_revision"])
             if(revision!=null && rev!=revision)throw LiveFailure("face_profile_response_changed")
             val version=NativeProtocol.integer(value["version"],minimum,9007199254740991)
@@ -72,6 +80,41 @@ data class FaceLifecycleMetadata(val version: Long,val deviceRevision: String,va
             return FaceLifecycleMetadata(version,rev,lifecycleText(value["auth_policy_version"]),lifecycleText(value["photo_policy_version"]),lifecycleProfile(value["profile"]),
                 flag("authentication_enabled"),flag("matching_enabled"),flag("processing_enabled"),flag("receive_matches"),flag("matching_paused"),removal,
                 value["operation"]?.let(FaceLifecycleOperation::parse),value)
+        }
+    }
+}
+/** Status of the retained secret. It grants neither a session nor a purpose. */
+data class FaceControlRecovery(val binding: String,val expires: Long) {
+    companion object {
+        fun parse(value: Any?): FaceControlRecovery {
+            val row=NativeProtocol.obj(value)
+            if(row.keys!=setOf("binding","expires_at") || !Regex("[0-9a-f]{64}").matches(lifecycleText(row["binding"])))throw LiveFailure("face_profile_response_changed")
+            return FaceControlRecovery(row["binding"] as String,lifecycleDate(row["expires_at"]) ?: throw LiveFailure("face_profile_response_changed"))
+        }
+    }
+}
+data class FaceControlRecoveryRenewal(val body: WireObject,val fromExpires: Long) {
+    fun wire(): WireObject=mapOf("body" to body,"from_expires_at" to Instant.ofEpochMilli(fromExpires).toString())
+    fun receipt(value: Any?,current: FaceControlRecovery) {
+        val row=NativeProtocol.obj(value)
+        val from=lifecycleDate(row["from_expires_at"]);val to=lifecycleDate(row["to_expires_at"])
+        if(row.keys!=setOf("operation_key","from_expires_at","to_expires_at") || row["operation_key"]!=body["operation_key"] || from!=fromExpires || to==null || to<=fromExpires || current.expires<to)throw LiveFailure("face_profile_response_changed")
+    }
+    companion object {
+        fun create(metadata: FaceLifecycleMetadata,policy: String): FaceControlRecoveryRenewal {
+            val review=metadata.controlRecovery ?: throw LiveFailure("face_profile_control_review_required")
+            if(policy!=metadata.authPolicy)throw LiveFailure("face_policy_required")
+            return FaceControlRecoveryRenewal(mapOf("operation_key" to UUID.randomUUID().toString(),"expected_version" to metadata.version,
+                "expected_binding" to review.binding,"consent" to lifecycleConsent(policy)),review.expires)
+        }
+        fun restore(value: Any?): FaceControlRecoveryRenewal {
+            val row=NativeProtocol.obj(value);val body=NativeProtocol.obj(row["body"])
+            if(row.keys!=setOf("body","from_expires_at") || body.keys!=setOf("operation_key","expected_version","expected_binding","consent") ||
+                !Regex("[0-9a-f]{64}").matches(lifecycleText(body["expected_binding"])))throw LiveFailure("face_profile_response_changed")
+            NativeProtocol.id(body["operation_key"]);NativeProtocol.integer(body["expected_version"],1)
+            val consent=NativeProtocol.obj(body["consent"])
+            if(consent!=lifecycleConsent(lifecycleText(consent["policy_version"])))throw LiveFailure("face_profile_response_changed")
+            return FaceControlRecoveryRenewal(body,lifecycleDate(row["from_expires_at"]) ?: throw LiveFailure("face_profile_response_changed"))
         }
     }
 }
@@ -119,9 +162,9 @@ data class FaceLifecycleJournal(val origin: String,val account: String,val devic
     val intent: FaceLifecycleIntent?=null,val generation: Long=0,val challengeId: String?=null,val challenge: WireObject?=null,
     val planned: List<EnrollmentCapture> = emptyList(),val accepted: List<EnrollmentCapture> = emptyList(),val retired: List<EnrollmentCapture> = emptyList(),
     val resume: WireObject?=null,val completion: WireObject?=null,val credentialResult: WireObject?=null,
-    val previousControl: String?=null,val loginKey: String?=null) {
+    val previousControl: String?=null,val loginKey: String?=null,val controlRecoveryRenewal: FaceControlRecoveryRenewal?=null) {
     val digest get()=NativeProtocol.sha256(NativeProtocol.canonical(jwk).toByteArray(Charsets.UTF_8))
-    val blocksPrivate get()=!acknowledged || intent!=null || !metadata.authenticationEnabled || state!="ready"
+    val blocksPrivate get()=!acknowledged || intent!=null || controlRecoveryRenewal!=null || metadata.controlRecovery?.expires?.let { it<=System.currentTimeMillis() }==true || !metadata.authenticationEnabled || state!="ready"
     val waiting get()=state in setOf("capture_pending","verifying","completion_pending")
     override fun toString()="FaceLifecycleJournal(state=$state, action=${intent?.action}, redacted)"
     fun base(): WireObject=mapOf("account_id" to account,"device_id" to device,"control_key" to control)
@@ -132,15 +175,15 @@ data class FaceLifecycleJournal(val origin: String,val account: String,val devic
         "control" to control,"control_operation" to controlOperation,"metadata" to metadata.wire,"acknowledged" to acknowledged,"state" to state,
         "intent" to intent?.wire(),"generation" to generation,"challenge_id" to challengeId,"challenge" to challenge,
         "planned" to planned.map(EnrollmentCapture::wire),"accepted" to accepted.map(EnrollmentCapture::wire),"retired" to retired.map(EnrollmentCapture::wire),
-        "resume" to resume,"completion" to completion,"credential_result" to credentialResult,"previous_control" to previousControl,"login_key" to loginKey)
+        "resume" to resume,"completion" to completion,"credential_result" to credentialResult,"previous_control" to previousControl,"login_key" to loginKey,"control_recovery_renewal" to controlRecoveryRenewal?.wire())
     fun assertIntent(other: FaceLifecycleJournal?) {
         if(other==null || other.origin!=origin || other.account!=account || other.device!=device || other.alias!=alias || other.handle!=handle ||
-            other.control!=control || other.controlOperation!=controlOperation || other.previousControl!=previousControl || other.loginKey!=loginKey || other.intent?.key!=intent?.key || NativeProtocol.canonical(other.jwk)!=NativeProtocol.canonical(jwk))
+            other.control!=control || other.controlOperation!=controlOperation || other.previousControl!=previousControl || other.loginKey!=loginKey || other.controlRecoveryRenewal!=controlRecoveryRenewal || other.intent?.key!=intent?.key || NativeProtocol.canonical(other.jwk)!=NativeProtocol.canonical(jwk))
             throw LiveFailure("face_profile_scope_changed")
     }
     fun assertKey(actual: WireObject) { if(NativeProtocol.canonical(actual)!=NativeProtocol.canonical(jwk))throw LiveFailure("device_key_unavailable") }
     fun begin(action: String): FaceLifecycleJournal {
-        if(!acknowledged || intent!=null || loginKey!=null)throw LiveFailure("face_profile_requires_status")
+        if(!acknowledged || intent!=null || loginKey!=null || controlRecoveryRenewal!=null)throw LiveFailure("face_profile_requires_status")
         val op=FaceLifecycleIntent.create(action,metadata)
         return copy(intent=op,state=if(op.capture)"capture_start" else "action_pending",generation=0,challengeId=null,challenge=null,
             planned=emptyList(),accepted=emptyList(),retired=emptyList(),resume=null,completion=null,credentialResult=null)
@@ -181,9 +224,11 @@ data class FaceLifecycleJournal(val origin: String,val account: String,val devic
             if(loginKey!=null)throw LiveFailure("face_profile_requires_status")
             return copy(metadata=meta,acknowledged=true,state="ready")
         }
-        if(meta.authPolicy!=op.authPolicy || meta.photoPolicy!=op.photoPolicy)throw LiveFailure("face_profile_version_changed")
         val result=meta.operation ?: throw LiveFailure("face_profile_operation_missing")
         if(result.key!=op.key || result.action!=op.action)throw LiveFailure("face_profile_response_changed")
+        // A bound terminal cancellation can be reconciled after annual review
+        // changed policy/version. It never resumes the former capture or consent.
+        if(result.state!="cancelled" && (meta.authPolicy!=op.authPolicy || meta.photoPolicy!=op.photoPolicy))throw LiveFailure("face_profile_version_changed")
         if(!op.capture) {
             if(result.state!="applied" || result.challenge!=null || result.captures.isNotEmpty())throw LiveFailure("face_profile_response_changed")
             val cleanup=meta.removal in setOf("pending","failed","blocked")
@@ -196,7 +241,7 @@ data class FaceLifecycleJournal(val origin: String,val account: String,val devic
                 op.action=="restore_authentication" && profile!=op.reference)throw LiveFailure("face_profile_response_changed")
             return copy(metadata=meta,acknowledged=true,state=if(credentialResult==null)"registered" else "credentials_pending",challenge=null,planned=emptyList(),accepted=emptyList(),retired=emptyList(),resume=null,completion=null)
         }
-        if(meta.version!=op.expectedVersion || meta.profile!=op.reference)throw LiveFailure("face_profile_version_changed")
+        if(result.state!="cancelled" && (meta.version!=op.expectedVersion || meta.profile!=op.reference))throw LiveFailure("face_profile_version_changed")
         if(result.generation<1 || result.challengeId==null)throw LiveFailure("face_profile_response_changed")
         val successor=result.generation==generation+1 && generation>0 && resume?.get("expected_challenge_id")==challengeId &&
             resume?.get("expected_generation")?.let { NativeProtocol.integer(it)==generation }==true
@@ -298,7 +343,7 @@ data class FaceLifecycleJournal(val origin: String,val account: String,val devic
                 NativeProtocol.integer(row["generation"],0,1000000),row["challenge_id"]?.let(NativeProtocol::id),row["challenge"]?.let(NativeProtocol::obj),
                 NativeProtocol.rows(row["planned"],3).map(EnrollmentCapture::parse),NativeProtocol.rows(row["accepted"],3).map(EnrollmentCapture::parse),NativeProtocol.rows(row["retired"],3).map(EnrollmentCapture::parse),
                 row["resume"]?.let(NativeProtocol::obj),row["completion"]?.let(NativeProtocol::obj),row["credential_result"]?.let(NativeProtocol::obj),
-                row["previous_control"]?.let(NativeProtocol::id),row["login_key"]?.let(NativeProtocol::id))
+                row["previous_control"]?.let(NativeProtocol::id),row["login_key"]?.let(NativeProtocol::id),row["control_recovery_renewal"]?.let(FaceControlRecoveryRenewal::restore))
             if(j.origin!=origin || !j.alias.startsWith("lovelies.device.") || !Regex("lfh_[A-Za-z0-9_-]{43}").matches(j.handle) || !Regex("lfl_[A-Za-z0-9_-]{43}").matches(j.control) ||
                 jwk.keys!=setOf("kty","crv","x","y","ext","key_ops") || jwk["kty"]!="EC" || jwk["crv"]!="P-256" || jwk["ext"]!=true || jwk["key_ops"]!=listOf("verify") ||
                 listOf("x","y").any { !Regex("[A-Za-z0-9_-]{43}").matches(NativeProtocol.text(jwk[it])) })throw LiveFailure("face_profile_scope_changed")
