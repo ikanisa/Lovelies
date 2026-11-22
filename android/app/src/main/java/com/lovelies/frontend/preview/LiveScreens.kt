@@ -481,9 +481,13 @@ private fun LiveViewer(state: PreviewState) {
         if(granted)live.selectedPhoto?.let { live.original(it) }
         else state.info(uiContext.getString(R.string.copy_allow_photo_saving_b73adb30),uiContext.getString(R.string.copy_open_android_settings_and_allow_stor_a8cc21b8))
     }
-    LaunchedEffect(live.shareIntent) { live.shareIntent?.let { intent->
-        try { context.startActivity(android.content.Intent.createChooser(intent,uiContext.getString(R.string.copy_share_photo_58c755ac)));live.clearShareIntent() }
-        catch(_: android.content.ActivityNotFoundException) { live.clearShareIntent();state.info(uiContext.getString(R.string.copy_share_unavailable_9fa6cce2),uiContext.getString(R.string.copy_no_installed_app_can_share_this_phot_6764d270)) }
+    LaunchedEffect(live.shareIntent,live.busy) { if(!live.busy)live.shareIntent?.let { key->
+        live.launchOriginalShare(key) { intent->
+            try { context.startActivity(android.content.Intent.createChooser(intent,uiContext.getString(R.string.copy_share_photo_58c755ac))) }
+            catch(problem: android.content.ActivityNotFoundException) {
+                state.info(uiContext.getString(R.string.copy_share_unavailable_9fa6cce2),uiContext.getString(R.string.copy_no_installed_app_can_share_this_phot_6764d270));throw problem
+            }
+        }
     } }
     val scope=rememberCoroutineScope()
     LaunchedEffect(pager.settledPage) {
@@ -1305,6 +1309,15 @@ internal fun displayedPhotoTitle(photo: LivePhoto,fallback: String): String = if
 private fun receiptLabel(status: String?, context: android.content.Context)=when(status){"open"->context.getString(R.string.copy_open_538b10e9);"under_review"->context.getString(R.string.copy_under_review_07000a6f);"resolved"->context.getString(R.string.copy_resolved_503b5525);"closed"->context.getString(R.string.copy_closed_3201cae5);"requested"->context.getString(R.string.copy_awaiting_acceptance_383a8dc6);"accepted"->context.getString(R.string.copy_accepted_41d09a60);"declined"->context.getString(R.string.copy_declined_56d6cf67);"withdrawn"->context.getString(R.string.copy_withdrawn_a579599b);"revoked"->context.getString(R.string.copy_revoked_e58fe295);"expired"->context.getString(R.string.copy_expired_bca9f3d2);"failed"->context.getString(R.string.copy_failed_5579c3d4);else->context.getString(R.string.copy_unavailable_da4baaa9)}
 internal fun readableError(code: String, context: android.content.Context)=when(code) {
     "database_schema_not_ready"->context.getString(R.string.service_temporarily_unavailable)
+    "download_operation_outcome_unresolved","download_operation_requires_status"->context.getString(R.string.copy_download_request_unconfirmed)
+    "download_legacy_outcome_unresolved"->context.getString(R.string.copy_download_legacy_unconfirmed)
+    "download_external_outcome_unresolved"->context.getString(R.string.copy_download_external_unconfirmed)
+    "download_storage_unavailable","download_staging_unavailable"->context.getString(R.string.copy_download_device_unconfirmed)
+    "download_preparation_failed"->context.getString(R.string.copy_download_preparation_failed)
+    "download_authority_changed","download_expired"->context.getString(R.string.copy_matches_or_permissions_changed_open__6586ed5d)
+    "download_requires_explicit_action"->context.getString(R.string.copy_download_explicit_action)
+    "download_not_issued"->context.getString(R.string.copy_download_not_issued)
+    "download_content_invalid","download_staging_invalid"->context.getString(R.string.audience_response_error)
     "audience_required","audience_choice_required"->context.getString(R.string.audience_choose_age)
     "audience_status_required"->context.getString(R.string.audience_check_required)
     "age_not_supported"->context.getString(R.string.audience_under13_blocked)

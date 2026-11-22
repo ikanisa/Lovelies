@@ -1,9 +1,9 @@
 /** Operator CLI. Database access is read-only; there is no serving restore command. */
-import {spawn,spawnSync} from 'node:child_process';
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import {pipeline} from 'node:stream/promises';
-import {backupCatalog,backupDirectory,backupHealth,backupKey,createBackup,expireBackups,PROJECT,verifyBackup,withVerifiedBackup} from './lib/encrypted-backup.mjs';
+import {backupKey,PROJECT,withBackupCatalog} from './lib/encrypted-backup.mjs';
+import {backupProcess} from './lib/backup-process.mjs';
 
 const error=code=>Object.assign(new Error(code),{code});
 function options(args){
@@ -18,24 +18,19 @@ function options(args){
   if(Object.keys(result).some(name=>!['command','local',...allowed].includes(name))||allowed.some(name=>!result[name]))throw error('backup_arguments_invalid');
   return result;
 }
+const cancellation=new AbortController();
+const cancelled=()=>cancellation.abort();
+process.once('SIGTERM',cancelled);process.once('SIGINT',cancelled);
+const current=()=>{if(cancellation.signal.aborted)throw error('backup_process_cancelled');};
 async function binary(value,name){
   if(!value||!path.isAbsolute(value))throw error('backup_tool_path_invalid');
   const resolved=await fs.realpath(value),stat=await fs.stat(resolved);
   if(!stat.isFile())throw error('backup_tool_path_invalid');
-  const result=spawnSync(resolved,['--version'],{encoding:'utf8',timeout:10000,env:{PATH:process.env.PATH,LC_ALL:'C'}});
-  if(result.status!==0||!new RegExp('^'+name+' \\(PostgreSQL\\) 17\\.').test(result.stdout))throw error('backup_tool_version_unqualified');
+  const chunks=[],task=backupProcess(resolved,['--version'],{PATH:process.env.PATH,LC_ALL:'C'},
+    {timeoutMs:10000,stdoutLimit:65536,stdoutLimitCode:'backup_tool_version_unqualified',onStdout:bytes=>chunks.push(bytes),signal:cancellation.signal});
+  task.child.stdin.end();await task.completed;
+  if(!new RegExp('^'+name+' \\(PostgreSQL\\) 17\\.').test(Buffer.concat(chunks).toString('utf8')))throw error('backup_tool_version_unqualified');
   return resolved;
-}
-function producer(binary,args,environment){
-  const child=spawn(binary,args,{env:environment,stdio:['pipe','pipe','pipe']});let stderr=0,timedOut=false;
-  child.stderr.on('data',bytes=>{stderr+=bytes.length;if(stderr>65536)child.kill('SIGTERM');});
-  const completed=new Promise((resolve,reject)=>{
-    child.once('error',()=>reject(error('backup_process_unavailable')));
-    child.once('close',code=>timedOut?reject(error('backup_process_timed_out')):code===0&&stderr===0?resolve():reject(error('backup_process_failed_or_warned')));
-  });
-  const timeout=setTimeout(()=>{timedOut=true;child.kill('SIGTERM');},240000);timeout.unref();child.once('close',()=>clearTimeout(timeout));
-  // Callers attach immediately; never print raw connection/provider diagnostics.
-  completed.catch(()=>{});return {child,completed};
 }
 function databaseEnvironment(local){
   const value=name=>process.env[name];
@@ -48,48 +43,56 @@ function databaseEnvironment(local){
     ...(!local?{PGSSLROOTCERT:value('PGSSLROOTCERT')}:{}),PGCONNECT_TIMEOUT:'10',PGAPPNAME:'lovelies-encrypted-backup-v1',PGOPTIONS:'-c statement_timeout=180000'};
 }
 async function inspectStream(stream,tool){
-    const task=producer(tool,['--list'],{PATH:process.env.PATH,LC_ALL:'C'});let lines=0,bytes=0,outputLimitExceeded=false;
-    task.child.stdout.on('data',chunk=>{
-      bytes+=chunk.length;lines+=chunk.toString().split('\n').length-1;
-      if(bytes>16*1024*1024&&!outputLimitExceeded){outputLimitExceeded=true;task.child.kill('SIGTERM');}
-    });
-    try{await Promise.all([pipeline(stream,task.child.stdin),task.completed]);}
-    catch(error){task.child.kill('SIGTERM');await task.completed.catch(()=>{});throw error;}
-    // A child can handle SIGTERM and exit zero; a breached listing bound must
-    // remain a failure even when its process reports success.
-    if(outputLimitExceeded)throw error('backup_inspection_output_limit');
-    return {archive_listed:true,toc_lines:lines};
+  let lines=0;
+  const task=backupProcess(tool,['--list'],{PATH:process.env.PATH,LC_ALL:'C'},
+    {stdoutLimit:16*1024*1024,onStdout:chunk=>{lines+=chunk.toString().split('\n').length-1;},signal:cancellation.signal});
+  try{await Promise.all([pipeline(stream,task.child.stdin),task.completed]);}
+  catch(problem){throw await task.cancel(problem);}
+  return {archive_listed:true,toc_lines:lines};
 }
-async function inspectArchive(config,tool){return withVerifiedBackup(config,stream=>inspectStream(stream,tool));}
+let key;
 try{
-  const opt=options(process.argv.slice(2)),key=backupKey(process.env.LOVELIES_BACKUP_ENCRYPTION_KEY);
-  const config={directory:opt['--directory'],key,environment:opt.local?'local-qualification':'production',id:opt['--id']};
-  await backupDirectory(config.directory,{create:opt.command!=='health'});
-  let result;
-  if(opt.command==='create'){
-    const tool=await binary(opt['--pg-dump'],'pg_dump'),restore=await binary(opt['--pg-restore'],'pg_restore'),env=databaseEnvironment(opt.local);
-    if(!opt.local){const ca=await fs.stat(env.PGSSLROOTCERT);if(!ca.isFile())throw error('backup_tls_ca_invalid');}
-    const task=producer(tool,['--format=custom','--schema=lovelies_private','--strict-names','--enable-row-security','--role=lovelies_api','--no-owner','--no-privileges','--no-password','--lock-wait-timeout=10s'],env);
-    task.child.stdin.end();
-    try{
-      const metadata=await createBackup({...config,source:task.child.stdout,sourceCompleted:task.completed});
-      const inspection=await inspectArchive({...config,id:metadata.id},restore);
-      result={status:'created_and_verified',id:metadata.id,environment:config.environment,created_at:metadata.created_at,expires_at:metadata.expires_at,archive_sha256:metadata.archive_sha256,...inspection};
-    }catch(error){task.child.kill('SIGTERM');await task.completed.catch(()=>{});throw error;}
-  }else if(opt.command==='catalog'){
-    const catalog=await backupCatalog(config);result={status:catalog.unmanaged_entries.length?'catalog_needs_reconciliation':'catalog_verified',environment:config.environment,backups:catalog.backups.map(x=>({id:x.id,created_at:x.created_at,expires_at:x.expires_at})),unmanaged_entries:catalog.unmanaged_entries.length};
-    if(catalog.unmanaged_entries.length)process.exitCode=2;
-  }else if(opt.command==='health'){
-    if(!/^(?:[1-9]|[1-9][0-9]|1[0-5][0-9]|16[0-8])$/.test(opt['--max-age-hours']))throw error('backup_arguments_invalid');
-    const tool=await binary(opt['--pg-restore'],'pg_restore');
-    result=await backupHealth({...config,maxAgeHours:Number(opt['--max-age-hours'])},stream=>inspectStream(stream,tool));
-    if(result.status!=='local_backup_artifact_verified')process.exitCode=2;
-  }else if(opt.command==='expire'){
-    const expiry=await expireBackups(config);result={status:expiry.unmanaged_entries?'expiry_needs_reconciliation':'verified_expiry_complete',environment:config.environment,...expiry};if(expiry.unmanaged_entries)process.exitCode=2;
-  }
-  else if(opt.command==='verify'){const metadata=await verifyBackup(config);result={status:'archive_verified',id:metadata.id,environment:config.environment,expires_at:metadata.expires_at};}
-  else result={status:'archive_inspected',environment:config.environment,...await inspectArchive(config,await binary(opt['--pg-restore'],'pg_restore'))};
-  key.fill(0);console.log(JSON.stringify(result));
+  const opt=options(process.argv.slice(2));key=backupKey(process.env.LOVELIES_BACKUP_ENCRYPTION_KEY);
+  const config={directory:opt['--directory'],key,environment:opt.local?'local-qualification':'production'};
+  if(opt.command==='health'&&!/^(?:[1-9]|[1-9][0-9]|1[0-5][0-9]|16[0-8])$/.test(opt['--max-age-hours']))throw error('backup_arguments_invalid');
+  const result=await withBackupCatalog({...config,create:opt.command!=='health'},async catalog=>{
+    current();let result;
+    // The lease is already durable before version probes or a producer starts,
+    // and remains held across create and its subsequent archive inspection.
+    if(opt.command==='create'){
+      const env=databaseEnvironment(opt.local);
+      if(!opt.local){const ca=await fs.stat(env.PGSSLROOTCERT);if(!ca.isFile())throw error('backup_tls_ca_invalid');}
+      const tool=await binary(opt['--pg-dump'],'pg_dump'),restore=await binary(opt['--pg-restore'],'pg_restore');
+      const task=backupProcess(tool,['--format=custom','--schema=lovelies_private','--strict-names','--enable-row-security','--role=lovelies_api','--no-owner','--no-privileges','--no-password','--lock-wait-timeout=10s'],env,{signal:cancellation.signal});
+      task.child.stdin.end();
+      try{
+        const metadata=await catalog.create({source:task.child.stdout,sourceCompleted:task.completed,cancelSource:problem=>task.cancel(problem)});
+        current();
+        const inspection=await catalog.consume(metadata.id,stream=>inspectStream(stream,restore));
+        result={status:'created_and_verified',id:metadata.id,environment:config.environment,created_at:metadata.created_at,expires_at:metadata.expires_at,archive_sha256:metadata.archive_sha256,...inspection};
+      }catch(problem){throw await task.cancel(problem);}
+    }else if(opt.command==='catalog'){
+      const value=await catalog.catalog();result={status:value.unmanaged_entries.length?'catalog_needs_reconciliation':'catalog_verified',environment:config.environment,backups:value.backups.map(x=>({id:x.id,created_at:x.created_at,expires_at:x.expires_at})),unmanaged_entries:value.unmanaged_entries.length};
+      if(value.unmanaged_entries.length)process.exitCode=2;
+    }else if(opt.command==='health'){
+      const tool=await binary(opt['--pg-restore'],'pg_restore');
+      result=await catalog.health({maxAgeHours:Number(opt['--max-age-hours'])},stream=>inspectStream(stream,tool));
+      if(result.status!=='local_backup_artifact_verified')process.exitCode=2;
+    }else if(opt.command==='expire'){
+      const expiry=await catalog.expire();result={status:expiry.unmanaged_entries?'expiry_needs_reconciliation':'verified_expiry_complete',environment:config.environment,...expiry};
+      if(expiry.unmanaged_entries)process.exitCode=2;
+    }else if(opt.command==='verify'){
+      const metadata=await catalog.verify(opt['--id']);result={status:'archive_verified',id:metadata.id,environment:config.environment,expires_at:metadata.expires_at};
+    }else{
+      const tool=await binary(opt['--pg-restore'],'pg_restore');
+      result={status:'archive_inspected',environment:config.environment,...await catalog.consume(opt['--id'],stream=>inspectStream(stream,tool))};
+    }
+    current();return result;
+  });
+  current();console.log(JSON.stringify(result));
 }catch(problem){
-  console.error(JSON.stringify({status:'failed',code:/^backup_[a-z_]+$/.test(problem?.code??'')?problem.code:'backup_operation_failed'}));process.exitCode=1;
+  console.error(JSON.stringify({status:'failed',code:/^backup_[a-z_]+$/.test(problem?.code??'')?problem.code:'backup_operation_failed',
+    ...(problem?.backupOutcomeUnknown?{reconciliation_required:true}:{})}));process.exitCode=1;
+}finally{
+  key?.fill(0);process.removeListener('SIGTERM',cancelled);process.removeListener('SIGINT',cancelled);
 }

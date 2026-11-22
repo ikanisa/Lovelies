@@ -236,8 +236,8 @@ for (const caller of ['cancel', 'renew']) for (const mode of ['outage', 'prepare
           armed = false;
           if (mode === 'commit-result-loss') {
             // This fixture hook runs after the real PostgreSQL COMMIT and
-            // before its synthetic lost reply. Final HTTP admission may then
-            // reconcile this pending journal plan without rerunning the action.
+            // before its synthetic lost reply. That reply loss poisons the
+            // current invocation; only a fresh request may reconcile the plan.
             f.faults.afterCommit = async () => {
               delete f.faults.afterCommit;
               committedBeforeReplyLoss = { journal: await f.journal.lookup(id),
@@ -269,7 +269,7 @@ for (const caller of ['cancel', 'renew']) for (const mode of ['outage', 'prepare
         else assert.deepEqual(committedBeforeReplyLoss.control, before.control);
         assert.equal(f.faults.commitReply, false, 'The synthetic lost commit reply was consumed');
         assert.equal(f.faults.afterCommit, undefined, 'The post-COMMIT observation hook was consumed');
-        assert.equal(saved.status, 'committed', 'Final HTTP admission reconciles the already-committed SQL marker');
+        assert.equal(saved.status, 'pending', 'Unknown COMMIT leaves the poisoned invocation unable to acknowledge its SQL marker');
         assert.equal(saved.plan_hash, committedBeforeReplyLoss.journal.plan_hash);
       } else assert.equal(saved.status, mode === 'ack-after' ? 'committed' : 'pending');
       assert.equal((await f.h.db.one('SELECT state FROM face_profile_operations WHERE operation_key=?', pending.operationKey)).state, 'cancelled');

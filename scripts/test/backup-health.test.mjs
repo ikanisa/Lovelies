@@ -59,7 +59,7 @@ test('an expired older archive keeps the whole local catalog in attention despit
 test('corruption, a wrong key and inspector failure cannot produce health success',async t=>{
  const config=await scope(t),at=1000,record=await create(config,at);
  await assert.rejects(health({...config,key:randomBytes(32)},at),/backup_manifest_authentication/);
- await assert.rejects(health(config,at,24,async()=>({archive_listed:true,toc_lines:0})),/backup_health_inspection_invalid/);
+ await assert.rejects(health(config,at,24,async stream=>{await inspect(stream);return {archive_listed:true,toc_lines:0};}),/backup_health_inspection_invalid/);
  await assert.rejects(health(config,at,24,async()=>{throw Error('synthetic_inspector_failure');}),/synthetic_inspector_failure/);
  const file=path.join(config.directory,record.archive),bytes=await fs.readFile(file);bytes[bytes.length-17]^=1;await fs.writeFile(file,bytes);
  let called=false;await assert.rejects(health(config,at,24,async()=>{called=true;}),/backup_archive_integrity/);assert.equal(called,false);

@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import { after, test } from 'node:test';
 import { startHarness, enroll, captureProofs, faceVerifierFixture, fixturePng, sha256, closeHarnesses } from './runtime-harness.mjs';
 
+import { attachDownloadFence,downloadRequest } from './download-v2-fixture.mjs';
 after(closeHarnesses);
 const key=name=>name+'-'+crypto.randomUUID();
 const vars={APPLE_BUNDLE_ID:'app.lovelies.ios',APPLE_APP_ID:'987654321',APPLE_SUBSCRIPTION_PRODUCT_ID:'app.lovelies.pro.monthly',GOOGLE_PLAY_PACKAGE_NAME:'app.lovelies.android',GOOGLE_PLAY_SUBSCRIPTION_PRODUCT_ID:'app.lovelies.pro.monthly'};
@@ -19,7 +20,7 @@ async function requestShare(h,owner,person,asset){const snapshot=(await h.commun
 test('native store requests require explicit provider config; anonymous access and external checkout stay denied',async()=>{
   const h=await startHarness({faceVerifier:faceVerifierFixture,consumeQueue:false});try{const anonymous=await h.anonymous({adult:true}),owner=await enroll(h);
     assert.equal((await h.json('/subscriptions/apple/transactions',{token:owner.token,body:{product_id:'com.lovelies.memories.pro.monthly',signed_transaction:'a.b.c',operation_key:key('store')}},503)).error.code,'apple_verifier_unconfigured');
-    assert.equal((await h.json('/downloads/sign',{token:anonymous.access_token,body:{asset_id:crypto.randomUUID(),operation_key:key('download')}},403)).error.code,'registered_face_required');
+    assert.equal((await h.json('/downloads/v2/sign',downloadRequest({token:anonymous.access_token},crypto.randomUUID(),'synthetic-source'),403)).error.code,'registered_face_required');
     assert.equal((await h.json('/subscriptions/momo-ussd-requests',{token:owner.token,body:{}},404)).error.code,'route_not_found');
     assert.equal((await h.storage.exec('SELECT count(*) n FROM store_subscriptions'))[0].n,0);
   }finally{await h.close();}
@@ -39,18 +40,19 @@ test('actual PostgreSQL purchase replay, foreign binding, sandbox ineligibility,
   }finally{await h.close();}
 });
 
-test('current production entitlement releases actual R2 original bytes and refund invalidates a prior capability',async()=>{
-  const proofs=new Map(),h=await startHarness({faceVerifier:faceVerifierFixture,photoProcessor:processor,storeVerifier:verifier(proofs),vars});try{
+test('current production entitlement releases actual private Storage fixture bytes and refund invalidates a prior capability',async t=>{
+  const proofs=new Map();let h=await startHarness({faceVerifier:faceVerifierFixture,photoProcessor:processor,storeVerifier:verifier(proofs),vars});try{
     const owner=await enroll(h),peer=await enroll(h);
     // Historical stored roles cannot break ordinary processing or signed downloads.
     await h.storage.exec('UPDATE accounts SET roles_json=? WHERE id=?',JSON.stringify(['user','photographer']),owner.accountId);
     await preferences(h,owner);await preferences(h,peer);const photo=await upload(h,owner);
-    assert.equal((await h.json('/downloads/sign',{token:owner.token,body:{asset_id:photo.asset_id,operation_key:key('download')}},403)).error.code,'missing_entitlement');
+    h=(await attachDownloadFence(h,t)).h;const version=(await h.storage.exec('SELECT version FROM assets WHERE id=?',photo.asset_id))[0].version;
+    assert.equal((await h.json('/downloads/v2/sign',downloadRequest(owner,photo.asset_id,version),403)).error.code,'missing_entitlement');
     const purchase=tx(owner.accountId);proofs.set('store.transaction.payload',purchase);await subscribe(h,owner);
-    const ticket=await h.json('/downloads/sign',{token:owner.token,body:{asset_id:photo.asset_id,operation_key:key('download')}});assert(!ticket.download_url.includes('quarantine'));const response=await h.request(new URL(ticket.download_url).pathname);assert.equal(response.status,200);assert.equal(response.headers.get('Cache-Control'),'no-store, private');assert.deepEqual(new Uint8Array(await response.arrayBuffer()),photo.bytes);
+    const intent=downloadRequest(owner,photo.asset_id,version),ticket=await h.json('/downloads/v2/sign',intent);assert.equal(ticket.status,'recorded');assert(!('download_url'in ticket));const response=await h.request('/downloads/v2/content',intent);assert.equal(response.status,200);assert.equal(response.headers.get('Cache-Control'),'no-store, private');assert.deepEqual(new Uint8Array(await response.arrayBuffer()),photo.bytes);
     assert.equal((await h.storage.exec('SELECT count(*) n FROM download_records'))[0].n,1);
-    await h.json('/downloads/sign',{token:peer.token,body:{asset_id:photo.asset_id,operation_key:key('foreign-download')}},403);
-    proofs.set('refund.transaction.payload',{...purchase,signedDate:Date.now()+10,revocationDate:Date.now()});await subscribe(h,owner,'refund.transaction.payload');await h.json(new URL(ticket.download_url).pathname,{},403);assert.equal((await h.storage.exec('SELECT count(*) n FROM download_records'))[0].n,1);
+    await h.json('/downloads/v2/sign',downloadRequest(peer,photo.asset_id,version),403);
+    proofs.set('refund.transaction.payload',{...purchase,signedDate:Date.now()+10,revocationDate:Date.now()});await subscribe(h,owner,'refund.transaction.payload');await h.json('/downloads/v2/content',intent,403);assert.equal((await h.storage.exec('SELECT count(*) n FROM download_records'))[0].n,1);
   }finally{await h.close();}
 });
 

@@ -1,0 +1,111 @@
+{
+  "version": 1,
+  "test_file": "test/retention-request-hold-candidate.test.mjs",
+  "files": {
+    "test/retention-request-hold-candidate.test.mjs": "24d99c3be6bbd10114a303df3fc6b306d475fc777be03cea23e03e745ecf0185",
+    "test/retention-request-hold-fixture.mjs": "4c425bcbf829926ae0f08cf60c5f21d13bc65d1448889091f86726a11ec9539c",
+    "test/offline-regression-guard.mjs": "e93a3f9eb0062bd8f9df8d420a6e599e7c4ba72c99fada0c564a8d67f2451988",
+    "test/restore-retention-network-guard.mjs": "72f2880b2290dc3564222b8cfe3f1d27c076c844100c6ac0cb1a91a9c3dcc6cf",
+    "test/hold-regression-process-guard.mjs": "14df64a8857e5fc4bae3898938268dd436aa739bb276e53e515fcf33a8c4b1f1"
+  },
+  "cases": [
+    {
+      "id": "candidate-request-holds-case-001",
+      "name": "pre-existing request hold preserves expired asset until release"
+    },
+    {
+      "id": "candidate-request-holds-case-002",
+      "name": "pre-existing request hold preserves face template until release"
+    },
+    {
+      "id": "candidate-request-holds-case-003",
+      "name": "pre-existing request hold preserves audit, consent and terminal support facts until release"
+    },
+    {
+      "id": "candidate-request-holds-case-004",
+      "name": "unheld asset retains ordinary retention progress"
+    },
+    {
+      "id": "candidate-request-holds-case-005",
+      "name": "unheld profile retains ordinary retention progress"
+    },
+    {
+      "id": "candidate-request-holds-case-006",
+      "name": "terminal deletion request with legal_hold bit set is not an active request hold"
+    },
+    {
+      "id": "candidate-request-holds-case-007",
+      "name": "pre-existing request hold leaves an already scheduled job retryable until release"
+    },
+    {
+      "id": "candidate-request-holds-case-008",
+      "name": "request hold after claim but before first DELETE resumes after release"
+    },
+    {
+      "id": "candidate-request-holds-case-009",
+      "name": "request hold during delete prevents verification but cannot undo DELETE"
+    },
+    {
+      "id": "candidate-request-holds-case-010",
+      "name": "request hold during head prevents verification but cannot undo DELETE"
+    },
+    {
+      "id": "candidate-request-holds-case-011",
+      "name": "hold query failure after DELETE fails closed without verification or retry"
+    },
+    {
+      "id": "candidate-request-holds-case-012",
+      "name": "source version conflicts remain blocked before DELETE"
+    },
+    {
+      "id": "candidate-request-holds-case-013",
+      "name": "existing global hold still protects the same-subject asset until release"
+    },
+    {
+      "id": "candidate-request-holds-case-014",
+      "name": "existing moderation hold still protects the same-subject asset until release"
+    },
+    {
+      "id": "candidate-request-holds-case-015",
+      "name": "existing asset hold still protects the same-subject asset until release"
+    },
+    {
+      "id": "candidate-request-holds-case-016",
+      "name": "hold-query failure before DELETE fails closed"
+    },
+    {
+      "id": "candidate-request-holds-case-017",
+      "name": "a previously failed job held after claim stays blocked after release"
+    },
+    {
+      "id": "candidate-request-holds-case-018",
+      "name": "stale pending scan is not treated as a fresh claim after a prior failure"
+    },
+    {
+      "id": "candidate-request-holds-case-019",
+      "name": "request hold after_select preserves asset before scheduling mutation"
+    },
+    {
+      "id": "candidate-request-holds-case-020",
+      "name": "request hold before_mutation preserves asset before scheduling mutation"
+    },
+    {
+      "id": "candidate-request-holds-case-021",
+      "name": "request hold after_select preserves profile before scheduling mutation"
+    },
+    {
+      "id": "candidate-request-holds-case-022",
+      "name": "request hold before_mutation preserves profile before scheduling mutation"
+    },
+    {
+      "id": "candidate-request-holds-case-023",
+      "name": "hold after job scan but before claim leaves unclaimed pending job unchanged and resumes after release"
+    },
+    {
+      "id": "candidate-request-holds-case-024",
+      "name": "stale scanned job cannot overwrite an already verified successor"
+    }
+  ],
+  "source_plan_sha256": "4b45d8a1a80141f3cc51ea85302a01e8a36c26e519be43dbff1f9eed96fe7128",
+  "reviewed_result_sha256": "0d0734710ac0febc3a8b1011b3b344f3b7e004181583b676673828c368bf70d7"
+}

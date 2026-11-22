@@ -398,9 +398,9 @@ for (const mode of ['commit', 'ack-before', 'ack-after']) test(mode + ' loss pre
     return prepare(input);
   };
   await f.uncertain(body);
-  // The HTTP invocation's final fresh admission reconciles an exact COMMIT
-  // whose reply was lost. A failed acknowledge poisons that invocation instead.
-  const saved = await assertPlan(f, body, facts, mode === 'ack-before' ? 'pending' : 'committed');
+  // Unknown COMMIT and failed acknowledgement poison this invocation. Only
+  // the fresh retry below may reconcile its exact already-committed SQL marker.
+  const saved = await assertPlan(f, body, facts, mode === 'ack-after' ? 'committed' : 'pending');
   if (mode === 'commit') { assert.deepEqual(boundary, { journal: 'pending', consent: true, request: 'revoked' }); assert.equal(f.faults.commitReply, false); }
   else {
     const path = '/v1/operations/' + id + '/acknowledge'; assert.equal(f.faults.reply, undefined);

@@ -18,6 +18,9 @@ internal interface RepositoryVault {
     fun sign(alias: String,envelope: WireObject): String=throw LiveFailure("device_key_unavailable")
     fun stagePhoto(account: String,batch: String,id: String,bytes: ByteArray) { throw LiveFailure("upload_storage_unavailable") }
     fun stagedPhoto(account: String,batch: String,id: String): ByteArray=throw LiveFailure("upload_source_unavailable")
+    fun stageOriginal(account: String,session: String,id: String,bytes: ByteArray) { throw LiveFailure("download_staging_unavailable") }
+    fun stagedOriginal(account: String,session: String,id: String): ByteArray=throw LiveFailure("download_staging_unavailable")
+    fun removeStagedOriginal(id: String) {}
 }
 internal class AndroidRepositoryVault(context: Context,endpoint: String): RepositoryVault {
     private val delegate=SecureSession(context,endpoint)
@@ -35,10 +38,17 @@ internal class AndroidRepositoryVault(context: Context,endpoint: String): Reposi
     override fun sign(alias: String,envelope: WireObject)=delegate.sign(alias,envelope)
     override fun stagePhoto(account: String,batch: String,id: String,bytes: ByteArray)=delegate.stagePhoto(account,batch,id,bytes)
     override fun stagedPhoto(account: String,batch: String,id: String)=delegate.stagedPhoto(account,batch,id)
+    override fun stageOriginal(account: String,session: String,id: String,bytes: ByteArray)=delegate.stageOriginal(account,session,id,bytes)
+    override fun stagedOriginal(account: String,session: String,id: String)=delegate.stagedOriginal(account,session,id)
+    override fun removeStagedOriginal(id: String)=delegate.removeStagedOriginal(id)
 }
 internal typealias RepositoryJsonBoundary=(String,SessionScope,String?,String,WireObject?,Int?)->WireObject
+internal typealias RepositoryHeaderJsonBoundary=(String,SessionScope,String?,String,WireObject?,Int?,Map<String,String>)->WireObject
+internal typealias RepositoryDownloadBoundary=(String,SessionScope,String,WireObject,Map<String,String>)->DownloadContent
 internal data class RepositoryBoundary(val vault: RepositoryVault,val json: RepositoryJsonBoundary,
-    val initialStorage: WireObject=emptyMap(),val initialSession: LiveCredentials?=null,val initialPending: PendingIntent?=null)
+    val initialStorage: WireObject=emptyMap(),val initialSession: LiveCredentials?=null,val initialPending: PendingIntent?=null,
+    val beforeJsonWrite: (()->Unit)?=null,val headerJson: RepositoryHeaderJsonBoundary?=null,val downloadContent: RepositoryDownloadBoundary?=null,
+    val decodedClaims: ((String)->WireObject)?=null,val useNetwork: Boolean=false)
 
 /** Financial recovery evidence has no sign-in or photo-access authority and is not discarded by account cleanup. */
 internal object StoreRecoveryRetention {
@@ -66,7 +76,7 @@ internal object StoreRecoveryRetention {
         val retained=previous.filterKeys { it in fields }+
             (previous["pending"]?.takeIf(::isStore)?.let { mapOf("pending" to it) } ?: emptyMap())
         // Preserve exact original bytes/fields; cleanup is not qualified financial disposition.
-        return candidate+retained
+        return DownloadRecoveryRetention.keep(previous,PushOperationRetention.keep(previous,candidate+retained))
     }
     fun registeredDeletion(previous: WireObject,origin: String): GuestDeletionRecord? {
         val current=previous["registered_deletion"]?.let { GuestDeletionRecord.restore(it,origin,null,null) }

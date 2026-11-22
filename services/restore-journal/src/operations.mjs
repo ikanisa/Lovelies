@@ -8,6 +8,7 @@ import {
   exact, plain, fail, uuidPattern, hashPattern, validateEvent, readJson,
   loadHead, headView, checkedReceipt, appendEventTransaction, response, errorResponse,
 } from './journal.mjs';
+import { validateDownloadReservation, downloadDispositionHash } from './download-descriptor.mjs';
 
 export const MAX_OPERATION_BYTES = 32_768;
 export const MAX_RESPONSE_BYTES = 131_072;
@@ -41,8 +42,8 @@ export function validateMarker(value) {
     checkpoint: { revision: value.checkpoint.revision, hash: value.checkpoint.hash }, cursor: { ...value.cursor } };
 }
 
-export function validatePrepare(value) {
-  requireEnvelope(value, ['operation_id', 'input_hash', 'expected', 'allocations', 'events'], 'operation_invalid');
+export function validatePrepare(value, typed = false) {
+  requireEnvelope(value, ['operation_id', 'input_hash', 'expected', 'allocations', 'events', ...(typed ? ['download'] : [])], 'operation_invalid');
   if (!uuid(value.operation_id) || !digest(value.input_hash) || !plain(value.allocations) || Object.keys(value.allocations).length > MAX_ALLOCATIONS ||
       Object.entries(value.allocations).some(([key, id]) => !/^id_(?:[0-9]|[12][0-9]|3[01])$/.test(key) || !uuid(id)) ||
       new Set(Object.values(value.allocations)).size !== Object.values(value.allocations).length ||
@@ -50,7 +51,7 @@ export function validatePrepare(value) {
   const expected = validateMarker(value.expected), events = value.events.map(validateEvent);
   if (new Set(events.map(event => event.operation_id)).size !== events.length) fail(400, 'operation_invalid');
   const result = { version: 1, project_id: PROJECT_ID, operation_id: value.operation_id, input_hash: value.input_hash,
-    expected, allocations: { ...value.allocations }, events };
+    expected, allocations: { ...value.allocations }, events, ...(typed ? {download:value.download} : {}) };
   if (encoder.encode(canonical(result)).byteLength > MAX_OPERATION_BYTES) fail(413, 'operation_too_large');
   return result;
 }
@@ -59,7 +60,7 @@ export function validatePrepare(value) {
 export function checkpointHash(input, cursor) {
   return sha256(canonical({ protocol: PROTOCOL, kind: 'database-checkpoint-v1', project_id: PROJECT_ID,
     operation_id: input.operation_id, input_hash: input.input_hash, expected: input.expected,
-    allocations: input.allocations, events: input.events, cursor }));
+    allocations: input.allocations, events: input.events, ...(input.download ? {download:input.download} : {}), cursor }));
 }
 
 export function operationRoute(request) {
@@ -70,6 +71,7 @@ export function operationRoute(request) {
     '/v1/control/bootstrap': ['POST', 'bootstrap'],
     '/v1/admission': ['POST', 'admission'],
     '/v1/operations/prepare': ['POST', 'prepare'],
+    '/v1/download-operations/prepare': ['POST', 'download-prepare'],
     '/v1/recovery/begin': ['POST', 'recovery'],
   };
   let target;
@@ -78,11 +80,12 @@ export function operationRoute(request) {
     if (request.method !== method) fail(405, 'method_unavailable');
     target = { kind };
   } else {
-    const match = /^\/v1\/operations\/([^/]+)(\/acknowledge)?$/.exec(url.pathname);
+    const typed = /^\/v1\/download-operations\/([^/]+)\/settle$/.exec(url.pathname);
+    const match = typed ?? /^\/v1\/operations\/([^/]+)(\/acknowledge)?$/.exec(url.pathname);
     if (!match) return null;
     if (!uuid(match[1])) fail(404, 'route_unavailable');
-    if (request.method !== (match[2] ? 'POST' : 'GET')) fail(405, 'method_unavailable');
-    target = { kind: match[2] ? 'acknowledge' : 'lookup', operation_id: match[1] };
+    if (request.method !== (typed || match[2] ? 'POST' : 'GET')) fail(405, 'method_unavailable');
+    target = { kind: typed ? 'download-settle' : match[2] ? 'acknowledge' : 'lookup', operation_id: match[1] };
   }
   if (url.search) fail(400, 'query_invalid');
   return target;
@@ -124,12 +127,13 @@ export async function checkedPlan(txn, id) {
   const value = await txn.get(planKey(id));
   if (value === undefined) return undefined;
   if (!exact(value, ['plan', 'plan_hash']) || !digest(value.plan_hash) ||
-      !exact(value.plan, ['version', 'project_id', 'operation_id', 'input_hash', 'expected', 'allocations', 'events', 'next', 'prepared_at', 'receipts'])) fail(503, 'journal_integrity_failed');
+      !exact(value.plan, ['version', 'project_id', 'operation_id', 'input_hash', 'expected', 'allocations', 'events', 'next', 'prepared_at', 'receipts', ...(value.plan?.download ? ['download'] : [])])) fail(503, 'journal_integrity_failed');
   const plan = value.plan;
   let input, next;
   try {
     input = validatePrepare({ version: plan.version, project_id: plan.project_id, operation_id: plan.operation_id,
-      input_hash: plan.input_hash, expected: plan.expected, allocations: plan.allocations, events: plan.events });
+      input_hash: plan.input_hash, expected: plan.expected, allocations: plan.allocations, events: plan.events, ...(plan.download ? {download:plan.download} : {}) }, !!plan.download);
+    if (plan.download) input.download=await validateDownloadReservation(plan.download,input);
     next = validateMarker(plan.next);
   } catch { fail(503, 'journal_integrity_failed'); }
   if (plan.operation_id !== id || !positive(plan.prepared_at) || !Array.isArray(plan.receipts) || plan.receipts.length !== plan.events.length ||
@@ -154,16 +158,17 @@ export async function checkedPlan(txn, id) {
 
 async function checkedCommit(txn, revision, binding) {
   const value = await txn.get(commitKey(revision));
-  if (!exact(value, ['version', 'project_id', 'marker', 'operation_id', 'plan_hash', 'committed_at']) || value.version !== 1 ||
+  if (!exact(value, ['version', 'project_id', 'marker', 'operation_id', 'plan_hash', 'committed_at', ...(value?.disposition !== undefined ? ['disposition','receipt_hash'] : [])]) || value.version !== 1 ||
       value.project_id !== PROJECT_ID || !positive(value.committed_at)) fail(503, 'journal_integrity_failed');
   try { validateMarker(value.marker); } catch { fail(503, 'journal_integrity_failed'); }
   if (value.marker.checkpoint.revision !== revision) fail(503, 'journal_integrity_failed');
   if (revision === 0) {
-    if (value.operation_id !== null || value.plan_hash !== null || !equal(value.marker, binding.initial_marker) || value.committed_at !== binding.created_at) fail(503, 'journal_integrity_failed');
+    if (value.disposition!==undefined || value.operation_id !== null || value.plan_hash !== null || !equal(value.marker, binding.initial_marker) || value.committed_at !== binding.created_at) fail(503, 'journal_integrity_failed');
   } else {
     if (!uuid(value.operation_id) || !digest(value.plan_hash)) fail(503, 'journal_integrity_failed');
     const operation = await checkedPlan(txn, value.operation_id);
-    if (!operation || operation.plan_hash !== value.plan_hash || !equal(operation.plan.next, value.marker) || value.committed_at < operation.plan.prepared_at) fail(503, 'journal_integrity_failed');
+    if (!operation || operation.plan_hash !== value.plan_hash || !equal(operation.plan.next, value.marker) || value.committed_at < operation.plan.prepared_at ||
+        (operation.plan.download ? value.receipt_hash!==downloadDispositionHash(operation.plan,value.disposition) : value.disposition!==undefined)) fail(503, 'journal_integrity_failed');
   }
   return value;
 }
@@ -241,11 +246,11 @@ async function operationView(txn, operation, control) {
     if (control.pending_operation_id !== operation.plan.operation_id || control.marker.checkpoint.revision >= operation.plan.next.checkpoint.revision) fail(503, 'journal_integrity_failed');
     return { ...operation, status: 'pending', committed_at: null };
   }
-  if (!exact(commit, ['version', 'project_id', 'marker', 'operation_id', 'plan_hash', 'committed_at']) ||
+  if (!exact(commit, ['version', 'project_id', 'marker', 'operation_id', 'plan_hash', 'committed_at', ...(operation.plan.download ? ['disposition','receipt_hash'] : [])]) ||
       commit.version !== 1 || commit.project_id !== PROJECT_ID || commit.operation_id !== operation.plan.operation_id ||
       commit.plan_hash !== operation.plan_hash || !equal(commit.marker, operation.plan.next) || !positive(commit.committed_at) ||
-      commit.committed_at < operation.plan.prepared_at) fail(503, 'journal_integrity_failed');
-  return { ...operation, status: 'committed', committed_at: commit.committed_at };
+      commit.committed_at < operation.plan.prepared_at || operation.plan.download && commit.receipt_hash!==downloadDispositionHash(operation.plan,commit.disposition)) fail(503, 'journal_integrity_failed');
+  return { ...operation, status: 'committed', committed_at: commit.committed_at, ...(operation.plan.download ? {disposition:commit.disposition,receipt_hash:commit.receipt_hash} : {}) };
 }
 
 export async function bootstrapControl(storage, value, now = Date.now) {
@@ -297,13 +302,14 @@ export async function admitDatabase(storage, value, now = Date.now) {
   }));
 }
 
-export async function prepareOperation(storage, raw, now = Date.now) {
-  const input = validatePrepare(raw);
+export async function prepareOperation(storage, raw, now = Date.now, typed = false) {
+  const input = validatePrepare(raw,typed);
+  if (typed) input.download=await validateDownloadReservation(input.download,input);
   return finish(await storage.transaction(async txn => {
     const head = await loadHead(txn), control = await requireControl(txn), existing = await checkedPlan(txn, input.operation_id);
     if (existing) {
       const { version, project_id, operation_id, input_hash, expected, allocations, events } = existing.plan;
-      if (!equal(input, { version, project_id, operation_id, input_hash, expected, allocations, events })) fail(409, 'operation_conflict');
+      if (!equal(input, { version, project_id, operation_id, input_hash, expected, allocations, events, ...(existing.plan.download ? {download:existing.plan.download} : {}) })) fail(409, 'operation_conflict');
       return { ...envelope(control), operation: await operationView(txn, existing, control) };
     }
     if (control.state === 'quarantined') return { denied: 'serving_quarantined', status: 409 };
@@ -339,25 +345,30 @@ export async function lookupOperation(storage, id) {
   });
 }
 
-export async function acknowledgeOperation(storage, id, value, now = Date.now) {
-  requireEnvelope(value, ['plan_hash', 'marker'], 'acknowledgement_invalid');
+export async function acknowledgeOperation(storage, id, value, now = Date.now, typed = false) {
+  requireEnvelope(value, ['plan_hash', 'marker', ...(typed ? ['disposition','receipt_hash'] : [])], 'acknowledgement_invalid');
   if (!uuid(id) || !digest(value.plan_hash)) fail(400, 'acknowledgement_invalid');
   const marker = validateMarker(value.marker);
   return finish(await storage.transaction(async txn => {
     const head = await loadHead(txn), control = await requireControl(txn), operation = await checkedPlan(txn, id);
     if (!operation) fail(404, 'operation_not_found');
+    if (!!operation.plan.download !== typed) fail(409,'typed_acknowledgement_required');
+    if (typed && value.receipt_hash!==downloadDispositionHash(operation.plan,value.disposition)) return quarantine(txn,control,'acknowledgement_mismatch',marker,now);
     if (value.plan_hash !== operation.plan_hash || !equal(marker, operation.plan.next)) return quarantine(txn, control, 'acknowledgement_mismatch', marker, now);
     const view = await operationView(txn, operation, control);
     // A historical acknowledgement is an idempotent receipt lookup. It never
     // changes a newer checkpoint or clears any independent quarantine.
-    if (view.status === 'committed') return { ...envelope(control), operation: view };
+    if (view.status === 'committed') {
+      if (typed && (view.disposition!==value.disposition || view.receipt_hash!==value.receipt_hash)) return quarantine(txn,control,'acknowledgement_mismatch',marker,now);
+      return { ...envelope(control), operation: view };
+    }
     if (control.state === 'quarantined') return { denied: 'serving_quarantined', status: 409 };
     if (control.state !== 'pending' || control.pending_operation_id !== id || !equal(control.marker, operation.plan.expected) ||
         !equal(marker.cursor, headView(head))) return quarantine(txn, control, 'acknowledgement_mismatch', marker, now);
     const committed_at = clock(now, operation.plan.prepared_at), serving = { ...control, state: 'serving', marker, pending_operation_id: null };
     await txn.put({ [commitKey(marker.checkpoint.revision)]: { version: 1, project_id: PROJECT_ID, marker,
-      operation_id: id, plan_hash: operation.plan_hash, committed_at }, [CONTROL_KEY]: serving });
-    return { ...envelope(serving), operation: { ...operation, status: 'committed', committed_at } };
+      operation_id: id, plan_hash: operation.plan_hash, committed_at, ...(typed ? {disposition:value.disposition,receipt_hash:value.receipt_hash} : {}) }, [CONTROL_KEY]: serving });
+    return { ...envelope(serving), operation: { ...operation, status: 'committed', committed_at, ...(typed ? {disposition:value.disposition,receipt_hash:value.receipt_hash} : {}) } };
   }));
 }
 
@@ -390,6 +401,8 @@ export async function handleOperationRequest(request, env, storage, { now = Date
     await authenticate(request, env);
     const target = operationRoute(request);
     if (!target) fail(404, 'route_unavailable');
+    if (['admission','prepare','download-prepare','acknowledge','download-settle'].includes(target.kind) &&
+        request.headers.get('X-Lovelies-Writer-Protocol')!=='lovelies-api-v15') fail(409,'writer_protocol_unsupported');
     let result;
     if (target.kind === 'control') result = await readControl(storage);
     else if (target.kind === 'lookup') result = await lookupOperation(storage, target.operation_id);
@@ -397,8 +410,8 @@ export async function handleOperationRequest(request, env, storage, { now = Date
       const input = await readJson(request, MAX_OPERATION_BYTES, 'operation');
       if (target.kind === 'bootstrap') result = await bootstrapControl(storage, input, now);
       else if (target.kind === 'admission') result = await admitDatabase(storage, input, now);
-      else if (target.kind === 'prepare') result = await prepareOperation(storage, input, now);
-      else if (target.kind === 'acknowledge') result = await acknowledgeOperation(storage, target.operation_id, input, now);
+      else if (target.kind === 'prepare' || target.kind==='download-prepare') result = await prepareOperation(storage, input, now,target.kind==='download-prepare');
+      else if (target.kind === 'acknowledge' || target.kind==='download-settle') result = await acknowledgeOperation(storage, target.operation_id, input, now,target.kind==='download-settle');
       else result = await beginRecovery(storage, input, now);
     }
     if (encoder.encode(JSON.stringify(result)).byteLength > MAX_RESPONSE_BYTES) fail(503, 'journal_integrity_failed');

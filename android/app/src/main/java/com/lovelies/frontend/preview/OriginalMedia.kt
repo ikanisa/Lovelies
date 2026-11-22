@@ -110,13 +110,19 @@ internal object PrivateTemporaryMedia {
         }
         cameraNames(references,authority)
     } catch(_: Exception) { null }
-    fun write(cache: File,kind: Kind,name: String,bytes: ByteArray,createdAt: Long=System.currentTimeMillis()): File {
+    fun write(cache: File,kind: Kind,name: String,bytes: ByteArray,createdAt: Long=System.currentTimeMillis(),current: ()->Unit={}): File {
         if(!owns(kind,name) || createdAt<=0)throw LiveFailure("save_failed")
+        current()
         val folder=directory(cache,kind,true) ?: throw LiveFailure("save_failed")
         val target=folder.resolve(name)
         var created=false
         try {
-            Files.newOutputStream(target,StandardOpenOption.CREATE_NEW,StandardOpenOption.WRITE,LinkOption.NOFOLLOW_LINKS).use { created=true;it.write(bytes);it.flush() }
+            Files.newOutputStream(target,StandardOpenOption.CREATE_NEW,StandardOpenOption.WRITE,LinkOption.NOFOLLOW_LINKS).use { stream ->
+                created=true
+                // Stream acquisition may block after the earlier admission.
+                // The guard runs before the first byte reaches the new file.
+                current();stream.write(bytes);stream.flush()
+            }
             // These files are written once. The persisted stamp records creation,
             // rather than extending their life whenever they are read/shared.
             if(directory(cache,kind)!=folder)throw LiveFailure("save_failed")
@@ -175,7 +181,8 @@ internal object OriginalMedia {
         current()
         val uri=context.contentResolver.insert(MediaStore.Images.Media.EXTERNAL_CONTENT_URI,values) ?: throw LiveFailure("save_failed")
         try {
-            context.contentResolver.openOutputStream(uri,"w")?.use { stream->stream.write(bytes);stream.flush() } ?: throw LiveFailure("save_failed")
+            current()
+            context.contentResolver.openOutputStream(uri,"w")?.use { stream->current();stream.write(bytes);stream.flush() } ?: throw LiveFailure("save_failed")
             current()
             if(Build.VERSION.SDK_INT>=29 && context.contentResolver.update(uri,ContentValues().apply { put(MediaStore.Images.Media.IS_PENDING,0) },null,null)!=1)throw LiveFailure("save_failed")
             current();return uri
@@ -185,7 +192,7 @@ internal object OriginalMedia {
         prune(context)
         val format=format(bytes)
         val target=PrivateTemporaryMedia.write(context.cacheDir,PrivateTemporaryMedia.Kind.SHARED,
-            "lovelies-${NativeProtocol.id(id)}-${java.util.UUID.randomUUID()}.${format.extension}",bytes)
+            "lovelies-${NativeProtocol.id(id)}-${java.util.UUID.randomUUID()}.${format.extension}",bytes,current=current)
         try {
             current()
             val uri=FileProvider.getUriForFile(context,"${context.packageName}.camera-files",target)

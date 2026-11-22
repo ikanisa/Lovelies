@@ -255,9 +255,9 @@ for (const mode of ['commit', 'ack-before', 'ack-after']) test(mode + ' reply lo
     return prepare(input);
   };
   await f.uncertain(body); assert.equal(armed, false);
-  // An actual COMMIT result loss is reconciled by the HTTP invocation's final
-  // fresh admission. A failed acknowledgement instead poisons that invocation.
-  const saved = await assertPlan(f, body, mode === 'ack-before' ? 'pending' : 'committed');
+  // Unknown COMMIT and failed acknowledgement poison this invocation. The
+  // fresh reserve call below may reconcile its exact marker and original IDs.
+  const saved = await assertPlan(f, body, mode === 'ack-after' ? 'committed' : 'pending');
   if (mode === 'commit') {
     assert.deepEqual(boundary, { journal: 'pending', asset: expected.id_0, version: expected.id_1, transfer: expected.id_0, receipt: expected.id_0 });
     assert.equal(f.faults.commitReply, false);

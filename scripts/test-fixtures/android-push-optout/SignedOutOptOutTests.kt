@@ -107,5 +107,38 @@ fun main() {
         check(error==null && FakeFirebase.autoInit && repo.mutations.isEmpty())
         check(FakeFirebase.setAttempts==1 && !PushConfiguration.optedIn(c))
     }
+    run("permission loss during the SDK token suspension prevents registration") {
+        val (c,repo)=setup(true);FakeFirebase.onComplete={FakeSystem.permission=-1}
+        val error=runBlocking { runCatching { PushRegistration(c,repo).sync() }.exceptionOrNull() }
+        check((error as? LiveFailure)?.code=="push_permission_changed" && repo.mutations.isEmpty() && !FakeFirebase.autoInit)
+    }
+    run("opt-out during the SDK token suspension prevents registration") {
+        val (c,repo)=setup(true);FakeFirebase.onComplete={PushConfiguration.setOptedIn(c,false)}
+        val error=runBlocking { runCatching { PushRegistration(c,repo).sync() }.exceptionOrNull() }
+        check((error as? LiveFailure)?.code=="push_permission_changed" && repo.mutations.isEmpty() && !FakeFirebase.autoInit)
+    }
+    run("account scope change during SDK token acquisition prevents registration") {
+        val (c,repo)=setup(true);FakeFirebase.onComplete={repo.epoch++}
+        val error=runBlocking { runCatching { PushRegistration(c,repo).sync() }.exceptionOrNull() }
+        check((error as? LiveFailure)?.code=="session_changed" && repo.mutations.isEmpty())
+    }
+    run("foreground sync reads and acknowledges a retained rotation marker") {
+        val (c,repo)=setup(true);PushConfiguration.markRotation(c)
+        check(PushConfiguration.rotationPending(c))
+        runBlocking { PushRegistration(c,repo).sync() }
+        check(!PushConfiguration.rotationPending(c) && repo.mutations.single().first=="notification.push.register")
+    }
+    run("a newer SDK callback during sync keeps its generation pending") {
+        val (c,repo)=setup(true);PushConfiguration.markRotation(c)
+        FakeFirebase.onComplete={PushConfiguration.markRotation(c)}
+        val sync=PushRegistration(c,repo);runBlocking { sync.sync() }
+        check(PushConfiguration.rotationPending(c));FakeFirebase.onComplete=null
+        runBlocking { sync.sync() };check(!PushConfiguration.rotationPending(c) && repo.mutations.size==1)
+    }
+    run("unknown registration blocks SDK rotation without reusing generic mutations") {
+        val (c,repo)=setup(true);repo.recoveryFailure=LiveFailure("push_operation_requires_status",503,true)
+        val error=runBlocking { runCatching { PushRegistration(c,repo).sync() }.exceptionOrNull() }
+        check((error as? LiveFailure)?.code=="push_operation_requires_status" && repo.mutations.isEmpty() && FakeFirebase.setAttempts==0)
+    }
     println("RESULT total=$total passed=${total-failed} failed=$failed");if(failed>0)kotlin.system.exitProcess(1)
 }

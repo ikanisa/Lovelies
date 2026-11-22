@@ -1,4 +1,5 @@
 import { accountRoles } from './auth.ts';
+import { retireDownloadEvidence } from './download-v2-persistence.ts';
 import { ApiError, digest, jsonBody, ok, record, stable, uuid, type Actor, type AppContext, type Database } from './types.ts';
 import { assertOperationReceiptAvailable, assertRegisteredActor, executeOperation, prepareOperation, retiredOperationInput, retiredOperationResponse, type PreparedOperation } from './operations.ts';
 import { parseMediaAuthority, protectedRendition, type Asset, type MediaAuthority } from './gallery.ts';
@@ -615,6 +616,7 @@ export async function handleEntitlements(request: Request, ctx: AppContext): Pro
     const url = new URL(request.url), path = url.pathname, store = /^\/subscriptions\/(apple|google)\/(transactions|notifications)$/.exec(path), download = /^\/downloads\/([0-9a-f-]{36})$/i.exec(path);
     if (!store && !download && !['/downloads/sign', '/me/entitlements', '/me/store-operations'].includes(path))
         return null;
+    if (download || path==='/downloads/sign') throw new ApiError(410,'download_protocol_retired');
     if (store && request.method !== 'POST' || download && request.method !== 'GET')
         throw new ApiError(405, 'method_not_allowed');
     if (store?.[2] === 'notifications')
@@ -682,12 +684,14 @@ export async function handleEntitlements(request: Request, ctx: AppContext): Pro
     })));
 }
 export async function entitlementPrivacyRows(ctx: AppContext, subject: string): Promise<Record<string, unknown>> {
-    const rows = { subscriptions: (await ctx.db.all('SELECT provider,product_id,billing_environment,active,starts_at,expires_at,observed_at FROM store_subscriptions WHERE account_id=? ORDER BY starts_at,id LIMIT 25001', subject)), store_transactions: (await ctx.db.all('SELECT provider,transaction_id,billing_environment,product_id,starts_at,expires_at,active,financial_eligible FROM store_transactions WHERE account_id=? ORDER BY starts_at,id LIMIT 25001', subject)), downloads: (await ctx.db.all('SELECT asset_id,created_at,financial_eligible FROM download_records WHERE account_id=? ORDER BY created_at,id LIMIT 25001', subject)) };
+    const rows = { subscriptions: (await ctx.db.all('SELECT provider,product_id,billing_environment,active,starts_at,expires_at,observed_at FROM store_subscriptions WHERE account_id=? ORDER BY starts_at,id LIMIT 25001', subject)), download_issuance: (await ctx.db.all('SELECT operation_key,asset_id,disposition,retired_at FROM download_v2_operations WHERE account_id=? ORDER BY operation_key LIMIT 25001',subject)), store_transactions: (await ctx.db.all('SELECT provider,transaction_id,billing_environment,product_id,starts_at,expires_at,active,financial_eligible FROM store_transactions WHERE account_id=? ORDER BY starts_at,id LIMIT 25001', subject)), downloads: (await ctx.db.all('SELECT asset_id,created_at,financial_eligible FROM download_records WHERE account_id=? ORDER BY created_at,id LIMIT 25001', subject)) };
     if (Object.values(rows).some(items => items.length > 25000))
         throw new ApiError(413, 'privacy_export_too_large');
     return rows;
 }
-export async function eraseEntitlementSubject(db: Database, subject: string): Promise<void> {
+export async function eraseEntitlementSubject(db: Database, subject: string, ctx?: AppContext): Promise<void> {
+    if(ctx)await retireDownloadEvidence(ctx,subject);
+    else if(await db.one('SELECT operation_id FROM download_v2_operations WHERE account_id=? OR asset_id IN(SELECT id FROM assets WHERE owner_id=?) LIMIT 1',subject,subject))throw new ApiError(503,'download_operation_outcome_unresolved');
     (await db.run('DELETE FROM download_tickets WHERE account_id=? OR asset_id IN(SELECT id FROM assets WHERE owner_id=?)', subject, subject));
     (await db.run('DELETE FROM download_records WHERE asset_id IN(SELECT id FROM assets WHERE owner_id=?)', subject));
     (await db.run('UPDATE store_subscriptions SET active=0,version=version+1 WHERE account_id=?', subject));

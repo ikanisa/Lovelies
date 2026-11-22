@@ -5,9 +5,10 @@ import { retentionSchemaStatements } from './retention.ts';
 import { uploadSchemaStatements } from './upload-schema.ts';
 import { refreshDeliverySchemaStatements } from './refresh-delivery.ts';
 import { audienceSchemaStatements } from './audience.ts';
-export const currentSchemaVersion = 13;
+import { downloadV2SchemaStatements } from './download-v2-schema.ts';
+export const currentSchemaVersion = 15;
 export const extensionSchemaStatements: readonly string[] = [
-    ...entitlementsSchemaStatements, ...operatorsSchemaStatements, ...notificationsSchemaStatements, ...retentionSchemaStatements, ...refreshDeliverySchemaStatements, ...audienceSchemaStatements,
+    ...entitlementsSchemaStatements, ...operatorsSchemaStatements, ...notificationsSchemaStatements, ...retentionSchemaStatements, ...refreshDeliverySchemaStatements, ...audienceSchemaStatements, ...downloadV2SchemaStatements,
 ];
 /** Logical engine schema used by the migration generator. Never execute these
  * source definitions at runtime: generate-schema emits reviewed PostgreSQL DDL. */
@@ -18,7 +19,8 @@ export const schemaStatements: readonly string[] = [
       database_id TEXT NOT NULL,incarnation_id TEXT NOT NULL,
       checkpoint_revision INTEGER NOT NULL CHECK(checkpoint_revision BETWEEN 0 AND 9007199254740991),checkpoint_hash TEXT NOT NULL,
       journal_sequence INTEGER NOT NULL CHECK(journal_sequence BETWEEN 0 AND 9007199254740991),journal_hash TEXT NOT NULL,
-      last_operation_id TEXT,last_plan_hash TEXT,
+      last_operation_id TEXT,last_plan_hash TEXT,last_disposition TEXT CHECK(last_disposition IN('issued','not_issued')),last_receipt_hash TEXT,
+      CHECK((last_disposition IS NULL)=(last_receipt_hash IS NULL)),
       CHECK((checkpoint_revision=0 AND last_operation_id IS NULL AND last_plan_hash IS NULL)
         OR(checkpoint_revision>0 AND last_operation_id IS NOT NULL AND last_plan_hash IS NOT NULL)))`,
     `CREATE TABLE IF NOT EXISTS retention_scan_cursors(scan TEXT NOT NULL CHECK(scan IN('support','guardian','adult','privacy')),entity_id TEXT NOT NULL DEFAULT '',last_at INTEGER,last_id TEXT,PRIMARY KEY(scan,entity_id),CHECK((last_at IS NULL)=(last_id IS NULL)))`,

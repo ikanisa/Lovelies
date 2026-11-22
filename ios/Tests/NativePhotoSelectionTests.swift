@@ -36,16 +36,20 @@ private actor SelectionTransport: NativeTransport {
             return try json(.object(["protocol": .string(NativeAudienceProjection.protocolName), "policy_version": .string(NativeAudienceProjection.policy), "account_id": .string(Self.account),
                 "audience": .object(["age_band": .string("18_plus"), "status": .string("eligible"), "version": .integer(1), "policy_version": .string(NativeAudienceProjection.policy), "next_review_at": .null]),
                 "guardian_request": .null, "capabilities": .object(["face_authentication": .bool(true), "photo_matching": .bool(true), "photo_processing": .bool(true)])]))
-        case "/downloads/sign":
+        case "/downloads/v2/sign", "/downloads/v2/status":
             signs += 1
             let body = try WireValue.decoded(request.httpBody!)
-            guard body["asset_id"].string == NativePhotoSelectionTests.assetA, body["operation_key"].string != nil else { throw NativeAPIError.invalidResponse }
-            var response: [String: WireValue] = ["method": .string("GET"), "download_url": .string("https://fixture.invalid/downloads/" + Self.ticket), "expires_in": .integer(120)]
-            if sourceVersion != .null { response["source_version"] = sourceVersion }
+            guard body["asset_id"].string == NativePhotoSelectionTests.assetA, body["operation_key"].string != nil,
+                  request.value(forHTTPHeaderField: "X-Lovelies-Download-Capability") != nil else { throw NativeAPIError.invalidResponse }
+            var response = body.object!
+            response["protocol"] = .string("lovelies-download-operation-v2"); response["status"] = .string("recorded"); response["account_id"] = .string(Self.account)
+            let now = Int(Date().timeIntervalSince1970 * 1000); response["created_at"] = .integer(now); response["expires_at"] = .integer(now + 110_000)
+            response["source_version"] = sourceVersion == .null ? nil : sourceVersion
             return try json(.object(response))
-        case "/downloads/" + Self.ticket:
+        case "/downloads/v2/content":
             gets += 1
-            return .init(status: 200, headers: ["content-type": "image/png"], data: Data([0x89, 0x50, 0x4e, 0x47, 0x01]))
+            let bytes = Data([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0x01])
+            return .init(status: 200, headers: ["content-type": "image/png", "content-length": String(bytes.count), "x-lovelies-source-version": "source-v1", "x-lovelies-content-sha256": NativeDownloadRecord.hash(bytes)], data: bytes)
         default: throw NativeAPIError.invalidResponse
         }
     }
@@ -61,14 +65,15 @@ private actor SelectionTransport: NativeTransport {
     static func photo(_ id: String, _ version: String) throws -> NativePhoto {
         try NativePhoto(.object(["id": .string(id), "title": .string("Synthetic photo"), "media_source": .string("personal"), "version": .string(version)]))
     }
-    private static func make(_ source: WireValue) async throws -> (BackendRepository, SelectionTransport) {
+    private static func make(_ source: WireValue) async throws -> (BackendRepository, SelectionTransport, URL) {
         let vault = SelectionSecrets(), transport = SelectionTransport(source), now = Date(), lifetime = 900
-        let claims: WireValue = .object(["sub": .string(SelectionTransport.account), "auth_method": .string("registered_face"), "exp": .integer(Int(now.timeIntervalSince1970) + lifetime + 1)])
+        let claims: WireValue = .object(["sub": .string(SelectionTransport.account), "auth_method": .string("registered_face"), "jti": .string(SelectionTransport.ticket), "exp": .integer(Int(now.timeIntervalSince1970) + lifetime + 1)])
         let credential = try NativeCredentials(.object(["access_token": .string("fixture." + (try claims.encoded()).base64URL + ".fixture"), "refresh_token": .string("synthetic-selection-refresh"),
             "account_id": .string(SelectionTransport.account), "auth_method": .string("registered_face"), "expires_in": .integer(lifetime), "roles": .strings(["user"])]), now: now)
         try vault.write("credentials", data: JSONEncoder().encode(credential))
-        let repository = BackendRepository(origin: URL(string: "https://fixture.invalid")!, transport: transport, secrets: vault, signer: SelectionSigner())
-        _ = try await repository.bootstrap(); return (repository, transport)
+        let scratch = FileManager.default.temporaryDirectory.appendingPathComponent("lovelies-photo-selection-" + UUID().uuidString, isDirectory: true)
+        let repository = BackendRepository(origin: URL(string: "https://fixture.invalid")!, transport: transport, secrets: vault, signer: SelectionSigner(), uploadFiles: NativeUploadPrivateFiles(root: scratch))
+        _ = try await repository.bootstrap(); return (repository, transport, scratch)
     }
     static func main() async throws {
         let arguments = Array(CommandLine.arguments.dropFirst())
@@ -96,14 +101,15 @@ private actor SelectionTransport: NativeTransport {
             ("source-v1", WireValue.null, 1, fixed ? 0 : 1, !fixed),
             ("", WireValue.string("source-v1"), fixed ? 0 : 1, fixed ? 0 : 1, !fixed)
         ] {
-            let (repo, transport) = try await make(returned)
+            let (repo, transport, scratch) = try await make(returned)
+            defer { try? FileManager.default.removeItem(at: scratch) }
             var value: Data?, failure: Error?
             do { value = try await repo.authorizedSaveBytes(photo(assetA, selected)) }
             catch { failure = error }
             let (signs, gets) = await transport.counts()
             try require(signs == expectedSigns && gets == expectedGets, "version case sends only expected sign and GET")
             try require((value != nil) == shouldSucceed && (failure != nil) != shouldSucceed, "version case publishes only expected result")
-            if let value { try require(value == Data([0x89, 0x50, 0x4e, 0x47, 0x01]), "matching bytes remain unchanged") }
+            if let value { try require(value == Data([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0x01]), "matching bytes remain unchanged") }
         }
         print("Photo selection checks passed: \(checks); mode=\(fixed ? "fixed" : "baseline").")
     }

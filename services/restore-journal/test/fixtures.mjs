@@ -9,7 +9,7 @@ export function event(kind = 'consent-withdrawn', scope = { account_id: ids.acco
 export function request(path = '/v1/events', body, headers = {}) {
   return new Request('https://journal.invalid' + path, {
     method: body === undefined ? 'GET' : 'POST',
-    headers: { authorization: 'Bearer ' + env.RESTORE_JOURNAL_TOKEN, ...(body === undefined ? {} : { 'content-type': 'application/json' }), ...headers },
+    headers: { authorization: 'Bearer ' + env.RESTORE_JOURNAL_TOKEN, 'X-Lovelies-Writer-Protocol':'lovelies-api-v15', ...(body === undefined ? {} : { 'content-type': 'application/json' }), ...headers },
     ...(body === undefined ? {} : { body: typeof body === 'string' ? body : JSON.stringify(body) }),
   });
 }

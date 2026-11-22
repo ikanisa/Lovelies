@@ -129,7 +129,8 @@ data class LiveCredentials(val account: String,val token: String,val refresh: St
 data class PendingIntent(val account: String,val source: String,val action: String,val key: String,val payload: WireObject,val path: String?=null,val method: String="POST") {
     fun wire(): WireObject = mapOf("account" to account,"source" to source,"action" to action,"key" to key,"payload" to payload,"path" to path,"method" to method)
 }
-class CloudflareTransport(private val endpoint: String,private val fence: SessionFence) {
+class CloudflareTransport(private val endpoint: String,private val fence: SessionFence,
+    private val openConnection: (String)->HttpURLConnection={ URL(it).openConnection() as HttpURLConnection }) {
     private val connections=ConcurrentHashMap.newKeySet<HttpURLConnection>()
     fun cancel() { connections.forEach(HttpURLConnection::disconnect);connections.clear() }
     fun action(action: String,payload: WireObject,scope: SessionScope,token: String?): ByteArray {
@@ -138,11 +139,12 @@ class CloudflareTransport(private val endpoint: String,private val fence: Sessio
         return try { request("/community/action",scope,token,"POST",bytes) } finally { bytes.fill(0) }
     }
     fun request(path: String,scope: SessionScope,token: String?,method: String="GET",body: ByteArray?=null,
-        type: String="application/json",headers: Map<String,String> = emptyMap(),binary: Boolean=false,binaryLimit: Int=4*1024*1024,documentLimit: Int?=null,expectedStatus: Int?=null): ByteArray {
+        type: String="application/json",headers: Map<String,String> = emptyMap(),binary: Boolean=false,binaryLimit: Int=4*1024*1024,documentLimit: Int?=null,expectedStatus: Int?=null,
+        beforeWrite: (()->Unit)?=null,onWriteAttempt: (()->Unit)?=null,responseHeaders: ((Map<String,String>)->Unit)?=null): ByteArray {
         if(!path.startsWith('/') || path.startsWith("//") || path.contains('\\'))throw LiveFailure("invalid_api_path")
         if(endpoint.isBlank())throw LiveFailure("api_endpoint_unconfigured")
         fence.assert(scope)
-        val connection=URL(endpoint+path).openConnection() as HttpURLConnection
+        val connection=openConnection(endpoint+path)
         connections.add(connection)
         try {
             connection.connectTimeout=10000;connection.readTimeout=45000;connection.instanceFollowRedirects=false
@@ -151,7 +153,12 @@ class CloudflareTransport(private val endpoint: String,private val fence: Sessio
             headers.forEach { (key,value) -> connection.setRequestProperty(key,value) }
             if(body!=null) {
                 connection.doOutput=true;connection.setRequestProperty("Content-Type",type);connection.setFixedLengthStreamingMode(body.size)
-                fence.assert(scope);connection.outputStream.use { stream -> stream.write(body) }
+                fence.assert(scope);connection.outputStream.use { stream ->
+                    // Acquiring a stream can suspend on connection setup. Check
+                    // product permission again at the actual body-write port.
+                    fence.assert(scope);beforeWrite?.invoke();fence.assert(scope)
+                    onWriteAttempt?.invoke();stream.write(body)
+                }
             }
             val status=connection.responseCode;fence.assert(scope)
             if(expectedStatus!=null && status in 200..299 && status!=expectedStatus)throw LiveFailure("response_invalid",status)
@@ -171,6 +178,9 @@ class CloudflareTransport(private val endpoint: String,private val fence: Sessio
             }
             if(binary && !Regex("image/(jpeg|png|webp|gif)(;.*)?").matches(connection.contentType.orEmpty())) { bytes.fill(0);throw LiveFailure("preview_invalid") }
             if(!binary && !connection.contentType.orEmpty().startsWith("application/json")) { bytes.fill(0);throw LiveFailure("response_invalid") }
+            try { responseHeaders?.invoke(listOf("content-type","content-length","x-lovelies-source-version","x-lovelies-content-sha256").mapNotNull { key ->
+                connection.getHeaderField(key)?.let { key to it }
+            }.toMap()) } catch(problem: Exception) { bytes.fill(0);throw problem }
             return bytes
         } catch(error: LiveFailure) { throw error }
         catch(error: Exception) { fence.assert(scope);throw LiveFailure("connection_unavailable",ambiguous=method!="GET") }
@@ -188,6 +198,7 @@ class CloudflareRepository private constructor(private val suppliedContext: Cont
     private val vault: RepositoryVault=boundary?.vault ?: AndroidRepositoryVault(context,baseUrl)
     private val mutex=Mutex()
     private val photoUploadMutex=Mutex()
+    private val downloadMutex=Mutex()
     private val storage = ConcurrentHashMap<String,Any?>()
     @Volatile var credentials: LiveCredentials?=null;private set
     var identity: DeviceIdentity?=null;private set
@@ -243,12 +254,13 @@ class CloudflareRepository private constructor(private val suppliedContext: Cont
         synchronized(fence) { vault.save(candidate);storage.clear();storage.putAll(candidate) }
     }
     private fun clearPrivateScope() {
+        retireOriginalStaging(all=true)
         transport.cancel();challenge=null;captures.clear()
         listOfNotNull(signingAlias,pendingDevice?.alias).filter { it!=identity?.alias && it!=enrollment?.alias && it!=accountRecovery?.alias && it!=faceLifecycle?.alias }.distinct().forEach(vault::deleteDevice)
         signingAlias=null;pendingDevice=null
     }
     fun invalidateReads(expected: SessionScope?=null): SessionScope = synchronized(fence) {
-        expected?.let(fence::assert);transport.cancel();fence.switch(credentials?.account)
+        expected?.let(fence::assert);retireOriginalStaging(all=true);transport.cancel();fence.switch(credentials?.account)
     }
     fun cancelFace(expected: SessionScope?=null): SessionScope = synchronized(fence) {
         val scope=invalidateReads(expected);clearPrivateScope()
@@ -376,10 +388,19 @@ class CloudflareRepository private constructor(private val suppliedContext: Cont
         clearPrivateScope();credentials=next;val scope=fence.switch(next.account)
         storage.clear();storage.putAll(candidate);scope
     }
-    private fun json(path: String,scope: SessionScope=currentScope(),token: String?=credentials?.token,method: String="GET",body: WireObject?=null,expectedStatus: Int?=null): WireObject {
-        boundary?.let { injected -> fence.assert(scope);return injected.json(path,scope,token,method,body,expectedStatus).also { fence.assert(scope) } }
+    private fun json(path: String,scope: SessionScope=currentScope(),token: String?=credentials?.token,method: String="GET",body: WireObject?=null,expectedStatus: Int?=null,
+        beforeWrite: (()->Unit)?=null,onWriteAttempt: (()->Unit)?=null,headers: Map<String,String> = emptyMap()): WireObject {
+        boundary?.takeUnless { it.useNetwork }?.let { injected ->
+            fence.assert(scope)
+            if(body!=null) {
+                if(beforeWrite!=null)injected.beforeJsonWrite?.invoke()
+                beforeWrite?.invoke();fence.assert(scope);onWriteAttempt?.invoke()
+            }
+            return (if(headers.isEmpty())injected.json(path,scope,token,method,body,expectedStatus)
+                else (injected.headerJson ?: throw LiveFailure("download_header_boundary_unavailable"))(path,scope,token,method,body,expectedStatus,headers)).also { fence.assert(scope) }
+        }
         val bytes=body?.let { NativeProtocol.canonical(it).toByteArray(Charsets.UTF_8) }
-        val response=try { transport.request(path,scope,token,method,bytes,expectedStatus=expectedStatus) } finally { bytes?.fill(0) }
+        val response=try { transport.request(path,scope,token,method,bytes,headers=headers,expectedStatus=expectedStatus,beforeWrite=beforeWrite,onWriteAttempt=onWriteAttempt) } finally { bytes?.fill(0) }
         try { fence.assert(scope);return jsonMap(JSONObject(response.toString(Charsets.UTF_8))) }
         catch(error: LiveFailure) { throw error } catch(error: Exception) { throw LiveFailure("response_invalid") }
         finally { response.fill(0) }
@@ -411,6 +432,7 @@ class CloudflareRepository private constructor(private val suppliedContext: Cont
             cameraLoginOwner(held)
         }
         pending=StoreRecoveryRetention.restorePending(storage["pending"])
+        adoptLegacyDownload()
         (storage["credentials"] as? Map<*, *>)?.let { credentials=parseCredentials(NativeProtocol.obj(it));fence.switch(credentials!!.account) }
         refreshJournal()?.let { if(it.state!="pending")throw LiveFailure("refresh_delivery_storage_unavailable") }
         retiredRefreshes().forEach { if(it.state=="pending")throw LiveFailure("refresh_delivery_storage_unavailable") }
@@ -447,7 +469,8 @@ class CloudflareRepository private constructor(private val suppliedContext: Cont
         if(cameraLoginHeld)return@withLock emptyMap()
         if(credentials!=null) {
             try { ensureFresh();return@withLock json("/me") }
-            catch(error: LiveFailure) { if(error.status !in listOf(401,403) || error.code in AudienceProtocol.gateErrors || hasPendingRefresh())throw error;synchronized(fence) { credentials=null;if(faceLifecycle==null)storage.remove("credentials");if(!StoreRecoveryRetention.isStore(storage["pending"]) && !StoreRecoveryRetention.isStore(pending?.wire())) { storage.remove("pending");pending=null }
+            catch(error: LiveFailure) { if(error.status !in listOf(401,403) || error.code in AudienceProtocol.gateErrors || hasPendingRefresh())throw error;synchronized(fence) { credentials=null;if(faceLifecycle==null)storage.remove("credentials");if(PushOperationRetention.isLegacy(storage["pending"]) || PushOperationRetention.isLegacy(pending?.wire()) || DownloadRecoveryRetention.isLegacy(storage["pending"]) || DownloadRecoveryRetention.isLegacy(pending?.wire())) { /* Retain until an exact typed receipt or acknowledged independent adoption. */ }
+                else if(!StoreRecoveryRetention.isStore(storage["pending"]) && !StoreRecoveryRetention.isStore(pending?.wire())) { storage.remove("pending");pending=null }
                 else pending=StoreRecoveryRetention.heldPending(storage.toMap(),pending);fence.switch(null);save() } }
         }
         if(faceLifecycle!=null || identity!=null)return@withLock emptyMap()
@@ -1824,6 +1847,130 @@ class CloudflareRepository private constructor(private val suppliedContext: Cont
         if(action=="inbox")NativeProtocol.rows(response["items"]).forEach { NativeProtocol.mediaSource(it["source"]) }
         response
     }
+    private fun assertPushOwner(scope: SessionScope,account: String,device: String) {
+        fence.assert(scope)
+        if(credentials?.account!=account || credentials?.method!="registered_face" || identity?.account!=account || identity?.device!=device)
+            throw LiveFailure("push_operation_account_changed",403,true)
+    }
+    private fun savePushOperation(record: PushOperation,scope: SessionScope,legacy: WireObject?=null,adoptPending: Boolean=false) = synchronized(fence) {
+        assertPushOwner(scope,record.account,record.device)
+        val held=PushOperation.retained(storage.toMap(),baseUrl)
+        if(held!=null && held!=record)throw LiveFailure("push_operation_scope_changed",409,true)
+        val candidate=storage.toMap().filterKeys { !adoptPending || it!="pending" }+mapOf("push_operation" to record.wire())+
+            (legacy?.let { mapOf("push_operation_legacy" to it) } ?: emptyMap())
+        try { vault.save(candidate) }
+        catch(problem: Exception) {
+            // A lost AtomicFile acknowledgement must survive the next unrelated
+            // vault save. The generic slot remains occupied until adoption is
+            // durably acknowledged; this marker grants no replay authority.
+            storage["push_operation_uncertainty"]=record.wire()
+            legacy?.let { storage["push_operation_legacy"]=it }
+            if(problem is kotlinx.coroutines.CancellationException)throw problem
+            throw LiveFailure("push_operation_storage_requires_status",503,true)
+        }
+        storage.clear();storage.putAll(candidate);if(adoptPending)pending=null
+    }
+    private fun publishPushReceipt(record: PushOperation,receipt: PushOperationReceipt,scope: SessionScope) = synchronized(fence) {
+        assertPushOwner(scope,record.account,record.device)
+        if(PushOperation.retained(storage.toMap(),baseUrl)!=record)throw LiveFailure("push_operation_scope_changed",409,true)
+        var candidate=storage.toMap().filterKeys { it !in PushOperationRetention.fields }
+        val previous=(storage["push_registration"] as? Map<*,*>)?.let(NativeProtocol::obj)
+        val owned=previous?.get("account")==record.account && previous["device"]==record.device
+        if(record.kind=="register" && receipt.active)candidate=candidate+mapOf("push_registration" to mapOf(
+            "account" to record.account,"device" to record.device,"id" to receipt.id,"hash" to record.tokenHash))
+        else if(!receipt.active && owned && previous?.get("id")==receipt.id)candidate=candidate-"push_registration"
+        try { vault.save(candidate) }
+        catch(problem: Exception) {
+            storage["push_operation_uncertainty"]=record.wire()
+            if(problem is kotlinx.coroutines.CancellationException)throw problem
+            throw LiveFailure("push_operation_storage_requires_status",503,true)
+        }
+        storage.clear();storage.putAll(candidate)
+    }
+    private fun recoverPushOperationLocked(device: String,assertCurrent: ()->Unit): PushOperationReceipt? {
+        assertCurrent();registered();assertCurrent()
+        val actor=credentials ?: throw LiveFailure("authentication_required");val scope=currentScope()
+        assertPushOwner(scope,actor.account,device)
+        val preserved=storage["push_operation_legacy"]?.let(NativeProtocol::obj)
+        val generic=pending?.wire()?.takeIf(PushOperationRetention::isLegacy)
+        if(preserved!=null && generic!=null && preserved!=generic)throw LiveFailure("push_operation_scope_changed",409,true)
+        val legacy=preserved ?: generic
+        val adopted=legacy?.let { PushOperation.legacy(it,baseUrl,device) }
+        val held=PushOperation.retained(storage.toMap(),baseUrl)
+        if(held!=null && adopted!=null && held!=adopted)throw LiveFailure("push_operation_scope_changed",409,true)
+        val record=held ?: adopted ?: return null
+        record.assertOwner(baseUrl,actor.account,device)
+        // Only after this acknowledged independent hold may unrelated product
+        // mutations use the generic slot. The exact old payload is retained.
+        savePushOperation(record,scope,legacy,adoptPending=generic!=null)
+        assertCurrent();assertPushOwner(scope,actor.account,device)
+        val value=json("/me/push-operations",scope,actor.token,"POST",mapOf("operation_key" to record.key))
+        assertCurrent();assertPushOwner(scope,actor.account,device)
+        val receipt=PushOperationProtocol.receipt(value,record) ?: throw LiveFailure("push_operation_requires_status",503,true)
+        publishPushReceipt(record,receipt,scope)
+        if(record.kind=="remove" && receipt.active)throw LiveFailure("push_registration_changed",409,true)
+        return receipt
+    }
+    internal suspend fun recoverPushOperation(device: String,assertCurrent: ()->Unit) = withContext(Dispatchers.IO) { mutex.withLock {
+        recoverPushOperationLocked(NativeProtocol.id(device),assertCurrent);Unit
+    } }
+    private fun discardUndispatchedPush(record: PushOperation,scope: SessionScope) = synchronized(fence) {
+        assertPushOwner(scope,record.account,record.device)
+        if(PushOperation.retained(storage.toMap(),baseUrl)!=record || storage["push_operation_legacy"]!=null)
+            throw LiveFailure("push_operation_requires_status",503,true)
+        val candidate=storage.toMap().filterKeys { it !in PushOperationRetention.fields }
+        try { vault.save(candidate) }
+        catch(problem: Exception) { storage["push_operation_uncertainty"]=record.wire();throw LiveFailure("push_operation_storage_requires_status",503,true) }
+        storage.clear();storage.putAll(candidate)
+    }
+    private fun dispatchPushOperation(record: PushOperation,scope: SessionScope,body: WireObject,path: String,method: String,beforeDispatch: ()->Unit) {
+        try { beforeDispatch();assertPushOwner(scope,record.account,record.device) }
+        catch(problem: Exception) {
+            // This exact newly reserved operation has not entered the transport.
+            // No receipt absence or network error is used as cancellation proof.
+            discardUndispatchedPush(record,scope);throw problem
+        }
+        var writeAttempted=false
+        var deniedAtWrite: Exception?=null
+        try { json(path,scope,credentials!!.token,method,body+mapOf("operation_key" to record.key),
+            beforeWrite={
+                try { beforeDispatch();assertPushOwner(scope,record.account,record.device) }
+                catch(problem: Exception) { deniedAtWrite=problem;throw problem }
+            },onWriteAttempt={writeAttempted=true}) }
+        catch(problem: kotlinx.coroutines.CancellationException) { throw problem }
+        catch(problem: Exception) {
+            // Only the exact final-guard denial proves this reservation never
+            // entered write. Setup timeouts and other transport failures retain
+            // their marker even if no local write callback was observed.
+            if(!writeAttempted && problem===deniedAtWrite) { discardUndispatchedPush(record,scope);throw problem }
+            if(!writeAttempted)throw problem
+            // Even a rejected/lost response is reconciled only through the exact
+            // authenticated receipt. Never resend this marker automatically.
+            assertPushOwner(scope,record.account,record.device)
+        }
+        assertPushOwner(scope,record.account,record.device)
+        val value=json("/me/push-operations",scope,credentials!!.token,"POST",mapOf("operation_key" to record.key))
+        assertPushOwner(scope,record.account,record.device)
+        val receipt=PushOperationProtocol.receipt(value,record) ?: throw LiveFailure("push_operation_requires_status",503,true)
+        publishPushReceipt(record,receipt,scope)
+        if((record.kind=="remove" && receipt.active) || (record.kind=="register" && !receipt.active))throw LiveFailure("push_registration_changed",409,true)
+    }
+    internal suspend fun registerPushToken(token: String,device: String,beforeDispatch: ()->Unit) = withContext(Dispatchers.IO) { mutex.withLock {
+        val initialScope=currentScope();recoverPushOperationLocked(device) { fence.assert(initialScope) }
+        registered();beforeDispatch()
+        val account=credentials!!.account;val scope=currentScope();assertPushOwner(scope,account,device)
+        val record=PushOperation.registration(baseUrl,account,device,token)
+        savePushOperation(record,scope)
+        dispatchPushOperation(record,scope,mapOf("platform" to "android","push_token" to token),"/me/push-devices","POST",beforeDispatch)
+    } }
+    internal suspend fun removePushRegistration(id: String,device: String,beforeDispatch: ()->Unit) = withContext(Dispatchers.IO) { mutex.withLock {
+        val initialScope=currentScope();recoverPushOperationLocked(device) { fence.assert(initialScope) }
+        registered();beforeDispatch()
+        val account=credentials!!.account;val scope=currentScope();assertPushOwner(scope,account,device)
+        val record=PushOperation.removal(baseUrl,account,device,id)
+        savePushOperation(record,scope)
+        dispatchPushOperation(record,scope,emptyMap(),"/me/push-devices/${record.registrationId}","DELETE",beforeDispatch)
+    } }
     private fun googleStoreJournal(): StorePurchaseJournal?=StorePurchasePersistence.retained(
         saved("google_store_operation")?.let { StorePurchaseJournal.restore(it,baseUrl) },
         saved("google_store_write_uncertainty")?.let { StorePurchaseJournal.restore(it,baseUrl) })
@@ -1910,6 +2057,9 @@ class CloudflareRepository private constructor(private val suppliedContext: Cont
         googleStorePurchaseLocked(original.product,original.token,original.key)
     } }
     suspend fun mutate(action: String,payload: WireObject,source: String="personal",path: String?=null,method: String="POST",validate: ((WireObject,String)->Unit)?=null,operationKey: String?=null): WireObject=withContext(Dispatchers.IO) { mutex.withLock {
+        adoptLegacyDownload()
+        if(action.startsWith("download.") || path?.startsWith("/downloads/")==true)throw LiveFailure("download_operation_requires_status",503,true)
+        if(action in setOf("notification.push.register","notification.push.remove"))throw LiveFailure("push_operation_requires_status",503,true)
         val storePending=StoreRecoveryRetention.heldPending(storage.toMap(),pending)
         if(storePending!=null && (storePending.action!="store.google" || action!="store.google"))throw LiveFailure("store_operation_scope_changed",409,true)
         NativeProtocol.operationSource(action,source);NativeProtocol.validateActionPayload(action,payload)
@@ -1941,6 +2091,8 @@ class CloudflareRepository private constructor(private val suppliedContext: Cont
     } }
     suspend fun reconcile(validate: ((WireObject,String)->Unit)?=null): WireObject=withContext(Dispatchers.IO) { mutex.withLock {
         val intent=pending ?: StoreRecoveryRetention.heldPending(storage.toMap(),null) ?: throw LiveFailure("no_pending_operation")
+        if(DownloadRecoveryRetention.isLegacy(intent.wire()))throw LiveFailure("download_operation_requires_status",503,true)
+        if(PushOperationRetention.isLegacy(intent.wire()))throw LiveFailure("push_operation_requires_status",503,true)
         if(StoreRecoveryRetention.isStore(intent.wire()) && intent.action!="store.google")throw LiveFailure("store_operation_scope_changed",409,true)
         NativeProtocol.operationSource(intent.action,intent.source);NativeProtocol.validateActionPayload(intent.action,intent.payload)
         if(intent.action=="store.google") {
@@ -1974,15 +2126,202 @@ class CloudflareRepository private constructor(private val suppliedContext: Cont
         if(NativeProtocol.idList(allowed["authorized_ids"])!=listOf(photo.id))throw LiveFailure("photo_forbidden",403)
         fence.assert(scope);transport.request("/community/media/${photo.id}/preview",scope,actor.token,binary=true)
     }
-    suspend fun original(photo: LivePhoto): ByteArray=withContext(Dispatchers.IO) {
-        NativeProtocol.mediaSource(photo.mediaSource)
-        val owned=currentScope()
-        val ticket=mutate("download.sign",mapOf("asset_id" to photo.id),"media",path="/downloads/sign")
-        fence.assert(owned)
-        if(ticket["method"]!="GET" || ticket["source_version"]!=photo.version || NativeProtocol.integer(ticket["expires_in"],1,120)<1)throw LiveFailure("download_authority_changed")
-        val path=NativeProtocol.downloadPath(NativeProtocol.text(ticket["download_url"],2048),baseUrl)
-        val (scope,actor)=ready();fence.assert(owned)
-        transport.request(path,scope,actor.token,binary=true,binaryLimit=25*1024*1024)
+    private fun downloadSession(actor: LiveCredentials): String {
+        boundary?.decodedClaims?.let { return NativeProtocol.downloadSession(it(actor.token),actor.account) }
+        val parts=actor.token.split('.')
+        val claims=try { if(parts.size!=3)throw LiveFailure("download_authority_changed");jsonMap(JSONObject(Base64.getUrlDecoder().decode(parts[1]).toString(Charsets.UTF_8))) }
+            catch(_: Exception) { throw LiveFailure("download_authority_changed",409,true) }
+        return NativeProtocol.downloadSession(claims,actor.account)
+    }
+    private fun downloadOperation(): DownloadOperation?=synchronized(fence) {
+        val current=storage["download_operation"]?.let { DownloadOperation.restore(it,baseUrl) }
+        val uncertain=storage["download_uncertainty"]?.let { DownloadOperation.restore(it,baseUrl) }
+        if(current!=null && uncertain!=null && (!current.sameIntent(uncertain) || current.createdAt!=null && uncertain.createdAt!=null &&
+            (current.createdAt!=uncertain.createdAt || current.expiresAt!=uncertain.expiresAt)))DownloadProtocol.invalid()
+        uncertain ?: current
+    }
+    private fun saveDownload(record: DownloadOperation,scope: SessionScope)=synchronized(fence) {
+        fence.assert(scope)
+        val candidate=(storage.toMap()-"download_uncertainty")+mapOf("download_operation" to record.wire())
+        try { vault.save(candidate);fence.assert(scope);storage.clear();storage.putAll(candidate) }
+        catch(_: Exception) {
+            // A lost local acknowledgement cannot authorize dispatch or repeat
+            // an external effect. Subsequent cleanup preserves this hold too.
+            storage["download_uncertainty"]=(if(record.phase=="effect_completed")record.copy(phase="effect_started") else record).wire()
+            throw LiveFailure("download_storage_unavailable",503,true)
+        }
+    }
+    private fun adoptLegacyDownload()=synchronized(fence) {
+        val legacy=storage["pending"]?.takeIf(DownloadRecoveryRetention::isLegacy) ?: pending?.wire()?.takeIf(DownloadRecoveryRetention::isLegacy) ?: return@synchronized
+        val previous=storage["download_legacy"]
+        if(previous!=null && previous!=legacy)DownloadProtocol.invalid()
+        // Commit the independent hold first. A failed/uncertain write never
+        // releases the original generic slot.
+        val held=storage.toMap()+mapOf("download_legacy" to legacy)
+        try { vault.save(held) } catch(_: Exception) { storage["download_legacy"]=legacy;throw LiveFailure("download_storage_unavailable",503,true) }
+        storage.clear();storage.putAll(held)
+        val released=held-"pending"
+        try { vault.save(released) } catch(_: Exception) { throw LiveFailure("download_storage_unavailable",503,true) }
+        storage.clear();storage.putAll(released);if(DownloadRecoveryRetention.isLegacy(pending?.wire()))pending=null
+    }
+    private fun assertDownloadCurrent(record: DownloadOperation,scope: SessionScope) {
+        fence.assert(scope)
+        val actor=credentials ?: throw LiveFailure("download_authority_changed",409,true)
+        if(accountDeletion!=null || guestDeletion!=null || faceLifecycle?.blocksPrivate==true || accountRecovery!=null || enrollment!=null || cameraLoginHeld ||
+            ownGuardianWithdrawalPending || identity?.account!=record.account)throw LiveFailure("download_authority_changed",409,true)
+        record.assertCurrent(baseUrl,scope,actor,downloadSession(actor),identity?.device,System.currentTimeMillis())
+    }
+    private fun downloadStatus(record: DownloadOperation,scope: SessionScope): DownloadOperation {
+        // Privacy identity permits historical inspection by a renewed session;
+        // this function grants no content/effect authority to that session.
+        fence.assert(scope)
+        val actor=credentials ?: throw LiveFailure("authentication_required")
+        if(actor.account!=record.account || actor.method!="registered_face")throw LiveFailure("download_authority_changed",409,true)
+        val result=json("/downloads/v2/status",scope,actor.token,"POST",record.input(),200,headers=record.headers())
+        return record.receipt(result).also { saveDownload(it,scope) }
+    }
+    private fun downloadContent(record: DownloadOperation,scope: SessionScope,current: ()->Unit): DownloadContent {
+        val guard={assertDownloadCurrent(record,scope);current()}
+        guard()
+        boundary?.takeUnless { it.useNetwork }?.let { injected ->
+            injected.beforeJsonWrite?.invoke();guard()
+            val result=(injected.downloadContent ?: throw LiveFailure("download_content_boundary_unavailable"))("/downloads/v2/content",scope,credentials!!.token,record.input(),record.headers())
+            try { guard();return result } catch(problem: Exception) { result.bytes.fill(0);throw problem }
+        }
+        val body=NativeProtocol.canonical(record.input()).toByteArray(Charsets.UTF_8)
+        var headers=emptyMap<String,String>()
+        val bytes=try { transport.request("/downloads/v2/content",scope,credentials!!.token,"POST",body,headers=record.headers(),binary=true,
+            binaryLimit=DownloadProtocol.MAX_BYTES,expectedStatus=200,beforeWrite=guard,responseHeaders={headers=it}) } finally { body.fill(0) }
+        try { guard();return DownloadContent(bytes,headers) } catch(problem: Exception) { bytes.fill(0);throw problem }
+    }
+    private fun retireDownloadForNewAction(record: DownloadOperation,scope: SessionScope,independent: Boolean=false)=synchronized(fence) {
+        fence.assert(scope)
+        if(record.phase=="effect_started" && !independent)throw LiveFailure("download_external_outcome_unresolved",503,true)
+        val history=NativeProtocol.rows(storage["download_history"] ?: emptyList<WireObject>(),64)
+        val retained=if(record.phase in setOf("effect_completed","not_issued"))history else {
+            if(history.size>=64)throw LiveFailure("secure_storage_full")
+            history+record.wire()
+        }
+        val candidate=(storage.toMap()-setOf("download_operation","download_uncertainty"))+mapOf("download_history" to retained)
+        vault.save(candidate);storage.clear();storage.putAll(candidate);vault.removeStagedOriginal(record.stage)
+    }
+    /** Called only by an explicit Save/Share action. A retry first settles the
+     * exact issuance; it never creates a new ticket on a lost sign/content reply. */
+    internal suspend fun original(photo: LivePhoto,share: Boolean=false,current: ()->Unit={},resumeOnly: Boolean=false): DownloadOperation=withContext(Dispatchers.IO) { downloadMutex.withLock {
+        NativeProtocol.mediaSource(photo.mediaSource);current();adoptLegacyDownload()
+        val (scope,actor)=ready();current()
+        val session=downloadSession(actor);val device=identity?.takeIf { it.account==actor.account }?.device ?: throw LiveFailure("device_key_unavailable")
+        val legacy=storage["download_legacy"] as? Map<*,*>
+        if(legacy?.get("account")==actor.account && (legacy["payload"] as? Map<*,*>)?.get("asset_id")==photo.id)throw LiveFailure("download_legacy_outcome_unresolved",503,true)
+        var record=downloadOperation()
+        val history=NativeProtocol.rows(storage["download_history"] ?: emptyList<WireObject>(),64).map { DownloadOperation.restore(it,baseUrl) }
+        if(history.any { it.account==actor.account && it.asset==photo.id && it.phase=="effect_started" })throw LiveFailure("download_external_outcome_unresolved",503,true)
+        // Returning to an archived, unresolved issuance recovers its original
+        // capability. Switching accounts/assets never launders it into a new key.
+        val prior=history.lastOrNull { it.account==actor.account && it.asset==photo.id && it.phase in setOf("intent","signing") }
+        if(prior!=null) {
+            record?.let { retireDownloadForNewAction(it,scope,independent=it.account!=actor.account || it.asset!=photo.id) }
+            synchronized(fence) {
+                fence.assert(scope)
+                val retained=NativeProtocol.rows(storage["download_history"] ?: emptyList<WireObject>(),64).filter { it["key"]!=prior.key }
+                val candidate=(storage.toMap()-"download_uncertainty")+mapOf("download_operation" to prior.wire(),"download_history" to retained)
+                vault.save(candidate);storage.clear();storage.putAll(candidate)
+            }
+            record=prior
+        }
+        if(resumeOnly && (record==null || record.phase in setOf("effect_completed","not_issued") || record.account!=actor.account || record.session!=session ||
+            record.asset!=photo.id || record.version!=photo.version || record.effect!=if(share)"share" else "save"))throw LiveFailure("download_requires_explicit_action",409)
+        if(record!=null && record.account==actor.account && record.phase in setOf("intent","signing") &&
+            (record.asset!=photo.id || record.version!=photo.version || record.effect!=(if(share)"share" else "save")))record=downloadStatus(record,scope)
+        // The same explicit action may inspect historical issuance under a
+        // renewed session, but it cannot redeem or silently re-sign it.
+        if(record!=null && record.account==actor.account && record.session!=session && record.phase !in setOf("effect_completed","not_issued")) {
+            val historical=downloadStatus(record,scope)
+            if(historical.phase!="effect_started")retireDownloadForNewAction(historical,scope)
+            throw LiveFailure("download_authority_changed",409,true)
+        }
+        if(record!=null && (record.phase in setOf("effect_completed","not_issued") || record.account!=actor.account || record.session!=session || record.asset!=photo.id || record.version!=photo.version || record.effect!=if(share)"share" else "save")) {
+            retireDownloadForNewAction(record,scope,independent=record.account!=actor.account || record.asset!=photo.id);record=null
+        }
+        if(record?.phase=="effect_started")throw LiveFailure("download_external_outcome_unresolved",503,true)
+        var held=record ?: DownloadOperation.create(baseUrl,actor.account,session,device,photo,share,actor.expires).also { saveDownload(it,scope) }
+        // A protected intent is durably advanced before any HTTP dispatch. A
+        // crash before that transition may safely send this exact intent once;
+        // signing and every later phase must recover status instead.
+        if(held.phase=="intent") {
+            assertDownloadCurrent(held,scope);current();held=held.copy(phase="signing");saveDownload(held,scope)
+            held=try {
+                val signing=held
+                signing.receipt(json("/downloads/v2/sign",scope,actor.token,"POST",signing.input(),200,beforeWrite={assertDownloadCurrent(signing,scope);current()},headers=signing.headers())).also { saveDownload(it,scope) }
+            } catch(problem: LiveFailure) {
+                fence.assert(scope)
+                val settled=downloadStatus(held,scope)
+                if(settled.phase=="not_issued" && problem.status in 400..499)throw problem
+                settled
+            }
+        } else held=downloadStatus(held,scope)
+        if(held.phase=="not_issued")throw LiveFailure("download_not_issued",409)
+        try { assertDownloadCurrent(held,scope);current() }
+        catch(problem: LiveFailure) {
+            if(problem.code=="download_expired")retireDownloadForNewAction(held,scope)
+            throw problem
+        }
+        held=held.copy(phase="content_started");saveDownload(held,scope)
+        val content=downloadContent(held,scope,current)
+        try {
+            held=held.verified(content);assertDownloadCurrent(held,scope);current();saveDownload(held,scope)
+            synchronized(fence) { assertDownloadCurrent(held,scope);current();vault.stageOriginal(held.account,held.session,held.stage,content.bytes) }
+            held=held.copy(phase="staged");saveDownload(held,scope);held
+        } finally { content.bytes.fill(0) }
+    } }
+    internal fun canResumeOriginal(photo: LivePhoto,share: Boolean): Boolean=runCatching {
+        val record=downloadOperation() ?: return@runCatching false
+        val actor=credentials ?: return@runCatching false
+        record.phase !in setOf("effect_started","effect_completed","not_issued") && record.account==actor.account && record.session==downloadSession(actor) &&
+            record.asset==photo.id && record.version==photo.version && record.effect==(if(share)"share" else "save")
+    }.getOrDefault(false)
+    internal suspend fun recoverOriginalIssuance(): DownloadOperation?=withContext(Dispatchers.IO) { downloadMutex.withLock {
+        adoptLegacyDownload()
+        val held=downloadOperation() ?: return@withLock null
+        val (scope,actor)=readyOwnControls()
+        if(actor.account!=held.account)throw LiveFailure("download_authority_changed",409,true)
+        downloadStatus(held,scope)
+    } }
+    /** A chooser/API acknowledgement is the only completed local effect here.
+     * It does not assert recipient receipt or a remote/device store outcome. */
+    internal suspend fun performOriginalEffect(key: String,current: ()->Unit={},onEffectStarted: (DownloadOperation)->Unit={},effect: suspend (ByteArray)->Unit)=withContext(Dispatchers.IO) { downloadMutex.withLock {
+        val scope=currentScope();var held=downloadOperation()?.takeIf { it.key==key } ?: throw LiveFailure("download_operation_outcome_unresolved",503,true)
+        if(held.phase=="effect_started")throw LiveFailure("download_external_outcome_unresolved",503,true)
+        if(held.phase!="staged")throw LiveFailure("download_staging_unavailable",503,true)
+        assertDownloadCurrent(held,scope);current();held=downloadStatus(held,scope)
+        assertDownloadCurrent(held,scope);current()
+        val bytes=vault.stagedOriginal(held.account,held.session,held.stage)
+        try {
+            held.verifyStaged(bytes)
+            val fresh=downloadContent(held,scope,current)
+            try { held.verified(fresh) } finally { fresh.bytes.fill(0) }
+            assertDownloadCurrent(held,scope);current();held=held.copy(phase="effect_started");saveDownload(held,scope)
+            onEffectStarted(held)
+            assertDownloadCurrent(held,scope);current();effect(bytes)
+            assertDownloadCurrent(held,scope);current();saveDownload(held.copy(phase="effect_completed"),scope)
+            vault.removeStagedOriginal(held.stage)
+        } finally { bytes.fill(0) }
+    } }
+    internal fun assertOriginalEffect(key: String,scope: SessionScope)=synchronized(fence) {
+        val held=downloadOperation()?.takeIf { it.key==key && it.phase=="effect_started" } ?: throw LiveFailure("download_external_outcome_unresolved",503,true)
+        assertDownloadCurrent(held,scope)
+    }
+    /** Exact known staging only: no directory sweep or deletion of unknown data. */
+    internal fun retireOriginalStaging(now: Long=System.currentTimeMillis(),all: Boolean=false): Long?=synchronized(fence) {
+        val rows=listOfNotNull(storage["download_operation"],storage["download_uncertainty"])+((storage["download_history"] as? List<*>) ?: emptyList<Any?>())
+        var next: Long?=null
+        rows.forEach { raw ->
+            val held=runCatching { DownloadOperation.restore(raw,baseUrl) }.getOrNull() ?: return@forEach
+            val expiry=minOf(held.sessionExpires,held.expiresAt ?: held.sessionExpires)
+            if(all || expiry<=now || held.phase in setOf("effect_completed","not_issued"))vault.removeStagedOriginal(held.stage)
+            else next=minOf(next ?: (expiry-now),expiry-now)
+        }
+        next
     }
     fun photoUploads(): PhotoUploadBatch?=saved("photo_uploads")?.let { PhotoUploadBatch.restore(it,baseUrl) }
     fun clearFinishedPhotoUploads() {

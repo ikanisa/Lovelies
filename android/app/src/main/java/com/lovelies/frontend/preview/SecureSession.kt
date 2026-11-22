@@ -60,6 +60,36 @@ class SecureSession(context: Context,endpoint: String) {
         finally { sealed.fill(0) }
     }
     @Synchronized fun removeStagedPhoto(id: String) { uploadFile(id).delete() }
+    // A distinct directory and authenticated domain prevent upload/download or
+    // account/session substitution even when a file identifier is reused.
+    private val originalDirectory=File(context.noBackupFilesDir,"download-originals-$deviceScope")
+    private fun originalFile(id: String)=AtomicFile(File(originalDirectory,"${NativeProtocol.id(id)}.bin"))
+    private fun originalAad(account: String,session: String,id: String)=aad+":download-v2:${NativeProtocol.id(account)}:${NativeProtocol.id(session)}:${NativeProtocol.id(id)}".toByteArray()
+    @Synchronized fun stageOriginal(account: String,session: String,id: String,bytes: ByteArray) {
+        if(bytes.size !in 1..DownloadProtocol.MAX_BYTES)throw LiveFailure("download_content_invalid")
+        if(!originalDirectory.isDirectory && !originalDirectory.mkdirs())throw LiveFailure("download_staging_unavailable")
+        if(originalDirectory.usableSpace<bytes.size+1024L*1024)throw LiveFailure("download_staging_unavailable")
+        val cipher=Cipher.getInstance("AES/GCM/NoPadding");cipher.init(Cipher.ENCRYPT_MODE,secret());cipher.updateAAD(originalAad(account,session,id))
+        val sealed=byteArrayOf(1)+cipher.iv+cipher.doFinal(bytes);val target=originalFile(id);val stream=target.startWrite()
+        try { stream.write(sealed);target.finishWrite(stream) }
+        catch(problem: Exception) { target.failWrite(stream);throw LiveFailure("download_staging_unavailable",503,true) }
+        finally { sealed.fill(0) }
+    }
+    @Synchronized fun stagedOriginal(account: String,session: String,id: String): ByteArray {
+        val target=originalFile(id)
+        // AtomicFile.openRead also recovers an interrupted atomic replacement.
+        val sealed=try { target.openRead().use { stream ->
+            if(stream.channel.size() !in 30..(DownloadProtocol.MAX_BYTES+29))throw LiveFailure("download_staging_invalid")
+            stream.readBytes()
+        } } catch(_: Exception) { throw LiveFailure("download_staging_unavailable",503,true) }
+        try {
+            if(sealed.size !in 30..(DownloadProtocol.MAX_BYTES+29) || sealed[0].toInt()!=1)throw LiveFailure("download_staging_invalid")
+            val cipher=Cipher.getInstance("AES/GCM/NoPadding");cipher.init(Cipher.DECRYPT_MODE,secret(create=false),GCMParameterSpec(128,sealed.copyOfRange(1,13)))
+            cipher.updateAAD(originalAad(account,session,id));return cipher.doFinal(sealed.copyOfRange(13,sealed.size))
+        } catch(_: Exception) { throw LiveFailure("download_staging_invalid",503,true) }
+        finally { sealed.fill(0) }
+    }
+    @Synchronized fun removeStagedOriginal(id: String) { originalFile(id).delete() }
     fun enrollmentAlias(account: String)="lovelies.device.$account.$deviceScope.${java.util.UUID.randomUUID()}"
     fun recoveryAlias()="lovelies.device.recovery.$deviceScope.${java.util.UUID.randomUUID()}"
     fun hasEnrollmentKeys()=hasUnreferencedEnrollmentKeys(emptySet())

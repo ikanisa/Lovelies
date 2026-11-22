@@ -394,7 +394,7 @@ for (const mode of ['outage', 'prepare-before', 'prepare-after', 'commit-result-
     await assert.rejects(() => f.db.one('SELECT id FROM accounts LIMIT 1'), unavailable); await f.uncertain(); assert.deepEqual(await snapshot(f), before); assert.deepEqual(await f.journal.lookup(id), saved); return; }
   assert.notEqual((await target(f)).revoked_at, null); assert.equal((await f.h.db.one('SELECT status FROM consents WHERE id=?', pending.consentID)).status, 'revoked');
   if (mode === 'commit-result-loss') { assert(boundary); assert.equal(boundary.journal.status, 'pending'); assert.notEqual(boundary.session.revoked_at, null); assert.equal(boundary.consent.status, 'revoked'); assert.equal(boundary.audit.length, 1);
-    assert.equal(f.faults.afterCommit, undefined); assert.equal(f.faults.commitReply, false); assert.equal(saved.status, 'committed'); assert.equal(saved.plan_hash, boundary.journal.plan_hash); }
+    assert.equal(f.faults.afterCommit, undefined); assert.equal(f.faults.commitReply, false); assert.equal(saved.status, 'pending'); assert.equal(saved.plan_hash, boundary.journal.plan_hash); }
   else { assert.equal(f.faults.reply, undefined); assert.equal(saved.status, mode === 'ack-before' ? 'pending' : 'committed'); }
   await f.call(401); const newer = await f.pending(), committedState = await snapshot(f);
   assert.deepEqual(await f.call(200, { token: f.peer.token }), { status: 'revoked', current_session_revoked: false, clear_device_identity: false });

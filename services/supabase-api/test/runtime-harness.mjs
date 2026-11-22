@@ -28,13 +28,20 @@ export class MemoryBucket {
   async delete(key){for(const item of typeof key==='string'?[key]:key)this.rows.delete(item);}
   async list(){return {objects:await Promise.all([...this.rows.keys()].map(key=>this.head(key))),truncated:false};}
 }
-export async function startHarness({faceVerifier,photoProcessor,storeVerifier,pushService,mediaWriteGate,buckets,vars={},consumeQueue=true}={}){
+export async function startHarness({faceVerifier,photoProcessor,storeVerifier,pushService,mediaWriteGate,buckets,vars={},consumeQueue=true,throughSchema=15}={}){
   const localDatabase=process.env.TEST_DATABASE_URL?await isolatedPostgres(process.env.TEST_DATABASE_URL):null;
   const engine=localDatabase?.engine??await PGlite.create();
   try{
     if(!localDatabase)await engine.exec('CREATE ROLE anon; CREATE ROLE authenticated;');
-    const migrations=fs.readdirSync(new URL('../../../supabase/migrations/',import.meta.url)).filter(x=>/_lovelies_private_core\.sql$|_refresh_delivery\.sql$|_audience_retention\.sql$|_inference_generation\.sql$|_retention_scan_cursors\.sql$|_restore_control\.sql$|_lovelies_media_authority\.sql$/.test(x)).sort();
-    for(const migration of migrations)await engine.exec(fs.readFileSync(new URL('../../../supabase/migrations/'+migration,import.meta.url),'utf8'));
+    const migrations=fs.readdirSync(new URL('../../../supabase/migrations/',import.meta.url)).filter(x=>/_lovelies_private_core\.sql$|_refresh_delivery\.sql$|_audience_retention\.sql$|_inference_generation\.sql$|_retention_scan_cursors\.sql$|_restore_control\.sql$|_lovelies_media_authority\.sql$|_retention_schedule_saga\.sql$|_download_issuance_v15\.sql$/.test(x)).sort().slice(0,throughSchema-6);
+    if(!Number.isInteger(throughSchema)||throughSchema<7||throughSchema>15)throw Error('invalid_fixture_schema_version');
+    for(const migration of migrations){
+      let source=fs.readFileSync(new URL('../../../supabase/migrations/'+migration,import.meta.url),'utf8');
+      // PGlite has one backend and no advisory-lock primitive. Native PG keeps
+      // the exact migration lock; its separate multi-pool lane qualifies it.
+      if(!localDatabase)source=source.replace('PERFORM pg_advisory_xact_lock(704536419730718193::bigint);','');
+      await engine.exec(source);
+    }
   }catch(error){
     if(localDatabase)try{await engine.close();}catch(cleanupError){try{if(error instanceof Error&&Object.isExtensible(error))Object.defineProperty(error,'cleanupErrors',{value:[cleanupError],configurable:true});}catch{}}
     throw error;

@@ -56,6 +56,9 @@ struct LoveliesRootView: View {
                 await NativePush.shared.foreground()
             } else { purchases.retire() }
         }
+        .task(id: "\(store.isReferenceMode):\(live.connected):\(live.isForeground):\(live.repository.map { ObjectIdentifier($0).hashValue } ?? 0)") {
+            purchases.setAuthorityObservation(active: !store.isReferenceMode && live.isForeground)
+        }
         .onChange(of: store.screen) { _, _ in
             if !store.isReferenceMode { live.persistLibraryState() }
             if UIAccessibility.isVoiceOverRunning { UIAccessibility.post(notification: .screenChanged, argument: nil) }
@@ -63,7 +66,7 @@ struct LoveliesRootView: View {
         .onChange(of: live.busy) { _, busy in if !store.isReferenceMode, !busy { NativePush.shared.routePending() } }
         .onOpenURL { if !store.isReferenceMode { live.openLink($0) } }
         .onContinueUserActivity(NSUserActivityTypeBrowsingWeb) { activity in if !store.isReferenceMode, let url = activity.webpageURL { live.openLink(url) } }
-        .sheet(item: $live.sharedFile, onDismiss: { live.retireSharedFile() }) { item in NativeSystemShare(url: item.url) { live.retireSharedFile() } }
+        .sheet(item: $live.sharedFile, onDismiss: { live.retireSharedFile() }) { item in NativeSystemShare(url: item.url, isCurrent: { live.sharePresentationIsCurrent(item) }) { completed in live.finishSharedFile(item, completed: completed) } }
         .onReceive(NotificationCenter.default.publisher(for: Notification.Name("LoveliesAccountRetired"))) { _ in purchases.retire() }
         .onChange(of: scenePhase) { _, phase in
             foregroundRefresh?.cancel()

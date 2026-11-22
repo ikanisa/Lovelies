@@ -1,3 +1,4 @@
+import { retireDownloadEvidence } from './download-v2-persistence.ts';
 import { ApiError, digest, jsonBody, ok, stable, uuid, type Actor, type AppContext, type Database } from './types.ts';
 import { assertPrivacyActor } from './auth.ts';
 import { executeRestrictedOperation, prepareOperation, assertRegisteredActor } from './operations.ts';
@@ -218,6 +219,7 @@ export async function revokeAudienceAuthority(ctx: AppContext, account: string, 
  await ctx.db.run("UPDATE candidates SET status='invalidated',version=? WHERE owner_id=? OR recipient_id=?",crypto.randomUUID(),account,account);
  await ctx.db.run('UPDATE media_grants SET active=0,revoked_at=coalesce(revoked_at,?) WHERE owner_id=? OR recipient_id=?',now,account,account);
  await ctx.db.run('DELETE FROM media_tickets WHERE account_id=? OR asset_id IN(SELECT id FROM assets WHERE owner_id=?)',account,account);
+ await retireDownloadEvidence(ctx,account);
  await ctx.db.run('DELETE FROM download_tickets WHERE account_id=? OR asset_id IN(SELECT id FROM assets WHERE owner_id=?)',account,account);
  await ctx.db.run("UPDATE sharing_requests SET status='revoked',updated_at=? WHERE (sender_id=? OR recipient_id=?) AND status IN('requested','accepted')",now,account,account);
  const profile=await ctx.db.one<any>('SELECT * FROM face_profiles WHERE account_id=?',account);

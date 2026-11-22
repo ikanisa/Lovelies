@@ -22,7 +22,7 @@ const input = value => ({ version: 1, project_id: RESTORE_PROJECT_ID, ...value }
 const numberRows = rows => rows.map(row => Object.fromEntries(Object.entries(row).map(([key, value]) => [key, typeof value === 'bigint' ? Number(value) : value])));
 const digest = value => createHash('sha256').update(value).digest('hex');
 const unavailable = error => error instanceof ApiError && error.status === 503 &&
-  ['restore_reconciliation_required', 'restore_journal_unavailable'].includes(error.code) && error.message === error.code;
+  ['restore_reconciliation_required', 'restore_journal_unavailable', 'download_operation_outcome_unresolved'].includes(error.code) && error.message === error.code;
 const readOnly = error => error?.code === '25006';
 const asBackend = async (engine, callback) => {
   await engine.exec('SET ROLE lovelies_api');
@@ -39,7 +39,7 @@ async function installMarker(h, marker, operationId = null, planHash = null) {
     VALUES(1,$1,$2,$3,$4,$5,$6,$7,$8,$9)
     ON CONFLICT(singleton) DO UPDATE SET project_id=excluded.project_id,database_id=excluded.database_id,
       incarnation_id=excluded.incarnation_id,checkpoint_revision=excluded.checkpoint_revision,checkpoint_hash=excluded.checkpoint_hash,
-      journal_sequence=excluded.journal_sequence,journal_hash=excluded.journal_hash,last_operation_id=excluded.last_operation_id,last_plan_hash=excluded.last_plan_hash`,
+      journal_sequence=excluded.journal_sequence,journal_hash=excluded.journal_hash,last_operation_id=excluded.last_operation_id,last_plan_hash=excluded.last_plan_hash,last_disposition=NULL,last_receipt_hash=NULL`,
   [RESTORE_PROJECT_ID, marker.database_id, marker.incarnation_id, marker.checkpoint.revision, marker.checkpoint.hash,
     marker.cursor.sequence, marker.cursor.hash, operationId, planHash]));
 }
@@ -68,7 +68,9 @@ function databaseConnection(h, trace, faults) {
       let result;
       if (native) {
         result = await native.begin(async reserved => {
-          const value = await callback({ query: query(reserved), begin: () => { throw Error('nested_raw_fixture_transaction'); } });
+          const active = { query: query(reserved), begin: () => { throw Error('nested_raw_fixture_transaction'); } };
+          const value = await callback(active);
+          await faults.beforeActualCommit?.(active);
           if (faults.beforeCommit) { faults.beforeCommit = false; throw Error('synthetic_commit_rejected'); }
           return value;
         });
@@ -76,7 +78,9 @@ function databaseConnection(h, trace, faults) {
         let committed = false;
         await h.engine.exec('BEGIN');
         try {
-          result = await callback({ query: query(null), begin: () => { throw Error('nested_raw_fixture_transaction'); } });
+          const active = { query: query(null), begin: () => { throw Error('nested_raw_fixture_transaction'); } };
+          result = await callback(active);
+          await faults.beforeActualCommit?.(active);
           if (faults.beforeCommit) { faults.beforeCommit = false; throw Error('synthetic_commit_rejected'); }
           await h.engine.exec('COMMIT'); committed = true;
         } catch (error) { if (!committed) await h.engine.exec('ROLLBACK'); throw error; }
@@ -93,16 +97,16 @@ function databaseConnection(h, trace, faults) {
   return connection;
 }
 
-async function fixture(t, { seed = true } = {}) {
-  const h = await startHarness({ consumeQueue: false }), trace = [], faults = {}, storage = new MemoryStorage();
+async function fixture(t, { seed = true, harness = {} } = {}) {
+  const h = await startHarness({ consumeQueue: false,...harness }), trace = [], faults = {}, storage = new MemoryStorage();
   let db;
   t.after(async () => { try { await db?.close(); } finally { await h.close(); } });
   const version = Number((await privateRows(h, 'SELECT max(version) AS n FROM lovelies_private.schema_versions'))[0].n);
-  assert.equal(version, 13);
+  assert.equal(version, 15);
   assert.equal(await rowCount(h, 'restore_control'), 0, 'default harness must never seed serving admission');
   let tick = 1_000;
   const rawJournal = async (path, body) => handleOperationRequest(new Request('https://journal.invalid' + path, {
-    method: body === undefined ? 'GET' : 'POST', headers: { authorization: 'Bearer ' + journalEnv.RESTORE_JOURNAL_TOKEN,
+    method: body === undefined ? 'GET' : 'POST', headers: { authorization: 'Bearer ' + journalEnv.RESTORE_JOURNAL_TOKEN,'X-Lovelies-Writer-Protocol':'lovelies-api-v15',
       ...(body === undefined ? {} : { 'content-type': 'application/json' }) }, ...(body === undefined ? {} : { body: JSON.stringify(body) }),
   }), journalEnv, storage, { now: () => ++tick });
   const response = await rawJournal('/v1/control/bootstrap', input({ database_id: randomUUID(), bootstrap_id: randomUUID() }));
@@ -122,7 +126,7 @@ async function fixture(t, { seed = true } = {}) {
     if (lost?.stage === 'after') { await result.body?.cancel(); throw Error('synthetic_journal_reply_lost'); }
     return result;
   } });
-  db = new PostgresDatabase(databaseConnection(h, trace, faults), new RestoreDatabaseFence(journal));
+  db = new PostgresDatabase(databaseConnection(h, trace, faults), new RestoreDatabaseFence(journal,h.env));
   const queue = new PostgresJobQueue(db, () => 10_000);
   h.env.PHOTO_JOBS = queue;
   const context = { ...h.app, db };
@@ -136,6 +140,6 @@ async function seedAccount(h, id = randomUUID()) {
   await asBackend(h.engine, () => h.engine.query('INSERT INTO lovelies_private.accounts(id,name,created_at) VALUES($1,$2,$3)', [id, 'Preserved synthetic account', 1_000]));
   return id;
 }
-const userSql = trace => trace.filter(value => value.kind === 'sql' && !/^(SET TRANSACTION READ ONLY|SELECT pg_advisory_xact_lock\(|SET LOCAL ROLE |SET LOCAL search_path |SELECT project_id,database_id,incarnation_id,checkpoint_revision,checkpoint_hash,journal_sequence,journal_hash,last_operation_id,last_plan_hash FROM restore_control WHERE singleton=1|UPDATE restore_control SET)/.test(value.sql));
+const userSql = trace => trace.filter(value => value.kind === 'sql' && !/^(SET TRANSACTION READ ONLY|SELECT pg_advisory_xact_lock\(|SET LOCAL ROLE |SET LOCAL search_path |SELECT project_id,database_id,incarnation_id,checkpoint_revision,checkpoint_hash,journal_sequence,journal_hash,last_operation_id,last_plan_hash,last_disposition,last_receipt_hash FROM restore_control WHERE singleton=1|UPDATE restore_control SET)/.test(value.sql));
 
 export { folder,migration,baselineNames,input,numberRows,digest,unavailable,readOnly,asBackend,rawRows,privateRows,rowCount,controlRow,installMarker,databaseConnection,fixture,intent,insertAccount,seedAccount,userSql };

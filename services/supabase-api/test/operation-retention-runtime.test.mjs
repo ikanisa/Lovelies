@@ -315,7 +315,10 @@ test('known terminal privacy operation copies retire without removing minimal re
         assert.deepEqual(await h.db.one('SELECT * FROM privacy_requests WHERE id=?', request.id), facts);
         assert.equal((await h.db.one('SELECT status FROM privacy_requests WHERE id=?', pending.id)).status, 'pending_approval');
         assert.notEqual((await saved(h, pendingBody.operation_key)).payload_json, retiredOperationInput);
-        await h.json(`/privacy/operations/${body.operation_key}`, {token: owner.token}, 410);
+        // The typed privacy lookup cannot classify a key-only tombstone as a
+        // bound grant. Generic lookup reports only the retired operation; an
+        // exact-input retry below independently proves that input's retirement.
+        assert.equal((await h.json(`/privacy/operations/${body.operation_key}`, {token: owner.token}, 503)).error.code,'privacy_export_grant_reconciliation_required');
         await h.community(owner.token, 'operation', {operation_key: body.operation_key}, 410);
         await h.json('/privacy/export', {token: owner.token, body}, 410);
         await h.json('/privacy/export', {token: owner.token, body: {...body, reason: 'Changed reason'}}, 409);

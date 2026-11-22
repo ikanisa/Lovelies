@@ -2,6 +2,7 @@ import postgres from 'postgres';
 import { AsyncLocalStorage } from 'node:async_hooks';
 import { ApiError, type Binding, type Database, type InvocationAuthorityOutcomeCode } from './types.ts';
 import { RestoreTransactionCollector, type RestoreTransactionScope } from './restore-transaction.ts';
+import type { RestoreOperationRecord } from './restore-journal.ts';
 
 /** Only bound values cross this translator. SQL is static application source.
  * Quoted strings/comments/dollar strings never become parameter positions. */
@@ -36,6 +37,8 @@ export function postgresQuery(source:string, bindings: readonly Binding[]):{sql:
 
 export interface SqlConnection {
   query<T>(sql:string,bindings:unknown[]):Promise<T[]>;
+  /** The original callback error may escape only after ROLLBACK is acknowledged.
+   * Connection loss or unknown rollback must escape as a different error. */
   begin<T>(callback:(connection:SqlConnection)=>Promise<T>):Promise<T>;
   close?():Promise<void>;
 }
@@ -43,13 +46,15 @@ export interface SqlConnection {
 /** Independent restore admission is deliberately an injected production port;
  * a missing database control row is never created by request handling. */
 export interface DatabaseFence {
+  reconcile?(connection:SqlConnection):Promise<void>;
   enter(connection:SqlConnection):Promise<unknown>;
   lineage(admission:unknown):DatabaseLineage;
   prepare(connection:SqlConnection,admission:unknown,intent?:unknown):Promise<unknown>;
   committed(connection:SqlConnection,prepared:unknown):Promise<void>;
+  lookupCommitted?(connection:SqlConnection,admission:unknown,operationID:string):Promise<RestoreOperationRecord|null>;
 }
 export type DatabaseLineage=Readonly<{database_id:string;incarnation_id:string}>;
-type TransactionFrame={connection:SqlConnection;readOnly:boolean;restore:RestoreTransactionScope};
+type TransactionFrame={connection:SqlConnection;readOnly:boolean;restore:RestoreTransactionScope;admission?:unknown;validating:boolean;validators:Array<()=>void|Promise<void>>};
 type InvocationAuthority={check:()=>Promise<void>;fresh:()=>void;outcomeCode:InvocationAuthorityOutcomeCode};
 type InvocationFrame={lineage?:DatabaseLineage;closed:boolean;failed:boolean;failureCode?:string;
   authority?:InvocationAuthority;mayHaveCommitted?:boolean};
@@ -89,7 +94,7 @@ export class PostgresDatabase implements Database {
   bindInvocationAuthority(check:()=>Promise<void>,fresh:()=>void,outcomeCode:InvocationAuthorityOutcomeCode='store_operation_outcome_unresolved'):void {
     const frame=this.assertInvocation();
     if(!frame||frame.authority||this.transactions.getStore()||typeof check!=='function'||typeof fresh!=='function'||
-      !['store_operation_outcome_unresolved','privacy_export_grant_outcome_unresolved'].includes(outcomeCode))
+      !['store_operation_outcome_unresolved','privacy_export_grant_outcome_unresolved','download_operation_outcome_unresolved'].includes(outcomeCode))
       throw new ApiError(500,'invocation_authority_invalid');
     frame.authority=Object.freeze({check,fresh,outcomeCode});
   }
@@ -129,8 +134,8 @@ export class PostgresDatabase implements Database {
         // A privacy grant may have committed even when a subsequent handler read
         // raises session_invalid. Do not send a definitive failure that permits
         // the client to discard its exact recovery key.
-        if(frame.mayHaveCommitted&&frame.authority?.outcomeCode==='privacy_export_grant_outcome_unresolved'){
-          frame.failureCode=frame.authority.outcomeCode;return this.unavailable(frame);
+        if(frame.mayHaveCommitted&&['privacy_export_grant_outcome_unresolved','download_operation_outcome_unresolved'].includes(frame.authority?.outcomeCode??'')){
+          frame.failureCode=frame.authority!.outcomeCode;return this.unavailable(frame);
         }
         throw error;
       }finally{frame.closed=true;}
@@ -154,6 +159,22 @@ export class PostgresDatabase implements Database {
     if(this.transactions.getStore()!.readOnly)throw new ApiError(500,'read_only_transaction');
     await this.all(sql,...bindings);
   }
+  /** Call before multi-transaction jobs: joined scopes cannot independently commit. */
+  requireTransactionBoundary():void {
+    this.assertInvocation();
+    if(this.transactions.getStore())throw new ApiError(500,'database_transaction_scope_invalid');
+  }
+  beforeCommit(validate:()=>void|Promise<void>):void {
+    this.assertInvocation();const frame=this.transactions.getStore();
+    if(!frame||frame.readOnly||frame.validating||typeof validate!=='function'||frame.validators.length>=8)throw new ApiError(500,'database_commit_guard_invalid');
+    frame.validators.push(validate);
+  }
+  async verifiedRestoreOperation(operationID:string):Promise<RestoreOperationRecord|null> {
+    this.assertInvocation();const frame=this.transactions.getStore();
+    if(!frame||frame.validating||!this.fence?.lookupCommitted||!frame.admission)throw new ApiError(503,'restore_reconciliation_required');
+    try{return await this.fence.lookupCommitted(frame.connection,frame.admission,operationID);}
+    catch(error){const invocation=this.invocations.getStore();if(invocation)invocation.failed=true;throw error;}
+  }
   async read<T>(callback:()=>T|Promise<T>):Promise<T>{
     this.assertInvocation();
     if(this.transactions.getStore()){const value=await callback();this.assertInvocation();return value;}
@@ -172,9 +193,10 @@ export class PostgresDatabase implements Database {
   }
   private async execute<T>(callback:(restore:RestoreTransactionScope)=>T|Promise<T>,readOnly:boolean,intent?:unknown):Promise<T>{
     this.assertInvocation();
-    let prepared:unknown,commitDispatched=false,result:T;
+    if(this.fence?.reconcile){try{await this.fence.reconcile(this.connection);}catch(error){const frame=this.invocations.getStore();if(frame)frame.failed=true;throw error;}}
+    let prepared:unknown,commitDispatched=false,callbackThrew=false,callbackFailure:unknown,result:T;
     const collector=new RestoreTransactionCollector(readOnly,intent!==undefined),restore=collector.scope;
-    try{result=await this.connection.begin(connection=>this.transactions.run({connection,readOnly,restore},async()=>{
+    try{result=await this.connection.begin(connection=>this.transactions.run({connection,readOnly,restore,validating:false,validators:[]},async()=>{
       try{
         // This is enforced by PostgreSQL, including modifying CTEs and volatile
         // functions. SQL spelling/method names cannot prove a query read-only.
@@ -183,7 +205,7 @@ export class PostgresDatabase implements Database {
         await connection.query('SET LOCAL ROLE lovelies_api',[]);
         await connection.query("SET LOCAL search_path TO lovelies_private, pg_catalog",[]);
         let admission:unknown;
-        try{admission=await this.fence?.enter(connection);this.admitInvocation(admission);}
+        try{admission=await this.fence?.enter(connection);this.admitInvocation(admission);this.transactions.getStore()!.admission=admission;}
         catch(error){const frame=this.invocations.getStore();if(frame)frame.failed=true;throw error;}
         const value=await callback(restore);
         this.assertInvocation();
@@ -203,6 +225,14 @@ export class PostgresDatabase implements Database {
           // Expiry rolls back SQL while preserving the independent plan.
           if(invocation?.authority)await this.checkBoundAuthority(invocation);
         }
+        // Validations run after any independent prepare while SQL is still
+        // uncommitted. A failed guard after prepare leaves the journal pending.
+        this.transactions.getStore()!.validating=true;
+        try{for(const validate of this.transactions.getStore()!.validators)await validate();}
+        catch(error){
+          if(this.fence&&prepared!==undefined){const frame=this.invocations.getStore();if(frame)frame.failed=true;throw new ApiError(503,'restore_reconciliation_required');}
+          throw error;
+        }
         this.assertInvocation();
         // Last synchronous check before returning to the SQL COMMIT port.
         // Even without a journal, that COMMIT can have an ambiguous outcome.
@@ -210,14 +240,17 @@ export class PostgresDatabase implements Database {
           invocation.mayHaveCommitted=true;this.checkBoundFreshness(invocation);commitDispatched=true;
         }
         return value;
-      }finally{collector.close();}
+      }catch(error){callbackThrew=true;callbackFailure=error;throw error;}
+      finally{collector.close();}
     }));}catch(error){
       const invocation=this.invocations.getStore();
-      // Once the callback has returned for COMMIT, a lost reply cannot prove
-      // that SQL rolled back. Preserve any accepted independent plan.
+      // A returned callback entered COMMIT; a lost reply cannot establish rollback.
       if(commitDispatched&&invocation?.authority){
         invocation.failureCode=invocation.authority.outcomeCode;return this.unavailable(invocation);
       }
+      // Only an identical callback error establishes acknowledged rollback.
+      // Unknown begin, rollback or commit poisons this invocation.
+      if((!callbackThrew||error!==callbackFailure)&&invocation)invocation.failed=true;
       throw error;
     }
     if(this.fence&&prepared!==undefined){

@@ -497,17 +497,21 @@ private actor PhotoShareSelectionTransport: NativeTransport {
             return try json(.object(["protocol": .string(NativeAudienceProjection.protocolName), "policy_version": .string(NativeAudienceProjection.policy), "account_id": .string(Self.account),
                 "audience": .object(["age_band": .string("18_plus"), "status": .string("eligible"), "version": .integer(1), "policy_version": .string(NativeAudienceProjection.policy), "next_review_at": .null]),
                 "guardian_request": .null, "capabilities": .object(["face_authentication": .bool(true), "photo_matching": .bool(true), "photo_processing": .bool(true)])]))
-        case "/downloads/sign":
+        case "/downloads/v2/sign", "/downloads/v2/status":
             signCount += 1
             let body = try WireValue.decoded(request.httpBody!)
             guard let asset = body["asset_id"].string,
                   [Self.assetA, "00000000-0000-4000-8000-000000000094"].contains(asset),
-                  body["operation_key"].string != nil else { throw NativeAPIError.invalidResponse }
-            return try json(.object(["method": .string("GET"), "download_url": .string("https://fixture.invalid/downloads/" + Self.ticket),
-                                     "expires_in": .integer(120), "source_version": .string("source-v1")]))
-        case "/downloads/" + Self.ticket:
-            downloadCount += 1; reached?.fulfill(); await gate.hold()
-            return .init(status: 200, headers: ["content-type": "image/png"], data: Data([0x89, 0x50, 0x4e, 0x47, 0x01]))
+                  body["operation_key"].string != nil,
+                  request.value(forHTTPHeaderField: "X-Lovelies-Download-Capability") != nil else { throw NativeAPIError.invalidResponse }
+            var response = body.object!; response["protocol"] = .string("lovelies-download-operation-v2"); response["status"] = .string("recorded"); response["account_id"] = .string(Self.account)
+            let now = Int(Date().timeIntervalSince1970 * 1000); response["created_at"] = .integer(now); response["expires_at"] = .integer(now + 110_000)
+            return try json(.object(response))
+        case "/downloads/v2/content":
+            downloadCount += 1
+            if downloadCount == 1 { reached?.fulfill(); await gate.hold() }
+            let bytes = Data([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0x01])
+            return .init(status: 200, headers: ["content-type": "image/png", "content-length": String(bytes.count), "x-lovelies-source-version": "source-v1", "x-lovelies-content-sha256": NativeDownloadRecord.hash(bytes)], data: bytes)
         default: throw NativeAPIError.invalidResponse
         }
     }
@@ -517,13 +521,14 @@ private actor PhotoShareSelectionTransport: NativeTransport {
     private(set) var attempts = 0, dispatched = 0
     var permissionGate: PhotoShareSelectionGate?
     var permissionReached: XCTestExpectation?
-    func save(_ bytes: Data, requireCurrent: @escaping @MainActor () async throws -> Void) async throws {
+    func save(_ bytes: Data, requireCurrent: @escaping @MainActor () async throws -> Void, beforeWrite: @escaping @MainActor () async throws -> Void) async throws {
         attempts += 1
         try await requireCurrent()
         if let permissionGate {
             permissionReached?.fulfill()
             await permissionGate.hold()
         }
+        try await beforeWrite()
         try await requireCurrent()
         dispatched += 1
     }
@@ -545,16 +550,16 @@ private actor PhotoShareSelectionTransport: NativeTransport {
         let gate = PhotoShareSelectionGate(), vault = PhotoShareSelectionSecrets()
         let transport = PhotoShareSelectionTransport(gate: gate, reached: reached)
         let now = Date(), lifetime = 900
-        let claims: WireValue = .object(["sub": .string(PhotoShareSelectionTransport.account), "auth_method": .string("registered_face"), "exp": .integer(Int(now.timeIntervalSince1970) + lifetime + 1)])
+        let claims: WireValue = .object(["sub": .string(PhotoShareSelectionTransport.account), "auth_method": .string("registered_face"), "jti": .string(PhotoShareSelectionTransport.ticket), "exp": .integer(Int(now.timeIntervalSince1970) + lifetime + 1)])
         let credential = try NativeCredentials(.object(["access_token": .string("fixture." + (try claims.encoded()).base64URL + ".fixture"), "refresh_token": .string("synthetic-selection-refresh"),
             "account_id": .string(PhotoShareSelectionTransport.account), "auth_method": .string("registered_face"), "expires_in": .integer(lifetime), "roles": .strings(["user"])]), now: now)
         try vault.write("credentials", data: JSONEncoder().encode(credential))
-        let repository = BackendRepository(origin: URL(string: "https://fixture.invalid")!, transport: transport, secrets: vault, signer: PhotoShareSelectionSigner())
-        _ = try await repository.bootstrap()
         let scratch = FileManager.default.temporaryDirectory.appendingPathComponent("lovelies-selection-test-" + UUID().uuidString, isDirectory: true)
         guard mkdir(scratch.path, 0o700) == 0 else { throw NativeAPIError.unavailable("selection_test_scratch_unavailable") }
+        let repository = BackendRepository(origin: URL(string: "https://fixture.invalid")!, transport: transport, secrets: vault, signer: PhotoShareSelectionSigner(), uploadFiles: NativeUploadPrivateFiles(root: scratch.appendingPathComponent("uploads", isDirectory: true)))
+        _ = try await repository.bootstrap()
         let store = LiveAppStore(sharedFiles: NativeAuthorizedShareFiles(directory: scratch), repository: repository,
-            savePhotoToLibrary: { bytes, requireCurrent in try await saver.save(bytes, requireCurrent: requireCurrent) })
+            savePhotoToLibrary: { bytes, requireCurrent, beforeWrite in try await saver.save(bytes, requireCurrent: requireCurrent, beforeWrite: beforeWrite) })
         store.refreshAudience(); try await waitUntilIdle(store)
         XCTAssertEqual(store.session?.accountID, PhotoShareSelectionTransport.account)
         XCTAssertTrue(store.session?.authenticated == true)
@@ -585,10 +590,10 @@ private actor PhotoShareSelectionTransport: NativeTransport {
                 }
                 await gate.open(); try await waitUntilIdle(store)
                 let downloaded = await transport.downloadCount
-                XCTAssertEqual(downloaded, 1)
+                XCTAssertEqual(downloaded, mode == "unchanged" ? 2 : 1)
                 if mode == "unchanged" && action == "share" {
                     guard let file = store.sharedFile else { XCTFail("Unchanged selection did not reach its own share slot"); try cleanup(store, scratch: scratch); continue }
-                    XCTAssertEqual(try Data(contentsOf: file.url), Data([0x89, 0x50, 0x4e, 0x47, 0x01]))
+                    XCTAssertEqual(try Data(contentsOf: file.url), Data([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0x01]))
                 } else if mode == "unchanged" {
                     XCTAssertEqual(saver.attempts, 1); XCTAssertEqual(saver.dispatched, 1)
                 } else {

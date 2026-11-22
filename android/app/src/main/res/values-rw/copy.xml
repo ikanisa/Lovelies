@@ -1,5 +1,13 @@
 <?xml version='1.0' encoding='utf-8'?>
 <resources>
+    <!-- Download recovery: issuance is not a saved/shared result. Refer only to the existing Save Original / Share Original actions. -->
+    <string name="copy_download_not_issued">"Iyi foto ntiyatangiye kumanurwa. Kanda nanone Bika ifoto y’umwimerere cyangwa Sangiza ifoto y’umwimerere kugira ngo utange ubusabe bushya."</string>
+    <string name="copy_download_explicit_action">"Kugira ngo umanure iyi foto ubu, kanda nanone Bika ifoto y’umwimerere cyangwa Sangiza ifoto y’umwimerere. Igikorwa cya mbere ntikizongera gutangira ubwacyo."</string>
+    <string name="copy_download_request_unconfirmed">"Ntitubashije kwemeza uko ubu busabe bwo kumanura ifoto bwagenze. Kanda igikorwa kimwe wahisemo mbere, Bika ifoto y’umwimerere cyangwa Sangiza ifoto y’umwimerere, kugira ngo ugenzure bwa busabe. Ubusabe bwawe buracyabitswe."</string>
+    <string name="copy_download_external_unconfirmed">"Iyi foto ishobora kuba yaramaze kubikwa cyangwa gusangizwa. Reba mu mafoto, muri dosiye cyangwa muri porogaramu wahisemo yo gusangiza. Ntusubiremo iki gikorwa igihe utaramenya uko cyagenze; Lovelies ntizongera kugikora ubwayo."</string>
+    <string name="copy_download_legacy_unconfirmed">"Ntituzi uko igikorwa cya mbere cyo kumanura ifoto cyagenze. Amakuru yacyo aracyabitswe. Reba mu mafoto, muri dosiye cyangwa muri porogaramu wahisemo yo gusangiza mbere yo kugira ikindi ukora."</string>
+    <string name="copy_download_device_unconfirmed">"Ntitubashije kwemeza uko iki gikorwa cyagenze kuri iki gikoresho. Reba mu mafoto, muri dosiye cyangwa muri porogaramu wahisemo yo gusangiza mbere yo kongera kugerageza. Ntusubiremo kubika cyangwa gusangiza ifoto igihe utaramenya uko byagenze."</string>
+    <string name="copy_download_preparation_failed">"Ntitubashije gutegura iyi foto kuri iki gikoresho. Nta gikorwa cyo kuyibika cyangwa kuyisangiza cyatangiye. Kanda igikorwa kimwe wahisemo mbere kugira ngo ugenzure ubusabe bwawe bwa mbere wongere ugerageze kuyitegura."</string>
     <string name="copy__0ab8318a">"!"</string>
     <string name="copy_a_saved_operation_needs_reconciliat_f323e585">"Igikorwa cyabitswe gikeneye kugenzurirwa uko gihagaze. Ibyo watoranyije mbere n’urufunguzo rw’igikorwa biracyabitswe."</string>
     <string name="copy_a_verified_subscription_is_required_6773aca5">"Hakenewe ifatabuguzi ryemejwe kugira ngo ubike cyangwa wohereze amafoto y’umwimerere. Uracyashobora kureba mbere amafoto wemerewe."</string>

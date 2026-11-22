@@ -55,6 +55,7 @@ enum NativeAPIError: Error, LocalizedError, Equatable {
         switch self {
         case .unavailable(let code): return String.localizedStringWithFormat(NSLocalizedString("Connection unavailable (%@). Try again.", comment: ""), code)
         case .denied(_, let code):
+            if let message = NativeDownloadIssue.message(for: code) { return message }
             if code == "database_schema_not_ready" { return String(localized: "Lovelies is temporarily unavailable. Please try again later.") }
             if code == "age_not_supported" { return String(localized: "Lovelies is for ages 13 and over. You can still manage privacy and account deletion.") }
             if code == "audience_required" { return String(localized: "Confirm your age range before face setup or photos.") }
@@ -185,7 +186,7 @@ struct NativeRefreshDeliveryRecord: Codable, Sendable {
     }
 }
 
-struct NativeSessionSummary: Sendable {
+struct NativeSessionSummary: Sendable, Equatable {
     let accountID: String, roles: [String], authenticated: Bool, expiresAt: Date, epoch: Int
 }
 
@@ -193,6 +194,162 @@ struct NativeSessionSummary: Sendable {
 /// A lifecycle-held registered identity is not a product-authenticated session.
 struct NativeAudienceSessionBinding: Sendable, Equatable {
     let accountID: String, epoch: Int, registeredIdentity: Bool
+}
+
+/// A complete, token-free local observation. It is not a store entitlement or
+/// remote revocation proof. Coalescing snapshots cannot lose a later recovery.
+struct NativeStoreAuthoritySnapshot: Sendable, Equatable {
+    let sourceID: UUID
+    let revision: UInt64
+    let session: NativeSessionSummary?
+    let binding: NativeAudienceSessionBinding?
+    let audience: NativeAudienceProjection?
+    let readID: UUID?
+    let observationID: UUID?
+    func permitsStoreRead(now: Date = Date()) -> Bool {
+        guard let session, session.authenticated, session.expiresAt > now,
+              binding?.accountID == session.accountID, binding?.epoch == session.epoch,
+              let audience, audience.accountID == session.accountID else { return false }
+        return (try? audience.require(.faceAuthentication, now: now)) != nil
+    }
+    var deadline: Date? {
+        guard let session else { return nil }
+        return [session.expiresAt, audience?.nextReviewAt, audience?.guardianRequest?.expiresAt].compactMap { $0 }.min()
+    }
+}
+
+enum NativeStoreAuthorityRead {
+    @TaskLocal static var id: UUID?
+    @TaskLocal static var observationID: UUID?
+}
+
+/// Yield only complete snapshots while holding the short source lock. Yield is
+/// nonblocking; no UI callback, file work or actor hop runs under this lock.
+/// A synchronous proof check also closes the actor-to-presentation wait: the
+/// getter fails closed even before MainActor processes the invalidation event.
+final class NativeStoreAuthoritySource: @unchecked Sendable {
+    private let lock = NSLock()
+    private var snapshot = NativeStoreAuthoritySnapshot(sourceID: UUID(), revision: 0, session: nil, binding: nil, audience: nil, readID: nil, observationID: nil)
+    private var observers: [UUID: AsyncStream<NativeStoreAuthoritySnapshot>.Continuation] = [:]
+    func current() -> NativeStoreAuthoritySnapshot { lock.lock(); defer { lock.unlock() }; return snapshot }
+    func publish(session: NativeSessionSummary?, binding: NativeAudienceSessionBinding?, audience: NativeAudienceProjection?, readID: UUID?, observationID: UUID? = nil, force: Bool = false) {
+        lock.lock(); defer { lock.unlock() }
+        guard force || snapshot.session != session || snapshot.binding != binding || snapshot.audience != audience else { return }
+        precondition(snapshot.revision < UInt64.max)
+        snapshot = .init(sourceID: snapshot.sourceID, revision: snapshot.revision + 1, session: session, binding: binding, audience: audience, readID: readID, observationID: observationID)
+        for observer in observers.values { observer.yield(snapshot) }
+    }
+    func matches(_ proof: NativeStoreAuthoritySnapshot) -> Bool {
+        lock.lock(); defer { lock.unlock() }; return snapshot == proof
+    }
+    func permits(_ proof: NativeStoreAuthoritySnapshot, now: Date = Date()) -> Bool {
+        lock.lock(); defer { lock.unlock() }
+        return snapshot == proof && snapshot.permitsStoreRead(now: now)
+    }
+    func observations() -> AsyncStream<NativeStoreAuthoritySnapshot> {
+        let id = UUID()
+        return AsyncStream(bufferingPolicy: .bufferingNewest(1)) { continuation in
+            continuation.onTermination = { [weak self] _ in self?.remove(id) }
+            lock.lock(); observers[id] = continuation; continuation.yield(snapshot); lock.unlock()
+        }
+    }
+    private func remove(_ id: UUID) { lock.lock(); defer { lock.unlock() }; observers[id] = nil }
+}
+
+struct NativeStoreEntitlementRead: Sendable {
+    let authority: NativeStoreAuthoritySnapshot
+    let value: WireValue
+}
+struct NativeStoreEntitlementFailure: Error, LocalizedError, @unchecked Sendable {
+    let readID: UUID
+    let authority: NativeStoreAuthoritySnapshot
+    let attemptedAuthority: NativeStoreAuthoritySnapshot?
+    let settledAuthority: NativeStoreAuthoritySnapshot?
+    let cancelledAuthority: NativeStoreAuthoritySnapshot?
+    let underlying: Error
+    init(readID: UUID, authority: NativeStoreAuthoritySnapshot, underlying: Error,
+         attemptedAuthority: NativeStoreAuthoritySnapshot? = nil,
+         settledAuthority: NativeStoreAuthoritySnapshot? = nil, cancelledAuthority: NativeStoreAuthoritySnapshot? = nil) {
+        self.readID = readID; self.authority = authority; self.underlying = underlying
+        self.settledAuthority = settledAuthority; self.cancelledAuthority = cancelledAuthority
+        self.attemptedAuthority = attemptedAuthority
+    }
+    var errorDescription: String? { underlying.localizedDescription }
+}
+
+/// MainActor request ownership is separate from repository authority. A later
+/// failed read still supersedes an older success. Presentation retirement does
+/// not detach the authority subscription or consume a newer eligible event.
+@MainActor final class NativeStoreEntitlementReducer {
+    private(set) var readID: UUID?
+    private(set) var activeReadID: UUID?
+    private(set) var settledRevision: UInt64?
+    private(set) var cancelledRevision: UInt64?
+    private(set) var queuedRevision: UInt64?
+    private(set) var observedRevision: UInt64?
+    private(set) var proof: NativeStoreAuthoritySnapshot?
+    private(set) var value: WireValue = .object([:])
+    enum RefreshDecision: Equatable { case none, start, cancel }
+    func beginRead() -> UUID { let id = UUID(); readID = id; activeReadID = id; queuedRevision = nil; cancelledRevision = nil; return id }
+    func owns(_ id: UUID) -> Bool { readID == id }
+    func observe(_ snapshot: NativeStoreAuthoritySnapshot, source: NativeStoreAuthoritySource) -> Bool {
+        guard source.matches(snapshot), observedRevision == nil || snapshot.revision > observedRevision! else { return false }
+        observedRevision = snapshot.revision
+        if proof?.revision != snapshot.revision { clearValue(invalidateSettlement: false) }
+        return true
+    }
+    func install(_ reply: NativeStoreEntitlementRead, id: UUID, source: NativeStoreAuthoritySource) -> Bool {
+        guard owns(id), source.permits(reply.authority) else { return false }
+        proof = reply.authority; value = reply.value; return true
+    }
+    func displayed(source: NativeStoreAuthoritySource, now: Date = Date()) -> WireValue {
+        guard let proof, source.permits(proof, now: now) else { return .object([:]) }; return value
+    }
+    func finishRead(_ id: UUID, authority: NativeStoreAuthoritySnapshot?, source: NativeStoreAuthoritySource,
+                    cancelledAuthority: NativeStoreAuthoritySnapshot? = nil, cancelled: Bool = false,
+                    attemptedAuthority: NativeStoreAuthoritySnapshot? = nil) {
+        guard owns(id) else { return }
+        activeReadID = nil
+        settledRevision = cancelled ? nil : authority.flatMap { source.matches($0) ? $0.revision : nil }
+        let suppression = cancelled ? attemptedAuthority : cancelledAuthority
+        cancelledRevision = suppression.flatMap { source.matches($0) ? $0.revision : nil }
+    }
+    /// Called for observations AND current-read completion. An old reader may
+    /// discover new eligibility after its successor settled; shared observation
+    /// identity alone never means that a live owner will handle that revision.
+    func refreshDecision(_ snapshot: NativeStoreAuthoritySnapshot, source: NativeStoreAuthoritySource,
+                         active: Bool, now: Date = Date()) -> RefreshDecision {
+        guard source.matches(snapshot) else { return .none }
+        guard active, snapshot.session?.authenticated == true, snapshot.session!.expiresAt > now,
+              snapshot.audience == nil || snapshot.permitsStoreRead(now: now) else {
+            queuedRevision = nil; return .cancel
+        }
+        if let proof, source.permits(proof, now: now) { return .none }
+        if activeReadID != nil { return .none }
+        // The latest read has already attempted this exact authority, including
+        // a bounded version retry or failure. Replaying its delayed event must
+        // not create an automatic retry loop, regardless of who learned it.
+        if settledRevision == snapshot.revision || cancelledRevision == snapshot.revision || queuedRevision == snapshot.revision { return .none }
+        queuedRevision = snapshot.revision; return .start
+    }
+    func canPresentFailure(_ id: UUID, authority: NativeStoreAuthoritySnapshot, source: NativeStoreAuthoritySource) -> Bool {
+        owns(id) && activeReadID == nil && queuedRevision == nil && settledRevision == authority.revision && source.matches(authority)
+    }
+    func clearValue(invalidateSettlement: Bool = true) {
+        proof = nil; value = .object([:]); if invalidateSettlement { settledRevision = nil; cancelledRevision = nil }
+    }
+    func cancelRead() { readID = nil; activeReadID = nil; queuedRevision = nil; cancelledRevision = nil }
+    func reset() { cancelRead(); observedRevision = nil; clearValue() }
+}
+
+/// Shared feedback ownership for StoreKit suspension points. An account token
+/// identifies its account, not the current UI epoch or repository incarnation.
+struct NativeStoreFeedbackBinding: Equatable, Sendable {
+    let repositoryID: UUID
+    let session: NativeSessionSummary?
+    func permits(repositoryID currentRepository: UUID, session currentSession: NativeSessionSummary?, now: Date = Date()) -> Bool {
+        repositoryID == currentRepository && session == currentSession && (session == nil || session!.expiresAt > now)
+    }
 }
 
 /// UI publication ownership is independent of backend/session authority.
@@ -776,6 +933,126 @@ struct NativeOperationIntent: Codable, Sendable {
     let approvedPairs: Set<NativePair>?
     var path: String? = nil
     var method: String? = nil
+}
+/// Recovery copy names the known boundary without exposing wire codes or
+/// treating a lost reply, dismissal or interrupted OS write as failure.
+enum NativeDownloadIssue: Error, LocalizedError, Equatable, Sendable {
+    case notIssued, issuanceUnconfirmed, deliveryUnconfirmed, externalUnconfirmed, retired, expired
+    case sessionChanged, sourceChanged, authorityChanged, updateRequired, invalidRequest, actionCompleted
+    var errorDescription: String? {
+        switch self {
+        case .notIssued: return String(localized: "This download was not issued. Tap Save or Share again to make a new request.")
+        case .issuanceUnconfirmed: return String(localized: "The download request is not confirmed. Tap the same action again to check its status.")
+        case .deliveryUnconfirmed: return String(localized: "The photo download is not confirmed. Tap the same action again to check the original request.")
+        case .externalUnconfirmed: return String(localized: "The photo may already have been saved or shared. Check Photos, Files or the sharing destination before trying again.")
+        case .retired: return String(localized: "The original download is no longer available in this session. Tap Save or Share again to make a new request.")
+        case .expired: return String(localized: "This download has expired. Check the original request before starting a new Save or Share action.")
+        case .sessionChanged: return String(localized: "This download belongs to an earlier session. Check the original request before starting a new Save or Share action.")
+        case .sourceChanged: return String(localized: "This photo changed. Return to your library and refresh access before saving or sharing.")
+        case .authorityChanged: return String(localized: "Your access to this photo changed. Return to your library and refresh access before saving or sharing.")
+        case .updateRequired: return String(localized: "Update Lovelies before saving or sharing this photo. The original download request has been kept.")
+        case .invalidRequest: return String(localized: "This download request could not be verified. Keep the original request and refresh your library.")
+        case .actionCompleted: return String(localized: "This photo was already saved or shared. Start a new Save or Share action only if you want another copy.")
+        }
+    }
+    static func message(for code: String) -> String? {
+        let issue: Self
+        switch code {
+        case "download_not_issued": issue = .invalidRequest // Only a validated typed status proves terminal not-issued.
+        case "download_operation_outcome_unresolved": issue = .issuanceUnconfirmed
+        case "download_content_unavailable": issue = .deliveryUnconfirmed
+        case "download_expired": issue = .expired
+        case "download_session_changed": issue = .sessionChanged
+        case "download_source_changed": issue = .sourceChanged
+        case "download_authority_changed": issue = .authorityChanged
+        case "download_protocol_retired": issue = .updateRequired
+        case "invalid_download_input": issue = .invalidRequest
+        default: return code.hasPrefix("download_") ? Self.issuanceUnconfirmed.errorDescription : nil
+        }
+        return issue.errorDescription
+    }
+    static func recoveryError(_ error: any Error, delivery: Bool) -> any Error {
+        if error is CancellationError || Task.isCancelled { return CancellationError() }
+        if let issue = error as? Self { return issue }
+        if let api = error as? NativeAPIError {
+            switch api {
+            case .authenticationRequired, .sessionChanged: return api
+            case .denied(let status, _) where (400..<500).contains(status) && ![408, 429].contains(status): return api
+            default: break
+            }
+        }
+        return delivery ? Self.deliveryUnconfirmed : Self.issuanceUnconfirmed
+    }
+}
+/// Protected local delivery state. A server issuance is never a saved-photo receipt.
+enum NativeDownloadPhase: String, Codable, Sendable {
+    case prepared, signing, recorded, notIssued, contentStarted, staged, externalStarted, externalCompleted, externalUncertain, retired
+}
+enum NativeDownloadPurpose: String, Codable, Sendable { case bytes, photos, share }
+struct NativeDownloadRecord: Codable, Sendable {
+    let key: String, apiOrigin: String, accountID: String, originalSessionID: String, assetID: String, sourceVersion: String
+    let capability: String, purpose: NativeDownloadPurpose, localCreatedAt: Date, originalSessionExpiry: Date
+    var phase: NativeDownloadPhase = .prepared
+    var revision = 0
+    var lastObservedAt: Date
+    var issuedAt: Int?, expiresAt: Int?
+    var sha256: String?, byteCount: Int?, mime: String?
+    var stagingRetired = false
+    var effectID: String?
+    var body: WireValue { .object(["protocol": .string("lovelies-download-input-v2"), "operation_key": .string(key),
+        "original_session_id": .string(originalSessionID), "asset_id": .string(assetID), "source_version": .string(sourceVersion)]) }
+    static func uuid(_ value: String) -> Bool { UUID(uuidString: value)?.uuidString.lowercased() == value }
+    static func hash(_ bytes: Data) -> String { SHA256.hash(data: bytes).map { String(format: "%02x", $0) }.joined() }
+    func validate(origin: URL) throws {
+        let encoded = String(capability.dropFirst(7))
+        guard apiOrigin == origin.absoluteString, [key, accountID, originalSessionID, assetID].allSatisfy(Self.uuid),
+              !sourceVersion.isEmpty, sourceVersion.utf8.count <= 512, capability.hasPrefix("lvd_v2_"),
+              let secret = Data(base64URL: encoded), secret.count == 32, secret.base64URL == encoded,
+              localCreatedAt.timeIntervalSince1970.isFinite, lastObservedAt >= localCreatedAt,
+              originalSessionExpiry > localCreatedAt, revision >= 0, revision < Int.max else { throw NativeAPIError.invalidResponse }
+        if let issuedAt, let expiresAt {
+            guard issuedAt >= 0, expiresAt > issuedAt, expiresAt - issuedAt <= 120_000,
+                  expiresAt <= 9_007_199_254_740_991, Double(expiresAt) <= originalSessionExpiry.timeIntervalSince1970 * 1000 + 1 else { throw NativeAPIError.invalidResponse }
+        } else { guard issuedAt == nil, expiresAt == nil, [.prepared, .signing, .notIssued].contains(phase) else { throw NativeAPIError.invalidResponse } }
+        if let sha256, let byteCount, let mime {
+            guard NativeResumableUploadFile.digest(sha256), (1...20 * 1024 * 1024).contains(byteCount),
+                  ["image/jpeg", "image/png", "image/webp", "image/gif"].contains(mime) else { throw NativeAPIError.invalidResponse }
+        } else { guard sha256 == nil, byteCount == nil, mime == nil, ![.staged, .externalStarted, .externalCompleted, .externalUncertain].contains(phase) else { throw NativeAPIError.invalidResponse } }
+        if [.externalStarted, .externalCompleted, .externalUncertain].contains(phase) { guard effectID.map(Self.uuid) == true else { throw NativeAPIError.invalidResponse } }
+        else { guard effectID == nil else { throw NativeAPIError.invalidResponse } }
+    }
+    mutating func accept(_ value: WireValue) throws {
+        let identity: Set<String> = ["protocol", "status", "account_id", "operation_key", "original_session_id", "asset_id", "source_version"]
+        guard value["protocol"].string == "lovelies-download-operation-v2", value["account_id"].string == accountID,
+              value["operation_key"].string == key, value["original_session_id"].string == originalSessionID,
+              value["asset_id"].string == assetID, value["source_version"].string == sourceVersion else { throw NativeAPIError.invalidResponse }
+        if value["status"].string == "not_issued" {
+            guard Set(value.object?.keys.map { $0 } ?? []) == identity, issuedAt == nil else { throw NativeAPIError.invalidResponse }
+            phase = .notIssued; return
+        }
+        guard phase != .notIssued, value["status"].string == "recorded", Set(value.object?.keys.map { $0 } ?? []) == identity.union(["created_at", "expires_at"]),
+              let created = value["created_at"].integer, let expiry = value["expires_at"].integer,
+              created <= 9_007_199_254_740_991, expiry <= 9_007_199_254_740_991,
+              issuedAt == nil || issuedAt == created && expiresAt == expiry else { throw NativeAPIError.invalidResponse }
+        issuedAt = created; expiresAt = expiry
+        if [.prepared, .signing].contains(phase) { phase = .recorded }
+    }
+}
+struct NativeDownloadJournal: Codable, Sendable {
+    let schema: Int
+    var operations: [NativeDownloadRecord]
+    // Legacy histories retain their original evidence and can never acquire v2 proof.
+    var legacy: [NativeOperationIntent]
+    static var empty: Self { .init(schema: 2, operations: [], legacy: []) }
+    func validate(origin: URL) throws {
+        guard schema == 2, operations.count + legacy.count <= 100, Set(operations.map(\.key)).count == operations.count,
+              Set(legacy.map(\.key)).count == legacy.count, Set(operations.map(\.key) + legacy.map(\.key)).count == operations.count + legacy.count else { throw NativeAPIError.invalidResponse }
+        for record in operations { try record.validate(origin: origin) }
+        for intent in legacy { guard Self.isLegacy(intent), UUID(uuidString: intent.accountID) != nil else { throw NativeAPIError.invalidResponse } }
+    }
+    static func isLegacy(_ intent: NativeOperationIntent) -> Bool {
+        intent.action == "download.sign" || intent.path == "/downloads/sign" || intent.action.hasPrefix("media.download") || intent.path?.hasPrefix("/downloads/") == true
+    }
 }
 struct NativeUploadRecord: Codable, Sendable {
     let accountID: String, localID: String, sha256: String, assetID: String

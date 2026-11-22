@@ -72,7 +72,7 @@ test('real OpenFace signed enrollment/login, exact grants and stale-state/privac
  const actualPreview=await h.request('/community/media/'+upload.asset_id+'/preview',{token:recipient.token});
  assert.equal(actualPreview.status,200);assert.equal(actualPreview.headers.get('content-type'),'image/jpeg');
  assert((await actualPreview.arrayBuffer()).byteLength>0);
- await h.json('/downloads/sign',{token:recipient.token,body:{asset_id:upload.asset_id,operation_key:key()}},403);
+ await h.json('/downloads/sign',{token:recipient.token,body:{asset_id:upload.asset_id,operation_key:key()}},410);
  await h.json('/auth/logout',{token:recipient.token,body:{}});
  const wrongChallenge=await h.json('/auth/face/challenge',{body:{face_handle:recipient.faceHandle,device_id:recipient.deviceId}},201);
  const wrongProof=await sendRealCaptures(h,recipient,wrongChallenge,[otherCaptures[5]]);

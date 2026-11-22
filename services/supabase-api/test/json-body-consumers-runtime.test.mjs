@@ -14,7 +14,10 @@ async function noPurchase(h,account){assert.equal((await h.db.one('SELECT COUNT(
 async function storeReadFailure(t,stage,mode){
  let person;const calls=[],fault=faultResponse(mode);const h=await harness(t,{storeVerifier:async(envelope,path)=>{calls.push(path);assert.equal(envelope.input_hash,await digest(stable(envelope.input)));if(path==='/google/'+stage)return fault.response;assert.equal(path,'/google/subscription');return receipt(envelope,await purchase(person));}});person=await enroll(h);
  const res=await h.request('/subscriptions/google/transactions',{token:person.token,body:{product_id:vars.GOOGLE_PLAY_SUBSCRIPTION_PRODUCT_ID,purchase_token:'synthetic-purchase-token-'+key(),operation_key:key()}});
- assert.equal(res.status,503);assert.equal((await res.json()).error.code,mode==='stall'?'upstream_json_body_timeout':'upstream_json_body_fragment_limit');assert.deepEqual(calls,stage==='subscription'?['/google/subscription']:['/google/subscription','/google/acknowledge']);assert(fault.state.pulls>=1);assert.equal(fault.state.cancels,1);await noPurchase(h,person.accountId);
+ // Once acknowledgement was dispatched, a transport/body failure cannot prove
+ // that the provider effect did not occur. Preserve its unresolved disposition.
+ const expected=stage==='acknowledge'?'store_operation_outcome_unresolved':mode==='stall'?'upstream_json_body_timeout':'upstream_json_body_fragment_limit';
+ assert.equal(res.status,503);assert.equal((await res.json()).error.code,expected);assert.deepEqual(calls,stage==='subscription'?['/google/subscription']:['/google/subscription','/google/acknowledge']);assert(fault.state.pulls>=1);assert.equal(fault.state.cancels,1);await noPurchase(h,person.accountId);
  // In acknowledgement cases a provider call DID occur. No assertion says the
  // provider did nothing, and this test does not replay the operation blindly.
 }

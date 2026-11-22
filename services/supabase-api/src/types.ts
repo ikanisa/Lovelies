@@ -1,7 +1,8 @@
 import type { RestoreTransactionScope } from './restore-transaction.ts';
+import type { RestoreOperationRecord } from './restore-journal.ts';
 
 export type Binding = string | number | null | ArrayBuffer;
-export type InvocationAuthorityOutcomeCode = 'store_operation_outcome_unresolved' | 'privacy_export_grant_outcome_unresolved';
+export type InvocationAuthorityOutcomeCode = 'store_operation_outcome_unresolved' | 'privacy_export_grant_outcome_unresolved' | 'download_operation_outcome_unresolved';
 export interface Database {
     invocation<T>(callback: () => T | Promise<T>): Promise<T>;
     /** Opt-in authority for one active invocation; the caller retains ownership
@@ -10,6 +11,10 @@ export interface Database {
     all<T = Record<string, unknown>>(sql: string, ...bindings: Binding[]): Promise<T[]>;
     one<T = Record<string, unknown>>(sql: string, ...bindings: Binding[]): Promise<T | null>;
     run(sql: string, ...bindings: Binding[]): Promise<void>;
+    /** Fail before effects if the caller is already in a transaction. */
+    requireTransactionBoundary(): void;
+    beforeCommit(validate: () => void | Promise<void>): void;
+    verifiedRestoreOperation(operationID: string): Promise<RestoreOperationRecord | null>;
     read<T>(callback: () => T | Promise<T>): Promise<T>;
     transaction<T>(callback: (restore: RestoreTransactionScope) => T | Promise<T>, intent?: unknown): Promise<T>;
 }
@@ -42,6 +47,7 @@ export interface SupabaseEnv {
     MODEL_SERVICE_READINESS?: (signal?:AbortSignal)=>Promise<boolean>;
     INFERENCE_ENGINE_IDENTITY?: string;
     APP_ENV: string; AUTH_SIGNING_SECRET?:string; MEDIA_SIGNING_SECRET?:string;
+    DOWNLOAD_RECEIPT_KEY_ID?:string; DOWNLOAD_RECEIPT_KEYS_JSON?:string;
     FACE_AUTH_POLICY_VERSION?:string; PHOTO_MODEL_VERSION?:string; PHOTO_CONSENT_POLICY_VERSION?:string;
     STORE_VERIFIER?:ServiceFetcher; PUSH_SERVICE?:ServiceFetcher;
     APPLE_BUNDLE_ID?:string; APPLE_APP_ID?:string; APPLE_SUBSCRIPTION_PRODUCT_ID?:string;

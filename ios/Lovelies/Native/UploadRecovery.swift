@@ -226,3 +226,48 @@ struct NativeResumableUploadStatus: Sendable {
         return formatter.date(from: text) ?? ISO8601DateFormatter().date(from: text)
     }
 }
+
+/// Only files named by a validated protected download journal are managed here.
+/// Unknown installed files are never swept or adopted.
+struct NativeDownloadPrivateFiles: Sendable {
+    let root: URL
+    init(root: URL) { self.root = root.standardizedFileURL }
+    private func location(_ record: NativeDownloadRecord, create: Bool) throws -> URL {
+        guard NativeDownloadRecord.uuid(record.key), (try? FileManager.default.destinationOfSymbolicLink(atPath: root.path)) == nil else { throw NativeAPIError.invalidResponse }
+        if create && !FileManager.default.fileExists(atPath: root.path) {
+            try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true, attributes: [.posixPermissions: 0o700])
+        }
+        let values = try root.resourceValues(forKeys: [.isDirectoryKey, .isSymbolicLinkKey])
+        guard values.isDirectory == true, values.isSymbolicLink != true else { throw NativeAPIError.invalidResponse }
+        var directory = root, excluded = URLResourceValues(); excluded.isExcludedFromBackup = true; try directory.setResourceValues(excluded)
+        return root.appendingPathComponent(record.key + ".download")
+    }
+    func stage(_ bytes: Data, record: NativeDownloadRecord) throws {
+        guard bytes.count == record.byteCount, NativeDownloadRecord.hash(bytes) == record.sha256 else { throw NativeAPIError.invalidResponse }
+        let file = try location(record, create: true)
+        if FileManager.default.fileExists(atPath: file.path) { _ = try verifiedBytes(record); return }
+        #if os(iOS)
+        try bytes.write(to: file, options: [.atomic, .completeFileProtection])
+        #else
+        try bytes.write(to: file, options: .atomic)
+        #endif
+        try FileManager.default.setAttributes([.posixPermissions: 0o600], ofItemAtPath: file.path)
+        var target = file, excluded = URLResourceValues(); excluded.isExcludedFromBackup = true; try target.setResourceValues(excluded)
+        _ = try verifiedBytes(record)
+    }
+    func verifiedBytes(_ record: NativeDownloadRecord) throws -> Data {
+        let file = try location(record, create: false)
+        let values = try file.resourceValues(forKeys: [.isRegularFileKey, .isSymbolicLinkKey, .fileSizeKey])
+        guard values.isRegularFile == true, values.isSymbolicLink != true, values.fileSize == record.byteCount else { throw NativeAPIError.invalidResponse }
+        let bytes = try Data(contentsOf: file)
+        guard bytes.count == record.byteCount, NativeDownloadRecord.hash(bytes) == record.sha256 else { throw NativeAPIError.invalidResponse }
+        return bytes
+    }
+    func remove(_ record: NativeDownloadRecord) throws {
+        guard record.sha256 != nil, FileManager.default.fileExists(atPath: root.path) else { return }
+        let file = try location(record, create: false)
+        guard FileManager.default.fileExists(atPath: file.path) else { return }
+        // A replaced or unknown file is retained as evidence, never deleted.
+        _ = try verifiedBytes(record); try FileManager.default.removeItem(at: file)
+    }
+}

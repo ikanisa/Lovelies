@@ -7,6 +7,7 @@ import { handleGallery } from './gallery.ts';
 import { handleProfile } from './profile.ts';
 import { handleIdentity } from './identity.ts';
 import { handleEntitlements } from './entitlements.ts';
+import { handleDownloadV2 } from './download-v2.ts';
 import { handleOperators } from './operators.ts';
 import { handleAdminUsers } from './admin-users.ts';
 import { handleNotifications } from './notifications.ts';
@@ -78,9 +79,15 @@ export function createHandler(ctx:AppContext):(request:Request)=>Promise<Respons
     if(ctx.env.PUBLIC_APP_BASE_URL)allowed.add(ctx.env.PUBLIC_APP_BASE_URL);
     let response:Response|undefined,activeRequest:Request|undefined;
     const decorate=(value:Response):Response=>{
-      const headers=new Headers(value.headers);headers.set('Cache-Control','no-store, private');headers.set('X-Content-Type-Options','nosniff');headers.set('Vary','Origin');
+      const headers=new Headers(value.headers);headers.set('Cache-Control','no-store, private');headers.set('X-Content-Type-Options','nosniff');headers.set('Access-Control-Expose-Headers','X-Lovelies-Source-Version, X-Lovelies-Content-SHA256');headers.set('Vary','Origin');
       if(origin&&allowed.has(origin))headers.set('Access-Control-Allow-Origin',origin);else headers.delete('Access-Control-Allow-Origin');
       return new Response(value.body,{status:value.status,statusText:value.statusText,headers});
+    };
+    const requestFailure=(error:unknown):Response=>{
+      const path=new URL((activeRequest??normalizedRequest(incoming)).url).pathname;
+      if(/^\/downloads\/v2\/(sign|status|content)$/.test(path)&&(!(error instanceof ApiError)||error.status>=500))
+        return ok({error:{code:'download_operation_outcome_unresolved'}},503);
+      return failure(error);
     };
     try{return await ctx.db.invocation(async()=>{
       const request=normalizedRequest(incoming);activeRequest=request;
@@ -89,7 +96,7 @@ export function createHandler(ctx:AppContext):(request:Request)=>Promise<Respons
         const path=new URL(request.url).pathname;
         if(request.method==='OPTIONS'){
           if(!origin)throw new ApiError(403,'origin_required');
-          response=new Response(null,{status:204,headers:{'Access-Control-Allow-Methods':'GET,POST,PUT,PATCH,DELETE,OPTIONS','Access-Control-Allow-Headers':'Authorization,Content-Type,X-Lovelies-Capture-SHA256,X-Lovelies-Device-Signature,X-Lovelies-Capture-Bytes,X-Lovelies-Chunk-SHA256','Access-Control-Max-Age':'600'}});
+          response=new Response(null,{status:204,headers:{'Access-Control-Allow-Methods':'GET,POST,PUT,PATCH,DELETE,OPTIONS','Access-Control-Allow-Headers':'Authorization,Content-Type,X-Lovelies-Download-Capability,X-Lovelies-Capture-SHA256,X-Lovelies-Device-Signature,X-Lovelies-Capture-Bytes,X-Lovelies-Chunk-SHA256','Access-Control-Max-Age':'600'}});
         }else if(request.method==='GET'&&(path==='/health'||path==='/ready')){
           const version=await databaseVersion(ctx),ready=version===currentSchemaVersion;
           const missing=path==='/ready'?missingConfiguration(ctx.env):[];
@@ -112,12 +119,12 @@ export function createHandler(ctx:AppContext):(request:Request)=>Promise<Respons
           if(path.startsWith('/auth/face/recovery/'))await limitAuth(request,ctx,'recovery');
           if(path.startsWith('/auth/face/profile/'))await limitAuth(request,ctx,'profile');
           let handled:Response|null=null;
-          for(const handler of [handleAuth,handleAudience,handleFaceProfile,handleFaceAuth,handleIdentity,handleProfile,handleProcessing,handleSharing,handleGallery,handleEntitlements,handleOperators,handleAdminUsers,handleNotifications,handleRetention,handlePrivacy]){
+          for(const handler of [handleAuth,handleAudience,handleFaceProfile,handleFaceAuth,handleIdentity,handleProfile,handleProcessing,handleSharing,handleGallery,handleDownloadV2,handleEntitlements,handleOperators,handleAdminUsers,handleNotifications,handleRetention,handlePrivacy]){
             handled=await handler(request,ctx);if(handled)break;
           }
           if(!handled)throw new ApiError(404,'route_not_found');response=handled;
         }
-      }catch(error){response=failure(error);}
+      }catch(error){response=requestFailure(error);}
       finally{cancelUnusedBody(request.body);}
       response=decorate(response);return response;
     });}catch(error){
@@ -128,7 +135,7 @@ export function createHandler(ctx:AppContext):(request:Request)=>Promise<Respons
       cancelUnusedBody(response?.body);
       const body=(activeRequest??incoming).body;
       cancelUnusedBody(body);
-      return decorate(failure(error));
+      return decorate(requestFailure(error));
     }
   };
 }

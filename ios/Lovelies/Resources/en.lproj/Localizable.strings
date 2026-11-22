@@ -993,3 +993,17 @@
 "Your sign-in state changed. Authenticate again to check the original request." = "Your sign-in state changed. Authenticate again to check the original request.";
 "Device authorization expired. Authenticate again to continue the original request." = "Device authorization expired. Authenticate again to continue the original request.";
 "Confirm access on this device to continue your Lovelies request. Your selfies are verified separately." = "Confirm access on this device to continue your Lovelies request. Your selfies are verified separately.";
+
+/* Download recovery: not-issued, unresolved delivery, and ambiguous external effects are distinct. */
+"This download was not issued. Tap Save or Share again to make a new request." = "This download was not issued. Tap Save or Share again to make a new request.";
+"The download request is not confirmed. Tap the same action again to check its status." = "The download request is not confirmed. Tap the same action again to check its status.";
+"The photo download is not confirmed. Tap the same action again to check the original request." = "The photo download is not confirmed. Tap the same action again to check the original request.";
+"The photo may already have been saved or shared. Check Photos, Files or the sharing destination before trying again." = "The photo may already have been saved or shared. Check Photos, Files or the sharing destination before trying again.";
+"The original download is no longer available in this session. Tap Save or Share again to make a new request." = "The original download is no longer available in this session. Tap Save or Share again to make a new request.";
+"This download has expired. Check the original request before starting a new Save or Share action." = "This download has expired. Check the original request before starting a new Save or Share action.";
+"This download belongs to an earlier session. Check the original request before starting a new Save or Share action." = "This download belongs to an earlier session. Check the original request before starting a new Save or Share action.";
+"This photo changed. Return to your library and refresh access before saving or sharing." = "This photo changed. Return to your library and refresh access before saving or sharing.";
+"Your access to this photo changed. Return to your library and refresh access before saving or sharing." = "Your access to this photo changed. Return to your library and refresh access before saving or sharing.";
+"Update Lovelies before saving or sharing this photo. The original download request has been kept." = "Update Lovelies before saving or sharing this photo. The original download request has been kept.";
+"This download request could not be verified. Keep the original request and refresh your library." = "This download request could not be verified. Keep the original request and refresh your library.";
+"This photo was already saved or shared. Start a new Save or Share action only if you want another copy." = "This photo was already saved or shared. Start a new Save or Share action only if you want another copy.";

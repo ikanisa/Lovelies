@@ -1,11 +1,12 @@
 import assert from 'node:assert/strict';
-import { test } from 'node:test';
+import { test as nodeTest } from 'node:test';
 import { SupabasePrivateBucket } from '../src/storage.ts';
 import { JSON_BODY_LIMITS } from '../src/types.ts';
 import { processPhotoJob } from '../src/processing.ts';
 import { startHarness,enroll,faceVerifierFixture,fixturePng,sha256 } from './runtime-harness.mjs';
 
 const operation=()=>crypto.randomUUID();
+const test=process.env.TEST_DATABASE_URL===undefined?nodeTest:nodeTest.skip;
 
 test('one owner preview bounds only the first successful info body and leaves source state intact', {timeout:60000}, async t=>{
  assert.equal(process.env.TEST_DATABASE_URL,undefined,'fixture must never attach to an external database');

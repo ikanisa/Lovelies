@@ -377,7 +377,7 @@ for (const mode of ['outage', 'prepare-before', 'prepare-after', 'commit-result-
   if (mode === 'commit-result-loss') {
     assert(boundary); assert.equal(boundary.journal.status, 'pending'); assert.notEqual(boundary.session.revoked_at, null); assert.equal(boundary.consent.status, 'revoked');
     assert(boundary.receipt); assert.equal(boundary.audit.length, 1); assert.equal(f.faults.commitReply, false); assert.equal(f.faults.afterCommit, undefined);
-    assert.equal(saved.status, 'committed'); assert.equal(saved.plan_hash, boundary.journal.plan_hash);
+    assert.equal(saved.status, 'pending'); assert.equal(saved.plan_hash, boundary.journal.plan_hash);
   } else { assert.equal(f.faults.reply, undefined); assert.equal(saved.status, mode === 'ack-after' ? 'committed' : 'pending'); }
   const committedState = await snapshot(f), originalReceipt = await receipt(f), response = await f.json();
   assert.deepEqual(response, JSON.parse(originalReceipt.response_json)); assert.deepEqual(await snapshot(f), committedState);

@@ -1,4 +1,5 @@
 import { ApiError, digest, stable } from './types.ts';
+import { validateDownloadDescriptor, verifyDownloadDescriptor, type DownloadDescriptor } from './download-v2-contract.ts';
 
 export const RESTORE_PROJECT_ID = 'ltqfplqevxztlswlzexn' as const;
 export const RESTORE_JOURNAL_PROTOCOL = 'lovelies-restriction-journal-v1' as const;
@@ -36,7 +37,7 @@ export type RestoreRestrictionEvent = Readonly<{
 export type RestoreOperationInput = Readonly<{
   version: 1; project_id: typeof RESTORE_PROJECT_ID; operation_id: string; input_hash: string;
   expected: RestoreMarker; allocations: Readonly<Record<string, string>>;
-  events: readonly RestoreRestrictionEvent[];
+  events: readonly RestoreRestrictionEvent[]; download?: DownloadDescriptor;
 }>;
 export type RestoreEventReceipt = Readonly<{
   sequence: number; hash: string; previous_hash: string; payload_hash: string;
@@ -47,6 +48,7 @@ export type RestoreOperationPlan = RestoreOperationInput & Readonly<{
 }>;
 export type RestoreOperationRecord = Readonly<{
   plan: RestoreOperationPlan; plan_hash: string; status: 'pending' | 'committed'; committed_at: number | null;
+  disposition?: 'issued' | 'not_issued'; receipt_hash?: string;
 }>;
 export type RestoreControl = Readonly<{
   state: 'serving' | 'pending' | 'quarantined'; marker: RestoreMarker;
@@ -95,7 +97,7 @@ export function validateRestoreRestrictionEvent(value: unknown): RestoreRestrict
   return Object.freeze({ version: 1, project_id: RESTORE_PROJECT_ID, operation_id: identifier(value.operation_id), kind, scope: Object.freeze(scope) });
 }
 export function validateRestoreOperationInput(value: unknown): RestoreOperationInput {
-  if (!exact(value, ['version', 'project_id', 'operation_id', 'input_hash', 'expected', 'allocations', 'events']) ||
+  if (!exact(value, ['version', 'project_id', 'operation_id', 'input_hash', 'expected', 'allocations', 'events', ...(plain(value) && Object.hasOwn(value,'download') ? ['download'] : [])]) ||
       value.version !== 1 || value.project_id !== RESTORE_PROJECT_ID || !plain(value.allocations) ||
       Object.keys(value.allocations).length > 32 || !Array.isArray(value.events) || value.events.length > 32) return unavailable();
   const allocations: Record<string, string> = {};
@@ -108,7 +110,7 @@ export function validateRestoreOperationInput(value: unknown): RestoreOperationI
   if (new Set(events.map(event => event.operation_id)).size !== events.length) return unavailable();
   const input = Object.freeze({ version: 1 as const, project_id: RESTORE_PROJECT_ID, operation_id: identifier(value.operation_id),
     input_hash: hash(value.input_hash), expected: validateRestoreMarker(value.expected),
-    allocations: Object.freeze(allocations), events: Object.freeze(events) });
+    allocations: Object.freeze(allocations), events: Object.freeze(events), ...(Object.hasOwn(value,'download') ? {download:validateDownloadDescriptor(value.download)} : {}) });
   if (new TextEncoder().encode(stable(input)).byteLength > RESTORE_REQUEST_BYTES) return unavailable();
   return input;
 }
@@ -130,11 +132,12 @@ async function validateReceipt(value: unknown, event: RestoreRestrictionEvent, s
   return Object.freeze({ sequence, hash: value.hash as string, previous_hash: previous, payload_hash: payloadHash, recorded_at: recordedAt, event });
 }
 export async function validateRestoreOperationRecord(value: unknown): Promise<RestoreOperationRecord> {
-  if (!exact(value, ['plan', 'plan_hash', 'status', 'committed_at']) || !exact(value.plan,
-    ['version', 'project_id', 'operation_id', 'input_hash', 'expected', 'allocations', 'events', 'next', 'prepared_at', 'receipts'])) return unavailable();
+  if (!exact(value, ['plan', 'plan_hash', 'status', 'committed_at', ...(plain(value) && plain(value.plan) && value.plan.download && value.status==='committed' ? ['disposition','receipt_hash'] : [])]) || !exact(value.plan,
+    ['version', 'project_id', 'operation_id', 'input_hash', 'expected', 'allocations', 'events', 'next', 'prepared_at', 'receipts', ...(plain(value.plan) && Object.hasOwn(value.plan,'download') ? ['download'] : [])])) return unavailable();
   const raw = value.plan;
   const input = validateRestoreOperationInput({ version: raw.version, project_id: raw.project_id, operation_id: raw.operation_id,
-    input_hash: raw.input_hash, expected: raw.expected, allocations: raw.allocations, events: raw.events });
+    input_hash: raw.input_hash, expected: raw.expected, allocations: raw.allocations, events: raw.events, ...(Object.hasOwn(raw,'download') ? {download:raw.download} : {}) });
+  if (input.download) await verifyDownloadDescriptor(input.download,input);
   if (!Array.isArray(raw.receipts) || raw.receipts.length !== input.events.length) return unavailable();
   const next = validateRestoreMarker(raw.next), preparedAt = integer(raw.prepared_at, 1);
   if (input.expected.checkpoint.revision === Number.MAX_SAFE_INTEGER || next.database_id !== input.expected.database_id ||
@@ -149,13 +152,16 @@ export async function validateRestoreOperationRecord(value: unknown): Promise<Re
   if (next.cursor.sequence !== sequence || next.cursor.hash !== previous || next.checkpoint.hash !== await digest(stable({
     protocol: RESTORE_JOURNAL_PROTOCOL, kind: 'database-checkpoint-v1', project_id: RESTORE_PROJECT_ID,
     operation_id: input.operation_id, input_hash: input.input_hash, expected: input.expected,
-    allocations: input.allocations, events: input.events, cursor: next.cursor,
+    allocations: input.allocations, events: input.events, ...(input.download ? {download:input.download} : {}), cursor: next.cursor,
   }))) return unavailable();
   const plan = Object.freeze({ ...input, next, prepared_at: preparedAt, receipts: Object.freeze(receipts) });
   const committedAt = value.committed_at === null ? null : integer(value.committed_at, 1);
   if (!['pending', 'committed'].includes(value.status as string) || value.status === 'pending' && committedAt !== null ||
       value.status === 'committed' && (committedAt === null || committedAt < preparedAt) || hash(value.plan_hash) !== await digest(stable(plan))) return unavailable();
-  return Object.freeze({ plan, plan_hash: value.plan_hash as string, status: value.status as RestoreOperationRecord['status'], committed_at: committedAt });
+  if (input.download && value.status==='committed' && (!['issued','not_issued'].includes(value.disposition as string) ||
+      value.receipt_hash!==(value.disposition==='issued'?input.download.issued_receipt_hash:input.download.not_issued.receipt_hash))) return unavailable();
+  return Object.freeze({ plan, plan_hash: value.plan_hash as string, status: value.status as RestoreOperationRecord['status'], committed_at: committedAt,
+    ...(input.download && value.status==='committed' ? {disposition:value.disposition as 'issued'|'not_issued',receipt_hash:value.receipt_hash as string} : {}) });
 }
 
 /** Server-only, fixed-project client. No bootstrap/recovery-clear method and no
@@ -192,7 +198,7 @@ export class RestoreJournalClient {
       if (serialized !== undefined && new TextEncoder().encode(serialized).byteLength > RESTORE_REQUEST_BYTES || controller.signal.aborted) return unavailable();
       const destination = new URL(path, this.base);
       const pending = this.fetcher(destination, { method: body === undefined ? 'GET' : 'POST', redirect: 'manual', signal: controller.signal,
-        headers: { Authorization: 'Bearer ' + this.#token, Accept: 'application/json', 'Accept-Encoding': 'identity',
+        headers: { Authorization: 'Bearer ' + this.#token, 'X-Lovelies-Writer-Protocol':'lovelies-api-v15', Accept: 'application/json', 'Accept-Encoding': 'identity',
           ...(body === undefined ? {} : { 'Content-Type': 'application/json; charset=utf-8' }) }, ...(serialized === undefined ? {} : { body: serialized }) });
       void pending.then(late => { if (controller.signal.aborted) void late.body?.cancel().catch(() => {}); }, () => {});
       response = await Promise.race([pending, interrupted]);
@@ -239,13 +245,22 @@ export class RestoreJournalClient {
     }, signal);
   }
   async prepare(value: RestoreOperationInput, signal?: AbortSignal): Promise<RestoreOperationRecord> {
+    if (value.download) return unavailable();
+    return this.prepareRequest(value,false,signal);
+  }
+  async prepareDownload(value: RestoreOperationInput, signal?: AbortSignal): Promise<RestoreOperationRecord> {
+    if (!value.download) return unavailable();
+    return this.prepareRequest(value,true,signal);
+  }
+  private async prepareRequest(value: RestoreOperationInput, typed:boolean, signal?:AbortSignal):Promise<RestoreOperationRecord> {
     const input = validateRestoreOperationInput(value);
-    return this.request('/v1/operations/prepare', input, async (value, status) => {
+    if (input.download) await verifyDownloadDescriptor(input.download,input);
+    return this.request(typed?'/v1/download-operations/prepare':'/v1/operations/prepare', input, async (value, status) => {
       if (status !== 200) return unavailable(); const envelope = this.envelope(value, ['protocol', 'project_id', 'control', 'operation']);
       const control = validateRestoreControl(envelope.control), operation = await validateRestoreOperationRecord(envelope.operation);
       const plan = operation.plan;
       if (!same({ version: plan.version, project_id: plan.project_id, operation_id: plan.operation_id, input_hash: plan.input_hash,
-        expected: plan.expected, allocations: plan.allocations, events: plan.events }, input) || control.state === 'quarantined') return unavailable();
+        expected: plan.expected, allocations: plan.allocations, events: plan.events, ...(plan.download ? {download:plan.download} : {}) }, input) || control.state === 'quarantined') return unavailable();
       if (operation.status === 'pending' && (control.state !== 'pending' || control.pending_operation_id !== input.operation_id || !same(control.marker, input.expected))) return unavailable();
       if (operation.status === 'committed' && (control.state !== 'serving' || !same(control.marker, plan.next))) return unavailable();
       return operation;
@@ -270,4 +285,16 @@ export class RestoreJournalClient {
       return operation;
     }, signal);
   }
+  async settleDownload(operationId:string,planHash:string,marker:RestoreMarker,disposition:'issued'|'not_issued',receiptHash:string,signal?:AbortSignal):Promise<RestoreOperationRecord> {
+    const id=identifier(operationId),expectedHash=hash(planHash),next=validateRestoreMarker(marker),receipt=hash(receiptHash);
+    if (!['issued','not_issued'].includes(disposition)) return unavailable();
+    return this.request('/v1/download-operations/'+id+'/settle',{version:1,project_id:RESTORE_PROJECT_ID,plan_hash:expectedHash,marker:next,disposition,receipt_hash:receipt},async(value,status)=>{
+      if(status!==200)return unavailable();const envelope=this.envelope(value,['protocol','project_id','control','operation']);
+      const control=validateRestoreControl(envelope.control),operation=await validateRestoreOperationRecord(envelope.operation);
+      if(!operation.plan.download||operation.plan.operation_id!==id||operation.plan_hash!==expectedHash||operation.status!=='committed'||
+        operation.disposition!==disposition||operation.receipt_hash!==receipt||!same(operation.plan.next,next)||control.state!=='serving'||!same(control.marker,next))return unavailable();
+      return operation;
+    },signal);
+  }
+
 }

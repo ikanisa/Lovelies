@@ -365,7 +365,7 @@ for (const mode of ['outage', 'prepare-before', 'prepare-after', 'commit-result-
   if (mode === 'commit-result-loss') {
     assert(boundary); assert.equal(boundary.journal.status, 'pending'); assert.notEqual(boundary.session.revoked_at, null); assert.equal(boundary.consent.status, 'revoked');
     assert.equal(f.faults.commitReply, false); assert.equal(f.faults.afterCommit, undefined);
-    assert.equal(saved.status, 'committed'); assert.equal(saved.plan_hash, boundary.journal.plan_hash);
+    assert.equal(saved.status, 'pending'); assert.equal(saved.plan_hash, boundary.journal.plan_hash);
   } else { assert.equal(f.faults.reply, undefined); assert.equal(saved.status, mode === 'ack-after' ? 'committed' : 'pending'); }
   await f.logout(401); const committed = await assertPlan(f, facts); assert.equal(committed.plan_hash, saved.plan_hash);
   assert.equal(await cursor(f), facts.length);

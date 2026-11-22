@@ -12,6 +12,8 @@ const MAXIMUM=512*1024*1024,MAGIC=Buffer.from('LVBK0001');
 const idPattern=/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
 const manifestPattern=/^lovelies-db-([0-9a-f-]{36})\.json$/;
 const fail=code=>Object.assign(new Error(code),{code});
+const unknown=reason=>Object.assign(new Error(/^backup_[a-z_]+$/.test(reason?.code??'')?reason.code:'backup_lease_reconciliation_required',{cause:reason}),
+  {code:/^backup_[a-z_]+$/.test(reason?.code??'')?reason.code:'backup_lease_reconciliation_required',backupOutcomeUnknown:true});
 const sha=value=>createHash('sha256').update(value).digest('hex');
 const canonical=value=>JSON.stringify(value,Object.keys(value).sort());
 
@@ -47,9 +49,28 @@ async function regular(file){
 async function locked(directory,work,{create=true}={}){
   await backupDirectory(directory,{create});
   const name=path.join(directory,'.lovelies-backup.lock');
-  const handle=await fs.open(name,'wx',0o600);
-  try{await handle.writeFile(JSON.stringify({pid:process.pid}));await handle.sync();return await work();}
-  finally{await handle.close();await fs.unlink(name);}
+  const handle=await fs.open(name,'wx',0o600),run=randomUUID();
+  let identity,initialized=false,problem,value,failed=false;
+  try{
+    await handle.writeFile(JSON.stringify({protocol:'lovelies-backup-lease-v1',run_id:run,pid:process.pid}));
+    await handle.sync();await syncDirectory(directory);identity=await handle.stat();initialized=true;
+    value=await work();
+  }catch(error){failed=true;problem=error;}
+  try{
+    // A failed/uncertain child or incomplete hold initialization must never
+    // reopen the catalog for another provided CLI or library caller.
+    if(initialized&&!problem?.backupOutcomeUnknown){
+      const current=await regular(name);
+      if(current.dev!==identity.dev||current.ino!==identity.ino||
+          (await fs.readFile(name,'utf8'))!==JSON.stringify({protocol:'lovelies-backup-lease-v1',run_id:run,pid:process.pid}))
+        throw fail('backup_lease_reconciliation_required');
+      await fs.unlink(name);await syncDirectory(directory);
+    }
+  }catch(cleanup){problem=unknown(failed?problem:cleanup);failed=true;}
+  finally{
+    try{await handle.close();}catch(cleanup){problem=unknown(failed?problem:cleanup);failed=true;}
+  }
+  if(failed)throw problem;return value;
 }
 async function syncDirectory(directory){const handle=await fs.open(directory,'r');try{await handle.sync();}finally{await handle.close();}}
 async function writeAll(handle,bytes){let at=0;while(at<bytes.length){const {bytesWritten}=await handle.write(bytes,at,bytes.length-at);if(!bytesWritten)throw fail('backup_write_incomplete');at+=bytesWritten;}}
@@ -103,9 +124,8 @@ async function verifyUnlocked(directory,id,key,environment,snapshot){
   return {metadata,archive,archiveStat:as,manifestFile,manifestStat:ms,encoded,tag,iv:header.iv};
 }
 
-export async function verifyBackup({directory,id,key,environment='production'}){
-  environmentName(environment);
-  return locked(directory,async()=>{const {metadata}=await verifyUnlocked(directory,id,key,environment);return metadata;});
+export async function verifyBackup(config){
+  return withBackupCatalog(config,catalog=>catalog.verify(config.id));
 }
 
 /** Verify and consume the same unlinked encrypted snapshot. Reopening the catalog
@@ -127,27 +147,32 @@ async function withVerifiedBackupUnlocked({directory,id,key,environment},consume
       const cipher=createDecipheriv('aes-256-gcm',derived.encryption,Buffer.from(verified.iv,'base64url'));
       cipher.setAAD(verified.encoded);cipher.setAuthTag(verified.tag);
       const output=new PassThrough(),transfer=pipeline(archiveRead(verified.archive,snapshot,{start:verified.encoded.length,end:verified.archiveStat.size-17}),cipher,output);
-      try{return (await Promise.all([transfer,Promise.resolve().then(()=>consume(output,verified.metadata))]))[1];}
+      const consumed=Promise.resolve().then(()=>consume(output,verified.metadata)).then(value=>{
+        // A consumer returning success without reading EOF otherwise leaves a
+        // large transfer blocked on backpressure forever. Its return value is
+        // not proof that the authenticated stream was fully consumed.
+        if(!output.readableEnded){const error=fail('backup_consumer_incomplete');output.destroy(error);throw error;}
+        return value;
+      });
+      try{return (await Promise.all([transfer,consumed]))[1];}
       catch(error){output.destroy();await transfer.catch(()=>{});throw error;}
       finally{derived.encryption.fill(0);derived.manifest.fill(0);}
     }finally{await snapshot.close();}
 }
 
-export async function withVerifiedBackup({directory,id,key,environment='production'},consume){
-  environmentName(environment);
-  return locked(directory,()=>withVerifiedBackupUnlocked({directory,id,key,environment},consume));
+export async function withVerifiedBackup(config,consume){
+  return withBackupCatalog(config,catalog=>catalog.consume(config.id,consume));
 }
 
-export async function createBackup({directory,source,sourceCompleted=Promise.resolve(),key,environment='production',now=Date.now}){
+async function createBackupUnlocked({directory,source,sourceCompleted=Promise.resolve(),cancelSource,key,environment='production',now=Date.now}){
   environmentName(environment);const derived=keys(key);
   // Attach a rejection handler immediately; a producer may fail before EOF.
-  const completed=sourceCompleted.then(()=>null,error=>error);
-  return locked(directory,async()=>{
+  const completed=Promise.resolve(sourceCompleted).then(()=>({ok:true}),error=>({ok:false,error}));
     const id=randomUUID(),created=now();if(!Number.isSafeInteger(created)||created<0)throw fail('backup_clock_invalid');
     const header={protocol:'lovelies-db-backup-v1',project:PROJECT,environment,id,created_at:created,expires_at:created+BACKUP_TTL,key_id:derived.id,
       algorithm:'AES-256-GCM',schema:'lovelies_private',format:'pg_dump_custom',iv:randomBytes(12).toString('base64url')};
     const encoded=headerBytes(header),archive=`lovelies-db-${id}.lvbk`,temporary=path.join(directory,archive+'.partial'),final=path.join(directory,archive);
-    const handle=await fs.open(temporary,'wx',0o600);let renamed=false;
+    const handle=await fs.open(temporary,'wx',0o600);let renamed=false,closed=false;
     try{
       await writeAll(handle,encoded);
       const cipher=createCipheriv('aes-256-gcm',derived.encryption,Buffer.from(header.iv,'base64url'));cipher.setAAD(encoded);
@@ -155,9 +180,9 @@ export async function createBackup({directory,source,sourceCompleted=Promise.res
       const count=new Transform({transform(chunk,encoding,done){bytes+=chunk.length;if(bytes>MAXIMUM)return done(fail('backup_size_exceeded'));hash.update(chunk);if(magic.length<5)magic=prefix(magic,chunk);done(null,chunk);}});
       // Keep the one opened file descriptor through header/ciphertext/tag/fsync.
       await pipeline(source,count,cipher,new Writable({write(chunk,encoding,done){writeAll(handle,chunk).then(()=>done(),done);}}));
-      const producerError=await completed;if(producerError)throw producerError;
+      const outcome=await completed;if(!outcome.ok)throw outcome.error;
       if(magic.toString()!=='PGDMP'||bytes<5)throw fail('backup_source_format');
-      await writeAll(handle,cipher.getAuthTag());await handle.sync();await handle.close();
+      await writeAll(handle,cipher.getAuthTag());await handle.sync();await handle.close();closed=true;
       const finished=now();if(!Number.isSafeInteger(finished)||finished<created||finished>=header.expires_at)throw fail('backup_clock_invalid');
       const metadata={protocol:header.protocol,project:PROJECT,environment,id,created_at:created,completed_at:finished,expires_at:header.expires_at,key_id:derived.id,
         archive,archive_bytes:(await regular(temporary)).size,archive_sha256:await hashFile(temporary),plaintext_bytes:bytes,plaintext_sha256:hash.digest('hex')};
@@ -168,12 +193,22 @@ export async function createBackup({directory,source,sourceCompleted=Promise.res
       await verifyUnlocked(directory,id,key,environment);
       return metadata;
     }catch(error){
-      try{await handle.close();}catch{}
-      if(!renamed)try{await fs.unlink(temporary);}catch(cleanup){if(cleanup.code!=='ENOENT')throw new AggregateError([error,cleanup],'backup_failure_cleanup');}
+      // Stop even when failure precedes pipeline attachment (for example an
+      // encrypted-header write failure), rather than waiting for an outer CLI
+      // catch that cannot run until this operation settles.
+      if(cancelSource)try{
+        const stopped=await cancelSource(error);if(stopped?.backupOutcomeUnknown)error=unknown(error);
+      }catch{error=unknown(error);}
+      // The CLI supervisor reacts to a pipeline error and bounds termination.
+      // Wait for that outcome before deciding whether a partial is safe to
+      // remove; a signal request alone cannot release the catalog.
+      const outcome=await completed;
+      if(!outcome.ok&&outcome.error?.backupOutcomeUnknown)error=unknown(error);
+      if(!closed)try{await handle.close();closed=true;}catch{error=unknown(error);}
+      if(!renamed&&!error?.backupOutcomeUnknown)try{await fs.unlink(temporary);}catch(cleanup){if(cleanup.code!=='ENOENT')throw new AggregateError([error,cleanup],'backup_failure_cleanup');}
       // An orphan final archive is preserved for reconciliation, never adopted.
       throw error;
     }
-  });
 }
 
 async function backupCatalogUnlocked({directory,key,environment},{maximumEntries=Infinity,maximumBackups=Infinity,maximumBytes=Infinity}={}){
@@ -199,18 +234,16 @@ async function backupCatalogUnlocked({directory,key,environment},{maximumEntries
     return {backups,unmanaged_entries:unknown};
 }
 
-export async function backupCatalog({directory,key,environment='production'}){
-  environmentName(environment);
-  return locked(directory,()=>backupCatalogUnlocked({directory,key,environment}));
+export async function backupCatalog(config){
+  return withBackupCatalog(config,catalog=>catalog.catalog());
 }
 
 /** Verify one local catalog and inspect the newest archive under one cooperative
  * lease. This observes private artifacts only; it is not backup operation,
  * source-database provenance, off-site custody, Storage recovery or expiry. */
-export async function backupHealth({directory,key,environment='production',maxAgeHours,now=Date.now},inspect){
+async function backupHealthUnlocked({directory,key,environment='production',maxAgeHours,now=Date.now},inspect){
   environmentName(environment);
   if(!Number.isSafeInteger(maxAgeHours)||maxAgeHours<1||maxAgeHours>168||typeof now!=='function'||typeof inspect!=='function')throw fail('backup_health_config_invalid');
-  return locked(directory,async()=>{
     const limits={maximumEntries:4096,maximumBackups:256,maximumBytes:8*1024*1024*1024};
     const checkedClock=()=>{const at=now();if(!Number.isSafeInteger(at)||at<0||at>Number.MAX_SAFE_INTEGER-120000)throw fail('backup_clock_invalid');return at;};
     const start=checkedClock();
@@ -245,12 +278,10 @@ export async function backupHealth({directory,key,environment='production',maxAg
       newest_id:check.latest?.id??null,newest_created_at:check.latest?.created_at??null,reasons:check.reasons,
       ...(inspection?{archive_listed:true,toc_lines:inspection.toc_lines}:{}),
       not_established:['source_database_provenance','schema_completeness','catalog_history_completeness','scheduler_operation','offsite_custody','storage_objects','independent_suppression','restore_safety','physical_expiry']};
-  },{create:false});
 }
 
-export async function expireBackups({directory,key,environment='production',now=Date.now}){
+async function expireBackupsUnlocked({directory,key,environment='production',now=Date.now}){
   environmentName(environment);const at=now();if(!Number.isSafeInteger(at)||at<0)throw fail('backup_clock_invalid');
-  return locked(directory,async()=>{
     const candidates=[],entries=(await fs.readdir(directory)).sort(),known=new Set(['.lovelies-backup.lock']);
     // Validate the entire recognized catalog before deleting any managed pair.
     for(const name of entries){
@@ -283,5 +314,64 @@ export async function expireBackups({directory,key,environment='production',now=
       await fs.unlink(current.archive);await syncDirectory(directory);await fs.unlink(current.manifestFile);await syncDirectory(directory);
     }
     return {expired:candidates.length,unmanaged_entries:entries.filter(name=>!known.has(name)).length};
-  });
 }
+
+/** One cooperative catalog lease across tool qualification, production and
+ * inspection. The frozen capability exposes only bound operations, never an
+ * unlocked flag, alternate directory/key or reusable lease token. Ordinary
+ * public library callers acquire this same lease independently.
+ */
+export async function withBackupCatalog({directory,key,environment='production',create=true},work){
+  environmentName(environment);
+  if(!Buffer.isBuffer(key)||key.length!==32)throw fail('backup_key_invalid');
+  if(typeof work!=='function')throw fail('backup_lease_callback_invalid');
+  return locked(directory,async()=>{
+    let active=true,busy=false,pending,operationFailed=false,operationProblem;
+    const config={directory,key,environment};
+    const run=operation=>{
+      if(!active)return Promise.reject(fail('backup_lease_closed'));
+      if(operationFailed)return Promise.reject(operationProblem);
+      if(busy)return Promise.reject(fail('backup_lease_busy'));
+      busy=true;
+      const task=Promise.resolve().then(operation).catch(error=>{
+        operationFailed=true;operationProblem=error;throw error;
+      }).finally(()=>{busy=false;if(pending===task)pending=undefined;});
+      pending=task;task.catch(()=>{});return task;
+    };
+    const catalog=Object.freeze({
+      create:({source,sourceCompleted,cancelSource,now}={})=>run(()=>createBackupUnlocked({...config,source,sourceCompleted,cancelSource,now})),
+      verify:id=>run(async()=>{const {metadata}=await verifyUnlocked(directory,id,key,environment);return metadata;}),
+      consume:(id,consume)=>run(()=>withVerifiedBackupUnlocked({...config,id},consume)),
+      catalog:()=>run(()=>backupCatalogUnlocked(config)),
+      health:({maxAgeHours,now}={},inspect)=>run(()=>backupHealthUnlocked({...config,maxAgeHours,now},inspect)),
+      expire:({now}={})=>run(()=>expireBackupsUnlocked({...config,now})),
+    });
+    let value,problem,failed=false;
+    try{value=await work(catalog);}catch(error){failed=true;problem=error;}
+    finally{
+      active=false;
+      // A callback returning without awaiting its last operation cannot release
+      // a lease while that operation is still writing.
+      if(pending)try{await pending;}catch(error){
+        if(failed){if(error?.backupOutcomeUnknown)problem=unknown(problem);}
+        else {failed=true;problem=error;}
+      }
+      // A callback can catch an operation rejection, or return after an
+      // unawaited operation has already settled. Neither clears that outcome
+      // or authorizes release of an unknown writer's durable hold.
+      if(operationFailed){
+        if(!failed){failed=true;problem=operationProblem;}
+        else if(operationProblem?.backupOutcomeUnknown&&!problem?.backupOutcomeUnknown)problem=unknown(problem);
+      }
+    }
+    if(failed)throw problem;return value;
+  },{create});
+}
+export async function createBackup(config){
+  // Observe a supplied producer immediately, before asynchronous lease I/O.
+  // Its original result is still checked inside the admitted operation.
+  Promise.resolve(config.sourceCompleted).catch(()=>{});
+  return withBackupCatalog(config,catalog=>catalog.create(config));
+}
+export async function backupHealth(config,inspect){return withBackupCatalog({...config,create:false},catalog=>catalog.health(config,inspect));}
+export async function expireBackups(config){return withBackupCatalog(config,catalog=>catalog.expire(config));}

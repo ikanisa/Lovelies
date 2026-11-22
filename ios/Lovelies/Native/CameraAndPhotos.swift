@@ -388,10 +388,12 @@ struct NativePhotoPicker: UIViewControllerRepresentable {
 }
 
 enum NativePhotoLibrary {
-    static func save(_ data: Data, requireCurrent: @MainActor () async throws -> Void) async throws {
+    static func save(_ data: Data, requireCurrent: @MainActor () async throws -> Void, beforeWrite: @MainActor () async throws -> Void = {}) async throws {
         try await requireCurrent()
         let status = await PHPhotoLibrary.requestAuthorization(for: .addOnly)
         guard status == .authorized || status == .limited else { throw NativeAPIError.unsupported(String(localized: "Allow saving to Photos in Settings.")) }
+        try await requireCurrent()
+        try await beforeWrite()
         try await requireCurrent()
         try await PHPhotoLibrary.shared().performChanges {
             PHAssetCreationRequest.forAsset().addResource(with: .photo, data: data, options: nil)

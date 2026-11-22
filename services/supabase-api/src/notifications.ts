@@ -189,7 +189,9 @@ export async function handleNotifications(request: Request, ctx: AppContext): Pr
             // Keep old-account delivery history bound to the old device row.
             // An explicitly deactivated token can be registered by the next
             // verified account on this phone without moving that history.
-            await ctx.db.run("UPDATE notification_deliveries SET status='cancelled',updated_at=? WHERE device_id=? AND status<>'accepted'",ctx.now(),prior.id);
+            // Reassignment cannot settle an earlier attempted send or revise
+            // terminal evidence, including an already cancelled delivery.
+            await ctx.db.run("UPDATE notification_deliveries SET status='cancelled',updated_at=? WHERE device_id=? AND status='queued' AND attempts=0 AND provider_receipt IS NULL AND lease_token IS NULL AND lease_until IS NULL",ctx.now(),prior.id);
             await ctx.db.run("UPDATE push_devices SET token_hash=?,token_value='',updated_at=? WHERE id=? AND active=0",await digest('retired:'+prior.id+':'+tokenHash),ctx.now(),prior.id);
             prior=null;
         }

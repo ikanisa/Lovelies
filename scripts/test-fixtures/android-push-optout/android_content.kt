@@ -9,12 +9,14 @@ open class Context {
     open fun getString(id:Int)=when(id) { 1->"Updates";2->"Private";3->"Lovelies";4->"Open Lovelies";else->"unknown" }
 }
 class SharedPreferences {
-    private val values=ConcurrentHashMap<String,Boolean>()
-    fun getBoolean(key:String,default:Boolean)=values[key] ?: default
+    private val values=ConcurrentHashMap<String,Any>()
+    fun getBoolean(key:String,default:Boolean)=values[key] as? Boolean ?: default
+    fun getLong(key:String,default:Long)=values[key] as? Long ?: default
     fun edit()=Editor(values)
-    class Editor(private val values:MutableMap<String,Boolean>) {
-        private val staged=mutableMapOf<String,Boolean>()
+    class Editor(private val values:MutableMap<String,Any>) {
+        private val staged=mutableMapOf<String,Any>()
         fun putBoolean(key:String,value:Boolean)=apply { staged[key]=value }
+        fun putLong(key:String,value:Long)=apply { staged[key]=value }
         fun commit():Boolean { values.putAll(staged);if(FakeSystem.commitThrows)throw IllegalStateException("synthetic preference failure");return FakeSystem.commitResult }
         fun apply() { commit() }
     }

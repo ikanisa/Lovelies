@@ -402,8 +402,12 @@ export async function handleSharing(request: Request, ctx: AppContext): Promise<
             // A store receipt needs its typed, input-bound recovery contract.
             // Do not release an unvalidated row or a definitive retired/conflict
             // result through this generic route, including mixed-source keys.
+            if (rows.some(row=>row.source==='media.download.sign.v2'||row.action==='download.sign'||row.action==='download.sign.v2'))
+                throw new ApiError(503,'download_operation_outcome_unresolved');
             if (rows.some(row => row.source === 'store' || row.action === 'store.apple' || row.action === 'store.google'))
                 throw new ApiError(503, 'store_operation_receipt_unavailable');
+            if(await ctx.db.one('SELECT operation_id FROM download_v2_operations WHERE account_id=? AND operation_key=?',actor.accountId,payload.operation_key))
+                throw new ApiError(503,'download_operation_outcome_unresolved');
             if (rows.length > 1)
                 throw new ApiError(409, 'operation_source_ambiguous');
             if (!rows.length)

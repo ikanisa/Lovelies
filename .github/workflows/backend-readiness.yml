@@ -62,9 +62,30 @@ jobs:
             test/notification-unconfirmed-delivery.test.mjs \
             test/notification-device-removal-race.test.mjs \
             test/notification-logout-delivery-race.test.mjs \
+            test/notification-token-reassignment.test.mjs \
+            test/restore-authority-merge.test.mjs \
+            test/retention-schedule-privacy.test.mjs \
             test/storage-status-cleanup-runtime.test.mjs | tee "$report_file"
-          grep -qx '# tests 126' "$report_file"
-          grep -qx '# pass 126' "$report_file"
+          grep -qx '# tests 152' "$report_file"
+          grep -qx '# pass 152' "$report_file"
+          grep -qx '# fail 0' "$report_file"
+          grep -qx '# skipped 0' "$report_file"
+      - name: Run PGlite-only preview authority regressions
+        working-directory: services/supabase-api
+        shell: bash
+        run: |
+          set -euo pipefail
+          report_file="$(mktemp "${TMPDIR:-/tmp}/lovelies-preview.XXXXXXXX")"
+          trap 'rm -f "$report_file"' EXIT
+          env -u TEST_DATABASE_URL node --experimental-transform-types \
+            --import ./test/restore-retention-network-guard.mjs \
+            --import ./test/hold-regression-process-guard.mjs \
+            --test --test-reporter=tap --test-concurrency=1 \
+            test/preview-auth-candidate.test.mjs \
+            test/preview-info-header-authority.test.mjs \
+            test/preview-info-route.test.mjs | tee "$report_file"
+          grep -qx '# tests 14' "$report_file"
+          grep -qx '# pass 14' "$report_file"
           grep -qx '# fail 0' "$report_file"
           grep -qx '# skipped 0' "$report_file"
       - name: Run PGlite-only privacy grant recovery regressions
@@ -174,6 +195,39 @@ jobs:
       - run: pnpm preview:test
       - run: pnpm push:check
       - run: pnpm push:test
+  offline-retention:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    strategy:
+      fail-fast: false
+      matrix:
+        script:
+          - test-retention-pglite-cases.mjs
+          - test-retention-request-holds-cases.mjs
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
+        with:
+          version: 10.33.2
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: '24'
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile --ignore-scripts
+      - name: Run exact offline retention selection
+        working-directory: services/supabase-api
+        shell: bash
+        timeout-minutes: 20
+        env:
+          RETENTION_TEST_SCRIPT: ${{ matrix.script }}
+        run: |
+          set -euo pipefail
+          env -u TEST_DATABASE_URL \
+            LOVELIES_RETENTION89_EVIDENCE_PARENT="${RUNNER_TEMP:?}" \
+            LOVELIES_HOLD_EVIDENCE_PARENT="${RUNNER_TEMP:?}" \
+            node "scripts/$RETENTION_TEST_SCRIPT"
 # This workflow has no production secrets and never deploys or submits a store
 # build. Models, real Storage, providers, native builds and hosted acceptance have
 # separate required evidence. Earlier GitHub runs stopped before any jobs;

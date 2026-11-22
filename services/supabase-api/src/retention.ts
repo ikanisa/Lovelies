@@ -1,10 +1,13 @@
+import { pruneDownloadEvidence } from './download-v2-retention.ts';
+import { retireDownloadEvidence } from './download-v2-persistence.ts';
 import { asyncSome } from './async-collections.ts';
 import { verifiedGrantReceipt } from './privacy-export-grant.ts';
-import { ApiError, digest, jsonBody, ok, stable, uuid, type AppContext, type Binding, type Database } from './types.ts';
-import { executeOperation, prepareOperation, retiredOperationInput, retiredOperationResponse } from './operations.ts';
+import { ApiError, digest, jsonBody, ok, stable, uuid, type Actor, type AppContext, type Binding, type Database } from './types.ts';
+import { assertOperationReceiptAvailable, executeOperation, prepareOperation, retiredOperationInput, retiredOperationResponse, type PreparedOperation } from './operations.ts';
+import { restoreAllocationID, restoreOperationID, type RestoreTransactionScope } from './restore-transaction.ts';
 import { hasConsent } from './gallery.ts';
 import { mediaHeld, requireOperator } from './operators.ts';
-import { AUDIENCE_POLICY } from './audience.ts';
+import { AUDIENCE_POLICY, assertAudienceCapability } from './audience.ts';
 import { INACTIVE_PROFILE_FACT, inactiveProfileOperationVersion } from './face-profile.ts';
 const DAY = 86400000;
 type InactiveKind = 'lifecycle' | 'job';
@@ -18,6 +21,9 @@ export const retentionSchemaStatements: readonly string[] = [
     `CREATE UNIQUE INDEX IF NOT EXISTS retention_profile_job ON retention_jobs(subject_id,object_version,policy_version) WHERE kind='profile'`,
     `CREATE TABLE IF NOT EXISTS retention_objects(id TEXT PRIMARY KEY,job_id TEXT NOT NULL REFERENCES retention_jobs(id) ON DELETE CASCADE,bucket TEXT NOT NULL CHECK(bucket IN('PHOTOS','QUARANTINE')),object_key TEXT NOT NULL,status TEXT NOT NULL CHECK(status IN('pending','failed','verified')),attempts INTEGER NOT NULL DEFAULT 0,created_at INTEGER NOT NULL,verified_at INTEGER,UNIQUE(job_id,bucket,object_key))`,
     `CREATE INDEX IF NOT EXISTS retention_pending ON retention_jobs(status,created_at)`,
+    `CREATE TABLE IF NOT EXISTS retention_schedule_commands(id TEXT PRIMARY KEY,actor_id TEXT NOT NULL,source TEXT NOT NULL CHECK(source='retention'),operation_key TEXT NOT NULL,payload_hash TEXT NOT NULL CHECK(length(payload_hash)=64),policy_json TEXT NOT NULL CHECK(json_valid(policy_json)),limit_count INTEGER NOT NULL CHECK(limit_count BETWEEN 1 AND 200),planned_count INTEGER NOT NULL CHECK(planned_count BETWEEN 0 AND limit_count),next_position INTEGER NOT NULL CHECK(next_position BETWEEN 0 AND planned_count),plan_hash TEXT NOT NULL CHECK(length(plan_hash)=64),created_at INTEGER NOT NULL,UNIQUE(actor_id,source,operation_key),FOREIGN KEY(actor_id,source,operation_key) REFERENCES operations(actor_id,source,operation_key) ON DELETE CASCADE)`,
+    `CREATE TABLE IF NOT EXISTS retention_schedule_items(command_id TEXT NOT NULL REFERENCES retention_schedule_commands(id) ON DELETE CASCADE,position INTEGER NOT NULL CHECK(position BETWEEN 0 AND 199),asset_id TEXT NOT NULL REFERENCES assets(id) ON DELETE CASCADE,owner_id TEXT NOT NULL REFERENCES accounts(id) ON DELETE CASCADE,source_version TEXT NOT NULL,snapshot_hash TEXT NOT NULL CHECK(length(snapshot_hash)=64),outcome TEXT NOT NULL CHECK(outcome IN('pending','raw','preview','replaced','already_retired')),completion_id TEXT,superseding_id TEXT,CHECK((outcome='pending')=(completion_id IS NULL)),CHECK((outcome='already_retired')=(superseding_id IS NOT NULL)),PRIMARY KEY(command_id,position),UNIQUE(command_id,asset_id))`,
+    `CREATE TABLE IF NOT EXISTS retention_schedule_commit_guards(id TEXT PRIMARY KEY,actor_id TEXT NOT NULL,session_id TEXT NOT NULL,auth_epoch INTEGER NOT NULL,deadline_db_ms INTEGER NOT NULL)`,
 ];
 export async function initRetentionSchema(db: Database): Promise<void> { for (const sql of retentionSchemaStatements)
     (await db.run(sql)); }
@@ -68,11 +74,19 @@ async function keys(ctx: AppContext, asset: any, kind: 'raw' | 'preview'): Promi
         objects.push({ bucket: 'PHOTOS', object_key: row.rendition_key });
     return [...new Map(objects.map(item => [item.bucket + ':' + item.object_key, item])).values()];
 }
-async function createJob(ctx: AppContext, p: Policy, subject: string, asset: string | null, kind: Job['kind'], version: string, binding: unknown, objects: PrivateObject[]): Promise<void> {
+async function createJob(ctx: AppContext, p: Policy, subject: string, asset: string | null, kind: Job['kind'], version: string, binding: unknown, objects: PrivateObject[], allocatedJob?: string, conflict?: Error): Promise<void> {
+    // Neither raw nor preview episode identity includes policy. Preserve every
+    // existing obligation even if its prior policy or provider outcome is old.
+    if (kind === 'raw' && asset && (await rawObligation(ctx, asset, version) || await unresolvedPreviewObligation(ctx, asset, version))) throw conflict ?? new ApiError(409, 'retention_job_conflict');
+    if (kind === 'preview' && asset && await previewObligation(ctx, asset, version)) throw conflict ?? new ApiError(409, 'retention_job_conflict');
     const prior = (await ctx.db.one('SELECT id FROM retention_jobs WHERE subject_id=? AND kind=? AND object_version=? AND policy_version=? AND asset_id IS NOT DISTINCT FROM ?', subject, kind, version, p.version, asset));
-    if (prior)
+    // A raw expiry plan allocates its job identity independently. An existing
+    // job for a still-live source is ambiguous; never adopt it as this plan.
+    if (prior) {
+        if (allocatedJob) throw conflict ?? new ApiError(409, 'retention_job_conflict');
         return;
-    const id = crypto.randomUUID();
+    }
+    const id = allocatedJob ?? crypto.randomUUID();
     (await ctx.db.run("INSERT INTO retention_jobs(id,subject_id,asset_id,kind,binding_json,policy_version,object_version,status,created_at) VALUES(?,?,?,?,?,?,?,'pending',?)", id, subject, asset, kind, stable(binding), p.version, version, ctx.now()));
     for (const item of objects)
         (await ctx.db.run("INSERT INTO retention_objects(id,job_id,bucket,object_key,status,created_at) VALUES(?,?,?,?,'pending',?)", crypto.randomUUID(), id, item.bucket, item.object_key, ctx.now()));
@@ -94,14 +108,18 @@ async function hold(ctx: AppContext, job: Job, p: Policy): Promise<boolean> {
         return !!(await ctx.db.one('SELECT asset_id FROM asset_retention WHERE asset_id=? AND legal_hold=1', job.asset_id)) || (await mediaHeld(ctx, job.subject_id, job.asset_id));
     return !!(await ctx.db.one('SELECT id FROM moderation_holds WHERE active=1 AND subject_id=?', job.subject_id));
 }
-async function current(ctx: AppContext, id: string, lease?: string): Promise<{
+async function current(ctx: AppContext, id: string, lease?: string, conflict?: Error): Promise<{
     job: Job;
     binding: any;
 }> {
     const job = (await ctx.db.one<Job>('SELECT * FROM retention_jobs WHERE id=?', id));
     if (!job || job.status !== 'processing' || lease && job.lease_token !== lease || job.lease_until === null || job.lease_until <= ctx.now())
         throw new ApiError(409, 'retention_job_changed');
+    if (conflict && (await jobEpisodeConflict(ctx, job) || await jobObjectOverlap(ctx, job.id))) throw conflict;
     const p = (await policy(ctx));
+    // A policy change after claiming a preview preserves the lease and evidence;
+    // after any external dispatch the caller stops rather than downgrading it.
+    if (conflict && job.kind === 'preview' && p.version !== job.policy_version) throw conflict;
     if (await subjectDeletionHold(ctx, job.subject_id))
         throw new ApiError(503, 'retention_request_hold');
     if (p.version !== job.policy_version || (await hold(ctx, job, p)))
@@ -123,41 +141,241 @@ async function current(ctx: AppContext, id: string, lease?: string): Promise<{
     }
     return { job, binding };
 }
-async function snapshotExpired(ctx: AppContext, maximum: number): Promise<void> {
-    const p = (await policy(ctx));
-    if (p.legal_hold)
-        return;
-    // Metadata is paged before constructing object work. Existing grants are
-    // retired synchronously before any external DELETE is attempted.
+/** A conflict is tied to the asset and source version, not the owner field,
+ * current policy, job state or lease. Preserve even malformed/old obligations. */
+async function rawObligation(ctx: AppContext, asset: string, version: string): Promise<boolean> {
+    return !!await ctx.db.one(`SELECT id FROM retention_jobs WHERE asset_id=? AND object_version=? AND kind='raw' LIMIT 1`, asset, version);
+}
+/** Preview episode identity is asset/version, independent of policy. Do not
+ * adopt, overwrite or duplicate an existing job, including an empty inventory. */
+async function previewObligation(ctx: AppContext, asset: string, version: string): Promise<boolean> {
+    return !!await ctx.db.one(`SELECT id FROM retention_jobs WHERE asset_id=? AND object_version=? AND kind='preview' LIMIT 1`, asset, version);
+}
+/** Static SQL shared by health, bounded scans and locked checks. Aliases
+ * preview_asset and preview_job always refer to the same asset/version episode.
+ * This covers known rows only; it cannot prove complete restored inventory. */
+const previewInventoryMismatchSQL = `(EXISTS(SELECT 1 FROM renditions rd WHERE rd.asset_id=preview_asset.id AND (rd.status='ready' OR NOT EXISTS(
+    SELECT 1 FROM retention_objects o WHERE o.job_id=preview_job.id AND o.bucket='PHOTOS' AND o.object_key=rd.object_key)))
+  OR EXISTS(SELECT 1 FROM processing_attempts pa WHERE pa.asset_id=preview_asset.id AND pa.rendition_key IS NOT NULL AND NOT EXISTS(
+    SELECT 1 FROM retention_objects o WHERE o.job_id=preview_job.id AND o.bucket='PHOTOS' AND o.object_key=pa.rendition_key)))`;
+const previewRawBlockSQL = `(preview_job.status<>'verified'
+  OR EXISTS(SELECT 1 FROM retention_objects pending WHERE pending.job_id=preview_job.id AND pending.status<>'verified')
+  OR EXISTS(SELECT 1 FROM retention_jobs peer WHERE peer.asset_id=preview_job.asset_id AND peer.object_version=preview_job.object_version
+    AND peer.kind='preview' AND peer.id<>preview_job.id)
+  OR ${previewInventoryMismatchSQL})`;
+/** A raw expiry cannot invalidate an unfinished, duplicated or inventory-
+ * inconsistent preview episode, including one with no recorded object keys. */
+async function unresolvedPreviewObligation(ctx: AppContext, asset: string, version: string): Promise<boolean> {
+    return !!await ctx.db.one(`SELECT preview_job.id FROM retention_jobs preview_job LEFT JOIN assets preview_asset
+      ON preview_asset.id=preview_job.asset_id AND preview_asset.version=preview_job.object_version
+      WHERE preview_job.asset_id=? AND preview_job.object_version=? AND preview_job.kind='preview' AND ${previewRawBlockSQL} LIMIT 1`, asset, version);
+}
+async function previewInventoryMismatch(ctx: AppContext, asset: string, version: string): Promise<boolean> {
+    return !!await ctx.db.one(`SELECT preview_job.id FROM retention_jobs preview_job JOIN assets preview_asset
+      ON preview_asset.id=preview_job.asset_id AND preview_asset.version=preview_job.object_version
+      WHERE preview_job.asset_id=? AND preview_job.object_version=? AND preview_job.kind='preview' AND ${previewInventoryMismatchSQL} LIMIT 1`, asset, version);
+}
+/** Quarantine a live source with a raw job, or duplicated raw/preview episodes
+ * even after replacement or retirement; obligations may share private keys. */
+async function jobEpisodeConflict(ctx: AppContext, job: Job): Promise<boolean> {
+    if (!job.asset_id) return false;
+    if (await ctx.db.one(`SELECT first_job.id FROM retention_jobs first_job
+      WHERE first_job.asset_id=? AND first_job.object_version=? AND first_job.kind='raw'
+      AND (EXISTS(SELECT 1 FROM assets a WHERE a.id=first_job.asset_id AND a.version=first_job.object_version AND a.deleted_at IS NULL)
+        OR EXISTS(SELECT 1 FROM retention_jobs other_job WHERE other_job.asset_id=first_job.asset_id AND other_job.object_version=first_job.object_version
+          AND other_job.kind='raw' AND other_job.id<>first_job.id)) LIMIT 1`, job.asset_id, job.object_version)) return true;
+    if (await ctx.db.one(`SELECT first_job.id FROM retention_jobs first_job JOIN retention_jobs peer
+      ON peer.asset_id=first_job.asset_id AND peer.object_version=first_job.object_version AND peer.kind='preview' AND peer.id<>first_job.id
+      WHERE first_job.asset_id=? AND first_job.object_version=? AND first_job.kind='preview' LIMIT 1`, job.asset_id, job.object_version)) return true;
+    if (job.kind === 'raw' && await unresolvedPreviewObligation(ctx, job.asset_id, job.object_version)) return true;
+    return previewInventoryMismatch(ctx, job.asset_id, job.object_version);
+}
+async function anyRawConflict(ctx: AppContext): Promise<boolean> {
+    return !!await ctx.db.one(`SELECT first_job.id FROM retention_jobs first_job WHERE first_job.kind='raw' AND first_job.asset_id IS NOT NULL
+      AND (EXISTS(SELECT 1 FROM assets a WHERE a.id=first_job.asset_id AND a.version=first_job.object_version AND a.deleted_at IS NULL)
+        OR EXISTS(SELECT 1 FROM retention_jobs other_job WHERE other_job.asset_id=first_job.asset_id AND other_job.object_version=first_job.object_version
+          AND other_job.kind='raw' AND other_job.id<>first_job.id)) LIMIT 1`);
+}
+/** Unresolved obligations sharing an exact private key must not race. This
+ * only covers keys present in the current database, not missing restore data. */
+async function jobObjectOverlap(ctx: AppContext, jobID: string): Promise<boolean> {
+    return !!await ctx.db.one(`SELECT mine.id FROM retention_objects mine JOIN retention_objects other ON other.bucket=mine.bucket
+      AND other.object_key=mine.object_key AND other.job_id<>mine.job_id JOIN retention_jobs peer ON peer.id=other.job_id
+      WHERE mine.job_id=? AND (peer.status<>'verified' OR other.status<>'verified') LIMIT 1`, jobID);
+}
+async function anyJobObjectOverlap(ctx: AppContext): Promise<boolean> {
+    return !!await ctx.db.one(`SELECT mine.id FROM retention_objects mine JOIN retention_jobs current_job ON current_job.id=mine.job_id
+      JOIN retention_objects other ON other.bucket=mine.bucket AND other.object_key=mine.object_key AND other.job_id<>mine.job_id
+      JOIN retention_jobs peer ON peer.id=other.job_id WHERE (current_job.status<>'verified' OR mine.status<>'verified')
+      AND (peer.status<>'verified' OR other.status<>'verified') LIMIT 1`);
+}
+async function anySourceObjectOverlap(ctx: AppContext, p: Policy): Promise<boolean> {
+    return !!await ctx.db.one(`SELECT a.id FROM assets a LEFT JOIN asset_retention r ON r.asset_id=a.id
+      JOIN retention_objects o ON ((o.bucket='QUARANTINE' AND coalesce(r.raw_expires_at,a.created_at+?)<=? AND o.object_key=a.object_key)
+        OR (o.bucket='PHOTOS' AND (EXISTS(SELECT 1 FROM renditions rd WHERE rd.asset_id=a.id AND rd.object_key=o.object_key)
+          OR EXISTS(SELECT 1 FROM processing_attempts pa WHERE pa.asset_id=a.id AND pa.rendition_key=o.object_key))))
+      JOIN retention_jobs j ON j.id=o.job_id WHERE a.deleted_at IS NULL
+      AND (coalesce(r.raw_expires_at,a.created_at+?)<=? OR coalesce(r.preview_expires_at,a.created_at+?)<=?)
+      AND (j.status<>'verified' OR o.status<>'verified') LIMIT 1`, p.raw_days*DAY,ctx.now(),p.raw_days*DAY,ctx.now(),p.preview_days*DAY,ctx.now());
+}
+async function sourceObjectOverlap(ctx: AppContext, objects: PrivateObject[]): Promise<boolean> {
+    return asyncSome(objects, async item => !!await ctx.db.one(`SELECT o.id FROM retention_objects o JOIN retention_jobs j ON j.id=o.job_id
+      WHERE o.bucket=? AND o.object_key=? AND (j.status<>'verified' OR o.status<>'verified') LIMIT 1`, item.bucket, item.object_key));
+}
+/** Keep local inventory mismatches visible even after a raw job has already
+ * retired the source; a conflict must not disappear with deleted_at. */
+async function anyPreviewConflict(ctx: AppContext, p: Policy): Promise<boolean> {
+    return !!await ctx.db.one(`SELECT preview_job.id FROM retention_jobs preview_job WHERE preview_job.kind='preview' AND preview_job.asset_id IS NOT NULL AND (
+      (preview_job.policy_version<>? AND (preview_job.status<>'verified' OR EXISTS(SELECT 1 FROM retention_objects o WHERE o.job_id=preview_job.id AND o.status<>'verified')))
+      OR (preview_job.status='verified' AND EXISTS(SELECT 1 FROM retention_objects o WHERE o.job_id=preview_job.id AND o.status<>'verified'))
+      OR EXISTS(SELECT 1 FROM retention_jobs peer WHERE peer.asset_id=preview_job.asset_id AND peer.object_version=preview_job.object_version AND peer.kind='preview' AND peer.id<>preview_job.id)
+      OR EXISTS(SELECT 1 FROM assets preview_asset WHERE preview_asset.id=preview_job.asset_id AND preview_asset.version=preview_job.object_version
+        AND ${previewInventoryMismatchSQL})
+      OR EXISTS(SELECT 1 FROM assets preview_asset LEFT JOIN asset_retention r ON r.asset_id=preview_asset.id
+        WHERE preview_asset.id=preview_job.asset_id AND preview_asset.version=preview_job.object_version AND preview_asset.deleted_at IS NULL
+          AND coalesce(r.raw_expires_at,preview_asset.created_at+?)<=? AND ${previewRawBlockSQL})) LIMIT 1`,
+      p.version, p.raw_days * DAY, ctx.now());
+}
+type ScannedAssets = { policy: Policy; assets: any[]; conflict: boolean };
+type ScheduledAsset = { policy: Policy; asset: any; rule: any; objects: PrivateObject[]; raw: boolean };
+/** Apply the same exact-key hold/writer rules before LIMIT as well as inside
+ * each transaction. Existing preview jobs cannot occupy the bounded page;
+ * raw expiry waits for verified, consistent and nonduplicated preview evidence. */
+async function scanExpiredAssets(ctx: AppContext, maximum: number): Promise<ScannedAssets> {
+    const p = await policy(ctx), conflict = await anyRawConflict(ctx) || await anyPreviewConflict(ctx, p) ||
+      await anyJobObjectOverlap(ctx) || await anySourceObjectOverlap(ctx, p);
+    if (p.legal_hold) return { policy: p, assets: [], conflict };
     const assets = (await ctx.db.all<any>(`SELECT a.* FROM assets a LEFT JOIN asset_retention r ON r.asset_id=a.id
     WHERE a.deleted_at IS NULL AND (coalesce(r.raw_expires_at,a.created_at+?)<=? OR coalesce(r.preview_expires_at,a.created_at+?)<=?)
+    AND coalesce(r.legal_hold,0)=0
+    AND NOT EXISTS(SELECT 1 FROM moderation_holds h WHERE h.active=1 AND (h.asset_id=a.id OR h.subject_id=a.owner_id))
     AND NOT EXISTS(SELECT 1 FROM privacy_requests h WHERE h.subject_id=a.owner_id AND h.request_type='delete'
       AND h.legal_hold=1 AND h.status NOT IN('completed','rejected','cancelled'))
-    ORDER BY a.created_at,a.id LIMIT ?`, p.raw_days * DAY, ctx.now(), p.preview_days * DAY, ctx.now(), maximum));
-    for (const asset of assets) {
-        if (await subjectDeletionHold(ctx, asset.owner_id)) continue;
-        const rule = (await assetPolicy(ctx, asset, p));
-        if (rule.legal_hold || (await mediaHeld(ctx, asset.owner_id, asset.id)))
-            continue;
-        const raw = rule.raw_expires_at <= ctx.now(), objects = (await keys(ctx, asset, raw ? 'raw' : 'preview'));
-        // A live external writer must settle before the exact-key cleanup begins.
-        if ((await asyncSome(objects, async (item) => (await ctx.db.one("SELECT id FROM media_write_intents WHERE bucket=? AND object_key=? AND status='pending' LIMIT 1", item.bucket, item.object_key)))))
-            continue;
-        // Recheck immediately before mutating the asset/its retained work.
-        if (await subjectDeletionHold(ctx, asset.owner_id)) continue;
+    AND NOT EXISTS(SELECT 1 FROM retention_jobs conflict WHERE conflict.asset_id=a.id AND conflict.object_version=a.version AND conflict.kind='raw')
+    AND NOT EXISTS(SELECT 1 FROM media_write_intents w WHERE w.status='pending' AND
+      ((w.bucket='QUARANTINE' AND coalesce(r.raw_expires_at,a.created_at+?)<=? AND w.object_key=a.object_key)
+       OR (w.bucket='PHOTOS' AND (EXISTS(SELECT 1 FROM renditions rd WHERE rd.asset_id=a.id AND rd.object_key=w.object_key)
+         OR EXISTS(SELECT 1 FROM processing_attempts pa WHERE pa.asset_id=a.id AND pa.rendition_key=w.object_key)))))
+    AND (coalesce(r.raw_expires_at,a.created_at+?)<=? OR NOT EXISTS(SELECT 1 FROM retention_jobs prior
+      WHERE prior.asset_id=a.id AND prior.object_version=a.version AND prior.kind='preview'))
+    AND (coalesce(r.raw_expires_at,a.created_at+?)>? OR NOT EXISTS(SELECT 1 FROM retention_jobs preview_job
+      LEFT JOIN assets preview_asset ON preview_asset.id=preview_job.asset_id AND preview_asset.version=preview_job.object_version
+      WHERE preview_job.asset_id=a.id AND preview_job.object_version=a.version AND preview_job.kind='preview' AND ${previewRawBlockSQL}))
+    AND NOT EXISTS(SELECT 1 FROM retention_objects o JOIN retention_jobs j ON j.id=o.job_id
+      WHERE (j.status<>'verified' OR o.status<>'verified') AND
+      ((o.bucket='QUARANTINE' AND coalesce(r.raw_expires_at,a.created_at+?)<=? AND o.object_key=a.object_key)
+        OR (o.bucket='PHOTOS' AND (EXISTS(SELECT 1 FROM renditions rd WHERE rd.asset_id=a.id AND rd.object_key=o.object_key)
+          OR EXISTS(SELECT 1 FROM processing_attempts pa WHERE pa.asset_id=a.id AND pa.rendition_key=o.object_key)))))
+    ORDER BY a.created_at,a.id LIMIT ?`, p.raw_days * DAY, ctx.now(), p.preview_days * DAY, ctx.now(),
+      p.raw_days * DAY, ctx.now(), p.raw_days * DAY, ctx.now(), p.raw_days * DAY, ctx.now(), p.raw_days * DAY, ctx.now(), maximum));
+    return { policy: p, assets, conflict };
+}
+/** Re-select the exact scanned asset under the transaction lock and check all
+ * existing policy, hold and unresolved-writer conditions before any transition. */
+type AssetDeferred = 'deferred_policy' | 'deferred_hold' | 'deferred_writer' | 'deferred_deadline' | 'deferred_source';
+type AssetSelection = {kind: 'ready'; value: ScheduledAsset} | {kind: AssetDeferred};
+async function selectedAsset(ctx: AppContext, scannedPolicy: Policy, selected: any): Promise<AssetSelection> {
+    const p = await policy(ctx);
+    if (stable(p) !== stable(scannedPolicy)) return {kind: 'deferred_policy'};
+    if (p.legal_hold) return {kind: 'deferred_hold'};
+    const asset = await ctx.db.one<any>('SELECT * FROM assets WHERE id=?', selected.id);
+    if (!asset || stable(asset) !== stable(selected) || asset.deleted_at !== null) return {kind: 'deferred_source'};
+    if (await subjectDeletionHold(ctx, asset.owner_id)) return {kind: 'deferred_hold'};
+    const rule = await assetPolicy(ctx, asset, p);
+    if (rule.legal_hold || await mediaHeld(ctx, asset.owner_id, asset.id)) return {kind: 'deferred_hold'};
+    const raw = rule.raw_expires_at <= ctx.now();
+    if (!raw && rule.preview_expires_at > ctx.now()) return {kind: 'deferred_deadline'};
+    const objects = await keys(ctx, asset, raw ? 'raw' : 'preview');
+    if (await asyncSome(objects, async item => !!await ctx.db.one("SELECT id FROM media_write_intents WHERE bucket=? AND object_key=? AND status='pending' LIMIT 1", item.bucket, item.object_key))) return {kind: 'deferred_writer'};
+    if (await subjectDeletionHold(ctx, asset.owner_id)) return {kind: 'deferred_hold'};
+    return {kind: 'ready', value: { policy: p, asset, rule, raw, objects: [...objects].sort((a, b) => { const x = a.bucket + ':' + a.object_key, y = b.bucket + ':' + b.object_key; return x < y ? -1 : x > y ? 1 : 0; }) }};
+}
+/** One raw asset/version is one independently recorded expiry episode. The
+ * fact records the version for a future qualified replay; replay is not yet
+ * implemented and this does not establish object inventory, remote deletion,
+ * or recovery clearance. */
+type ScheduleHooks = {
+    begin: () => Promise<'ready' | 'replaced' | 'already_retired' | 'deferred_source' | 'deferred_policy' | 'deferred_hold' | 'deferred_writer' | 'stale'>;
+    preview: (restore: RestoreTransactionScope) => Promise<{operationID: string; jobID: string}>;
+    finish: (restore: RestoreTransactionScope, outcome: 'raw' | 'preview' | 'replaced' | 'already_retired', operationID?: string) => Promise<void>;
+};
+export async function scheduleExpiredAsset(ctx: AppContext, scannedPolicy: Policy, scanned: any, hooks?: ScheduleHooks): Promise<'scheduled' | 'replaced' | 'already_retired' | 'conflict' | 'stale' | AssetDeferred> {
+    ctx.db.requireTransactionBoundary();
+    return ctx.db.invocation(async () => {
+      // Only this private, identity-compared sentinel denotes a conflict found
+      // before prepare. The transaction adapter must return the original callback
+      // error only after confirmed rollback; a lost rollback reply must escape.
+      const conflict = new Error('retention_preprepare_conflict'), deferred = new Error('retention_preprepare_deferred');
+      let deferredKind: AssetDeferred = 'deferred_source';
+      try {
+        return await ctx.db.transaction(async restore => {
+        if (hooks) {
+            const selection = await hooks.begin();
+            if (selection === 'stale') return 'stale' as const;
+            if (selection === 'deferred_source' || selection === 'deferred_policy' || selection === 'deferred_hold' || selection === 'deferred_writer') { deferredKind = selection; throw deferred; }
+            if (selection === 'replaced' || selection === 'already_retired') { await hooks.finish(restore, selection); return selection; }
+        }
+        const selection = await selectedAsset(ctx, scannedPolicy, scanned);
+        if (selection.kind !== 'ready') { deferredKind = selection.kind; throw deferred; }
+        const selected = selection.value;
+        const { policy: p, asset, rule, raw, objects } = selected;
+        let jobID: string | undefined, itemOperationID: string | undefined;
+        // A preview can overlap an unresolved raw job as well.
+        if (await rawObligation(ctx, asset.id, asset.version) || await sourceObjectOverlap(ctx, objects) ||
+            (raw ? await unresolvedPreviewObligation(ctx, asset.id, asset.version) : await previewObligation(ctx, asset.id, asset.version))) throw conflict;
+        if (raw) {
+            const episode = await digest(stable({ asset_id: asset.id, asset_version: asset.version }));
+            const operationID = await restoreOperationID(asset.owner_id, 'retention.raw-expiry-v1', 'retention.raw:' + episode);
+            jobID = await restoreAllocationID(operationID, 'id_0');
+            itemOperationID = operationID;
+            restore.operation({ operation_id: operationID, input_hash: await digest(stable({ protocol: 'lovelies-raw-retention-expiry-v1',
+                owner_id: asset.owner_id, asset_id: asset.id, asset_version: asset.version, object_key: asset.object_key,
+                source_checksum: asset.checksum_sha256, retention_version: rule.version, retention_policy: p.version,
+                raw_expires_at: rule.raw_expires_at, objects })), allocations: { id_0: jobID } });
+            await restore.restrict('asset-retired', { owner_id: asset.owner_id, asset_id: asset.id, asset_version: asset.version });
+        } else if (hooks) {
+            const preview = await hooks.preview(restore);
+            itemOperationID = preview.operationID; jobID = preview.jobID;
+        }
+        // Recheck every selected input after the await and before changing SQL.
+        const current = await selectedAsset(ctx, scannedPolicy, scanned);
+        if (current.kind !== 'ready') { deferredKind = current.kind; throw deferred; }
+        if (stable(current.value) !== stable(selected)) { deferredKind = 'deferred_source'; throw deferred; }
+        // Still inside the callback, before independent prepare or SQL effects.
+        if (await rawObligation(ctx, asset.id, asset.version) || await sourceObjectOverlap(ctx, objects) ||
+            (raw ? await unresolvedPreviewObligation(ctx, asset.id, asset.version) : await previewObligation(ctx, asset.id, asset.version))) throw conflict;
         const deleted = raw ? ctx.now() : null;
         if (raw) {
-            (await ctx.db.run("UPDATE assets SET status='expired',deleted_at=? WHERE id=?", deleted, asset.id));
-            (await ctx.db.run("UPDATE processing_attempts SET status='cancelled',lease_token=NULL,lease_until=NULL WHERE asset_id=? AND status<>'completed'", asset.id));
-            (await ctx.db.run("UPDATE photo_job_outbox SET status='cancelled' WHERE asset_id=?", asset.id));
-            (await ctx.db.run("UPDATE candidates SET status='expired',version=? WHERE asset_id=?", crypto.randomUUID(), asset.id));
+            await ctx.db.run("UPDATE assets SET status='expired',deleted_at=? WHERE id=? AND version=? AND deleted_at IS NULL", deleted, asset.id, asset.version);
+            const after = await ctx.db.one<any>('SELECT * FROM assets WHERE id=?', asset.id);
+            if (!after || stable(after) !== stable({ ...asset, status: 'expired', deleted_at: deleted })) throw new ApiError(409, 'retention_source_changed');
+            await ctx.db.run("UPDATE processing_attempts SET status='cancelled',lease_token=NULL,lease_until=NULL WHERE asset_id=? AND status<>'completed'", asset.id);
+            await ctx.db.run("UPDATE photo_job_outbox SET status='cancelled' WHERE asset_id=?", asset.id);
+            await ctx.db.run("UPDATE candidates SET status='expired',version=? WHERE asset_id=?", crypto.randomUUID(), asset.id);
         }
-        (await ctx.db.run("UPDATE renditions SET status='retired' WHERE asset_id=?", asset.id));
-        (await ctx.db.run('UPDATE media_grants SET active=0,revoked_at=coalesce(revoked_at,?) WHERE asset_id=?', ctx.now(), asset.id));
-        (await ctx.db.run('DELETE FROM media_tickets WHERE asset_id=?', asset.id));
-        (await ctx.db.run('DELETE FROM download_tickets WHERE asset_id=?', asset.id));
-        (await createJob(ctx, p, asset.owner_id, asset.id, raw ? 'raw' : 'preview', asset.version, { object_key: asset.object_key, checksum: asset.checksum_sha256, retention_version: rule.version, deleted_at: deleted }, objects));
-    }
+        await ctx.db.run("UPDATE renditions SET status='retired' WHERE asset_id=?", asset.id);
+        await ctx.db.run('UPDATE media_grants SET active=0,revoked_at=coalesce(revoked_at,?) WHERE asset_id=?', ctx.now(), asset.id);
+        await ctx.db.run('DELETE FROM media_tickets WHERE asset_id=?', asset.id);
+        await retireDownloadEvidence(ctx,asset.id,true);
+        await ctx.db.run('DELETE FROM download_tickets WHERE asset_id=?', asset.id);
+        if (await sourceObjectOverlap(ctx, objects)) throw conflict;
+        await createJob(ctx, p, asset.owner_id, asset.id, raw ? 'raw' : 'preview', asset.version,
+            { object_key: asset.object_key, checksum: asset.checksum_sha256, retention_version: rule.version, deleted_at: deleted }, objects, jobID, conflict);
+        if (hooks) await hooks.finish(restore, raw ? 'raw' : 'preview', itemOperationID);
+        return 'scheduled' as const;
+        });
+      } catch (error) {
+        if (error === conflict) return 'conflict' as const;
+        if (error === deferred) return deferredKind;
+        throw error; // Never downgrade admission, prepare, commit or ack uncertainty.
+      }
+    });
+}
+/** Profile scanning still uses its prior batch and requires a separate
+ * exact-profile/session journal protocol before restore recovery is complete. */
+async function snapshotExpiredProfiles(ctx: AppContext, maximum: number, scannedPolicy: Policy): Promise<void> {
+    const p = await policy(ctx);
+    if (p.legal_hold || stable(p) !== stable(scannedPolicy)) return;
     for (const profile of (await ctx.db.all<any>(`SELECT f.* FROM face_profiles f WHERE f.status='active'
     AND NOT EXISTS(SELECT 1 FROM consents c WHERE c.account_id=f.account_id AND c.purpose IN('face_authentication','photo_matching') AND c.status='granted' AND c.revoked_at IS NULL AND (c.expires_at IS NULL OR c.expires_at>?))
     AND NOT EXISTS(SELECT 1 FROM privacy_requests h WHERE h.subject_id=f.account_id AND h.request_type='delete'
@@ -175,6 +393,332 @@ async function snapshotExpired(ctx: AppContext, maximum: number): Promise<void> 
         (await createJob(ctx, p, profile.account_id, null, 'profile', profile.revision, { template_key: profile.template_key, template_digest: profile.template_digest }, [{ bucket: 'PHOTOS', object_key: profile.template_key }]));
     }
 }
+/** Post-prepare authority check and a DB-clock deadline enforced by a deferred
+ * trigger during COMMIT. This assumes cooperative writers retain the advisory
+ * lock, a monotonic/correct DB clock and the installed trigger definition. */
+async function scheduleGuardAvailable(ctx: AppContext): Promise<void> {
+    const row = await ctx.db.one<{tgdeferrable: boolean; tginitdeferred: boolean; tgenabled: string; tgtype: number; relrowsecurity: boolean; relforcerowsecurity: boolean; proname: string; replication_role: string}>(
+      `SELECT t.tgdeferrable,t.tginitdeferred,t.tgenabled,t.tgtype,c.relrowsecurity,c.relforcerowsecurity,p.proname,current_setting('session_replication_role') AS replication_role
+       FROM pg_catalog.pg_trigger t JOIN pg_catalog.pg_class c ON c.oid=t.tgrelid JOIN pg_catalog.pg_namespace n ON n.oid=c.relnamespace
+       JOIN pg_catalog.pg_proc p ON p.oid=t.tgfoid JOIN pg_catalog.pg_namespace pn ON pn.oid=p.pronamespace
+       WHERE n.nspname='lovelies_private' AND c.relname='retention_schedule_commit_guards' AND t.tgname='retention_schedule_commit_guard'
+         AND pn.nspname='lovelies_private' AND NOT t.tgisinternal`);
+    if (!row || row.tgdeferrable !== true || row.tginitdeferred !== true || row.tgenabled !== 'O' || Number(row.tgtype) !== 5 ||
+        !row.relrowsecurity || !row.relforcerowsecurity || row.replication_role !== 'origin' || row.proname !== 'retention_schedule_check_commit_guard')
+        throw new ApiError(503, 'retention_schedule_guard_unavailable');
+}
+async function registerScheduleGuard(ctx: AppContext, actor: Actor, expectedPolicy?: () => Policy | undefined): Promise<void> {
+    await scheduleGuardAvailable(ctx);
+    ctx.db.beforeCommit(async () => {
+        await scheduleGuardAvailable(ctx);
+        await requireOperator(ctx, actor, true);
+        const expected = expectedPolicy?.();
+        if (expected) {
+            const current = await ctx.db.one<Policy>("SELECT * FROM retention_settings WHERE id='default'");
+            if (!current || stable(current) !== stable(expected) || current.legal_hold) throw new ApiError(503, 'retention_schedule_policy_changed');
+        }
+        // Capture the actual selected audience episode, not every potential
+        // guardian approval. Ordinary operator authorization still runs above.
+        const audience = JSON.parse(await assertAudienceCapability(ctx, actor.accountId, 'face_authentication')) as {approval?: string};
+        const audienceRow = await ctx.db.one<{next_review_at: number | null}>('SELECT next_review_at FROM account_audience WHERE account_id=?', actor.accountId);
+        const now = ctx.now();
+        const own = await ctx.db.one<{session_exp: number; refresh_exp: number; consent_exp: number | null; used_at: number}>(`
+          SELECT s.expires_at AS session_exp,s.refresh_expires_at AS refresh_exp,own_consent.expires_at AS consent_exp,c.used_at
+          FROM sessions s JOIN consents own_consent ON own_consent.id=s.face_consent_id JOIN auth_challenges c
+            ON c.account_id=s.account_id AND c.device_id=s.device_id AND c.device_revision=s.device_revision
+           AND c.profile_revision=s.face_profile_revision AND c.profile_auth_epoch=s.face_profile_epoch
+           AND c.auth_epoch=s.auth_epoch AND c.consent_id=s.face_consent_id
+          WHERE s.id=? AND s.account_id=? AND c.purpose='login' AND c.status='used' AND c.used_at>=? AND c.used_at<=?
+            AND c.created_at<=s.created_at AND c.used_at>=s.created_at ORDER BY c.used_at DESC LIMIT 1`,
+          actor.sessionId, actor.accountId, now - 300000, now);
+        if (!own || !audienceRow) throw new ApiError(503, 'retention_schedule_guard_unavailable');
+        const deadlines: Array<number | null> = [actor.expiresAt, own.session_exp, own.refresh_exp, own.consent_exp, own.used_at + 300000, audienceRow.next_review_at];
+        if (audience.approval !== undefined) {
+            const guardian = await ctx.db.one<{approval_exp: number; request_exp: number; guardian_review: number | null; guardian_consent_exp: number | null}>(`
+              SELECT p.expires_at AS approval_exp,r.expires_at AS request_exp,g.next_review_at AS guardian_review,c.expires_at AS guardian_consent_exp
+              FROM guardian_purpose_approvals p JOIN guardian_requests r ON r.id=p.request_id
+              JOIN account_audience g ON g.account_id=p.guardian_account_id JOIN face_profiles fp ON fp.account_id=g.account_id
+              JOIN consents c ON c.id=fp.auth_consent_id WHERE p.id=? AND p.child_account_id=?`, audience.approval, actor.accountId);
+            if (!guardian) throw new ApiError(503, 'retention_schedule_guard_unavailable');
+            deadlines.push(guardian.approval_exp, guardian.request_exp, guardian.guardian_review, guardian.guardian_consent_exp);
+        }
+        if (deadlines.some(value => value !== null && (!Number.isSafeInteger(value) || value < 0))) throw new ApiError(503, 'retention_schedule_guard_unavailable');
+        const until = Math.min(...deadlines.filter((value): value is number => value !== null));
+        // Calibrate remaining app-authority lifetime into the server-clock
+        // domain. The DB time is sampled before the later app time, making the
+        // derived deadline conservative absent clock jumps or abnormal skew.
+        const dbClock = await ctx.db.one<{ms: number}>("SELECT floor(extract(epoch FROM clock_timestamp())*1000)::bigint AS ms");
+        const remaining = until - ctx.now();
+        if (!dbClock || !Number.isSafeInteger(dbClock.ms) || !Number.isSafeInteger(remaining) || remaining <= 0 || !Number.isSafeInteger(dbClock.ms + remaining))
+            throw new ApiError(503, 'retention_schedule_authority_expired');
+        await ctx.db.run('INSERT INTO retention_schedule_commit_guards(id,actor_id,session_id,auth_epoch,deadline_db_ms) VALUES(?,?,?,?,?)',
+            crypto.randomUUID(), actor.accountId, actor.sessionId, actor.authEpoch, dbClock.ms + remaining);
+    });
+}
+
+// A reserved receipt owns one bounded manual scheduling plan. It is not a
+// successful receipt until the complete plan and profile scan have committed.
+const SCHEDULE_PENDING = 'lovelies-retention-schedule-pending-v1';
+type ScheduleItem = { position: number; asset_id: string; owner_id: string; source_version: string; snapshot_hash: string;
+    outcome: 'pending' | 'raw' | 'preview' | 'replaced' | 'already_retired'; completion_id: string | null; superseding_id: string | null };
+type ScheduleCommand = { id: string; actor_id: string; source: string; operation_key: string; payload_hash: string;
+    policy_json: string; limit_count: number; planned_count: number; next_position: number; plan_hash: string };
+type ScheduleReceipt = { action: string; payload_hash: string; payload_json: string; response_json: string };
+type ScheduleState = { kind: 'complete'; response: Record<string, unknown> } |
+    { kind: 'pending'; command: ScheduleCommand; policy: Policy; items: ScheduleItem[] };
+const scheduleUnavailable = (): never => { throw new ApiError(503, 'retention_schedule_state_unavailable'); };
+const hash64 = (value: unknown): value is string => typeof value === 'string' && /^[0-9a-f]{64}$/.test(value);
+const schedulePlanHash = (intent: PreparedOperation, limit: number, p: Policy, items: ScheduleItem[]) =>
+    digest(stable({ protocol: 'lovelies-retention-schedule-plan-v1', input_hash: intent.hash, limit, policy: p,
+        items: items.map(({position, asset_id, owner_id, source_version, snapshot_hash}) => ({position, asset_id, owner_id, source_version, snapshot_hash})) }));
+/** A later raw retirement is terminal only with both the exact independently
+ * committed restriction/allocation and its matching local source/job binding. */
+async function verifiedRawRetirement(ctx: AppContext, item: ScheduleItem, asset: any): Promise<string | null> {
+    if (!asset || asset.id !== item.asset_id || asset.owner_id !== item.owner_id || asset.version !== item.source_version ||
+        asset.status !== 'expired' || asset.deleted_at === null) return null;
+    const operationID = await restoreOperationID(item.owner_id, 'retention.raw-expiry-v1',
+        'retention.raw:' + await digest(stable({ asset_id: item.asset_id, asset_version: item.source_version })));
+    const prior = await ctx.db.verifiedRestoreOperation(operationID);
+    const jobID = await restoreAllocationID(operationID, 'id_0');
+    const event = {owner_id: item.owner_id, asset_id: item.asset_id, asset_version: item.source_version};
+    if (!prior || prior.status !== 'committed' || stable(prior.plan.allocations) !== stable({id_0: jobID}) || prior.plan.events.length !== 1 ||
+        prior.plan.events[0].kind !== 'asset-retired' || stable(prior.plan.events[0].scope) !== stable(event)) return null;
+    const job = await ctx.db.one<{subject_id:string; asset_id:string; object_version:string; kind:string; binding_json:string}>(
+        'SELECT subject_id,asset_id,object_version,kind,binding_json FROM retention_jobs WHERE id=?', jobID);
+    if (!job || job.subject_id !== item.owner_id || job.asset_id !== item.asset_id || job.object_version !== item.source_version || job.kind !== 'raw') return null;
+    let binding: any; try { binding = JSON.parse(job.binding_json); } catch { return null; }
+    if (!binding || binding.object_key !== asset.object_key || binding.checksum !== asset.checksum_sha256 || binding.deleted_at !== asset.deleted_at) return null;
+    return operationID;
+}
+async function scheduleState(ctx: AppContext, actor: Actor, intent: PreparedOperation, expectedCommand: string): Promise<ScheduleState | null> {
+    const row = await ctx.db.one<ScheduleReceipt>('SELECT action,payload_hash,payload_json,response_json FROM operations WHERE actor_id=? AND source=? AND operation_key=?', actor.accountId, intent.source, intent.key);
+    if (!row) return null;
+    if (row.action !== intent.action || row.payload_hash !== intent.hash) throw new ApiError(409, 'operation_key_conflict');
+    assertOperationReceiptAvailable(row);
+    if (row.payload_json !== intent.payloadJson) throw new ApiError(409, 'operation_key_conflict');
+    let response: any;
+    try { response = JSON.parse(row.response_json); } catch { return scheduleUnavailable(); }
+    if (!response || typeof response !== 'object' || Array.isArray(response)) return scheduleUnavailable();
+    const command = await ctx.db.one<ScheduleCommand>('SELECT * FROM retention_schedule_commands WHERE actor_id=? AND source=? AND operation_key=?', actor.accountId, intent.source, intent.key);
+    if (response.protocol !== SCHEDULE_PENDING) {
+        if (command || Object.keys(response).sort().join(',') !== 'operation_key,scheduled' || response.scheduled !== true || response.operation_key !== intent.key) return scheduleUnavailable();
+        return { kind: 'complete', response };
+    }
+    if (Object.keys(response).sort().join(',') !== 'command_id,protocol' || response.command_id !== expectedCommand || !command || command.id !== expectedCommand ||
+        command.actor_id !== actor.accountId || command.source !== intent.source || command.operation_key !== intent.key || command.payload_hash !== intent.hash ||
+        !Number.isSafeInteger(command.limit_count) || command.limit_count < 1 || command.limit_count > 200 ||
+        !Number.isSafeInteger(command.planned_count) || command.planned_count < 0 || command.planned_count > command.limit_count ||
+        !Number.isSafeInteger(command.next_position) || command.next_position < 0 || command.next_position > command.planned_count || !hash64(command.plan_hash)) return scheduleUnavailable();
+    let p: Policy;
+    try { p = JSON.parse(command.policy_json); } catch { return scheduleUnavailable(); }
+    if (!p || p.id !== 'default' || stable(p) !== command.policy_json || !Number.isSafeInteger(p.version) || p.version < 1) return scheduleUnavailable();
+    const items = await ctx.db.all<ScheduleItem>('SELECT position,asset_id,owner_id,source_version,snapshot_hash,outcome,completion_id,superseding_id FROM retention_schedule_items WHERE command_id=? ORDER BY position LIMIT 201', command.id);
+    if (items.length !== command.planned_count || items.some((item, index) => item.position !== index ||
+        typeof item.asset_id !== 'string' || typeof item.owner_id !== 'string' || typeof item.source_version !== 'string' || !hash64(item.snapshot_hash) ||
+        (index < command.next_position ? !['raw','preview','replaced','already_retired'].includes(item.outcome) || typeof item.completion_id !== 'string' : item.outcome !== 'pending' || item.completion_id !== null || item.superseding_id !== null)) ||
+        await schedulePlanHash(intent, command.limit_count, p, items) !== command.plan_hash) return scheduleUnavailable();
+    const expectedJobs: Array<{id: string; asset_id: string; owner_id: string; version: string; kind: string}> = [];
+    for (const item of items.slice(0, command.next_position)) {
+        const id = item.outcome === 'raw' ? await restoreOperationID(item.owner_id, 'retention.raw-expiry-v1',
+            'retention.raw:' + await digest(stable({ asset_id: item.asset_id, asset_version: item.source_version }))) : (await scheduleStepIdentity(actor, command, item)).operation_id;
+        if (item.completion_id !== id) return scheduleUnavailable();
+        if (item.outcome === 'replaced') {
+            const current = await ctx.db.one<any>('SELECT * FROM assets WHERE id=?', item.asset_id);
+            if (!current || current.owner_id !== item.owner_id || current.version === item.source_version || item.superseding_id !== null) return scheduleUnavailable();
+        } else if (item.outcome === 'already_retired') {
+            const current = await ctx.db.one<any>('SELECT * FROM assets WHERE id=?', item.asset_id);
+            const retired = await verifiedRawRetirement(ctx, item, current);
+            if (!retired || item.superseding_id !== retired) return scheduleUnavailable();
+        } else if (item.superseding_id !== null) return scheduleUnavailable();
+        if (item.outcome === 'raw' || item.outcome === 'preview') expectedJobs.push({id: await restoreAllocationID(id, 'id_0'), asset_id: item.asset_id, owner_id: item.owner_id, version: item.source_version, kind: item.outcome});
+    }
+    for (let start = 0; start < expectedJobs.length; start += 100) {
+        const expected = expectedJobs.slice(start, start + 100), placeholders = expected.map(() => '?').join(',');
+        const actual = await ctx.db.all<{id: string; asset_id: string; subject_id: string; object_version: string; kind: string; job_status:string; owner_id: string; asset_version: string; status: string; deleted_at: number | null}>(
+            `SELECT j.id,j.asset_id,j.subject_id,j.object_version,j.kind,j.status AS job_status,a.owner_id,a.version AS asset_version,a.status,a.deleted_at
+              FROM retention_jobs j JOIN assets a ON a.id=j.asset_id WHERE j.id IN (${placeholders})`, ...expected.map(item => item.id));
+        if (actual.length !== expected.length) return scheduleUnavailable();
+        for (const item of expected) {
+            const row = actual.find(value => value.id === item.id);
+            if (!row || row.asset_id !== item.asset_id || row.subject_id !== item.owner_id || row.owner_id !== item.owner_id || row.object_version !== item.version ||
+                row.asset_version !== item.version || row.kind !== item.kind) return scheduleUnavailable();
+            if (item.kind === 'raw' && (row.status !== 'expired' || row.deleted_at === null)) return scheduleUnavailable();
+            if (item.kind === 'preview' && row.deleted_at !== null) {
+                const original = items.find(value => value.asset_id === item.asset_id)!;
+                if (row.job_status !== 'verified' || await ctx.db.one("SELECT id FROM retention_objects WHERE job_id=? AND status<>'verified' LIMIT 1", item.id) ||
+                    !await verifiedRawRetirement(ctx, original, await ctx.db.one<any>('SELECT * FROM assets WHERE id=?', item.asset_id))) return scheduleUnavailable();
+            }
+        }
+    }
+    return { kind: 'pending', command, policy: p, items };
+}
+/** Reserve the ordinary operation key and selected source hashes atomically.
+ * A subject's erased asset cascades its item; plan-hash/count verification then
+ * fails closed rather than inventing successful completion or retaining its ID. */
+async function reserveSchedule(ctx: AppContext, actor: Actor, intent: PreparedOperation, limit: number, operationID: string, commandID: string): Promise<ScheduleState> {
+    return ctx.db.transaction(async restore => {
+        await requireOperator(ctx, actor, true);
+        await registerScheduleGuard(ctx, actor);
+        const existing = await scheduleState(ctx, actor, intent, commandID);
+        if (existing) { await requireOperator(ctx, actor, true); return existing; }
+        const scan = await scanExpiredAssets(ctx, limit);
+        const items: ScheduleItem[] = [];
+        for (const [position, asset] of scan.assets.entries())
+            items.push({ position, asset_id: asset.id, owner_id: asset.owner_id, source_version: asset.version, snapshot_hash: await digest(stable(asset)), outcome: 'pending', completion_id: null, superseding_id: null });
+        const planHash = await schedulePlanHash(intent, limit, scan.policy, items);
+        restore.operation({ operation_id: operationID, input_hash: await digest(stable({ protocol: 'lovelies-retention-schedule-reserve-v1', input_hash: intent.hash, plan_hash: planHash })),
+            allocations: { id_0: commandID } });
+        await requireOperator(ctx, actor, true);
+        await ctx.db.run('INSERT INTO operations(actor_id,source,operation_key,action,payload_hash,payload_json,response_json,created_at) VALUES(?,?,?,?,?,?,?,?)',
+            actor.accountId, intent.source, intent.key, intent.action, intent.hash, intent.payloadJson, stable({ protocol: SCHEDULE_PENDING, command_id: commandID }), ctx.now());
+        await ctx.db.run('INSERT INTO operation_subjects(actor_id,source,operation_key,subject_id) VALUES(?,?,?,?)', actor.accountId, intent.source, intent.key, actor.accountId);
+        await ctx.db.run(`INSERT INTO retention_schedule_commands(id,actor_id,source,operation_key,payload_hash,policy_json,limit_count,planned_count,next_position,plan_hash,created_at)
+            VALUES(?,?,?,?,?,?,?,?,0,?,?)`, commandID, actor.accountId, intent.source, intent.key, intent.hash, stable(scan.policy), limit, items.length, planHash, ctx.now());
+        for (const item of items) await ctx.db.run('INSERT INTO retention_schedule_items(command_id,position,asset_id,owner_id,source_version,snapshot_hash,outcome,completion_id,superseding_id) VALUES(?,?,?,?,?,?,?,?,?)',
+            commandID, item.position, item.asset_id, item.owner_id, item.source_version, item.snapshot_hash, item.outcome, item.completion_id, item.superseding_id);
+        await requireOperator(ctx, actor, true);
+        const state = await scheduleState(ctx, actor, intent, commandID);
+        if (!state || state.kind !== 'pending' || state.command.plan_hash !== planHash || state.command.next_position !== 0 || state.command.planned_count !== items.length) return scheduleUnavailable();
+        return state;
+    });
+}
+async function scheduleStepIdentity(actor: Actor, command: ScheduleCommand, item: ScheduleItem) {
+    const key = 'retention.step:' + await digest(stable({ command_id: command.id, position: item.position }));
+    return { operation_id: await restoreOperationID(actor.accountId, 'retention.schedule.step-v1', key),
+        input_hash: await digest(stable({ protocol: 'lovelies-retention-schedule-step-v1', command_id: command.id,
+            plan_hash: command.plan_hash, position: item.position, snapshot_hash: item.snapshot_hash })), allocations: {} };
+}
+/** Progress and the exact raw retirement live in the same SQL transaction and
+ * independent plan. Only proven replacement or retirement is terminal; other changes defer. */
+async function advanceScheduleAsset(ctx: AppContext, actor: Actor, intent: PreparedOperation, state: Extract<ScheduleState, {kind: 'pending'}>): Promise<void> {
+    const item = state.items[state.command.next_position];
+    if (!item) return scheduleUnavailable();
+    const scanned = await ctx.db.one<any>('SELECT * FROM assets WHERE id=?', item.asset_id) ?? { id: item.asset_id };
+    let supersedingID: string | null = null;
+    const result = await scheduleExpiredAsset(ctx, state.policy, scanned, {
+        begin: async () => {
+            await requireOperator(ctx, actor, true);
+            const current = await scheduleState(ctx, actor, intent, state.command.id);
+            if (!current || current.kind === 'complete' || current.command.next_position !== item.position) return 'stale';
+            if (current.command.plan_hash !== state.command.plan_hash) return scheduleUnavailable();
+            const livePolicy = await ctx.db.one<Policy>("SELECT * FROM retention_settings WHERE id='default'");
+            if (!livePolicy || stable(livePolicy) !== stable(state.policy) || livePolicy.legal_hold) return 'deferred_policy';
+            await registerScheduleGuard(ctx, actor, () => state.policy);
+            const actual = await ctx.db.one<any>('SELECT * FROM assets WHERE id=?', item.asset_id);
+            if (!actual || actual.owner_id !== item.owner_id) return 'deferred_source';
+            if (actual.version === item.source_version && await digest(stable(actual)) === item.snapshot_hash) return 'ready';
+            const rule = await ctx.db.one<{legal_hold:number}>('SELECT legal_hold FROM asset_retention WHERE asset_id=?', item.asset_id);
+            if (rule?.legal_hold || await subjectDeletionHold(ctx, item.owner_id) || await mediaHeld(ctx, item.owner_id, item.asset_id)) return 'deferred_hold';
+            // The changed snapshot stores no recoverable old key. Any
+            // unsettled writer for that subject prevents terminality.
+            if (await ctx.db.one("SELECT id FROM media_write_intents WHERE account_id=? AND status='pending' LIMIT 1", item.owner_id)) return 'deferred_writer';
+            if (actual.version !== item.source_version) return 'replaced';
+            supersedingID = await verifiedRawRetirement(ctx, item, actual);
+            return supersedingID ? 'already_retired' : 'deferred_source';
+        },
+        preview: async restore => {
+            const identity = await scheduleStepIdentity(actor, state.command, item);
+            const jobID = await restoreAllocationID(identity.operation_id, 'id_0');
+            restore.operation({ ...identity, allocations: { id_0: jobID } });
+            return { operationID: identity.operation_id, jobID };
+        },
+        finish: async (restore, outcome, operationID) => {
+            await requireOperator(ctx, actor, true);
+            const current = await scheduleState(ctx, actor, intent, state.command.id);
+            if (!current || current.kind !== 'pending' || current.command.next_position !== item.position || current.command.plan_hash !== state.command.plan_hash) return scheduleUnavailable();
+            if (outcome === 'replaced' || outcome === 'already_retired') { const identity = await scheduleStepIdentity(actor, current.command, item); restore.operation(identity); operationID = identity.operation_id; }
+            if (!operationID || outcome === 'already_retired' && !supersedingID) return scheduleUnavailable();
+            await ctx.db.run("UPDATE retention_schedule_items SET outcome=?,completion_id=?,superseding_id=? WHERE command_id=? AND position=? AND outcome='pending' AND completion_id IS NULL AND superseding_id IS NULL",
+                outcome, operationID, outcome === 'already_retired' ? supersedingID : null, current.command.id, item.position);
+            await ctx.db.run('UPDATE retention_schedule_commands SET next_position=? WHERE id=? AND next_position=?', item.position + 1, current.command.id, item.position);
+            const after = await scheduleState(ctx, actor, intent, current.command.id);
+            if (!after || after.kind !== 'pending' || after.command.next_position !== item.position + 1 || after.command.plan_hash !== current.command.plan_hash) return scheduleUnavailable();
+            await requireOperator(ctx, actor, true);
+        },
+    });
+    if (result === 'conflict') throw new ApiError(503, 'retention_schedule_conflict');
+    if (result.startsWith('deferred_')) throw new ApiError(503, 'retention_schedule_' + result);
+}
+async function finishSchedule(ctx: AppContext, actor: Actor, intent: PreparedOperation, state: Extract<ScheduleState, {kind: 'pending'}>): Promise<Record<string, unknown> | null> {
+    return ctx.db.transaction(async restore => {
+        await requireOperator(ctx, actor, true);
+        const current = await scheduleState(ctx, actor, intent, state.command.id);
+        if (!current) return scheduleUnavailable();
+        if (current.kind === 'complete') { await registerScheduleGuard(ctx, actor); await requireOperator(ctx, actor, true); return current.response; }
+        if (current.command.next_position !== current.command.planned_count) return null;
+        await registerScheduleGuard(ctx, actor, () => current.policy);
+        const currentPolicy = await policy(ctx);
+        if (currentPolicy.legal_hold || stable(currentPolicy) !== stable(current.policy)) throw new ApiError(503, 'retention_schedule_deferred_policy');
+        const key = 'retention.finish:' + await digest(stable({ command_id: current.command.id }));
+        restore.operation({ operation_id: await restoreOperationID(actor.accountId, 'retention.schedule.finish-v1', key),
+            input_hash: await digest(stable({ protocol: 'lovelies-retention-schedule-finish-v1', command_id: current.command.id,
+                plan_hash: current.command.plan_hash, input_hash: intent.hash })), allocations: {} });
+        await snapshotExpiredProfiles(ctx, current.command.limit_count, current.policy);
+        await requireOperator(ctx, actor, true);
+        const checked = await scheduleState(ctx, actor, intent, state.command.id);
+        if (!checked || checked.kind !== 'pending' || checked.command.next_position !== checked.command.planned_count || checked.command.plan_hash !== current.command.plan_hash) return scheduleUnavailable();
+        const policyAfter = await policy(ctx);
+        if (policyAfter.legal_hold || stable(policyAfter) !== stable(current.policy)) throw new ApiError(503, 'retention_schedule_deferred_policy');
+        const response = { scheduled: true, operation_key: intent.key };
+        await ctx.db.run('UPDATE operations SET response_json=? WHERE actor_id=? AND source=? AND operation_key=? AND response_json=?', stable(response),
+            actor.accountId, intent.source, intent.key, stable({ protocol: SCHEDULE_PENDING, command_id: current.command.id }));
+        const receipt = await ctx.db.one<{response_json: string}>('SELECT response_json FROM operations WHERE actor_id=? AND source=? AND operation_key=?', actor.accountId, intent.source, intent.key);
+        if (receipt?.response_json !== stable(response)) return scheduleUnavailable();
+        await ctx.db.run('DELETE FROM retention_schedule_commands WHERE id=?', current.command.id);
+        await requireOperator(ctx, actor, true);
+        return response;
+    });
+}
+/** A retry may rebase the unchanged item list onto a newly authorized current
+ * policy. Its old/new plan hashes are bound to one independent operation. */
+async function rebaseSchedulePolicy(ctx: AppContext, actor: Actor, intent: PreparedOperation, commandID: string): Promise<ScheduleState> {
+    return ctx.db.transaction(async restore => {
+        await requireOperator(ctx, actor, true);
+        const state = await scheduleState(ctx, actor, intent, commandID);
+        if (!state) return scheduleUnavailable();
+        if (state.kind === 'complete') { await registerScheduleGuard(ctx, actor); return state; }
+        const next = await policy(ctx);
+        if (next.legal_hold) throw new ApiError(503, 'retention_schedule_deferred_policy');
+        await registerScheduleGuard(ctx, actor, () => next);
+        if (stable(next) === stable(state.policy)) return state;
+        const nextHash = await schedulePlanHash(intent, state.command.limit_count, next, state.items);
+        const key = 'retention.rebase:' + await digest(stable({command_id: commandID, old_plan_hash: state.command.plan_hash, new_plan_hash: nextHash}));
+        restore.operation({operation_id: await restoreOperationID(actor.accountId, 'retention.schedule.rebase-v1', key),
+            input_hash: await digest(stable({protocol: 'lovelies-retention-schedule-rebase-v1', command_id: commandID,
+                old_plan_hash: state.command.plan_hash, new_plan_hash: nextHash})), allocations: {}});
+        await ctx.db.run('UPDATE retention_schedule_commands SET policy_json=?,plan_hash=? WHERE id=? AND plan_hash=? AND next_position=?',
+            stable(next), nextHash, commandID, state.command.plan_hash, state.command.next_position);
+        await requireOperator(ctx, actor, true);
+        const after = await scheduleState(ctx, actor, intent, commandID);
+        if (!after || after.kind !== 'pending' || after.command.plan_hash !== nextHash || after.command.next_position !== state.command.next_position) return scheduleUnavailable();
+        return after;
+    });
+}
+async function runOperatorSchedule(ctx: AppContext, actor: Actor, intent: PreparedOperation, limit: number): Promise<Record<string, unknown>> {
+    ctx.db.requireTransactionBoundary();
+    const operationID = await restoreOperationID(actor.accountId, intent.source, intent.key);
+    const commandID = await restoreAllocationID(operationID, 'id_0');
+    let state = await reserveSchedule(ctx, actor, intent, limit, operationID, commandID);
+    if (state.kind === 'pending') state = await rebaseSchedulePolicy(ctx, actor, intent, commandID);
+    // A concurrent identical request may advance the cursor. Bound retries and
+    // leave the reserved plan intact if contention prevents completion.
+    for (let attempts = 0; attempts < 500; attempts++) {
+        if (state.kind === 'complete') return state.response;
+        if (state.command.next_position === state.command.planned_count) {
+            const result = await finishSchedule(ctx, actor, intent, state);
+            if (result) return result;
+        } else await advanceScheduleAsset(ctx, actor, intent, state);
+        state = await ctx.db.read(async () => {
+            await requireOperator(ctx, actor, true);
+            const current = await scheduleState(ctx, actor, intent, commandID);
+            if (!current) return scheduleUnavailable();
+            await requireOperator(ctx, actor, true);
+            return current;
+        });
+    }
+    throw new ApiError(503, 'retention_schedule_retry');
+}
+
 /** Trusted maintenance entry: bounded exact-key deletions. Completion requires
  * DELETE followed by absent HEAD under the same current metadata/hold lease. */
 export async function runRetention(ctx: AppContext, maximum = 50): Promise<{
@@ -184,36 +728,82 @@ export async function runRetention(ctx: AppContext, maximum = 50): Promise<{
 }> {
     if (!Number.isInteger(maximum) || maximum < 1 || maximum > 200)
         throw new ApiError(400, 'retention_limit_invalid');
+    ctx.db.requireTransactionBoundary();
+    return ctx.db.invocation(() => runRetentionAtBoundary(ctx, maximum));
+}
+async function runRetentionAtBoundary(ctx: AppContext, maximum: number): Promise<{ verified: number; pending: number; failed: number }> {
     const metadataFailures = await pruneInactiveProfileMetadata(ctx, maximum);
-    (await ctx.db.transaction(async () => { await pruneRetainedMetadata(ctx, maximum); await snapshotExpired(ctx, maximum); }));
+    // Pruning remains one transaction. The former combined scheduling batch is
+    // now ordered per asset so one stable journal operation owns each raw expiry.
+    // A later failure can leave earlier asset transactions committed.
+    const scanned = await ctx.db.transaction(async () => { await pruneRetainedMetadata(ctx, maximum); return scanExpiredAssets(ctx, maximum); });
+    let conflicted = scanned.conflict;
+    for (const asset of scanned.assets)
+        if (await scheduleExpiredAsset(ctx, scanned.policy, asset) === 'conflict') conflicted = true;
+    if (!scanned.policy.legal_hold) await ctx.db.transaction(async () => { await snapshotExpiredProfiles(ctx, maximum, scanned.policy); });
     let verified = 0, failed = metadataFailures;
     for (const row of (await ctx.db.all<Job>(`SELECT j.* FROM retention_jobs j WHERE j.status IN('pending','failed','processing') AND (j.lease_until IS NULL OR j.lease_until<=?)
+      AND NOT EXISTS(SELECT 1 FROM retention_settings p WHERE p.id='default' AND j.kind='preview' AND j.policy_version<>p.version)
+      AND NOT EXISTS(SELECT 1 FROM retention_jobs first_preview JOIN retention_jobs peer
+        ON peer.asset_id=first_preview.asset_id AND peer.object_version=first_preview.object_version AND peer.kind='preview' AND peer.id<>first_preview.id
+        WHERE first_preview.asset_id=j.asset_id AND first_preview.object_version=j.object_version AND first_preview.kind='preview')
+      AND NOT EXISTS(SELECT 1 FROM retention_jobs preview_job JOIN assets preview_asset
+        ON preview_asset.id=preview_job.asset_id AND preview_asset.version=preview_job.object_version
+        WHERE preview_job.asset_id=j.asset_id AND preview_job.object_version=j.object_version AND preview_job.kind='preview' AND ${previewInventoryMismatchSQL})
+      AND (j.kind<>'raw' OR NOT EXISTS(SELECT 1 FROM retention_jobs preview_job LEFT JOIN assets preview_asset
+        ON preview_asset.id=preview_job.asset_id AND preview_asset.version=preview_job.object_version
+        WHERE preview_job.asset_id=j.asset_id AND preview_job.object_version=j.object_version AND preview_job.kind='preview' AND ${previewRawBlockSQL}))
       AND NOT EXISTS(SELECT 1 FROM privacy_requests h WHERE h.subject_id=j.subject_id AND h.request_type='delete'
         AND h.legal_hold=1 AND h.status NOT IN('completed','rejected','cancelled'))
+      AND NOT EXISTS(SELECT 1 FROM retention_settings p WHERE p.id='default' AND p.legal_hold=1)
+      AND NOT EXISTS(SELECT 1 FROM asset_retention r WHERE r.asset_id=j.asset_id AND r.legal_hold=1)
+      AND NOT EXISTS(SELECT 1 FROM moderation_holds h WHERE h.active=1 AND (h.subject_id=j.subject_id OR h.asset_id=j.asset_id))
+      AND NOT EXISTS(SELECT 1 FROM retention_objects o JOIN media_write_intents w ON w.bucket=o.bucket AND w.object_key=o.object_key
+        WHERE o.job_id=j.id AND o.status<>'verified' AND w.status='pending')
+      AND NOT EXISTS(SELECT 1 FROM retention_objects mine JOIN retention_objects other ON other.bucket=mine.bucket
+        AND other.object_key=mine.object_key AND other.job_id<>mine.job_id JOIN retention_jobs peer ON peer.id=other.job_id
+        WHERE mine.job_id=j.id AND (peer.status<>'verified' OR other.status<>'verified'))
+      AND NOT EXISTS(SELECT 1 FROM retention_jobs first_job WHERE first_job.asset_id=j.asset_id AND first_job.object_version=j.object_version AND first_job.kind='raw'
+        AND (EXISTS(SELECT 1 FROM assets a WHERE a.id=first_job.asset_id AND a.version=first_job.object_version AND a.deleted_at IS NULL)
+          OR EXISTS(SELECT 1 FROM retention_jobs other_job WHERE other_job.asset_id=first_job.asset_id AND other_job.object_version=first_job.object_version
+            AND other_job.kind='raw' AND other_job.id<>first_job.id)))
       ORDER BY j.created_at,j.id LIMIT ?`, ctx.now(), maximum))) {
-        const lease = crypto.randomUUID();
+        const lease = crypto.randomUUID(), lateConflict = new Error('retention_claimed_episode_conflict');
         let deleteDispatched = false, freshClaim = false;
         try {
-            (await ctx.db.transaction(async () => {
+            const claimed = await ctx.db.transaction(async () => {
                 const actual = (await ctx.db.one<Job>('SELECT * FROM retention_jobs WHERE id=?', row.id));
                 if (!actual || !['pending', 'failed', 'processing'].includes(actual.status) || actual.lease_until !== null && actual.lease_until > ctx.now())
                     throw new ApiError(409, 'retention_job_changed');
+                // Recheck after the bounded query before changing status, lease,
+                // error or policy; skip every job in a conflicted episode.
+                if (await jobEpisodeConflict(ctx, actual) || await jobObjectOverlap(ctx, actual.id)) return 'conflict' as const;
+                if (await ctx.db.one(`SELECT o.id FROM retention_objects o JOIN media_write_intents w ON w.bucket=o.bucket AND w.object_key=o.object_key
+                  WHERE o.job_id=? AND o.status<>'verified' AND w.status='pending' LIMIT 1`, actual.id)) return 'deferred' as const;
                 // Use the state read under the claim transaction, never the
                 // earlier scan row, which another worker may have changed.
                 freshClaim = actual.status === 'pending' && actual.lease_until === null;
                 const p = (await policy(ctx));
+                // The policy may change after the page was read. Never relabel
+                // or claim an older preview obligation on that basis.
+                if (actual.kind === 'preview' && actual.policy_version !== p.version) return 'conflict' as const;
                 if (await subjectDeletionHold(ctx, actual.subject_id))
                     throw new ApiError(503, 'retention_request_hold');
                 if ((await hold(ctx, actual, p)))
                     throw new ApiError(503, 'retention_on_hold');
-                // A hold pause may be released by a newer policy. The asset-specific
-                // deadline, source, exact keys and purpose checks remain unchanged.
-                (await ctx.db.run("UPDATE retention_jobs SET status='processing',policy_version=?,lease_token=?,lease_until=?,error_code=NULL WHERE id=?", p.version, lease, ctx.now() + 300000, row.id));
+                // Preview policy identity is retained. Legacy raw/profile policy
+                // handling remains an independently unqualified boundary.
+                if (actual.kind === 'preview')
+                    (await ctx.db.run("UPDATE retention_jobs SET status='processing',lease_token=?,lease_until=?,error_code=NULL WHERE id=?", lease, ctx.now() + 300000, row.id));
+                else
+                    (await ctx.db.run("UPDATE retention_jobs SET status='processing',policy_version=?,lease_token=?,lease_until=?,error_code=NULL WHERE id=?", p.version, lease, ctx.now() + 300000, row.id));
                 // Validate source under this committed lease immediately before
                 // DELETE or finalization, so only this lease can record failure.
-            }));
+                return 'claimed' as const;
+            });
+            if (claimed !== 'claimed') { if (claimed === 'conflict') conflicted = true; continue; }
             for (const item of (await ctx.db.all<any>("SELECT * FROM retention_objects WHERE job_id=? AND status<>'verified' ORDER BY id LIMIT 500", row.id))) {
-                const check = async () => { (await current(ctx, row.id, lease)); if ((await ctx.db.one("SELECT id FROM media_write_intents WHERE bucket=? AND object_key=? AND status='pending' LIMIT 1", item.bucket, item.object_key)))
+                const check = async () => { (await current(ctx, row.id, lease, lateConflict)); if ((await ctx.db.one("SELECT id FROM media_write_intents WHERE bucket=? AND object_key=? AND status='pending' LIMIT 1", item.bucket, item.object_key)))
                     throw new ApiError(503, 'retention_writer_unresolved'); };
                 (await ctx.db.transaction(check));
                 const bucket = ctx.env[item.bucket as PrivateObject['bucket']];
@@ -225,7 +815,7 @@ export async function runRetention(ctx: AppContext, maximum = 50): Promise<{
                     throw new ApiError(503, 'retention_delete_unconfirmed'); (await ctx.db.run("UPDATE retention_objects SET status='verified',attempts=attempts+1,verified_at=? WHERE id=?", ctx.now(), item.id)); }));
             }
             const finalized = await ctx.db.transaction(async () => {
-                (await current(ctx, row.id, lease));
+                (await current(ctx, row.id, lease, lateConflict));
                 if ((await ctx.db.one("SELECT id FROM retention_objects WHERE job_id=? AND status<>'verified' LIMIT 1", row.id)))
                     return false;
                 // Keep a non-sensitive asset tombstone for exact immutable sharing and
@@ -244,6 +834,13 @@ export async function runRetention(ctx: AppContext, maximum = 50): Promise<{
             if (finalized) verified++;
         }
         catch (error) {
+            if (error === lateConflict) {
+                conflicted = true;
+                // If bytes may already have been dispatched, leave the lease and
+                // object evidence untouched and stop this retention run.
+                if (deleteDispatched) throw new ApiError(503, 'retention_conflict_after_dispatch');
+                continue;
+            }
             const code = error instanceof ApiError ? error.code : 'retention_storage_failed';
             // In the intact local job lifecycle, a new pending job with no DELETE
             // in this attempt may retry after release. Older retry/expired-lease
@@ -258,9 +855,14 @@ export async function runRetention(ctx: AppContext, maximum = 50): Promise<{
             failed++;
         }
     }
+    // A conflict can arise after the initial scan even if its asset was later
+    // skipped for a hold or changed policy; keep maintenance health nonzero.
+    const finalPolicy = await policy(ctx);
+    const unresolvedConflict = conflicted || await anyRawConflict(ctx) || await anyPreviewConflict(ctx, finalPolicy) ||
+      await anyJobObjectOverlap(ctx) || await anySourceObjectOverlap(ctx, finalPolicy);
     return { verified, pending: (await ctx.db.one<{
             n: number;
-        }>("SELECT count(*) n FROM retention_jobs WHERE status<>'verified'"))!.n, failed };
+        }>("SELECT count(*) n FROM retention_jobs WHERE status<>'verified'"))!.n, failed: failed + (unresolvedConflict ? 1 : 0) };
 }
 // Inactive reference reconciliation keeps exact keys only while cleanup or
 // recovery still needs them. Minimal completion facts carry no object address.
@@ -431,8 +1033,8 @@ export async function handleRetention(request: Request, ctx: AppContext): Promis
         if (!Number.isInteger(limit) || limit < 1 || limit > 200)
             throw new ApiError(400, 'retention_limit_invalid');
         const intent = await prepareOperation('retention.schedule', body, 'retention');
-        const receipt = (await executeOperation(ctx, actor, intent, async () => { (await requireOperator(ctx, actor, true)); (await snapshotExpired(ctx, limit)); return { scheduled: true, operation_key: intent.key }; }));
-        return ok(receipt); // Root's trusted alarm performs physical cleanup; never claim completion here.
+        const receipt = await runOperatorSchedule(ctx, actor, intent, limit);
+        return ok(receipt); // Physical cleanup remains the trusted maintenance job's responsibility.
     }
     if (request.method !== 'PATCH')
         throw new ApiError(405, 'method_not_allowed');
@@ -484,7 +1086,16 @@ export async function handleRetention(request: Request, ctx: AppContext): Promis
     })));
 }
 export async function retentionPrivacyRows(ctx: AppContext, subject: string): Promise<Record<string, unknown>> {
-    const rows = { asset_retention: (await ctx.db.all('SELECT r.asset_id,r.raw_expires_at,r.preview_expires_at,r.legal_hold FROM asset_retention r JOIN assets a ON a.id=r.asset_id WHERE a.owner_id=? ORDER BY r.asset_id LIMIT 25001', subject)), retention_jobs: (await ctx.db.all('SELECT id,asset_id,kind,status,created_at,verified_at,error_code FROM retention_jobs WHERE subject_id=? ORDER BY created_at,id LIMIT 25001', subject)) };
+    const rows = { asset_retention: (await ctx.db.all('SELECT r.asset_id,r.raw_expires_at,r.preview_expires_at,r.legal_hold FROM asset_retention r JOIN assets a ON a.id=r.asset_id WHERE a.owner_id=? ORDER BY r.asset_id LIMIT 25001', subject)), retention_jobs: (await ctx.db.all('SELECT id,asset_id,kind,status,created_at,verified_at,error_code FROM retention_jobs WHERE subject_id=? ORDER BY created_at,id LIMIT 25001', subject)),
+        // An accepted bounded schedule may still be pending before a cleanup
+        // job exists. Export the subject's own item view without internal plan
+        // hashes, operator authority or other owners' selected items.
+        retention_schedule_items: (await ctx.db.all(`SELECT i.asset_id,i.source_version,i.outcome,c.created_at
+          FROM retention_schedule_items i JOIN retention_schedule_commands c ON c.id=i.command_id
+          WHERE i.owner_id=? ORDER BY c.created_at,c.id,i.position LIMIT 25001`, subject)),
+        retention_schedule_commands: (await ctx.db.all(`SELECT operation_key,limit_count,planned_count,next_position,created_at
+          FROM retention_schedule_commands WHERE actor_id=? ORDER BY created_at,id LIMIT 25001`, subject)),
+    };
     if (Object.values(rows).some(items => items.length > 25000))
         throw new ApiError(413, 'privacy_export_too_large');
     return rows;
@@ -828,6 +1439,7 @@ export async function pruneRetainedMetadata(ctx: AppContext, maximum = 100): Pro
     await ctx.db.transaction(async () => {
     const p = await policy(ctx);
     if (p.legal_hold) return;
+    await pruneDownloadEvidence(ctx,p.audit_days,maximum);
     await pruneTerminalOperationCopies(ctx, maximum);
     const events = await ctx.db.all<{id:string}>(`SELECT e.id FROM audit_events e
       WHERE e.created_at <= ? - CASE

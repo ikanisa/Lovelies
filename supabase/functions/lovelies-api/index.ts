@@ -19,9 +19,10 @@ if(!storageSecret)throw new Error('Server-only Storage secret missing');
 // No request/bootstrap fallback: a missing independent service or uninstalled
 // database marker makes the production entrypoint unavailable, including jobs.
 const journal=new RestoreJournalClient(required('RESTORE_JOURNAL_URL'),required('RESTORE_JOURNAL_TOKEN'));
-const db=connectPostgres(value('LOVELIES_DATABASE_URL')??required('SUPABASE_DB_URL'),value('LOVELIES_DATABASE_CA'),new RestoreDatabaseFence(journal));
+const downloadKeys={MEDIA_SIGNING_SECRET:value('MEDIA_SIGNING_SECRET'),DOWNLOAD_RECEIPT_KEY_ID:value('DOWNLOAD_RECEIPT_KEY_ID'),DOWNLOAD_RECEIPT_KEYS_JSON:value('DOWNLOAD_RECEIPT_KEYS_JSON')};
+const db=connectPostgres(value('LOVELIES_DATABASE_URL')??required('SUPABASE_DB_URL'),value('LOVELIES_DATABASE_CA'),new RestoreDatabaseFence(journal,downloadKeys));
 const env:SupabaseEnv={
-  APP_ENV:value('APP_ENV')??'production',
+  APP_ENV:value('APP_ENV')??'production',...downloadKeys,
   PHOTOS:new SupabasePrivateBucket(projectUrl,storageSecret,'lovelies-photos'),
   QUARANTINE:new SupabasePrivateBucket(projectUrl,storageSecret,'lovelies-quarantine'),
   PRIVACY_EXPORTS:new SupabasePrivateBucket(projectUrl,storageSecret,'lovelies-privacy-exports'),

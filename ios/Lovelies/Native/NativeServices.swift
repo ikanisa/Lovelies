@@ -19,13 +19,22 @@ enum NativePolicyLinks {
 
 /// Local choices never substitute for a current server snapshot, media grant,
 /// subscription or session. Store this record in the account's Keychain slot.
-struct NativeShareFile: Identifiable { let id = UUID(); let url: URL }
+struct NativeShareFile: Identifiable {
+    let id = UUID()
+    let url: URL
+    var download: NativeDownloadEffect? = nil
+    var owner: BackendRepository? = nil
+    var accountID: String? = nil
+    var epoch: Int? = nil
+    var expiresAt: Date? = nil
+}
 struct NativeSystemShare: UIViewControllerRepresentable {
     let url: URL
-    let completion: () -> Void
+    let isCurrent: () -> Bool
+    let completion: (Bool) -> Void
     func makeUIViewController(context: Context) -> UIActivityViewController {
-        let controller = UIActivityViewController(activityItems: [url], applicationActivities: nil)
-        controller.completionWithItemsHandler = { _, _, _, _ in completion() }
+        let controller = UIActivityViewController(activityItems: isCurrent() ? [url] : [], applicationActivities: nil)
+        controller.completionWithItemsHandler = { _, completed, _, error in completion(completed && error == nil) }
         return controller
     }
     func updateUIViewController(_ controller: UIActivityViewController, context: Context) {}
@@ -35,76 +44,220 @@ struct NativeSystemShare: UIViewControllerRepresentable {
     @Published private(set) var product: Product?
     @Published private(set) var working = false
     @Published private(set) var message = ""
-    @Published private(set) var entitlement: WireValue = .object([:])
+    @Published private var entitlementRevision: UInt64 = 0
+    private let entitlementReducer = NativeStoreEntitlementReducer()
+    private var authorityObservation: Task<Void, Never>?
+    private var authorityRefresh: Task<Void, Never>?
+    private var authorityExpiry: Task<Void, Never>?
+    private weak var observedRepository: BackendRepository?
+    private var observationGeneration = 0
+    private var observationID = UUID()
+    private var observationEnabled = true
+    private var productLoadID: UUID?
+    var entitlement: WireValue {
+        _ = entitlementRevision
+        guard observationEnabled, let live, live.isForeground, let repository = observedRepository,
+              live.repository === repository, let proof = entitlementReducer.proof,
+              live.session == proof.session else { return .object([:]) }
+        return entitlementReducer.displayed(source: repository.storeAuthority)
+    }
     private weak var live: LiveAppStore?
     private var updates: Task<Void, Never>?
     private var bindingGeneration = 0
     var productID: String { Bundle.main.object(forInfoDictionaryKey: "LoveliesSubscriptionProduct") as? String ?? "com.lovelies.memories.pro.monthly" }
     func attach(_ store: LiveAppStore) {
-        if live !== store { bindingGeneration += 1 }
+        if live !== store { bindingGeneration += 1; updates?.cancel(); updates = nil }
         live = store
+        observeAuthority()
         guard updates == nil else { return }
         let binding = bindingGeneration
         updates = Task { [weak self] in
             for await value in StoreKit.Transaction.updates {
                 guard !Task.isCancelled, let self, self.bindingGeneration == binding else { return }
+                let feedback = self.live.flatMap { self.feedbackBinding($0) }
                 do { try await self.verify(value) }
-                catch { if self.bindingGeneration == binding, !Task.isCancelled { self.message = error.localizedDescription } }
+                catch {
+                    if self.bindingGeneration == binding, !Task.isCancelled,
+                       let live = self.live, let feedback, self.currentFeedback(feedback, live: live) { self.message = error.localizedDescription }
+                }
             }
         }
     }
     func suspend() {
         bindingGeneration += 1
-        updates?.cancel(); updates = nil; live = nil
+        updates?.cancel(); updates = nil; stopAuthorityObservation(); live = nil
+    }
+    /// Scene/reference lifetime is independent of audience presentation. A denial
+    /// may clear the display, but cannot detach the newer eligible snapshot.
+    func setAuthorityObservation(active: Bool) {
+        observationEnabled = active
+        if active { observeAuthority() } else { stopAuthorityObservation() }
+    }
+    func observeAuthority() {
+        guard observationEnabled, let repository = live?.repository else { return }
+        guard observedRepository !== repository || authorityObservation == nil else { return }
+        stopAuthorityObservation()
+        observedRepository = repository
+        let generation = observationGeneration, source = repository.storeAuthority
+        let observations = source.observations()
+        authorityObservation = Task { [weak self] in
+            for await snapshot in observations {
+                guard !Task.isCancelled, let self, self.observationGeneration == generation,
+                      self.observedRepository === repository else { return }
+                self.receiveAuthority(snapshot, repository: repository)
+            }
+        }
+    }
+    private func stopAuthorityObservation() {
+        observationGeneration += 1
+        observationID = UUID()
+        authorityObservation?.cancel(); authorityObservation = nil
+        authorityRefresh?.cancel(); authorityRefresh = nil
+        authorityExpiry?.cancel(); authorityExpiry = nil
+        observedRepository = nil; entitlementReducer.reset(); publishEntitlement()
+    }
+    private func publishEntitlement() { entitlementRevision &+= 1 }
+    private func receiveAuthority(_ snapshot: NativeStoreAuthoritySnapshot, repository: BackendRepository) {
+        guard observationEnabled, let live, live.repository === repository,
+              entitlementReducer.observe(snapshot, source: repository.storeAuthority) else { return }
+        let generation = observationGeneration
+        live.applyStoreAuthority(snapshot, repository: repository)
+        guard observationGeneration == generation, observationEnabled, self.live === live, live.repository === repository,
+              observedRepository === repository else { return }
+        publishEntitlement()
+        authorityExpiry?.cancel(); authorityExpiry = nil
+        if let deadline = snapshot.deadline {
+            authorityExpiry = Task { [weak self] in
+                do { try await Task.sleep(for: .seconds(max(0, deadline.timeIntervalSinceNow))) } catch { return }
+                guard let self, !Task.isCancelled, self.observedRepository === repository,
+                      repository.storeAuthority.matches(snapshot) else { return }
+                self.entitlementReducer.clearValue(); self.publishEntitlement()
+                self.live?.applyStoreAuthority(snapshot, repository: repository)
+            }
+        }
+        scheduleAuthorityRefresh(snapshot, repository: repository)
+    }
+    private func scheduleAuthorityRefresh(_ snapshot: NativeStoreAuthoritySnapshot, repository: BackendRepository) {
+        guard observationEnabled, let live, live.repository === repository, observedRepository === repository else { return }
+        switch entitlementReducer.refreshDecision(snapshot, source: repository.storeAuthority, active: live.isForeground) {
+        case .none: return
+        case .cancel:
+            authorityRefresh?.cancel(); authorityRefresh = nil; entitlementReducer.cancelRead(); return
+        case .start: break
+        }
+        authorityRefresh?.cancel()
+        authorityRefresh = Task { [weak self] in
+            guard let self, !Task.isCancelled else { return }
+            do { try await self.refreshEntitlement() }
+            catch let failure as NativeStoreEntitlementFailure {
+                if self.entitlementReducer.canPresentFailure(failure.readID, authority: failure.authority, source: repository.storeAuthority),
+                   self.observedRepository === repository { self.message = failure.underlying.localizedDescription }
+            } catch { /* A retired/cancelled observation cannot change presentation. */ }
+        }
     }
     func load() async {
-        guard !Task.isCancelled, let live else { return }
+        guard !Task.isCancelled, let live, let feedback = feedbackBinding(live) else { return }
         let binding = bindingGeneration
+        let loadID = UUID(); productLoadID = loadID
         do {
             let available = try await Product.products(for: [productID]).first
-            guard isCurrent(live, binding: binding) else { return }
+            guard isCurrent(live, binding: binding), currentFeedback(feedback, live: live), productLoadID == loadID else { return }
             product = available
             if product == nil { message = String(localized: "This subscription is currently unavailable from the App Store.") }
             try await refreshEntitlement()
-        } catch { if isCurrent(live, binding: binding) { message = error.localizedDescription } }
+        } catch let failure as NativeStoreEntitlementFailure {
+            if isCurrent(live, binding: binding), currentFeedback(feedback, live: live), productLoadID == loadID,
+               let source = observedRepository?.storeAuthority,
+               entitlementReducer.canPresentFailure(failure.readID, authority: failure.authority, source: source) {
+                message = failure.underlying.localizedDescription
+            }
+        } catch { if isCurrent(live, binding: binding), currentFeedback(feedback, live: live), productLoadID == loadID { message = error.localizedDescription } }
     }
     func refreshEntitlement() async throws {
+        try await refreshEntitlement(versionRetries: 1)
+    }
+    private func refreshEntitlement(versionRetries: Int) async throws {
         try Task.checkCancellation()
-        guard let live, live.session?.authenticated == true, let repository = live.repository else { throw NativeAPIError.authenticationRequired }
+        observeAuthority()
+        guard observationEnabled, let live, live.isForeground, let repository = observedRepository,
+              live.repository === repository else { throw NativeAPIError.authenticationRequired }
         let binding = bindingGeneration
-        let account = live.session?.accountID
-        let result = try await repository.protectedJSON("/me/entitlements")
-        guard isCurrent(live, binding: binding), live.session?.accountID == account else { throw NativeAPIError.sessionChanged }
-        entitlement = result
+        let generation = observationGeneration
+        let id = entitlementReducer.beginRead()
+        var settledAuthority: NativeStoreAuthoritySnapshot?
+        var cancelledAuthority: NativeStoreAuthoritySnapshot?
+        var attemptedAuthority: NativeStoreAuthoritySnapshot?
+        defer {
+            entitlementReducer.finishRead(id, authority: settledAuthority, source: repository.storeAuthority,
+                cancelledAuthority: cancelledAuthority, cancelled: Task.isCancelled, attemptedAuthority: attemptedAuthority)
+            // Re-evaluate even a superseded result: its actor may have learned
+            // a newer revision after the current owner finished. Lifecycle
+            // cancellation/rebinding is checked independently of this task.
+            if observationGeneration == generation, bindingGeneration == binding, self.live === live {
+                scheduleAuthorityRefresh(repository.storeAuthority.current(), repository: repository)
+            }
+        }
+        do {
+            let result = try await repository.storeEntitlement(readID: id, observationID: observationID)
+            settledAuthority = result.authority
+            attemptedAuthority = result.authority
+            guard isCurrent(live, binding: binding), observationEnabled, live.isForeground,
+                  live.repository === repository, entitlementReducer.owns(id),
+                  repository.storeAuthority.permits(result.authority) else { throw NativeAPIError.sessionChanged }
+            live.applyStoreAuthority(result.authority, repository: repository)
+            guard live.session == result.authority.session,
+                  entitlementReducer.install(result, id: id, source: repository.storeAuthority) else { throw NativeAPIError.sessionChanged }
+            publishEntitlement()
+        } catch let failure as NativeStoreEntitlementFailure {
+            settledAuthority = failure.settledAuthority
+            cancelledAuthority = failure.cancelledAuthority
+            attemptedAuthority = failure.attemptedAuthority
+            guard isCurrent(live, binding: binding), observationEnabled, live.isForeground,
+                  live.repository === repository, entitlementReducer.owns(id),
+                  repository.storeAuthority.matches(failure.authority) else { throw NativeAPIError.sessionChanged }
+            if versionRetries > 0, failure.authority.permitsStoreRead(),
+               case NativeAPIError.denied(_, "audience_version_changed") = failure.underlying {
+                try await refreshEntitlement(versionRetries: versionRetries - 1); return
+            }
+            throw failure
+        }
     }
     func purchase() async {
-        guard !working else { return }
+        guard !working, let live, let feedback = feedbackBinding(live) else { return }
+        let binding = bindingGeneration
         working = true; defer { working = false }
         do {
-            guard let product, let live, live.session?.authenticated == true,
+            guard let product, currentFeedback(feedback, live: live), live.session?.authenticated == true,
                   let account = UUID(uuidString: live.session?.accountID ?? "") else { throw NativeAPIError.authenticationRequired }
-            switch try await product.purchase(options: [.appAccountToken(account)]) {
+            let result = try await product.purchase(options: [.appAccountToken(account)])
+            guard isCurrent(live, binding: binding), currentFeedback(feedback, live: live) else { throw NativeAPIError.sessionChanged }
+            switch result {
             case .success(let result): try await verify(result)
             case .pending: message = String(localized: "Purchase awaits App Store approval. Original access has not been granted.")
             case .userCancelled: message = String(localized: "Purchase cancelled.")
             @unknown default: message = String(localized: "The App Store returned an unknown purchase state. Check or restore purchases.")
             }
-        } catch { message = error.localizedDescription }
+        } catch { if isCurrent(live, binding: binding), currentFeedback(feedback, live: live) { message = error.localizedDescription } }
     }
     func restore() async {
-        guard !working else { return }
+        guard !working, let live, let feedback = feedbackBinding(live) else { return }
+        let binding = bindingGeneration
         working = true; defer { working = false }
         do {
+            guard live.session?.authenticated == true else { throw NativeAPIError.authenticationRequired }
             try await AppStore.sync()
+            guard isCurrent(live, binding: binding), currentFeedback(feedback, live: live) else { throw NativeAPIError.sessionChanged }
             var restored = false
             for await result in StoreKit.Transaction.currentEntitlements {
+                guard isCurrent(live, binding: binding), currentFeedback(feedback, live: live) else { throw NativeAPIError.sessionChanged }
                 if case .verified(let transaction) = result, transaction.productID == productID {
                     try await verify(result); restored = true
                 }
             }
             try await refreshEntitlement()
+            guard isCurrent(live, binding: binding), currentFeedback(feedback, live: live) else { throw NativeAPIError.sessionChanged }
             if !restored { message = String(localized: "No current matching subscription was returned by the App Store.") }
-        } catch { message = error.localizedDescription }
+        } catch { if isCurrent(live, binding: binding), currentFeedback(feedback, live: live) { message = error.localizedDescription } }
     }
     private func verify(_ result: VerificationResult<StoreKit.Transaction>) async throws {
         try Task.checkCancellation()
@@ -112,24 +265,37 @@ struct NativeSystemShare: UIViewControllerRepresentable {
         guard let live, let session = live.session, session.authenticated, let repository = live.repository,
               transaction.appAccountToken?.uuidString.lowercased() == session.accountID else { throw NativeAPIError.unsupported(String(localized: "This purchase belongs to another Lovelies account. Sign in to the purchasing account before restoring.")) }
         let binding = bindingGeneration
+        let feedback = NativeStoreFeedbackBinding(repositoryID: repository.storeAuthority.current().sourceID, session: session)
         let response = try await repository.post("/subscriptions/apple/transactions", payload: .object([
             "product_id": .string(transaction.productID), "signed_transaction": .string(result.jwsRepresentation)
         ]), operation: "store.apple")
-        guard isCurrent(live, binding: binding), live.session?.accountID == session.accountID, live.session?.epoch == session.epoch,
+        guard isCurrent(live, binding: binding), live.repository === repository, currentFeedback(feedback, live: live),
               response["product_id"].string == transaction.productID,
               response["transaction_id"].string == String(transaction.id), response["active"].bool != nil,
               ["production", "sandbox"].contains(response["billing_environment"].string ?? "") else { throw NativeAPIError.invalidResponse }
         // Finish only after durable backend verification. An unavailable service
         // leaves StoreKit's transaction unfinished for the next update/relaunch.
         await transaction.finish()
-        guard isCurrent(live, binding: binding) else { throw NativeAPIError.sessionChanged }
+        guard isCurrent(live, binding: binding), live.repository === repository, currentFeedback(feedback, live: live) else { throw NativeAPIError.sessionChanged }
         try await refreshEntitlement()
+        guard isCurrent(live, binding: binding), live.repository === repository, currentFeedback(feedback, live: live) else { throw NativeAPIError.sessionChanged }
         message = response["billing_environment"].string == "sandbox" ? String(localized: "Sandbox transaction verified. Production original access is unchanged.") : response["active"].bool == true ? String(localized: "Subscription verified by Lovelies.") : String(localized: "Subscription is expired or revoked.")
     }
     private func isCurrent(_ store: LiveAppStore, binding: Int) -> Bool {
         !Task.isCancelled && live === store && bindingGeneration == binding
     }
-    func retire() { entitlement = .object([:]); message = "" }
+    private func feedbackBinding(_ store: LiveAppStore) -> NativeStoreFeedbackBinding? {
+        guard let repository = store.repository else { return nil }
+        let current = repository.storeAuthority.current()
+        guard current.session == store.session else { return nil }
+        return NativeStoreFeedbackBinding(repositoryID: current.sourceID, session: store.session)
+    }
+    private func currentFeedback(_ feedback: NativeStoreFeedbackBinding, live: LiveAppStore) -> Bool {
+        guard let repository = live.repository else { return false }
+        let current = repository.storeAuthority.current()
+        return current.session == live.session && feedback.permits(repositoryID: current.sourceID, session: live.session)
+    }
+    func retire() { entitlementReducer.clearValue(); publishEntitlement(); message = "" }
 }
 
 @MainActor final class NativePush: NSObject, ObservableObject, UNUserNotificationCenterDelegate {

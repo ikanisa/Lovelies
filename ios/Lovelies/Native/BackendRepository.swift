@@ -117,7 +117,7 @@ struct NativePrivateMediaCache: Sendable {
 /// children of this directory and never participate in this cleanup.
 struct NativeAuthorizedShareFiles: Sendable {
     let directory: URL
-    static let extensions: Set<String> = ["json", "jpg", "png", "webp", "heic"]
+    static let extensions: Set<String> = ["json", "jpg", "png", "webp", "gif", "heic"]
     init(directory: URL = FileManager.default.temporaryDirectory.appendingPathComponent("lovelies-authorized-share", isDirectory: true)) {
         self.directory = directory.standardizedFileURL
     }
@@ -170,15 +170,17 @@ enum NativeLocalTransitionKind: Sendable { case accountRecoveryStart, profileCan
 struct NativeLocalTransitionTicket: Sendable { fileprivate let id: UUID }
 
 actor BackendRepository {
+    nonisolated let storeAuthority = NativeStoreAuthoritySource()
     private let origin: URL, transport: any NativeTransport, secrets: any NativeSecretStore, signer: any NativeDeviceSigner
     private var credentials: NativeCredentials? {
         didSet {
             if !Self.sameCredentials(oldValue, credentials) {
                 invalidateLocalSigning(); localPromotionActivation = nil; preparedGuestResume = nil; preparedLocalTransition = nil
             }
+            publishStoreAuthority(force: !Self.sameCredentials(oldValue, credentials))
         }
     }
-    private var epoch = 0 { didSet { if oldValue != epoch { invalidateLocalSigning(); localPromotionActivation = nil; preparedGuestResume = nil; preparedLocalTransition = nil } } }
+    private var epoch = 0 { didSet { if oldValue != epoch { invalidateLocalSigning(); localPromotionActivation = nil; preparedGuestResume = nil; preparedLocalTransition = nil }; publishStoreAuthority() } }
     private struct LocalPromotionActivation: Equatable {
         let intent: String, credential: String
         let epoch: Int
@@ -194,13 +196,16 @@ actor BackendRepository {
     }
     private var preparedLocalTransition: LocalTransitionPreparation?
     private var intents: [NativeOperationIntent] = []
+    private var downloadBusy = false
+    private var downloadDeadlines: [String: NativePrivateMediaDeadline] = [:]
+    private var downloadExpiryTask: Task<Void, Never>?
     private var uploads: [NativeUploadRecord] = []
     private var uploadBatches: [NativeResumableUploadBatch] = []
     private var uploadSerial = 0, uploadBusy = false
     private var uploadRetirement: Task<Void, Never>?
     private let uploadFiles: NativeUploadPrivateFiles
     private let uploadTransport: any NativeUploadFileTransport
-    private var guestDeletion: NativeGuestDeletionRecord?
+    private var guestDeletion: NativeGuestDeletionRecord? { didSet { publishStoreAuthority() } }
     private var guestDeletionSerial = 0
     private var guestDeletionBusy = false
     private struct GuestResumePreparation {
@@ -210,20 +215,20 @@ actor BackendRepository {
         let serial: Int, issuedAt: TimeInterval
     }
     private var preparedGuestResume: GuestResumePreparation?
-    private var enrollment: NativeEnrollmentRecord?
+    private var enrollment: NativeEnrollmentRecord? { didSet { publishStoreAuthority() } }
     private var enrollmentSerial = 0
     private var enrollmentBusy = false
-    private var accountRecovery: NativeAccountRecoveryRecord?
+    private var accountRecovery: NativeAccountRecoveryRecord? { didSet { publishStoreAuthority() } }
     private var recoverySerial = 0, recoveryBusy = false
     private var recoveryArchives: [NativeAccountRecoveryRecord] = []
-    private var faceLifecycle: NativeFaceLifecycleRecord?
+    private var faceLifecycle: NativeFaceLifecycleRecord? { didSet { publishStoreAuthority() } }
     private var lifecycleArchives: [NativeFaceLifecycleRecord] = []
     private var lifecycleSerial = 0, lifecycleBusy = false
-    private var ordinaryLogin: NativeOrdinaryLoginRecord?
-    private var audienceProjection: NativeAudienceProjection?
-    private var audienceProjectionEpoch: Int?
+    private var ordinaryLogin: NativeOrdinaryLoginRecord? { didSet { publishStoreAuthority() } }
+    private var audienceProjection: NativeAudienceProjection? { didSet { publishStoreAuthority() } }
+    private var audienceProjectionEpoch: Int? { didSet { publishStoreAuthority() } }
     private var audienceMutationBusy = false
-    private var audienceSuspension: NativeAudienceSuspensionRecord?
+    private var audienceSuspension: NativeAudienceSuspensionRecord? { didSet { publishStoreAuthority() } }
     private var mediaEpoch = 0
     private var media = NativePrivateMediaCache()
     private var mediaExpiryTask: Task<Void, Never>?
@@ -554,7 +559,12 @@ actor BackendRepository {
         }
         return try scope(anonymous: anonymous)
     }
-    private func saveIntents() throws { try secrets.write("operation-intents", data: JSONEncoder().encode(intents)) }
+    private func saveIntents() throws {
+        let intended = intents
+        try adoptLegacyDownloads(additional: intended)
+        intents = intended.filter { !NativeDownloadJournal.isLegacy($0) }
+        try secrets.write("operation-intents", data: JSONEncoder().encode(intents))
+    }
     private func adopt(_ wire: WireValue, expected: String? = nil, method: String? = nil) throws {
         try adoptCredentials(NativeCredentials(wire), expected: expected, method: method)
     }
@@ -581,7 +591,7 @@ actor BackendRepository {
         }
         try secrets.write("credentials", data: JSONEncoder().encode(next)); epoch += 1; credentials = next; audienceProjection = nil; audienceProjectionEpoch = nil; retireMedia()
     }
-    func retireMedia() { mediaEpoch += 1; mediaExpiryTask?.cancel(); mediaExpiryTask = nil; media.removeAll() }
+    func retireMedia() { retireDownloadStaging(); mediaEpoch += 1; mediaExpiryTask?.cancel(); mediaExpiryTask = nil; media.removeAll() }
     func expirePrivateMedia() {
         media.expire(at: privateMediaClock.read()); scheduleMediaExpiry()
     }
@@ -602,7 +612,8 @@ actor BackendRepository {
         guard expectedEpoch == mediaEpoch else { return }; expirePrivateMedia()
     }
     private func request(_ path: String, method: String = "GET", body: WireValue? = nil, raw: Data? = nil,
-                         headers: [String: String] = [:], scope captured: Scope? = nil, binary: Bool = false, preserveRefreshAuthority: Bool = false) async throws -> NativeHTTPReply {
+                         headers: [String: String] = [:], scope captured: Scope? = nil, binary: Bool = false, preserveRefreshAuthority: Bool = false,
+                         observeDispatch: ((NativeStoreAuthoritySnapshot) -> Void)? = nil) async throws -> NativeHTTPReply {
         let captured = captured ?? Scope(epoch: epoch, account: nil, token: nil); try check(captured)
         guard path.hasPrefix("/"), !path.hasPrefix("//"), !path.contains(".."), let url = URL(string: origin.path.trimmingCharacters(in: CharacterSet(charactersIn: "/")).isEmpty ? path : origin.path + path, relativeTo: origin)?.absoluteURL,
               url.scheme == origin.scheme, url.host == origin.host, url.port == origin.port else { throw NativeAPIError.invalidResponse }
@@ -615,8 +626,9 @@ actor BackendRepository {
         if let token = captured.token { request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization") }
         if let body { request.setValue("application/json", forHTTPHeaderField: "Content-Type"); request.httpBody = try body.encoded() }
         else { request.httpBody = raw }
+        observeDispatch?(storeAuthority.current())
         let response: NativeHTTPReply
-        do { response = try await transport.send(request, limit: binary ? 32 * 1024 * 1024 : 2 * 1024 * 1024) }
+        do { response = try await transport.send(request, limit: path == "/downloads/v2/content" ? 20 * 1024 * 1024 : (binary ? 32 * 1024 * 1024 : 2 * 1024 * 1024)) }
         catch { try check(captured); if error is CancellationError { throw error }; throw NativeAPIError.unavailable("network") }
         try check(captured)
         guard (200..<300).contains(response.status) else {
@@ -634,6 +646,8 @@ actor BackendRepository {
         try WireValue.decoded(await request(path, method: method, body: body, scope: scope, preserveRefreshAuthority: preserveRefreshAuthority).data)
     }
     func bootstrap() async throws -> NativeSessionSummary? {
+        try adoptLegacyDownloads()
+        retireDownloadStaging(expiredOnly: true)
         try restoreUploadBatches()
         try restoreFaceLifecycle()
         try restoreAccountRecovery()
@@ -871,6 +885,9 @@ actor BackendRepository {
         } catch { /* Exact protected cancellation identity remains for retry. */ }
     }
     func clearSession(identity: Bool = false) {
+        // A failed adoption keeps the original generic evidence on disk.
+        let mayClearIntents: Bool
+        do { try adoptLegacyDownloads(additional: intents); mayClearIntents = true } catch { mayClearIntents = false }
         retireUploadWork()
         var removeCredentialSlot = true
         if var record = guestDeletion, record.status?.completed != true, let current = credentials,
@@ -887,7 +904,7 @@ actor BackendRepository {
         enrollmentSerial += 1; enrollmentBusy = false
         recoverySerial += 1; recoveryBusy = false
         epoch += 1; credentials = nil; audienceProjection = nil; audienceProjectionEpoch = nil; intents = []; uploads = []; transport.cancelPending(); retireMedia()
-        if removeCredentialSlot { try? secrets.write("credentials", data: nil) }; try? secrets.write("operation-intents", data: nil)
+        if removeCredentialSlot { try? secrets.write("credentials", data: nil) }; if mayClearIntents { try? secrets.write("operation-intents", data: nil) }
         try? secrets.write("upload-stages", data: nil)
         if identity {
             if let guestDeletion { try? clearGuestDeviceReferences(account: guestDeletion.accountID) }
@@ -1624,6 +1641,7 @@ actor BackendRepository {
         if !status.completed { try saveGuestDeletion(acknowledged) }
         // Retire public guest authority immediately; the encrypted original
         // credential is retained solely for explicit same-account recovery.
+        try adoptLegacyDownloads(additional: intents)
         epoch += 1; credentials = nil; intents = []; uploads = []; transport.cancelPending(); retireMedia()
         for key in ["credentials", "operation-intents", "upload-stages"] { try secrets.write(key, data: nil) }
         try clearGuestDeviceReferences(account: record.accountID, completed: status.completed)
@@ -1791,6 +1809,51 @@ actor BackendRepository {
         try await json("/community/action", method: "POST", body: .object(["action": .string(action), "payload": payload]), scope: readyScope())
     }
     func protectedJSON(_ path: String, method: String = "GET", body: WireValue? = nil) async throws -> WireValue { try await json(path, method: method, body: body, scope: readyScope(anonymous: Self.audienceWeakerPath(path, method: method))) }
+    /// The value and its token-free local authority leave the actor together.
+    /// No generic caller may reinterpret an old error as a current audience denial.
+    func storeEntitlement(readID: UUID, observationID: UUID? = nil) async throws -> NativeStoreEntitlementRead {
+        try await NativeStoreAuthorityRead.$observationID.withValue(observationID) {
+          try await NativeStoreAuthorityRead.$id.withValue(readID) {
+            var attempted = storeAuthority.current()
+            var requestScope: Scope?
+            do {
+                let captured = try await readyScope(); requestScope = captured
+                let reply = try await request("/me/entitlements", scope: captured, observeDispatch: { attempted = $0 })
+                let value = try WireValue.decoded(reply.data)
+                try Task.checkCancellation()
+                publishStoreAuthority()
+                let authority = storeAuthority.current()
+                guard storeAuthority.permits(authority) else { throw NativeAPIError.sessionChanged }
+                return NativeStoreEntitlementRead(authority: authority, value: value)
+            } catch {
+                if case NativeAPIError.denied(_, let code) = error,
+                   code.hasPrefix("audience_") || code.hasPrefix("guardian_") || code == "age_not_supported" {
+                    // A transport denial alone cannot retire newer eligibility.
+                    // Publish only a validated current projection; unavailable
+                    // readback leaves the failed entitlement unpublishable.
+                    _ = try? await fetchAudience(readyScope(anonymous: true))
+                }
+                publishStoreAuthority()
+                let current = storeAuthority.current()
+                let cancelled = Task.isCancelled || error is CancellationError
+                let retired = cancelled || (error as? NativeAPIError) == .sessionChanged
+                var requestCurrent = false
+                if let requestScope { do { try check(requestScope); requestCurrent = true } catch { /* Retired request has no current settlement. */ } }
+                var settled: NativeStoreAuthoritySnapshot?
+                if !retired {
+                    // A post-read version fence deliberately owns one bounded
+                    // retry, but only while its actual request scope survives.
+                    if requestCurrent,
+                       case NativeAPIError.denied(_, "audience_version_changed") = error { settled = current }
+                    else if storeAuthority.matches(attempted) { settled = attempted }
+                }
+                throw NativeStoreEntitlementFailure(readID: readID, authority: current, underlying: error,
+                    attemptedAuthority: attempted, settledAuthority: settled,
+                    cancelledAuthority: cancelled && storeAuthority.matches(attempted) ? attempted : nil)
+            }
+          }
+        }
+    }
     func photos(source: String = "all", cursor: WireValue? = nil, query: String = "", category: String = "all") async throws -> WireValue {
         guard ["all", "received", "contributions"].contains(source) else { throw NativeAPIError.invalidResponse }
         var payload: [String: WireValue] = ["source": .string(source), "limit": .integer(60)]
@@ -1906,6 +1969,10 @@ actor BackendRepository {
     }
     private static func privacyIntentPath(_ path: String) -> Bool { path.hasPrefix("/privacy/") || path.hasPrefix("/privacy-exports/") }
     private func reconcileIntent(_ intent: NativeOperationIntent, retryUnknown: Bool) async throws -> WireValue {
+        if NativeDownloadJournal.isLegacy(intent) {
+            try adoptLegacyDownloads()
+            return .object(["status": .string("unknown"), "operation_key": .string(intent.key), "source": .string(intent.source)])
+        }
         guard intent.source == "personal", intent.payload["source"] == .null || intent.payload["source"].string == "personal" else { throw NativeAPIError.invalidResponse }
         let weakerPrivacy = intent.path.map { Self.audienceWeakerPath($0, method: intent.method ?? "POST") && ($0.hasPrefix("/privacy/") || $0.hasPrefix("/privacy-exports/")) } == true
         var result = weakerPrivacy ? try await json("/privacy/operations/" + intent.key, scope: readyScope(anonymous: true)) : try await community("operation", payload: .object(["operation_key": .string(intent.key)]))
@@ -1932,6 +1999,8 @@ actor BackendRepository {
         try validateDecision(value, requestID: requestID); try confirmed(key); return value
     }
     func post(_ path: String, payload: WireValue, operation: String, method: String = "POST") async throws -> WireValue {
+        guard !path.hasPrefix("/downloads/") else { throw NativeAPIError.invalidResponse }
+        try adoptLegacyDownloads()
         let captured = try await readyScope(anonymous: Self.audienceWeakerPath(path, method: method)), key = UUID().uuidString.lowercased(); var body = payload.object ?? [:]; body["operation_key"] = .string(key)
         // The private intent retains the original body for recovery; it can
         // contain sensitive values such as a provider token until retired.
@@ -1964,25 +2033,9 @@ actor BackendRepository {
         try secrets.write("upload-stages", data: JSONEncoder().encode(uploads)); return id
     }
     func authorizedSaveBytes(_ photo: NativePhoto) async throws -> Data {
-        // The backend owns the verified store entitlement and current grant decision.
-        guard photo.source == "personal" else { throw NativeAPIError.invalidResponse }
-        guard !photo.version.isEmpty else { throw NativeAPIError.unsupported(String(localized: "Return to your library and refresh current access.")) }
-        let captured = try await readyScope()
-        let signed = try await post("/downloads/sign", payload: .object(["asset_id": .string(photo.id)]), operation: "download.sign")
-        guard signed["source_version"].string == photo.version else { throw NativeAPIError.unsupported(String(localized: "Return to your library and refresh current access.")) }
-        guard signed["method"].string == "GET", let rawURL = signed["download_url"].string, let url = URL(string: rawURL),
-              url.scheme == origin.scheme, url.host == origin.host, url.port == origin.port, url.user == nil, url.password == nil,
-              url.query == nil, url.fragment == nil,
-              (url.path.hasPrefix("/downloads/") || url.path.hasPrefix(origin.path + "/downloads/")),
-              UUID(uuidString: url.lastPathComponent) != nil,
-              let seconds = signed["expires_in"].integer, (1...300).contains(seconds) else { throw NativeAPIError.invalidResponse }
-        let expiresAt = min(Date().addingTimeInterval(Double(seconds)), credentials!.expiresAt)
-        let downloadPath = url.path.hasPrefix(origin.path + "/downloads/") ? String(url.path.dropFirst(origin.path.count)) : url.path
-        let reply = try await request(downloadPath, scope: captured, binary: true)
-        guard expiresAt > Date() else { throw NativeAPIError.denied(403, "download_expired") }
-        guard (reply.headers["content-type"] ?? "").hasPrefix("image/"), !reply.data.isEmpty else { throw NativeAPIError.invalidResponse }
-        return reply.data
+        try await prepareDownload(photo, purpose: .bytes).bytes
     }
+
 }
 
 extension BackendRepository {
@@ -2518,6 +2571,7 @@ extension BackendRepository {
         if authorityRetired { next.credentials = nil; next.currentAuthorityValidated = false }
         try saveFaceLifecycle(next) // New authority/hold precedes retirement of its older credential slot.
         if authorityRetired {
+            try adoptLegacyDownloads(additional: intents)
             credentials = nil; epoch += 1; retireMedia(); intents = []; uploads = []
             try secrets.write("credentials", data: nil); try secrets.write("operation-intents", data: nil); try secrets.write("upload-stages", data: nil)
         }
@@ -3379,10 +3433,15 @@ extension BackendRepository {
 
 
 extension BackendRepository {
+    private func publishStoreAuthority(force: Bool = false) {
+        let currentAudience = audienceProjectionEpoch == epoch && audienceProjection?.accountID == credentials?.account_id ? audienceProjection : nil
+        storeAuthority.publish(session: summary(), binding: audienceSessionBinding(), audience: currentAudience,
+                               readID: NativeStoreAuthorityRead.id, observationID: NativeStoreAuthorityRead.observationID, force: force)
+    }
     // This allow-list permits safety/privacy work under a current durable session
     // even when an audience hold blocks all product work. It grants no backend authority.
     private static func audienceWeakerPath(_ path: String, method: String = "GET") -> Bool {
-        path == "/me" || path == "/me/audience" || path.hasPrefix("/me/guardian-requests") || path.hasPrefix("/guardian-requests/") ||
+        (path == "/downloads/v2/status" && method == "POST") || path == "/me" || path == "/me/audience" || path.hasPrefix("/me/guardian-requests") || path.hasPrefix("/guardian-requests/") ||
         path == "/me/devices" || path == "/me/sessions" || path == "/me/photo-preferences" || path == "/auth/session/revoke" || path == "/auth/device/revoke" ||
         path.hasPrefix("/privacy/") || path.hasPrefix("/privacy-requests/") || path.hasPrefix("/privacy-exports/") ||
         path == "/auth/logout" || (path.hasPrefix("/uploads/") && path.hasSuffix("/cancel"))
@@ -3632,4 +3691,256 @@ extension BackendRepository {
         let value = try await audienceMutation(path: "/guardian-requests/" + request.id + "/withdraw", body: .object(["expected_revision": .integer(request.revision)]))
         return try NativeGuardianRequest(value["guardian_request"], id: request.id)
     }
+}
+
+/// These handles never contain the capability. Their initializer is private to
+/// this repository file; callers can only act on the exact prepared intent.
+struct NativePreparedDownload: Sendable {
+    let bytes: Data, mime: String, expiresAt: Date
+    fileprivate let key: String, account: String, session: String, epoch: Int, sha256: String
+    var fileExtension: String { switch mime { case "image/png": return "png"; case "image/webp": return "webp"; case "image/gif": return "gif"; default: return "jpg" } }
+}
+struct NativeDownloadEffect: Sendable {
+    fileprivate let key: String, id: String, account: String, session: String, epoch: Int
+}
+extension BackendRepository {
+    private var downloadFiles: NativeDownloadPrivateFiles { .init(root: uploadFiles.root.appendingPathComponent("download-staging-v2", isDirectory: true)) }
+    private func readDownloads() throws -> (Data?, NativeDownloadJournal) {
+        let data = try secrets.read("download-delivery-v2")
+        guard data == nil || data!.count <= 2 * 1024 * 1024 else { throw NativeAPIError.invalidResponse }
+        let journal = try data.map { try JSONDecoder().decode(NativeDownloadJournal.self, from: $0) } ?? .empty
+        try journal.validate(origin: origin); return (data, journal)
+    }
+    private func writeDownloads(_ value: NativeDownloadJournal, expected: Data?) throws {
+        try value.validate(origin: origin)
+        let encoded = try JSONEncoder().encode(value)
+        guard encoded.count <= 2 * 1024 * 1024 else { throw NativeAPIError.invalidResponse }
+        guard try secrets.compareAndSwap("download-delivery-v2", expected: expected, replacement: encoded) else { throw NativeDownloadIssue.issuanceUnconfirmed }
+    }
+    @discardableResult private func changeDownload(_ original: NativeDownloadRecord, _ edit: (inout NativeDownloadRecord) throws -> Void) throws -> NativeDownloadRecord {
+        let (data, stored) = try readDownloads(); var journal = stored
+        guard let i = journal.operations.firstIndex(where: { $0.key == original.key }), journal.operations[i].revision == original.revision else { throw NativeDownloadIssue.issuanceUnconfirmed }
+        var record = journal.operations[i]
+        guard Date() >= record.lastObservedAt else { throw NativeAPIError.denied(403, "download_expired") }
+        try edit(&record); record.revision += 1; record.lastObservedAt = Date()
+        journal.operations[i] = record; try writeDownloads(journal, expected: data); return record
+    }
+    /// Adoption is durable before releasing any old generic slot. No legacy
+    /// lookup or re-signing is allowed, including malformed mixed-source history.
+    private func adoptLegacyDownloads(additional: [NativeOperationIntent] = []) throws {
+        let generic = try secrets.read("operation-intents")
+        guard generic == nil || generic!.count <= 2 * 1024 * 1024 else { throw NativeAPIError.invalidResponse }
+        let originals = try generic.map { try JSONDecoder().decode([NativeOperationIntent].self, from: $0) } ?? []
+        guard originals.count <= 100 else { throw NativeAPIError.invalidResponse }
+        let legacy = (originals + additional).filter(NativeDownloadJournal.isLegacy)
+        guard !legacy.isEmpty else { return }
+        let (data, stored) = try readDownloads(); var journal = stored
+        for intent in legacy {
+            if let old = journal.legacy.first(where: { $0.key == intent.key }) {
+                guard try WireValue.decoded(JSONEncoder().encode(old)) == WireValue.decoded(JSONEncoder().encode(intent)) else { throw NativeAPIError.invalidResponse }
+            } else { journal.legacy.append(intent) }
+        }
+        try writeDownloads(journal, expected: data)
+        // Read-back is part of the custody transfer, even if the vault reports
+        // a successful write before failing on a later read.
+        let (_, verified) = try readDownloads()
+        for item in legacy {
+            guard let retained = verified.legacy.first(where: { $0.key == item.key }),
+                  try WireValue.decoded(JSONEncoder().encode(retained)) == WireValue.decoded(JSONEncoder().encode(item)) else { throw NativeAPIError.invalidResponse }
+        }
+        let remaining = originals.filter { !NativeDownloadJournal.isLegacy($0) }
+        guard try secrets.compareAndSwap("operation-intents", expected: generic, replacement: JSONEncoder().encode(remaining)) else { throw NativeDownloadIssue.issuanceUnconfirmed }
+        intents = remaining
+    }
+    private func downloadSession(_ captured: Scope) throws -> String {
+        try check(captured)
+        guard let token = captured.token else { throw NativeAPIError.authenticationRequired }
+        let parts = token.split(separator: ".", omittingEmptySubsequences: false)
+        guard parts.count == 3, let bytes = Data(base64URL: String(parts[1])), let claims = try? WireValue.decoded(bytes),
+              claims["sub"].string == captured.account, let jti = claims["jti"].string, NativeDownloadRecord.uuid(jti) else { throw NativeAPIError.invalidResponse }
+        return jti
+    }
+    private func requireDownload(_ record: NativeDownloadRecord, captured: Scope) throws {
+        try check(captured)
+        guard record.accountID == captured.account, try downloadSession(captured) == record.originalSessionID else { throw NativeAPIError.sessionChanged }
+        guard let expiry = record.expiresAt, Date() >= record.lastObservedAt,
+              Double(expiry) / 1000 > Date().timeIntervalSince1970, record.localCreatedAt.addingTimeInterval(120) > Date(), record.originalSessionExpiry > Date() else { throw NativeAPIError.denied(403, "download_expired") }
+        if let deadline = downloadDeadlines[record.key], deadline.remaining(at: privateMediaClock.read()) <= 0 { throw NativeAPIError.denied(403, "download_expired") }
+    }
+    private func observeDownload(_ record: NativeDownloadRecord, captured: Scope, path: String) async throws -> NativeDownloadRecord {
+        let next: NativeDownloadRecord
+        do {
+            let reply = try await request(path, method: "POST", body: record.body, headers: ["X-Lovelies-Download-Capability": record.capability], scope: captured)
+            guard reply.status == 200 else { throw NativeAPIError.invalidResponse }
+            let value = try WireValue.decoded(reply.data)
+            try check(captured)
+            next = try changeDownload(record) { try $0.accept(value) }
+        } catch { throw NativeDownloadIssue.recoveryError(error, delivery: false) }
+        if let expiry = next.expiresAt, downloadDeadlines[next.key] == nil {
+            downloadDeadlines[next.key] = .init(created: privateMediaClock.read(), authorityExpiresAt: min(Date(timeIntervalSince1970: Double(expiry) / 1000), next.localCreatedAt.addingTimeInterval(120)))
+        }
+        return next
+    }
+    /// Status can inspect the original context under a renewed own-account
+    /// privacy session. It never authorizes original-session content.
+    func downloadStatus(key: String) async throws -> NativeDownloadPhase {
+        let captured = try await readyScope(anonymous: true)
+        guard let record = try readDownloads().1.operations.first(where: { $0.key == key }), record.accountID == captured.account else { throw NativeAPIError.sessionChanged }
+        return try await observeDownload(record, captured: captured, path: "/downloads/v2/status").phase
+    }
+    private func downloadContent(_ original: NativeDownloadRecord, captured: Scope) async throws -> (NativeDownloadRecord, Data) {
+        try requireDownload(original, captured: captured)
+        let record = try changeDownload(original) { $0.phase = .contentStarted; $0.stagingRetired = false }
+        let revision = mediaEpoch
+        let reply: NativeHTTPReply
+        do {
+            reply = try await request("/downloads/v2/content", method: "POST", body: record.body,
+                headers: ["X-Lovelies-Download-Capability": record.capability], scope: captured, binary: true)
+        } catch { throw NativeDownloadIssue.recoveryError(error, delivery: true) }
+        try requireDownload(record, captured: captured)
+        guard revision == mediaEpoch, !Task.isCancelled, reply.status == 200, !reply.data.isEmpty, reply.data.count <= 20 * 1024 * 1024,
+              reply.headers["content-length"] == String(reply.data.count), reply.headers["x-lovelies-source-version"] == record.sourceVersion,
+              let digest = reply.headers["x-lovelies-content-sha256"], NativeResumableUploadFile.digest(digest), NativeDownloadRecord.hash(reply.data) == digest,
+              let mime = reply.headers["content-type"]?.split(separator: ";").first.map(String.init), Self.downloadMime(reply.data) == mime,
+              record.sha256 == nil || record.sha256 == digest && record.byteCount == reply.data.count && record.mime == mime else { throw NativeDownloadIssue.deliveryUnconfirmed }
+        // Bind expected bytes before touching disk: a lost staging write or
+        // journal acknowledgement cannot cause adoption of unbound bytes.
+        let bound = try changeDownload(record) { $0.sha256 = digest; $0.byteCount = reply.data.count; $0.mime = mime }
+        scheduleDownloadExpiry()
+        let bytes: Data
+        do { try downloadFiles.stage(reply.data, record: bound); bytes = try downloadFiles.verifiedBytes(bound) }
+        catch { throw NativeDownloadIssue.recoveryError(error, delivery: true) }
+        try requireDownload(bound, captured: captured)
+        let staged = try changeDownload(bound) { $0.phase = .staged }
+        return (staged, bytes)
+    }
+    private static func downloadMime(_ bytes: Data) -> String? {
+        if let content = NativeUploadContentType.detect(bytes) { return content.rawValue }
+        // Preserve supported historical originals without broadening upload admission.
+        if bytes.count >= 6, ["GIF87a", "GIF89a"].contains(String(decoding: bytes.prefix(6), as: UTF8.self)) { return "image/gif" }
+        return nil
+    }
+    func prepareDownload(_ photo: NativePhoto, purpose: NativeDownloadPurpose, explicitNewAction: Bool = false) async throws -> NativePreparedDownload {
+        guard !downloadBusy else { throw NativeDownloadIssue.issuanceUnconfirmed }
+        downloadBusy = true; defer { downloadBusy = false }
+        try adoptLegacyDownloads(); retireDownloadStaging(expiredOnly: true)
+        guard photo.source == "personal", NativeDownloadRecord.uuid(photo.id), !photo.version.isEmpty, photo.version.utf8.count <= 512 else { throw NativeAPIError.invalidResponse }
+        let captured = try await readyScope(), jti = try downloadSession(captured)
+        let (data, stored) = try readDownloads(); var journal = stored
+        // Completed, expired deliveries need no unresolved recovery metadata.
+        // Uncertain histories and legacy evidence are never compacted here.
+        journal.operations.removeAll { record in
+            record.phase == .externalCompleted && record.stagingRetired &&
+            record.expiresAt.map { Double($0) / 1000 <= Date().timeIntervalSince1970 } == true
+        }
+        var record: NativeDownloadRecord
+        if let old = journal.operations.last(where: { $0.accountID == captured.account && $0.assetID == photo.id && $0.sourceVersion == photo.version && $0.purpose == purpose && $0.phase != .notIssued && $0.phase != .externalCompleted && $0.phase != .retired }) {
+            if [.externalStarted, .externalUncertain].contains(old.phase) {
+                guard explicitNewAction else { throw NativeDownloadIssue.externalUnconfirmed }
+                // This call is an explicit new button action. The previous OS
+                // outcome remains durably uncertain and is never replayed.
+                record = try newDownload(photo, purpose: purpose, captured: captured, jti: jti)
+                journal.operations.append(record); try writeDownloads(journal, expected: data)
+            } else { record = old }
+        } else {
+            if !explicitNewAction, let previous = journal.operations.last(where: { $0.accountID == captured.account && $0.assetID == photo.id && $0.purpose == purpose }) {
+                switch previous.phase {
+                case .notIssued: throw NativeDownloadIssue.notIssued
+                case .externalCompleted: throw NativeDownloadIssue.actionCompleted
+                case .retired: throw NativeDownloadIssue.retired
+                default: throw NativeDownloadIssue.issuanceUnconfirmed
+                }
+            }
+            record = try newDownload(photo, purpose: purpose, captured: captured, jti: jti)
+            journal.operations.append(record); try writeDownloads(journal, expected: data)
+        }
+        if record.phase == .prepared {
+            guard record.originalSessionID == jti else { throw NativeAPIError.sessionChanged }
+            record = try changeDownload(record) { $0.phase = .signing }
+            record = try await observeDownload(record, captured: captured, path: "/downloads/v2/sign")
+        } else {
+            // A lost sign reply is reconciled, never re-signed, even if its
+            // original session has since been renewed.
+            record = try await observeDownload(record, captured: captured, path: "/downloads/v2/status")
+        }
+        guard record.phase != .notIssued else { throw NativeDownloadIssue.notIssued }
+        if record.originalSessionID != jti || (record.localCreatedAt.addingTimeInterval(120) <= Date() || record.expiresAt.map({ Double($0) / 1000 <= Date().timeIntervalSince1970 }) == true) {
+            _ = try changeDownload(record) { $0.phase = .retired }
+            throw NativeDownloadIssue.retired
+        }
+        let (staged, bytes) = try await downloadContent(record, captured: captured)
+        return NativePreparedDownload(bytes: bytes, mime: staged.mime!, expiresAt: min(Date(timeIntervalSince1970: Double(staged.expiresAt!) / 1000), staged.localCreatedAt.addingTimeInterval(120)), key: staged.key, account: staged.accountID,
+            session: staged.originalSessionID, epoch: captured.epoch, sha256: staged.sha256!)
+    }
+    private func newDownload(_ photo: NativePhoto, purpose: NativeDownloadPurpose, captured: Scope, jti: String) throws -> NativeDownloadRecord {
+        guard let account = captured.account, let expiry = credentials?.expiresAt else { throw NativeAPIError.authenticationRequired }
+        let now = Date()
+        return NativeDownloadRecord(key: UUID().uuidString.lowercased(), apiOrigin: origin.absoluteString, accountID: account,
+            originalSessionID: jti, assetID: photo.id, sourceVersion: photo.version, capability: try Self.recoveryRandom("lvd_v2_"),
+            purpose: purpose, localCreatedAt: now, originalSessionExpiry: expiry, lastObservedAt: now)
+    }
+    /// Re-fetching the SAME immutable content authorizes this new external
+    /// effect and must match the already staged source/hash. No signing occurs.
+    func beginDownloadEffect(_ prepared: NativePreparedDownload) async throws -> NativeDownloadEffect {
+        guard !downloadBusy else { throw NativeDownloadIssue.issuanceUnconfirmed }
+        downloadBusy = true; defer { downloadBusy = false }
+        let captured = try await readyScope()
+        guard captured.account == prepared.account, captured.epoch == prepared.epoch, try downloadSession(captured) == prepared.session,
+              let record = try readDownloads().1.operations.first(where: { $0.key == prepared.key }),
+              record.sha256 == prepared.sha256, NativeDownloadRecord.hash(prepared.bytes) == prepared.sha256 else { throw NativeAPIError.sessionChanged }
+        guard record.phase == .staged else {
+            throw [.externalStarted, .externalUncertain, .externalCompleted].contains(record.phase) ? NativeDownloadIssue.externalUnconfirmed : NativeDownloadIssue.deliveryUnconfirmed
+        }
+        let (current, _) = try await downloadContent(record, captured: captured)
+        guard !Task.isCancelled else { throw CancellationError() }
+        let effectID = UUID().uuidString.lowercased()
+        let started = try changeDownload(current) { $0.phase = .externalStarted; $0.effectID = effectID }
+        try requireDownload(started, captured: captured)
+        guard !Task.isCancelled else { throw CancellationError() }
+        return NativeDownloadEffect(key: started.key, id: effectID, account: prepared.account, session: prepared.session, epoch: prepared.epoch)
+    }
+    func checkDownloadEffect(_ effect: NativeDownloadEffect) throws {
+        let captured = try scope()
+        guard captured.account == effect.account, captured.epoch == effect.epoch, try downloadSession(captured) == effect.session,
+              let record = try readDownloads().1.operations.first(where: { $0.key == effect.key }), record.effectID == effect.id, record.phase == .externalStarted else { throw NativeAPIError.sessionChanged }
+        try requireDownload(record, captured: captured)
+    }
+    /// OS completion is evidence about the original effect, even after logout;
+    /// recording it never grants presentation or authority to the next account.
+    func finishDownloadEffect(_ effect: NativeDownloadEffect, completed: Bool) throws {
+        guard let record = try readDownloads().1.operations.first(where: { $0.key == effect.key }), record.accountID == effect.account,
+              record.originalSessionID == effect.session, record.effectID == effect.id else { throw NativeAPIError.invalidResponse }
+        guard record.phase == .externalStarted || record.phase == .externalUncertain else { return }
+        let next = try changeDownload(record) { $0.phase = completed ? .externalCompleted : .externalUncertain }
+        try downloadFiles.remove(next)
+        _ = try changeDownload(next) { $0.stagingRetired = true }
+        scheduleDownloadExpiry()
+    }
+    private func retireDownloadStaging(expiredOnly: Bool = false) {
+        guard let journal = try? readDownloads().1 else { return }
+        for record in journal.operations where record.sha256 != nil && !record.stagingRetired {
+            let expired = record.expiresAt.map { Double($0) / 1000 <= Date().timeIntervalSince1970 } ?? true
+            let elapsed = downloadDeadlines[record.key].map { $0.remaining(at: privateMediaClock.read()) <= 0 } ?? false
+            guard !expiredOnly || expired || elapsed || record.localCreatedAt.addingTimeInterval(120) <= Date() || Date() < record.lastObservedAt else { continue }
+            do { try downloadFiles.remove(record); _ = try changeDownload(record) { $0.stagingRetired = true } } catch { /* Retain exact custody on failed cleanup or clock rollback. */ }
+        }
+        scheduleDownloadExpiry()
+    }
+    private func scheduleDownloadExpiry() {
+        downloadExpiryTask?.cancel(); downloadExpiryTask = nil
+        guard let journal = try? readDownloads().1 else { return }
+        let now = Date()
+        let delays = journal.operations.filter { $0.sha256 != nil && !$0.stagingRetired }.map { record -> TimeInterval in
+            let wall = min(record.expiresAt.map { Double($0) / 1000 - now.timeIntervalSince1970 } ?? 0, record.localCreatedAt.addingTimeInterval(120).timeIntervalSince(now))
+            return min(wall, downloadDeadlines[record.key]?.remaining(at: privateMediaClock.read()) ?? wall)
+        }
+        guard let minimum = delays.min() else { return }
+        // Failed private-file cleanup retries are bounded; an expired immutable
+        // intent is still rejected immediately by every content/effect check.
+        let delay = minimum > 0 ? minimum : 60
+        downloadExpiryTask = Task { [weak self] in
+            do { try await Task.sleep(for: .seconds(delay)); guard !Task.isCancelled else { return }; await self?.expireDownloadStaging() } catch {}
+        }
+    }
+    private func expireDownloadStaging() { retireDownloadStaging(expiredOnly: true) }
 }

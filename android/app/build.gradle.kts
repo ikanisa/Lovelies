@@ -72,6 +72,19 @@ android {
 }
 kotlin { compilerOptions { jvmTarget.set(org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_17) } }
 
+// Explicit local-handler qualification only. The value is a private file path;
+// credentials are neither interpolated into commands nor printed in build logs.
+val downloadHttpConfig=providers.systemProperty("lovelies.download.http.config").orElse(providers.environmentVariable("LOVELIES_DOWNLOAD_HTTP_CONFIG"))
+tasks.withType<org.gradle.api.tasks.testing.Test>().configureEach {
+    if(name=="testDebugUnitTest" && downloadHttpConfig.isPresent) {
+        val fixture=file(downloadHttpConfig.get())
+        inputs.file(fixture).withPropertyName("ownedDownloadHttpFixture").withPathSensitivity(PathSensitivity.NONE)
+        systemProperty("lovelies.download.http.config",fixture.absolutePath)
+        outputs.upToDateWhen { false }
+        outputs.doNotCacheIf("Private local-handler qualification") { true }
+    }
+}
+
 // Missing provider/policy values must not silently produce a store candidate.
 val validateLoveliesRelease=tasks.register("validateLoveliesRelease") {
     doLast {
@@ -115,4 +128,13 @@ dependencies {
     implementation("com.android.billingclient:billing:9.1.0")
     implementation("com.google.firebase:firebase-messaging:25.0.1")
     testImplementation("junit:junit:4.13.2")
+    // An explicit existing runtime can replace Android's throwing JVM JSON
+    // stubs for the optional HTTP lane; no production dependency changes.
+    providers.gradleProperty("loveliesDownloadHttpJsonRuntime").orNull?.let { path ->
+        val runtime=file(path)
+        require(runtime.isFile) { "The explicit HTTP-test JSON runtime is unavailable" }
+        val checksum=MessageDigest.getInstance("SHA-256").digest(runtime.readBytes()).joinToString("") { "%02x".format(it) }
+        require(checksum=="7dd2de1533e766e2b6c07d8194da85145ad313a167a4760050f5c9b6839604fe") { "The HTTP-test JSON runtime does not match the qualified publisher artifact" }
+        testRuntimeOnly(files(runtime))
+    }
 }

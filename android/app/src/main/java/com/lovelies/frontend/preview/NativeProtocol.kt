@@ -107,6 +107,13 @@ object NativeProtocol {
     }
     fun sha256(bytes: ByteArray): String = MessageDigest.getInstance("SHA-256").digest(bytes).joinToString("") { "%02x".format(it) }
     fun base64(bytes: ByteArray): String = Base64.getUrlEncoder().withoutPadding().encodeToString(bytes)
+    /** Decoded claims bind local recovery only; the server authenticates the JWT. */
+    fun downloadSession(claims: WireObject,account: String): String {
+        if(claims["sub"]!=account || claims["auth_method"]!="registered_face")throw LiveFailure("download_authority_changed",409,true)
+        val session=id(claims["jti"])
+        if(claims["jti"]!=session)throw LiveFailure("download_authority_changed",409,true)
+        return session
+    }
     fun derToRaw(der: ByteArray): ByteArray {
         var position = 0
         fun next(): Int { if (position >= der.size) throw LiveFailure("invalid_device_signature"); return der[position++].toInt() and 255 }

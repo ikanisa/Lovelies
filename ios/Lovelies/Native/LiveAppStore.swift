@@ -2,7 +2,7 @@ import SwiftUI
 import UIKit
 import AVFoundation
 
-typealias NativePhotoSaveOperation = @MainActor (Data, @escaping @MainActor () async throws -> Void) async throws -> Void
+typealias NativePhotoSaveOperation = @MainActor (Data, @escaping @MainActor () async throws -> Void, @escaping @MainActor () async throws -> Void) async throws -> Void
 
 @MainActor final class LiveAppStore: ObservableObject {
     @Published var session: NativeSessionSummary?
@@ -11,6 +11,8 @@ typealias NativePhotoSaveOperation = @MainActor (Data, @escaping @MainActor () a
     @Published private(set) var guardianClaim: NativeGuardianRequest?
     private var audienceCaptureGeneration = 0
     private var audienceSessionEpoch: Int?
+    private var storeAuthorityReducing = false
+    private var pendingStoreAuthority: NativeStoreAuthoritySnapshot?
     @Published private(set) var audienceBinding: NativeAudienceSessionBinding?
     var hasRegisteredPrivacyIdentity: Bool { audienceBinding?.registeredIdentity == true }
     @Published var connected = false
@@ -110,8 +112,8 @@ typealias NativePhotoSaveOperation = @MainActor (Data, @escaping @MainActor () a
     private(set) var photoCameraContext: NativeMediaCaptureContext?
     init(sharedFiles: NativeAuthorizedShareFiles = NativeAuthorizedShareFiles(), privateMediaClock: NativePrivateMediaClock = .live,
          localAuthenticator: any NativeLocalAuthenticating = NativeLocalAuthenticator(), repository: BackendRepository? = nil,
-         savePhotoToLibrary: @escaping NativePhotoSaveOperation = { bytes, requireCurrent in
-             try await NativePhotoLibrary.save(bytes, requireCurrent: requireCurrent)
+         savePhotoToLibrary: @escaping NativePhotoSaveOperation = { bytes, requireCurrent, beforeWrite in
+             try await NativePhotoLibrary.save(bytes, requireCurrent: requireCurrent, beforeWrite: beforeWrite)
          }) {
         self.sharedFiles = sharedFiles; self.privateMediaClock = privateMediaClock; self.localAuthenticator = localAuthenticator
         self.repository = repository; self.savePhotoToLibrary = savePhotoToLibrary
@@ -123,6 +125,11 @@ typealias NativePhotoSaveOperation = @MainActor (Data, @escaping @MainActor () a
     var audienceEligible: Bool {
         guard let audience, audience.accountID == audienceBinding?.accountID, audienceSessionEpoch == audienceBinding?.epoch,
               session == nil || session?.accountID == audience.accountID && session?.epoch == audienceSessionEpoch else { return false }
+        if let repository {
+            let current = repository.storeAuthority.current()
+            guard current.binding == audienceBinding, current.audience == audience,
+                  current.session == session else { return false }
+        }
         return (try? audience.require(.faceAuthentication)) != nil
     }
     var canManagePrivacy: Bool { !busy }
@@ -898,12 +905,31 @@ typealias NativePhotoSaveOperation = @MainActor (Data, @escaping @MainActor () a
             guard photoSelection.permits(selected, current: currentPhoto) else { throw NativeAPIError.unsupported(String(localized: "Return to your library and refresh current access.")) }
             let account = session?.accountID, epoch = session?.epoch
             let approval = try await repository.requireAudience(.faceAuthentication)
-            let bytes = try await repository.authorizedSaveBytes(photo)
-            try await savePhotoToLibrary(bytes) { [self] in
+            let prepared = try await repository.prepareDownload(photo, purpose: .photos, explicitNewAction: true)
+            var effect: NativeDownloadEffect?
+            let requireCurrent: @MainActor () async throws -> Void = { [self] in
                 let current = try await repository.requireAudience(.faceAuthentication)
                 try checkPublication(fence)
                 guard current == approval, account == session?.accountID, epoch == session?.epoch, isForeground else { throw NativeAPIError.sessionChanged }
                 guard photoSelection.permits(selected, current: currentPhoto) else { throw NativeAPIError.unsupported(String(localized: "Return to your library and refresh current access.")) }
+                if let effect { try await repository.checkDownloadEffect(effect) }
+                try checkPublication(fence)
+                guard account == session?.accountID, epoch == session?.epoch, isForeground,
+                      photoSelection.permits(selected, current: currentPhoto) else { throw NativeAPIError.sessionChanged }
+            }
+            do {
+                try await savePhotoToLibrary(prepared.bytes, requireCurrent, {
+                    try await requireCurrent()
+                    effect = try await repository.beginDownloadEffect(prepared)
+                })
+                guard let effect else { throw NativeAPIError.invalidResponse }
+                try await repository.finishDownloadEffect(effect, completed: true)
+            } catch {
+                if let effect {
+                    try? await repository.finishDownloadEffect(effect, completed: false)
+                    throw NativeDownloadIssue.externalUnconfirmed
+                }
+                throw error
             }
             try checkPublication(fence); transferText = String(localized: "Saved to Photos.")
         }
@@ -1368,22 +1394,29 @@ extension LiveAppStore {
             guard let repository, let photo, let selected else { throw NativeAPIError.invalidResponse }
             guard photoSelection.permits(selected, current: currentPhoto) else { throw NativeAPIError.unsupported(String(localized: "Return to your library and refresh current access.")) }
             let account = session?.accountID, epoch = session?.epoch, approval = try await repository.requireAudience(.faceAuthentication)
-            let bytes = try await repository.authorizedSaveBytes(photo), current = try await repository.requireAudience(.faceAuthentication)
+            let prepared = try await repository.prepareDownload(photo, purpose: .share, explicitNewAction: true)
             try checkPublication(fence)
-            guard session?.accountID == account, session?.epoch == epoch, approval == current, isForeground else { throw NativeAPIError.sessionChanged }
-            guard photoSelection.permits(selected, current: currentPhoto) else { throw NativeAPIError.unsupported(String(localized: "Return to your library and refresh current access.")) }
-            let ext = bytes.starts(with: [0xff, 0xd8]) ? "jpg" : bytes.starts(with: [0x89, 0x50, 0x4e, 0x47]) ? "png" : bytes.starts(with: [0x52, 0x49, 0x46, 0x46]) ? "webp" : "heic"
-            try presentSharedBytes(bytes, extension: ext)
+            guard session?.accountID == account, session?.epoch == epoch, isForeground,
+                  photoSelection.permits(selected, current: currentPhoto) else { throw NativeAPIError.sessionChanged }
+            let effect = try await repository.beginDownloadEffect(prepared)
+            do {
+                let current = try await repository.requireAudience(.faceAuthentication)
+                try await repository.checkDownloadEffect(effect)
+                try checkPublication(fence)
+                guard session?.accountID == account, session?.epoch == epoch, approval == current, isForeground else { throw NativeAPIError.sessionChanged }
+                guard photoSelection.permits(selected, current: currentPhoto) else { throw NativeAPIError.unsupported(String(localized: "Return to your library and refresh current access.")) }
+                try presentSharedBytes(prepared.bytes, extension: prepared.fileExtension, download: effect, owner: repository, expiresAt: prepared.expiresAt)
+            } catch { try? await repository.finishDownloadEffect(effect, completed: false); throw NativeDownloadIssue.externalUnconfirmed }
         }
     }
-    private func presentSharedBytes(_ data: Data, extension ext: String) throws {
+    private func presentSharedBytes(_ data: Data, extension ext: String, download: NativeDownloadEffect? = nil, owner: BackendRepository? = nil, expiresAt: Date? = nil) throws {
         retireSharedFile()
         // A failed older cleanup cannot accumulate another private disk copy.
         try sharedFiles.prune(now: privateMediaClock.read().wall)
-        let deadline = NativePrivateMediaDeadline(created: privateMediaClock.read(), authorityExpiresAt: session?.expiresAt)
+        let deadline = NativePrivateMediaDeadline(created: privateMediaClock.read(), authorityExpiresAt: expiresAt ?? session?.expiresAt)
         let url = try sharedFiles.create(data, extension: ext)
         guard deadline.remaining(at: privateMediaClock.read()) > 0 else { try? sharedFiles.prune(); throw NativeAPIError.sessionChanged }
-        let file = NativeShareFile(url: url); sharedFile = file; sharedFileDeadline = deadline
+        let file = NativeShareFile(url: url, download: download, owner: owner, accountID: session?.accountID, epoch: session?.epoch, expiresAt: expiresAt ?? session?.expiresAt); sharedFile = file; sharedFileDeadline = deadline
         sharedFileExpiryTask?.cancel()
         sharedFileExpiryTask = Task { [weak self] in
             do {
@@ -1393,7 +1426,25 @@ extension LiveAppStore {
             } catch {}
         }
     }
-    func retireSharedFile() {
+    func sharePresentationIsCurrent(_ file: NativeShareFile) -> Bool {
+        sharedFile?.id == file.id && isForeground && file.accountID == session?.accountID && file.epoch == session?.epoch &&
+        file.expiresAt.map { $0 > privateMediaClock.read().wall } == true && (sharedFileDeadline?.remaining(at: privateMediaClock.read()) ?? 0) > 0
+    }
+    func finishSharedFile(_ file: NativeShareFile, completed: Bool) {
+        if let effect = file.download, let owner = file.owner {
+            Task { try? await owner.finishDownloadEffect(effect, completed: completed) }
+        }
+        if sharedFile?.id == file.id { retireSharedFile(completionKnown: completed) }
+    }
+    func retireSharedFile(completionKnown: Bool = false) {
+        if !completionKnown, let file = sharedFile, let effect = file.download, let owner = file.owner {
+            // Dismissal/cancellation does not prove that a share target wrote nothing.
+            if isForeground, repository === owner, owner.storeAuthority.current().session == session,
+               file.accountID == session?.accountID, file.epoch == session?.epoch {
+                transferText = NativeDownloadIssue.externalUnconfirmed.localizedDescription
+            }
+            Task { try? await owner.finishDownloadEffect(effect, completed: false) }
+        }
         sharedFileExpiryTask?.cancel(); sharedFileExpiryTask = nil
         sharedFile = nil; sharedFileDeadline = nil
         do { try sharedFiles.prune(now: privateMediaClock.read().wall) }
@@ -1462,8 +1513,51 @@ extension LiveAppStore {
 
 
 extension LiveAppStore {
+    /// One nonblocking presentation reducer for repository store observations.
+    /// A denial never unsubscribes its successor. If an actor transition races
+    /// the last check, authority-bound getters reject the old presentation and
+    /// the retained latest snapshot restores the current eligible state.
+    func applyStoreAuthority(_ snapshot: NativeStoreAuthoritySnapshot, repository: BackendRepository) {
+        guard self.repository === repository, repository.storeAuthority.matches(snapshot) else { return }
+        if pendingStoreAuthority == nil || snapshot.revision >= pendingStoreAuthority!.revision { pendingStoreAuthority = snapshot }
+        guard !storeAuthorityReducing else { return }
+        storeAuthorityReducing = true
+        defer { storeAuthorityReducing = false }
+        while let queued = pendingStoreAuthority {
+            pendingStoreAuthority = nil
+            guard repository.storeAuthority.matches(queued) else { continue }
+            let current = queued
+            let oldBinding = audienceBinding
+            if oldBinding != current.binding { retireSelfieReview(); retireAccountPresentation() }
+            session = current.session.flatMap { $0.expiresAt > Date() ? $0 : nil }
+            audienceBinding = current.binding
+            audienceSessionEpoch = session?.epoch
+            audience = session == nil ? nil : current.audience
+            if !audienceEligible, current.audience != nil || current.session == nil || session == nil {
+                stopFaceCameraPresentation()
+                retireAccountPresentation(preservingWeakState: canPreserveWeakPresentation(current.binding))
+                photoCamera = false
+            }
+            // A synchronous Combine/notification callback may have queued a
+            // newer observation. Reduce it after this complete transition.
+        }
+    }
     func handleAudienceFailure(_ error: Error) {
         guard Self.isAudienceError(error) else { return }
+        if let repository {
+            // Errors have no authority sequence of their own. In particular,
+            // audience_version_changed may describe a newer eligible revision.
+            // Reduce a validated snapshot instead of letting an old callback
+            // erase a newer allow, then make one bounded current readback.
+            applyStoreAuthority(repository.storeAuthority.current(), repository: repository)
+            self.error = error.localizedDescription
+            Task { [weak self] in
+                _ = try? await repository.audience()
+                guard let self, self.repository === repository else { return }
+                self.applyStoreAuthority(repository.storeAuthority.current(), repository: repository)
+            }
+            return
+        }
         audience = nil; audienceSessionEpoch = nil; stopFaceCameraPresentation(); retireAccountPresentation(); self.error = error.localizedDescription
     }
     private static func isAudienceError(_ error: Error) -> Bool {

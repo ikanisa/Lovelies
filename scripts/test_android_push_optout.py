@@ -28,7 +28,7 @@ def run(args,out):
     kotlinc=locate(args.kotlinc,LOCAL_KOTLINC,'kotlinc')
     java=locate(args.java,None,'java')
     coroutines=Path(args.coroutines).expanduser().resolve() if args.coroutines else kotlinc.parent.parent/'lib/kotlinx-coroutines-core-jvm.jar'
-    inputs=[Path(__file__).resolve(),SOURCE/'PushMessaging.kt',SOURCE/'NativeProtocol.kt',*sorted(FIXTURE.glob('*.kt')),kotlinc,java,coroutines]
+    inputs=[Path(__file__).resolve(),SOURCE/'PushMessaging.kt',SOURCE/'PushOperationRecovery.kt',SOURCE/'NativeProtocol.kt',*sorted(FIXTURE.glob('*.kt')),kotlinc,java,coroutines]
     if not coroutines.is_file() or not (FIXTURE/'SignedOutOptOutTests.kt').is_file():raise RuntimeError('fixture or Kotlin coroutines jar missing')
     before={str(p):digest(p) for p in inputs}
     env=os.environ.copy()
@@ -37,13 +37,13 @@ def run(args,out):
     compiler=([str(kotlinc)] if os.access(kotlinc,os.X_OK) else ['sh',str(kotlinc)])
     binary=out/'signed-out-optout.jar'
     compile_cmd=[*compiler,'-jvm-target','17','-cp',str(coroutines),'-include-runtime','-d',str(binary),
-                 *[str(p) for p in sorted(FIXTURE.glob('*.kt'))],str(SOURCE/'NativeProtocol.kt'),str(SOURCE/'PushMessaging.kt')]
+                 *[str(p) for p in sorted(FIXTURE.glob('*.kt'))],str(SOURCE/'NativeProtocol.kt'),str(SOURCE/'PushOperationRecovery.kt'),str(SOURCE/'PushMessaging.kt')]
     test_cmd=[str(java),'-cp',str(binary)+os.pathsep+str(coroutines),'com.lovelies.frontend.preview.SignedOutOptOutTestsKt']
     sandbox=Path('/usr/bin/sandbox-exec')
     offline='macos-sandbox' if sys.platform=='darwin' and sandbox.is_file() else 'synthetic-fakes-only'
     if offline=='macos-sandbox':test_cmd=[str(sandbox),'-p','(version 1) (allow default) (deny network*)',*test_cmd]
     steps=[]
-    for name,cmd,marker in (('compile',compile_cmd,None),('test',test_cmd,'RESULT total=15 passed=15 failed=0')):
+    for name,cmd,marker in (('compile',compile_cmd,None),('test',test_cmd,'RESULT total=21 passed=21 failed=0')):
         if name=='test' and steps[-1].get('exit')!=0:
             steps.append({'name':name,'skipped':'compile failed'});continue
         try:

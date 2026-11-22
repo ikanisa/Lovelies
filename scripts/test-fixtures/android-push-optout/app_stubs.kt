@@ -11,10 +11,19 @@ class CloudflareRepository {
     var identity:FakeIdentity?=FakeIdentity("00000000-0000-4000-8000-000000000084")
     var epoch=1L;val fence=FakeFence(this)
     var registration:WireObject?=null
+    var recoveryFailure:LiveFailure?=null
     val mutations=mutableListOf<Triple<String,String?,String>>()
     fun currentScope()=SessionScope(epoch,credentials?.account)
     fun saved(key:String):Any?=if(key=="push_registration")registration else null
     fun remember(key:String,value:Any?) { if(key=="push_registration")registration=value as? WireObject }
+    suspend fun recoverPushOperation(device:String,assertCurrent:()->Unit) { assertCurrent();recoveryFailure?.let { throw it } }
+    suspend fun registerPushToken(token:String,device:String,beforeDispatch:()->Unit) {
+        beforeDispatch();mutations.add(Triple("notification.push.register","/me/push-devices","POST"))
+        registration=mapOf("account" to credentials!!.account,"device" to device,"id" to "00000000-0000-4000-8000-000000000082","hash" to NativeProtocol.sha256(token.toByteArray()))
+    }
+    suspend fun removePushRegistration(id:String,device:String,beforeDispatch:()->Unit) {
+        beforeDispatch();mutations.add(Triple("notification.push.remove","/me/push-devices/$id","DELETE"));registration=null
+    }
     suspend fun mutate(action:String,payload:WireObject,source:String="personal",path:String?=null,method:String="POST"):WireObject {
         mutations.add(Triple(action,path,method));return emptyMap()
     }

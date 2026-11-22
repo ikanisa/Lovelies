@@ -1,10 +1,12 @@
 import { ApiError, digest, stable } from './types.ts';
+import { validateDownloadDescriptor, type DownloadDescriptor } from './download-v2-contract.ts';
 import { RESTORE_PROJECT_ID, RESTORE_REQUEST_BYTES, validateRestoreRestrictionEvent,
   type RestoreOperationInput, type RestoreRestrictionEvent } from './restore-journal.ts';
 
 export type RestoreOperationIdentity = Readonly<Pick<RestoreOperationInput, 'operation_id' | 'input_hash' | 'allocations'>>;
 export interface RestoreTransactionScope {
   operation(identity: RestoreOperationIdentity): void;
+  download(descriptor: DownloadDescriptor): void;
   restrict(kind: RestoreRestrictionEvent['kind'], scope: Readonly<Record<string, string>>): Promise<void>;
 }
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
@@ -52,6 +54,7 @@ function identity(value: unknown): RestoreOperationIdentity {
  * the immediate error. This class performs no I/O or recovery/serving clearance. */
 export class RestoreTransactionCollector implements RestoreTransactionScope {
   #identity: RestoreOperationIdentity | undefined;
+  #download: DownloadDescriptor | undefined;
   #events: Promise<RestoreRestrictionEvent>[] = [];
   #closed = false; #failed = false;
   readonly #readOnly: boolean; readonly #explicitIntent: boolean;
@@ -60,6 +63,7 @@ export class RestoreTransactionCollector implements RestoreTransactionScope {
     this.#readOnly = readOnly; this.#explicitIntent = explicitIntent;
     // Domain callbacks receive this frozen port, never seal/close controls.
     this.scope = Object.freeze({ operation: (value: RestoreOperationIdentity) => this.operation(value),
+      download:(value:DownloadDescriptor)=>this.download(value),
       restrict: (kind: RestoreRestrictionEvent['kind'], value: Readonly<Record<string, string>>) => this.restrict(kind, value) });
   }
   #open(): void {
@@ -74,10 +78,15 @@ export class RestoreTransactionCollector implements RestoreTransactionScope {
       this.#identity = next;
     } catch (error) { this.#failed = true; throw error; }
   }
+  download(raw:DownloadDescriptor):void {
+    this.#open();
+    try { if(!this.#identity||this.#events.length||this.#download)return invalid();this.#download=validateDownloadDescriptor(raw); }
+    catch(error){this.#failed=true;throw error;}
+  }
   restrict(kind: RestoreRestrictionEvent['kind'], scope: Readonly<Record<string, string>>): Promise<void> {
     this.#open();
     try {
-      if (!this.#identity || this.#events.length >= 32) return invalid();
+      if (!this.#identity || this.#download || this.#events.length >= 32) return invalid();
       // Validate/copy before the first await; caller mutation cannot change scope.
       const value = validateRestoreRestrictionEvent({ version: 1, project_id: RESTORE_PROJECT_ID,
         operation_id: this.#identity.operation_id, kind, scope });
@@ -101,7 +110,7 @@ export class RestoreTransactionCollector implements RestoreTransactionScope {
     if (!this.#identity) return explicit;
     const events = await Promise.all(this.#events);
     if (this.#failed) return invalid();
-    const manifest = Object.freeze({ ...this.#identity, events: Object.freeze(events) });
+    const manifest = Object.freeze({ ...this.#identity, events: Object.freeze(events), ...(this.#download?{download:this.#download}:{}) });
     if (new TextEncoder().encode(stable(manifest)).byteLength > RESTORE_REQUEST_BYTES) return invalid();
     return manifest;
   }

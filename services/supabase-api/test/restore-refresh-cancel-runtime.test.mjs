@@ -73,7 +73,7 @@ for(const mode of ['outage','prepare-before','prepare-after','commit-result-loss
  if(mode==='outage'||mode==='prepare-before'){assert.deepEqual(await domain(f),before);assert.equal(saved,null);f.faults.control=false;await answer(f);await expectedPlan(f);return;}
  if(mode==='prepare-after'){assert.deepEqual(await domain(f),before);assert.equal(saved.status,'pending');await assert.rejects(()=>f.db.one('SELECT id FROM accounts LIMIT 1'),unavailable);return;}
  assert.equal((await f.h.db.one('SELECT state FROM refresh_delivery_receipts WHERE original_session_id=?',f.oldID)).state,'cancelled');
- if(mode==='commit-result-loss'){assert.equal(atCommit.status,'pending');assert.equal(saved.status,'committed');}else assert.equal(saved.status,mode==='ack-before'?'pending':'committed');
+ if(mode==='commit-result-loss'){assert.equal(atCommit.status,'pending');assert.equal(saved.status,'pending');}else assert.equal(saved.status,mode==='ack-before'?'pending':'committed');
  const terminal=await domain(f);await answer(f);assert.deepEqual(await domain(f),terminal);assert.equal((await f.journal.lookup(operation)).status,'committed');
 });
 async function seedPending(f,count,{duplicate=false}={}){

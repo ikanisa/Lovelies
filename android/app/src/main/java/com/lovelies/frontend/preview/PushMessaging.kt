@@ -17,6 +17,9 @@ import com.google.firebase.messaging.FirebaseMessaging
 import com.google.firebase.messaging.FirebaseMessagingService
 import com.google.firebase.messaging.RemoteMessage
 import kotlinx.coroutines.suspendCancellableCoroutine
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlin.coroutines.resume
 import kotlin.coroutines.resumeWithException
 
@@ -24,6 +27,7 @@ internal object PushConfiguration {
     // SharedPreferences may change its in-memory value even when commit fails.
     // Do not treat that unconfirmed write as an opt-in in this process.
     @Volatile private var preferenceWriteUnconfirmed=false
+    val rotationChanges=MutableStateFlow(0L)
     fun initialize(context: Context): FirebaseMessaging {
         val required=listOf(BuildConfig.FIREBASE_PROJECT_ID,BuildConfig.FIREBASE_APP_ID,BuildConfig.FIREBASE_API_KEY,BuildConfig.FIREBASE_SENDER_ID)
         if(required.any(String::isBlank))throw LiveFailure("push_provider_unconfigured")
@@ -42,14 +46,34 @@ internal object PushConfiguration {
     fun disableAutoInitIfInitialized(context: Context) {
         if(FirebaseApp.getApps(context).isNotEmpty())FirebaseMessaging.getInstance().isAutoInitEnabled=false
     }
+    fun rotationPending(context: Context)=context.getSharedPreferences("lovelies-device-push",Context.MODE_PRIVATE).getBoolean("rotation_pending",false)
+    @Synchronized fun rotationGeneration(context: Context)=context.getSharedPreferences("lovelies-device-push",Context.MODE_PRIVATE).getLong("rotation_generation",0)
+    @Synchronized fun markRotation(context: Context) {
+        val preferences=context.getSharedPreferences("lovelies-device-push",Context.MODE_PRIVATE)
+        val next=maxOf(preferences.getLong("rotation_generation",0),rotationChanges.value)+1L
+        // The SDK retains the token. This journal contains no raw token and a
+        // failed preference write cannot authorize registration. Foreground
+        // also reads the current SDK token rather than trusting this marker.
+        runCatching { preferences.edit().putBoolean("rotation_pending",true).putLong("rotation_generation",next).commit() }
+        rotationChanges.value=next
+    }
+    @Synchronized fun acknowledgeRotation(context: Context,generation: Long) {
+        val preferences=context.getSharedPreferences("lovelies-device-push",Context.MODE_PRIVATE)
+        if(preferences.getLong("rotation_generation",0)!=generation || !rotationPending(context))return
+        if(!preferences.edit().putBoolean("rotation_pending",false).commit())throw LiveFailure("push_preference_unavailable")
+    }
 }
 class PushRegistration(private val context: Context,private val repository: CloudflareRepository) {
+    private val mutex=Mutex()
     suspend fun sync(enable: Boolean?=null) {
         if(enable==false) {
             val saved=runCatching { PushConfiguration.setOptedIn(context,false) }.getOrDefault(false)
             runCatching { PushConfiguration.disableAutoInitIfInitialized(context) }
             if(!saved)throw LiveFailure("push_preference_unavailable")
         }
+        mutex.withLock { syncLocked(enable) }
+    }
+    private suspend fun syncLocked(enable: Boolean?) {
         val owned=repository.currentScope();val account=repository.credentials?.takeIf { it.method=="registered_face" }?.account
         if(account==null) {
             if(enable==true)throw LiveFailure("registered_face_required",403)
@@ -59,36 +83,35 @@ class PushRegistration(private val context: Context,private val repository: Clou
             val saved=runCatching { PushConfiguration.setOptedIn(context,true) }.getOrDefault(false)
             if(!saved)throw LiveFailure("push_preference_unavailable")
         }
-        val previous=(repository.saved("push_registration") as? Map<*,*>)?.let(NativeProtocol::obj)
-        if(!PushConfiguration.optedIn(context) || !PushConfiguration.permitted(context)) {
-            if(previous?.get("account")==account) {
-                val id=NativeProtocol.id(previous["id"])
-                repository.mutate("notification.push.remove",emptyMap(),"notification",path="/me/push-devices/$id",method="DELETE")
-                repository.fence.assert(owned);repository.remember("push_registration",null)
-            }
-            runCatching { PushConfiguration.initialize(context).isAutoInitEnabled=false }
-            return
-        }
-        val messaging=PushConfiguration.initialize(context);messaging.isAutoInitEnabled=true
-        val token=suspendCancellableCoroutine<String> { continuation->messaging.token.addOnCompleteListener { result ->
-            if(continuation.isActive) { if(result.isSuccessful)continuation.resume(result.result) else continuation.resumeWithException(LiveFailure("push_registration_failed")) }
-        } }
-        repository.fence.assert(owned)
-        val hash=NativeProtocol.sha256(token.toByteArray())
-        if(previous?.get("account")==account && previous["hash"]==hash && previous["device"]==repository.identity?.device)return
-        // Remove the original registration before rotating, so one account/device has one current token.
-        if(previous?.get("account")==account)repository.mutate("notification.push.remove",emptyMap(),"notification",path="/me/push-devices/${NativeProtocol.id(previous["id"])}",method="DELETE")
-        repository.fence.assert(owned)
-        val result=repository.mutate("notification.push.register",mapOf("platform" to "android","push_token" to token),"notification",path="/me/push-devices")
-        repository.fence.assert(owned)
-        if(result["active"]!=true || result["platform"]!="android")throw LiveFailure("push_registration_failed")
-        repository.remember("push_registration",mapOf("account" to account,"device" to repository.identity?.device,"id" to NativeProtocol.id(result["id"]),"hash" to hash))
+        val device=repository.identity?.device ?: throw LiveFailure("push_operation_account_changed",403,true)
+        val generation=PushConfiguration.rotationGeneration(context)
+        val assertCurrent={ repository.fence.assert(owned);if(repository.credentials?.account!=account || repository.credentials?.method!="registered_face" || repository.identity?.device!=device)throw LiveFailure("push_operation_account_changed",403,true) }
+        val allowed={ PushConfiguration.optedIn(context) && PushConfiguration.permitted(context) }
+        val disable={ runCatching { PushConfiguration.disableAutoInitIfInitialized(context) };Unit }
+        if(!allowed())disable()
+        try { PushRegistrationFlow(account,device,assertCurrent,allowed,
+            recover={ repository.recoverPushOperation(device,assertCurrent) },
+            previous={ (repository.saved("push_registration") as? Map<*,*>)?.let(NativeProtocol::obj) },
+            token={
+                assertCurrent();if(!allowed())throw LiveFailure("push_permission_changed",409,true)
+                val messaging=PushConfiguration.initialize(context);messaging.isAutoInitEnabled=true
+                suspendCancellableCoroutine<String> { continuation->messaging.token.addOnCompleteListener { result ->
+                    if(continuation.isActive) { if(result.isSuccessful)continuation.resume(result.result) else continuation.resumeWithException(LiveFailure("push_registration_failed")) }
+                } }
+            },
+            register={ token,guard -> repository.registerPushToken(token,device,guard) },
+            remove={ id,guard -> repository.removePushRegistration(id,device,guard) },disable=disable).run() }
+        finally { if(!allowed())disable() }
+        assertCurrent()
+        // A callback arriving while token/receipt work was suspended owns a
+        // newer generation and must be observed by the next foreground pass.
+        if(allowed())PushConfiguration.acknowledgeRotation(context,generation)
     }
 }
 class LoveliesMessagingService: FirebaseMessagingService() {
     override fun onNewToken(token: String) {
         // The SDK retains its token. Bind or rotate it only after current signed-in authority is checked.
-        getSharedPreferences("lovelies-device-push",MODE_PRIVATE).edit().putBoolean("rotation_pending",true).apply()
+        PushConfiguration.markRotation(this)
     }
     override fun onMessageReceived(message: RemoteMessage) {
         if(!PushConfiguration.optedIn(this) || !PushConfiguration.permitted(this))return

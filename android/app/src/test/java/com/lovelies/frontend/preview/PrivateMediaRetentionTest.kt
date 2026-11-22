@@ -171,6 +171,28 @@ class PrivateMediaRetentionTest {
         assertEquals(listOf(cameraName),requireNotNull(original.parentFile).list()!!.toList())
     }
 
+    @Test fun revokedShareAuthorityAfterActualStreamAcquisitionWritesNoBytesAndCleansOnlyItsNewFile() {
+        val cache=cache();val folder=File(cache,PrivateTemporaryMedia.Kind.SHARED.directory).apply { mkdir() }
+        val target=File(folder,shareName)
+        val unrelated=File(folder,"unknown-existing-file.bin").apply { writeBytes(bytes) }
+        var allowed=true;var checks=0;var bytesAtRevocation: Long?=null
+        try {
+            PrivateTemporaryMedia.write(cache,PrivateTemporaryMedia.Kind.SHARED,shareName,bytes,now,current={
+                checks++
+                if(checks==1) { assertTrue(allowed);assertFalse(target.exists()) }
+                else {
+                    // The real CREATE_NEW stream is open now. Model a revoke
+                    // during its acquisition, before any body byte is written.
+                    assertTrue(target.isFile);bytesAtRevocation=target.length();allowed=false
+                }
+                if(!allowed)throw LiveFailure("download_authority_changed",409,true)
+            })
+            fail("Revoked authority wrote a shared original")
+        } catch(problem: LiveFailure) { assertEquals("download_authority_changed",problem.code) }
+        assertEquals(2,checks);assertEquals(0L,bytesAtRevocation);assertFalse(target.exists())
+        assertArrayEquals(bytes,unrelated.readBytes());assertEquals(listOf(unrelated.name),folder.list()!!.toList())
+    }
+
     @Test fun failedDeletionRetainsTheFileAndSchedulesRetryWithoutClaimingRemoval() {
         val cache=cache();val source=write(cache,PrivateTemporaryMedia.Kind.SHARED,shareName,now-PrivateTemporaryMedia.SHARE_AGE_MS)
         val result=PrivateTemporaryMedia.sweep(cache,PrivateTemporaryMedia.Kind.SHARED,now,remove={ throw IOException("fixture deletion failed") })

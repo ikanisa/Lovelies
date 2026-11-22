@@ -5,6 +5,7 @@ import android.graphics.Bitmap
 import android.net.Uri
 import androidx.compose.runtime.*
 import kotlinx.coroutines.*
+import kotlinx.coroutines.flow.collect
 import java.util.UUID
 import kotlinx.coroutines.sync.withLock
 
@@ -27,6 +28,7 @@ class LiveController(private val state: PreviewState,private val context: Contex
                 val next=withContext(Dispatchers.IO) {
                     synchronized(repository.fence) {
                         val now=System.currentTimeMillis()
+                        val original=repository.retireOriginalStaging(now)
                         val shared=PrivateTemporaryMedia.sweep(context.cacheDir,PrivateTemporaryMedia.Kind.SHARED,now)
                         val camera=if(cameraInventoryReady) {
                             val protected=PrivateTemporaryMedia.cameraRecoveryNames(repository.saved("photo_uploads"),repository.saved("upload_draft"),
@@ -36,7 +38,7 @@ class LiveController(private val state: PreviewState,private val context: Contex
                             // re-evaluated on the next lifecycle/journal change.
                             protected?.let { PrivateTemporaryMedia.sweep(context.cacheDir,PrivateTemporaryMedia.Kind.CAMERA,now,it) }
                         } else null
-                        listOfNotNull(shared.nextDelay,camera?.nextDelay).minOrNull()
+                        listOfNotNull(shared.nextDelay,camera?.nextDelay,original).minOrNull()
                     }
                 }
                 if(next==null)break
@@ -111,43 +113,115 @@ class LiveController(private val state: PreviewState,private val context: Contex
     val outgoing=mutableStateListOf<WireObject>()
     var purchaseVisible by mutableStateOf(false);private set
     var mediaStatus by mutableStateOf("");private set
-    var shareIntent by mutableStateOf<android.content.Intent?>(null);private set
+    // The chooser trigger is an operation reference, never unvalidated bytes or
+    // a reusable Intent. Its actual launch revalidates protected staging.
+    var shareIntent by mutableStateOf<String?>(null);private set
     private var interruptedOriginal: Pair<LivePhoto,Boolean>?=null
     val purchases=PlayPurchases(context,repository) {
         entitlement=repository.get("/me/entitlements")
         if(entitlement["download_photos"]==true) {
             purchaseVisible=false
-            val resume=interruptedOriginal;interruptedOriginal=null
-            if(resume!=null && foregroundActive)original(resume.first,resume.second)
+            val resume=interruptedOriginal
+            // Only an existing safe intent can continue. The repository also
+            // enforces resumeOnly after suspension, so this never signs a new
+            // key after not-issued settlement or repeats an ambiguous effect.
+            if(resume!=null && foregroundActive && repository.canResumeOriginal(resume.first,resume.second))original(resume.first,resume.second,resumeOnly=true)
         }
     }
     fun dismissPurchases() { purchaseVisible=false }
     fun clearShareIntent() { shareIntent=null }
-    fun original(photo: LivePhoto,share: Boolean=false) {
+    private fun originalForeground() { if(!foregroundActive || !registered)throw LiveFailure("download_authority_changed",409,true) }
+    private fun originalFailure(problem: Exception,effectStarted: Boolean): LiveFailure {
+        val failure=when {
+            effectStarted->LiveFailure("download_external_outcome_unresolved",503,true)
+            problem is LiveFailure->problem
+            else->LiveFailure("download_preparation_failed")
+        }
+        // Preserve the diagnostic cause without adding tokens, capabilities,
+        // request bodies or private-file names to the displayed error.
+        if(failure!==problem)failure.initCause(problem)
+        return failure
+    }
+    fun launchOriginalShare(key: String,launch: (android.content.Intent)->Unit) {
+        if(busy || shareIntent!=key)return
+        shareIntent=null
+        run(false) {
+            val owned=repository.currentScope()
+            var effectStarted=false
+            try {
+                repository.performOriginalEffect(key,::originalForeground,onEffectStarted={ record ->
+                    if(record.key!=key || record.phase!="effect_started")throw LiveFailure("download_operation_outcome_unresolved",503,true)
+                    effectStarted=true
+                }) { bytes ->
+                    val intent=OriginalMedia.share(context,NativeProtocol.id(repository.saved("download_operation").let { NativeProtocol.obj(it)["asset"] }),bytes) {
+                        originalForeground();repository.assertOriginalEffect(key,owned)
+                    }
+                    withContext(Dispatchers.Main.immediate) {
+                        originalForeground();repository.assertOriginalEffect(key,owned);launch(intent)
+                    }
+                }
+                mediaStatus=context.getString(R.string.controller_15669a062c47);maintainTemporaryMedia()
+            } catch(problem: LiveFailure) {
+                val failure=originalFailure(problem,effectStarted);mediaStatus=readableError(failure.code,context);throw failure
+            } catch(problem: java.io.IOException) {
+                val failure=originalFailure(problem,effectStarted);mediaStatus=readableError(failure.code,context);throw failure
+            }
+        }
+    }
+    fun original(photo: LivePhoto,share: Boolean=false,resumeOnly: Boolean=false) {
         if(busy || !registered)return
         run(false) {
-            val owned=repository.currentScope();mediaStatus=context.getString(R.string.controller_30f58b93760b)
+            mediaStatus=context.getString(R.string.controller_30f58b93760b)
+            var effectStarted=false
             try {
-                val bytes=repository.original(photo)
-                try {
-                    repository.fence.assert(owned)
-                    val output=withContext(Dispatchers.IO) {
-                        if(share)OriginalMedia.share(context,photo.id,bytes) { repository.fence.assert(owned) }
-                        else { OriginalMedia.save(context,photo.id,bytes) { repository.fence.assert(owned) };null }
+                val operation=repository.original(photo,share,::originalForeground,resumeOnly=resumeOnly)
+                val owned=repository.currentScope()
+                repository.fence.assert(owned);originalForeground()
+                if(share)shareIntent=operation.key
+                else {
+                    repository.performOriginalEffect(operation.key,::originalForeground,onEffectStarted={ record ->
+                        if(record.key!=operation.key || record.phase!="effect_started")throw LiveFailure("download_operation_outcome_unresolved",503,true)
+                        effectStarted=true
+                    }) { bytes ->
+                        OriginalMedia.save(context,photo.id,bytes) { originalForeground();repository.assertOriginalEffect(operation.key,owned) }
                     }
-                    repository.fence.assert(owned)
-                    if(share) { shareIntent=output;mediaStatus=context.getString(R.string.controller_15669a062c47);maintainTemporaryMedia() }
-                    else mediaStatus=context.getString(R.string.controller_ad87b0a11a23)
-                } finally { bytes.fill(0) }
+                    repository.fence.assert(owned);mediaStatus=context.getString(R.string.controller_ad87b0a11a23)
+                }
+                maintainTemporaryMedia()
+                interruptedOriginal=null
             } catch(problem: LiveFailure) {
-                mediaStatus=readableError(problem.code,context)
-                if(problem.code=="missing_entitlement") { interruptedOriginal=photo to share;purchaseVisible=true;purchases.load() }
-                else throw problem
-            } catch(problem: java.io.IOException) { mediaStatus=context.getString(R.string.controller_57d25e1f7252);throw LiveFailure("save_failed") }
+                val failure=originalFailure(problem,effectStarted);mediaStatus=readableError(failure.code,context)
+                if(failure.code=="missing_entitlement") { interruptedOriginal=photo to share;purchaseVisible=true;purchases.load() }
+                else throw failure
+            } catch(problem: java.io.IOException) {
+                val failure=originalFailure(problem,effectStarted);mediaStatus=readableError(failure.code,context);throw failure
+            }
         }
     }
     val push=PushRegistration(context,repository)
+    private var pushWork: Job?=null
+    init { scope.launch { PushConfiguration.rotationChanges.collect { if(started)synchronizePushInForeground() } } }
     var pushStatus by mutableStateOf("");private set
+    private fun synchronizePushInForeground() {
+        if(!foregroundActive || !registered || pushWork?.isActive==true)return
+        val epoch=uiEpoch;val generation=PushConfiguration.rotationChanges.value
+        val next=scope.launch(start=CoroutineStart.LAZY) {
+            val task=currentCoroutineContext()[Job]
+            try { push.sync() }
+            catch(problem: CancellationException) { throw problem }
+            catch(problem: LiveFailure) { if(epoch==uiEpoch)pushStatus=readableError(problem.code,context) }
+            catch(_: Exception) { if(epoch==uiEpoch)pushStatus=context.getString(R.string.controller_57d25e1f7252) }
+            finally {
+                if(pushWork===task) {
+                    pushWork=null
+                    // One new SDK callback may have arrived during this pass.
+                    // An unchanged unknown operation is not an automatic retry loop.
+                    if(epoch==uiEpoch && generation!=PushConfiguration.rotationChanges.value)synchronizePushInForeground()
+                }
+            }
+        }
+        pushWork=next;next.start()
+    }
     var pendingLink by mutableStateOf<AppLink?>(null);private set
     var backgroundUploads by mutableStateOf(false);private set
     fun configureBackgroundUploads(enabled: Boolean) {
@@ -364,6 +438,7 @@ class LiveController(private val state: PreviewState,private val context: Contex
         inbox.clear();inbox.addAll(NativeProtocol.rows(requests["items"]))
         favorites.clear();favorites.addAll((repository.saved("favorites") as? List<*>)?.mapNotNull { it as? String } ?: emptyList())
         mediaGeneration++
+        synchronizePushInForeground()
     }
     private suspend fun loadLibraryInternal(reset: Boolean) {
         val scope=repository.currentScope()
@@ -1119,7 +1194,7 @@ class LiveController(private val state: PreviewState,private val context: Contex
     fun background(): Unit = synchronized(repository.fence) {
         persistNavigation();queryJob?.cancel()
         val pickerBefore=photoPickerOwnership.opened?.capture?.requestId?.let(::photoPickerContext)
-        foregroundActive=false;invalidateCameraReview();uiEpoch++;work?.cancel();busy=false
+        foregroundActive=false;invalidateCameraReview();uiEpoch++;work?.cancel();pushWork?.cancel();busy=false
         if(uploadRecovery?.let { !it.finished && !it.cancelled }==true)runCatching { repository.pausePhotoUploads()?.let(::presentUpload) }
         repository.invalidateReads();mediaGeneration++;cameraReady=false
         photoPickerOwnership.background(pickerBefore,pickerBefore?.capture?.requestId?.let(::photoPickerContext))
@@ -1133,6 +1208,7 @@ class LiveController(private val state: PreviewState,private val context: Contex
         if(BackgroundTransfers.running)repository.invalidateReads()
         maintainTemporaryMedia()
         foregroundActive=true
+        synchronizePushInForeground()
         if(state.route==44 && weakRegisteredSession && !busy) { if(repository.accountDeletion!=null)checkAccountDeletion() else refreshPrivacy();return }
         if(state.route==46 && weakRegisteredSession && !busy) { refreshOwnSecurity();return }
         if(photoPickerOwnership.opened!=null)return

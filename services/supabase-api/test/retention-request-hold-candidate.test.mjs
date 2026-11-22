@@ -174,8 +174,38 @@ pgliteTest('stale pending scan is not treated as a fresh claim after a prior fai
 for(const kind of ['asset','profile'])for(const phase of ['after_select','before_mutation'])pgliteTest(`request hold ${phase} preserves ${kind} before scheduling mutation`,{timeout:30000},async t=>{
  const f=await fixture(t,{held:false}),a=kind==='asset'?await asset(f):await profile(f);
  const hook=phase==='after_select'?holdAfterScheduleSelect(f,kind,kind==='asset'?a.assetId:a.profileId):holdBeforeScheduleMutation(f,kind);
+ // The asset scheduler deliberately rolls back its whole transaction when it
+ // observes this same-transaction synthetic hold. Verify that observation and
+ // rollback, then model the still-active hold in a separate synthetic commit.
+ // This is not an independently concurrent writer or native PostgreSQL proof.
+ let guardObserved=false,rollbackReestablished=false;const db=f.h.db;
+ const oldOne=db.one,oldTransaction=db.transaction,tx=oldTransaction.bind(db);
+ if(kind==='asset'&&phase==='before_mutation'){
+  db.one=async(sql,...args)=>{
+   const value=await oldOne.call(db,sql,...args);
+   if(!guardObserved&&hook.state().injected&&sql.includes("SELECT id FROM privacy_requests WHERE subject_id=? AND request_type='delete'")&&args[0]===f.owner){
+    assert.equal(value?.id,f.request,'the scheduling guard must observe the injected same-subject hold');guardObserved=true;
+   }
+   return value;
+  };
+  db.transaction=async(...args)=>{
+   try{return await tx(...args);}
+   catch(error){
+    if(!rollbackReestablished&&guardObserved&&error?.message==='retention_preprepare_deferred'){
+     assert.equal((await db.one('SELECT legal_hold FROM privacy_requests WHERE id=?',f.request)).legal_hold,0,'the deferred transaction must roll back the synthetic hold');
+     await tx(async()=>{
+      await db.run('UPDATE privacy_requests SET legal_hold=1 WHERE id=?',f.request);
+      assert.equal((await db.one('SELECT legal_hold FROM privacy_requests WHERE id=?',f.request)).legal_hold,1,'the separate synthetic hold must be re-established');
+     });
+     rollbackReestablished=true;
+    }
+    throw error;
+   }
+  };
+ }
  try{
   await runRetention(f.h.app);assert.deepEqual(hook.state(),{injected:true});assert.deepEqual(f.errors,[]);assert.deepEqual(f.events,[]);
+  if(kind==='asset'&&phase==='before_mutation'){assert(guardObserved);assert(rollbackReestablished);}
   assert.equal((await f.h.db.one('SELECT legal_hold FROM privacy_requests WHERE id=?',f.request)).legal_hold,1);
   const row=kind==='asset'?await f.h.db.one('SELECT status,deleted_at,title FROM assets WHERE id=?',a.assetId):
    await f.h.db.one('SELECT status FROM face_profiles WHERE account_id=?',f.owner);
@@ -184,7 +214,7 @@ for(const kind of ['asset','profile'])for(const phase of ['after_select','before
   assert(await f.h.env[kind==='asset'?'QUARANTINE':'PHOTOS'].head(a.key));
   await release(f);await runRetention(f.h.app);assert.equal(f.events.length,1);
   assert.equal(await f.h.env[kind==='asset'?'QUARANTINE':'PHOTOS'].head(a.key),null);
- }finally{hook.restore();}
+ }finally{db.one=oldOne;db.transaction=oldTransaction;hook.restore();}
 });
 
 pgliteTest('hold after job scan but before claim leaves unclaimed pending job unchanged and resumes after release',{timeout:30000},async t=>{

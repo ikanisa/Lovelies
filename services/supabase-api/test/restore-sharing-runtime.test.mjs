@@ -132,11 +132,18 @@ for (const mode of ['commit', 'ack-before', 'ack-after']) test(`sharing ${mode} 
     const prepare = f.journal.prepare.bind(f.journal); let armed = true;
     f.journal.prepare = async value => { const result = await prepare(value); if (armed && value.operation_id === id) { armed = false; f.faults.commitReply = true; } return result; };
   } else f.faults.reply = { path: '/v1/operations/' + id + '/acknowledge', stage: mode === 'ack-before' ? 'before' : 'after' };
-  await f.decide(payload, f.owner.token, mode === 'commit' ? 500 : 503);
+  const uncertain = await f.decide(payload, f.owner.token, 503);
+  if (mode === 'commit') assert.equal(uncertain.error.code, 'restore_reconciliation_required');
   assert.equal(await requestStatus(f), 'revoked'); assert.equal((await grants(f))[0].active, 0);
+  const saved = await f.journal.lookup(id);
+  assert.equal(saved.status, mode === 'ack-after' ? 'committed' : 'pending');
+  assert.equal(saved.plan.events.length, 1); assert.deepEqual(saved.plan.events[0].scope, targetEvent(f));
+  // A fresh request reconciles the exact SQL marker; the poisoned first
+  // invocation cannot acknowledge it or run the retirement a second time.
   assert.equal((await f.decide(payload)).status, 'revoked');
   const operation = await f.journal.lookup(id);
-  assert.equal(operation.status, 'committed'); assert.equal(operation.plan.events.length, 1); assert.equal(await cursor(f), 1);
+  assert.equal(operation.status, 'committed'); assert.equal(operation.plan_hash, saved.plan_hash);
+  assert.equal(operation.plan.events.length, 1); assert.equal(await cursor(f), 1);
   assert.equal(f.trace.filter(value => value.kind === 'sql' && value.sql.startsWith('UPDATE sharing_requests SET status=')).length, 1);
 });
 

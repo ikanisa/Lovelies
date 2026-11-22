@@ -402,7 +402,7 @@ export async function beginAccountErasure(ctx: AppContext, actor: ExecutionAutho
         // asset tombstones until every exact cleanup key has been verified.
         (await eraseNotificationSubject(ctx.db, subject));
         (await eraseOperatorSubject(ctx.db, subject, now, true));
-        (await eraseEntitlementSubject(ctx.db, subject));
+        (await eraseEntitlementSubject(ctx.db, subject, ctx));
         (await ctx.db.run('DELETE FROM media_tickets WHERE account_id=? OR asset_id IN(SELECT id FROM assets WHERE owner_id=?)', subject, subject));
         // Retire grants, preserving their managed marker; do not grant legacy access.
         (await ctx.db.run('UPDATE media_grants SET active=0,revoked_at=coalesce(revoked_at,?) WHERE owner_id=? OR recipient_id=?', now, subject, subject));

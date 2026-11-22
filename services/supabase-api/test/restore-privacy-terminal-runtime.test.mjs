@@ -344,14 +344,14 @@ for (const mode of ['denial', 'prepare-after', 'commit', 'ack-before', 'ack-afte
       await f.uncertainProcess(); assert.deepEqual(await f.journal.lookup(id), saved);
     } else {
       assert.equal((await requestRow(f)).status, 'completed');
-      // A lost COMMIT reply is followed by the ordinary token-guarded failure
-      // transaction. Its fresh admission reconciles the exact committed marker
-      // before observing that completed SQL cannot be marked failed.
+      // A lost COMMIT reply poisons the whole current invocation, including
+      // its ordinary token-guarded failure transaction. The fresh process call
+      // below reconciles the exact marker without repeating terminal erasure.
       if (mode === 'commit') {
         assert.deepEqual(commitBoundary, { journal: 'pending', sql: 'completed' });
         assert.equal(f.faults.commitReply, false);
       }
-      assert.equal(saved.status, mode === 'ack-before' ? 'pending' : 'committed');
+      assert.equal(saved.status, mode === 'ack-after' ? 'committed' : 'pending');
       if (mode.startsWith('ack-')) {
         const path = '/v1/operations/' + id + '/acknowledge';
         assert.equal(f.faults.reply, undefined, 'The intended acknowledgement fault was consumed');

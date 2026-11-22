@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
+import { attachDownloadFence,downloadRequest } from './download-v2-fixture.mjs';
 import { parseMediaAuthority } from '../src/gallery.ts';
 import { stable } from '../src/types.ts';
 import { startHarness, enroll, faceVerifierFixture, fixturePng, sha256 } from './runtime-harness.mjs';
@@ -102,6 +103,7 @@ async function fixture(t, { downloads = false } = {}) {
   const f = { h, owner, recipient, asset: reserved.asset_id, source, processingConsentId: processingConsent.id, processingConsent: consentBinding(processingConsent) };
   f.first = await share(f);
   f.initialTuple = await tuple(f);
+  if(downloads)f.h=(await attachDownloadFence(h,t)).h;
   f.sourceKey = (await h.storage.exec('SELECT object_key FROM assets WHERE id=?', f.asset))[0].object_key;
   f.previewKey = (await h.storage.exec("SELECT object_key FROM renditions WHERE asset_id=? AND kind='preview'", f.asset))[0].object_key;
   return f;
@@ -118,14 +120,18 @@ async function replace(f) {
   return replacement;
 }
 async function issue(f, kind, person = f.recipient) {
-  const body = { asset_id: f.asset, ...(kind === 'download' ? { operation_key: key('download') } : {}) };
-  const value = await f.h.json(kind === 'preview' ? '/previews/sign' : '/downloads/sign', { token: person.token, body });
-  const path = pathOf(kind === 'preview' ? value.preview_url : value.download_url), id = path.split('/').at(-1);
-  const table = kind === 'preview' ? 'media_tickets' : 'download_tickets';
-  const row = (await f.h.storage.exec('SELECT * FROM ' + table + ' WHERE id=?', id))[0];
-  const authority = JSON.parse(row.authority_json);
-  assert.equal(row.asset_id, f.asset);
-  return { id, path, row, authority, table, body, value };
+  if(kind==='download'){
+    const version=(await tuple(f))[0].version,intent=downloadRequest(person,f.asset,version);
+    const value=await f.h.json('/downloads/v2/sign',intent);
+    const operation=(await f.h.storage.exec('SELECT * FROM download_v2_operations WHERE account_id=? AND operation_key=?',person.accountId,intent.body.operation_key))[0];
+    const evidence=JSON.parse(JSON.parse(operation.receipt_json).evidence_json),id=evidence.ticket_id;
+    const row=(await f.h.storage.exec('SELECT * FROM download_v2_tickets WHERE id=?',id))[0];
+    return {id,path:{url:'/downloads/v2/content',intent},row,authority:evidence.ticket.authority,table:'download_v2_tickets',body:intent.body,value,intent,evidence,operation};
+  }
+  const body={asset_id:f.asset},value=await f.h.json('/previews/sign',{token:person.token,body});
+  const path=pathOf(value.preview_url),id=path.split('/').at(-1),table='media_tickets';
+  const row=(await f.h.storage.exec('SELECT * FROM '+table+' WHERE id=?',id))[0],authority=JSON.parse(row.authority_json);
+  assert.equal(row.asset_id,f.asset);return {id,path,row,authority,table,body,value};
 }
 async function assertBytes(f, response, kind = 'preview') {
   assert.equal(response.status, 200, `Expected ${kind} bytes, got ${response.status}`);
@@ -137,7 +143,7 @@ async function assertDenied(response) {
   assert.equal(response.status, 403);
   assert.equal(response.headers.get('content-type'), 'application/json');
   const body = await response.json();
-  assert(['photo_authority_changed', 'photo_forbidden'].includes(body.error.code), JSON.stringify(body));
+  assert(['photo_authority_changed', 'photo_forbidden','download_authority_changed','download_expired','store_authority_expired'].includes(body.error.code), JSON.stringify(body));
 }
 
 /** Gate Storage outside a database transaction. Competing canonical decisions
@@ -164,6 +170,9 @@ function storageGate(f, phase) {
     consumed++;
     if (body) {
       assert(value);
+      if(phase==='download-body')return {...value,body:new ReadableStream({async pull(controller){
+        const bytes=await value.arrayBuffer();heldBytes=new Uint8Array(bytes);entered.resolve();await released.promise;controller.enqueue(heldBytes);controller.close();
+      }},{highWaterMark:0})};
       return { ...value, arrayBuffer: async () => {
         const bytes = await value.arrayBuffer(); heldBytes = new Uint8Array(bytes);
         entered.resolve(); await released.promise; return bytes;
@@ -175,7 +184,8 @@ function storageGate(f, phase) {
     release: released.resolve, close: () => { released.resolve(); bucket[method] = original; },
     assertConsumed: () => assert.equal(consumed, 1, 'The intended Storage await must be exercised exactly once'),
     assertErased: () => { assert(heldBytes?.length, 'The body gate must have retained actual bytes');
-      assert(heldBytes.every(byte => byte === 0), 'Denied plaintext bytes must be erased'); } };
+      if(phase==='download-body')assert.deepEqual(heldBytes,f.source,'v2 copies producer-owned chunks before clearing its owned plaintext');
+      else assert(heldBytes.every(byte => byte === 0), 'Denied plaintext bytes must be erased'); } };
 }
 
 test('strict authority parser rejects legacy, unknown, extra and noncanonical bindings', () => {
@@ -296,9 +306,14 @@ for (const kind of ['preview', 'download']) test(`unknown, cross-account and mix
       if (kind === 'preview') await f.h.storage.exec(`INSERT INTO media_tickets
         (id,account_id,session_id,asset_id,rendition_id,asset_version,rendition_version,expires_at,authority_json)
         SELECT ?,account_id,session_id,asset_id,rendition_id,asset_version,rendition_version,expires_at,? FROM media_tickets WHERE id=?`, id, raw, ticket.id);
-      else await f.h.storage.exec(`INSERT INTO download_tickets
-        (id,account_id,session_id,asset_id,asset_version,source_checksum,subscription_id,subscription_version,expires_at,created_at,authority_json)
-        SELECT ?,account_id,session_id,asset_id,asset_version,source_checksum,subscription_id,subscription_version,expires_at,created_at,? FROM download_tickets WHERE id=?`, id, raw, ticket.id);
+      else {
+        const seal=JSON.parse(ticket.operation.receipt_json),e=JSON.parse(seal.evidence_json);try{e.ticket.authority=JSON.parse(raw);}catch{e.ticket.authority=raw;}
+        seal.evidence_json=stable(e);await f.h.storage.exec('UPDATE download_v2_operations SET receipt_json=? WHERE operation_id=?',stable(seal),ticket.operation.operation_id);
+        const before=await f.h.storage.exec('SELECT * FROM download_v2_operations WHERE operation_id=?',ticket.operation.operation_id);
+        const denied=await f.h.request(ticket.path);assert.equal(denied.status,503);assert.equal((await denied.json()).error.code,'download_operation_outcome_unresolved');
+        assert.deepEqual(await f.h.storage.exec('SELECT * FROM download_v2_operations WHERE operation_id=?',ticket.operation.operation_id),before);
+        await f.h.storage.exec('UPDATE download_v2_operations SET receipt_json=? WHERE operation_id=?',ticket.operation.receipt_json,ticket.operation.operation_id);continue;
+      }
       const before = await f.h.storage.exec('SELECT * FROM ' + ticket.table + ' WHERE id=?', id);
       await assertDenied(await f.h.request(ticket.path.slice(0, ticket.path.lastIndexOf('/') + 1) + id));
       assert.deepEqual(await f.h.storage.exec('SELECT * FROM ' + ticket.table + ' WHERE id=?', id), before);
@@ -509,9 +524,9 @@ for (const kind of ['preview', 'download']) test(`${kind} ticket expiry during a
   let now = originalNow(); f.h.app.now = () => now;
   const ticket = await issue(f, kind), gate = storageGate(f, kind + '-body'), pending = f.h.request(ticket.path);
   try {
-    await gate.entered(); now = ticket.row.expires_at; gate.release();
+    await gate.entered(); now = kind==='download'?ticket.value.expires_at:ticket.row.expires_at; gate.release();
     const response = await pending; assert.equal(response.status, 403);
-    assert.equal((await response.json()).error.code, kind === 'preview' ? 'preview_changed' : 'download_authority_changed');
+    assert.equal((await response.json()).error.code, kind === 'preview' ? 'preview_changed' : 'download_expired');
     gate.assertConsumed(); gate.assertErased();
     assert.deepEqual(await f.h.storage.exec('SELECT * FROM ' + ticket.table + ' WHERE id=?', ticket.id), [ticket.row]);
     assert.equal((await f.h.storage.exec('SELECT COUNT(*) n FROM download_records'))[0].n, 0);
@@ -543,27 +558,22 @@ for (const origin of ['owner', 'reviewed']) for (const kind of ['preview', 'down
     } finally { gate.close(); await pending; f.h.app.now = originalNow; }
   });
 
-for (const origin of ['owner', 'reviewed']) test(`${origin} cached legacy download receipt stays original; a fresh key obtains bound authority`, async t => {
-  const f = await fixture(t, { downloads: true }), person = origin === 'owner' ? f.owner : f.recipient, ticket = await issue(f, 'download', person);
-  // Emulate a pre-column ticket alongside its already committed SQL receipt.
-  // The new handler must neither adopt/backfill that ticket nor change its receipt.
-  await f.h.storage.exec('UPDATE download_tickets SET authority_json=NULL WHERE id=?', ticket.id);
-  const before = await f.h.storage.exec('SELECT * FROM download_tickets WHERE id=?', ticket.id);
-  const receipt = await f.h.storage.exec('SELECT * FROM operations WHERE actor_id=? AND source=? AND operation_key=?', person.accountId, 'media', ticket.body.operation_key);
-  assert.equal(receipt.length, 1);
-  const replay = await f.h.json('/downloads/sign', { token: person.token, body: ticket.body });
-  assert.deepEqual(replay, ticket.value);
-  assert.deepEqual(await f.h.storage.exec('SELECT * FROM operations WHERE actor_id=? AND source=? AND operation_key=?', person.accountId, 'media', ticket.body.operation_key), receipt);
-  assert.equal((await f.h.storage.exec('SELECT COUNT(*) n FROM download_tickets'))[0].n, 1);
-  const spy = spyStorage(f);
-  try { await assertDenied(await f.h.request(ticket.path)); assert.deepEqual(spy.calls, []); }
-  finally { spy.close(); }
-  assert.deepEqual(await f.h.storage.exec('SELECT * FROM download_tickets WHERE id=?', ticket.id), before);
-  const fresh = await issue(f, 'download', person); assert.notEqual(fresh.id, ticket.id);
-  assert.deepEqual(fresh.authority, origin === 'owner' ? ownerAuthority(f) : grantAuthority(f, f.first));
-  await assertBytes(f, await f.h.request(fresh.path), 'download');
-  assert.equal((await f.h.storage.exec('SELECT COUNT(*) n FROM download_records WHERE ticket_id=?', ticket.id))[0].n, 0);
-  assert.deepEqual(await f.h.storage.exec('SELECT * FROM download_tickets WHERE id=?', ticket.id), before);
+for (const origin of ['owner', 'reviewed']) test(`${origin} legacy download history stays preserved and cannot gain v2 proof`, async t => {
+  const f=await fixture(t,{downloads:true}),person=origin==='owner'?f.owner:f.recipient,ticket=await issue(f,'download',person),legacy=crypto.randomUUID(),oldKey=key('legacy');
+  const x=ticket.evidence.ticket,c=ticket.evidence.context;
+  await f.h.storage.exec(`INSERT INTO download_tickets(id,account_id,session_id,asset_id,asset_version,source_checksum,subscription_id,subscription_version,expires_at,created_at,authority_json)
+    VALUES(?,?,?,?,?,?,?,?,?,?,NULL)`,legacy,person.accountId,c.original_session_id,f.asset,c.source_version,x.source_checksum,x.subscription_id,x.subscription_version,x.expires_at,x.created_at);
+  await f.h.storage.exec("INSERT INTO operations(actor_id,source,operation_key,action,payload_hash,payload_json,response_json,created_at) VALUES(?,'media',?,'download.sign',?,?,?,?)",
+    person.accountId,oldKey,'a'.repeat(64),stable({asset_id:f.asset,operation_key:oldKey}),stable({download_url:'https://legacy.invalid/downloads/'+legacy}),x.created_at);
+  const before=await f.h.storage.exec('SELECT * FROM download_tickets WHERE id=?',legacy),receipt=await f.h.storage.exec("SELECT * FROM operations WHERE actor_id=? AND source='media' AND operation_key=?",person.accountId,oldKey);
+  const spy=spyStorage(f);
+  try{await f.h.json('/downloads/sign',{token:person.token,body:{asset_id:f.asset,operation_key:oldKey}},410);await f.h.json('/downloads/'+legacy,{},410);
+    await f.h.community(person.token,'operation',{operation_key:oldKey},503);assert.deepEqual(spy.calls,[]);
+  }finally{spy.close();}
+  assert.deepEqual(await f.h.storage.exec('SELECT * FROM download_tickets WHERE id=?',legacy),before);
+  assert.deepEqual(await f.h.storage.exec("SELECT * FROM operations WHERE actor_id=? AND source='media' AND operation_key=?",person.accountId,oldKey),receipt);
+  const fresh=await issue(f,'download',person);assert.notEqual(fresh.id,legacy);await assertBytes(f,await f.h.request(fresh.path),'download');
+  assert.equal((await f.h.storage.exec('SELECT COUNT(*) n FROM download_records WHERE ticket_id=?',legacy))[0].n,0);
 });
 for (const origin of ['owner', 'reviewed']) test(`${origin} legacy preview ticket remains denied while a fresh sign request obtains authority`, async t => {
   const f = await fixture(t), person = origin === 'owner' ? f.owner : f.recipient, ticket = await issue(f, 'preview', person);

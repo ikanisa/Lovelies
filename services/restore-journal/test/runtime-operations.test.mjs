@@ -51,7 +51,7 @@ test('actual Worker/SQLite DO preserves operation allocations, pending/commit fe
     const restart = async () => { await mf.dispose(); mf = undefined; await open(); };
     const send = async (pathname, body, status = 200, headers = {}) => {
       const response = await mf.dispatchFetch('https://journal.invalid' + pathname, { method: body === undefined ? 'GET' : 'POST',
-        headers: { authorization: 'Bearer ' + env.RESTORE_JOURNAL_TOKEN, ...(body === undefined ? {} : { 'content-type': 'application/json' }), ...headers },
+        headers: { authorization: 'Bearer ' + env.RESTORE_JOURNAL_TOKEN,'X-Lovelies-Writer-Protocol':'lovelies-api-v15', ...(body === undefined ? {} : { 'content-type': 'application/json' }), ...headers },
         ...(body === undefined ? {} : { body: JSON.stringify(body) }) });
       const value = await response.json(); assert.equal(response.status, status, JSON.stringify(value));
       assert.match(response.headers.get('cache-control'), /no-store/); return value;

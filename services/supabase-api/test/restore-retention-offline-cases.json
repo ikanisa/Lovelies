@@ -1,0 +1,368 @@
+{
+  "version": 1,
+  "source_plan_sha256": "65432148f95a5294be1886692d3f7439440b44213a85e3dcbe2f4df5d0f42317",
+  "files": {
+    "retention-saga-migration.test.mjs": "1dc4b1c728efbd4f98786b636bfc42d2fcd875182f6f19b7b6cef7e65447ae9e",
+    "restore-retention-raw.test.mjs": "1b21e192e0d9b358530778d1f45c11ebca2d3c69eecabcc097a0eede77bb42f2",
+    "restore-retention-conflicts.test.mjs": "716333dca7d5925c8092413f52f2c7d0c800f78a9c9617425ff75c3094928ab3",
+    "restore-retention-operator-saga.test.mjs": "479a188332b4779a280eaf8fbfa7d521e4852a4af92618a0672253a213834e5f"
+  },
+  "cases": [
+    {
+      "file": "retention-saga-migration.test.mjs",
+      "name": "v14 creates private forced-RLS saga tables without seeding authority or business rows"
+    },
+    {
+      "file": "retention-saga-migration.test.mjs",
+      "name": "asset and operation erasure cascade the plan without manufacturing a receipt"
+    },
+    {
+      "file": "restore-retention-raw.test.mjs",
+      "name": "raw expiry records one exact event and stable job allocation, without deleting bytes"
+    },
+    {
+      "file": "restore-retention-raw.test.mjs",
+      "name": "stale or held asset-replaced preserves the selected subject and records no expiry"
+    },
+    {
+      "file": "restore-retention-raw.test.mjs",
+      "name": "stale or held request-hold preserves the selected subject and records no expiry"
+    },
+    {
+      "file": "restore-retention-raw.test.mjs",
+      "name": "stale or held policy preserves the selected subject and records no expiry"
+    },
+    {
+      "file": "restore-retention-raw.test.mjs",
+      "name": "stale or held pending-writer preserves the selected subject and records no expiry"
+    },
+    {
+      "file": "restore-retention-raw.test.mjs",
+      "name": "a hold becoming visible after fact registration rolls back before journal preparation"
+    },
+    {
+      "file": "restore-retention-raw.test.mjs",
+      "name": "prepare not delivered rolls back and permits the original retry"
+    },
+    {
+      "file": "restore-retention-raw.test.mjs",
+      "name": "prepare-reply-lost leaves a pending independent fact and refuses automatic replay after rollback"
+    },
+    {
+      "file": "restore-retention-raw.test.mjs",
+      "name": "sql-marker-update leaves a pending independent fact and refuses automatic replay after rollback"
+    },
+    {
+      "file": "restore-retention-raw.test.mjs",
+      "name": "lost commit reply is reconciled only from the exact committed marker"
+    },
+    {
+      "file": "restore-retention-raw.test.mjs",
+      "name": "lost acknowledgement is recovered from the already committed independent plan"
+    },
+    {
+      "file": "restore-retention-raw.test.mjs",
+      "name": "preview-only scheduling does not invent an asset-retired fact"
+    },
+    {
+      "file": "restore-retention-raw.test.mjs",
+      "name": "asset refuses a joined transaction before any scheduling or provider call"
+    },
+    {
+      "file": "restore-retention-raw.test.mjs",
+      "name": "maintenance refuses a joined transaction before any scheduling or provider call"
+    },
+    {
+      "file": "restore-retention-raw.test.mjs",
+      "name": "maintenance schedules a raw expiry once before synthetic in-memory cleanup"
+    },
+    {
+      "file": "restore-retention-raw.test.mjs",
+      "name": "one-item scans retain asset ordering and the untouched later subject asset"
+    },
+    {
+      "file": "restore-retention-raw.test.mjs",
+      "name": "a later prepare failure preserves the earlier committed raw expiry and stops cleanup"
+    },
+    {
+      "file": "restore-retention-conflicts.test.mjs",
+      "name": "older conflicts exceeding the limit preserve evidence and cannot starve a later asset or cleanup"
+    },
+    {
+      "file": "restore-retention-conflicts.test.mjs",
+      "name": "an older-policy raw job on a live source is not adopted or rewritten by the new policy"
+    },
+    {
+      "file": "restore-retention-conflicts.test.mjs",
+      "name": "duplicate old and current policy jobs on an expired episode remain unchanged along with overlapping jobs"
+    },
+    {
+      "file": "restore-retention-conflicts.test.mjs",
+      "name": "a committed conflict appearing after scan is rolled back locally and later work advances"
+    },
+    {
+      "file": "restore-retention-conflicts.test.mjs",
+      "name": "a conflict exposed after fact collection aborts before prepare and later work advances"
+    },
+    {
+      "file": "restore-retention-conflicts.test.mjs",
+      "name": "a late conflict with uncertain rollback aborts, without scheduling later work or dispatching Storage"
+    },
+    {
+      "file": "restore-retention-conflicts.test.mjs",
+      "name": "a conflicted episode appearing after the claim scan leaves all its job evidence intact"
+    },
+    {
+      "file": "restore-retention-conflicts.test.mjs",
+      "name": "an accepted but unacknowledged prepare halts the run before later scheduling or cleanup"
+    },
+    {
+      "file": "restore-retention-conflicts.test.mjs",
+      "name": "an unknown claim COMMIT poisons the invocation and cannot trigger any DELETE"
+    },
+    {
+      "file": "restore-retention-conflicts.test.mjs",
+      "name": "a conflict discovered after claim but before DELETE preserves the claim and continues unrelated work"
+    },
+    {
+      "file": "restore-retention-conflicts.test.mjs",
+      "name": "a conflict detected after DELETE stops retention with its claim and object evidence untouched"
+    },
+    {
+      "file": "restore-retention-conflicts.test.mjs",
+      "name": "an uncertain rollback while checking a claimed conflict poisons the invocation before other work"
+    },
+    {
+      "file": "restore-retention-conflicts.test.mjs",
+      "name": "a caught lost COMMIT cannot reopen the same invocation; a new invocation may reconcile the exact marker"
+    },
+    {
+      "file": "restore-retention-conflicts.test.mjs",
+      "name": "trusted maintenance exposes a conflicting raw episode as HTTP 503 and a nonzero retention failure"
+    },
+    {
+      "file": "restore-retention-conflicts.test.mjs",
+      "name": "a verified preview-only oldest asset cannot starve a later raw expiry and returns when raw becomes due"
+    },
+    {
+      "file": "restore-retention-conflicts.test.mjs",
+      "name": "an oldest asset-hold is excluded before the bounded scan without mutating its evidence"
+    },
+    {
+      "file": "restore-retention-conflicts.test.mjs",
+      "name": "an oldest moderation-hold is excluded before the bounded scan without mutating its evidence"
+    },
+    {
+      "file": "restore-retention-conflicts.test.mjs",
+      "name": "an oldest pending-writer is excluded before the bounded scan without mutating its evidence"
+    },
+    {
+      "file": "restore-retention-conflicts.test.mjs",
+      "name": "a held old cleanup job does not occupy the limited claim page ahead of eligible work"
+    },
+    {
+      "file": "restore-retention-conflicts.test.mjs",
+      "name": "unresolved raw and preview obligations for the same exact key cannot occupy the claim page or mutate each other"
+    },
+    {
+      "file": "restore-retention-conflicts.test.mjs",
+      "name": "an unresolved writer for an older cleanup job does not starve the limited claim page"
+    },
+    {
+      "file": "restore-retention-conflicts.test.mjs",
+      "name": "a new preview key after a verified preview job is visible as a conflict and is not silently retired"
+    },
+    {
+      "file": "restore-retention-conflicts.test.mjs",
+      "name": "an old-policy empty preview obligation cannot create a second job or starve later work"
+    },
+    {
+      "file": "restore-retention-conflicts.test.mjs",
+      "name": "a verified older-policy preview suppresses rescheduling its already verified keys"
+    },
+    {
+      "file": "restore-retention-conflicts.test.mjs",
+      "name": "new keys after an older-policy verified preview raise health and remain available for reconciliation"
+    },
+    {
+      "file": "restore-retention-conflicts.test.mjs",
+      "name": "duplicate empty preview episodes across policies preserve both jobs and cannot starve the claim page"
+    },
+    {
+      "file": "restore-retention-conflicts.test.mjs",
+      "name": "a policy change after the claim page cannot relabel or overwrite the old preview"
+    },
+    {
+      "file": "restore-retention-conflicts.test.mjs",
+      "name": "a late old-policy preview episode is rechecked before any selected source is changed"
+    },
+    {
+      "file": "restore-retention-conflicts.test.mjs",
+      "name": "a raw-due asset with rendition preview inventory conflict is preserved before LIMIT"
+    },
+    {
+      "file": "restore-retention-conflicts.test.mjs",
+      "name": "a raw-due asset with ready-recorded preview inventory conflict is preserved before LIMIT"
+    },
+    {
+      "file": "restore-retention-conflicts.test.mjs",
+      "name": "a raw-due asset with attempt preview inventory conflict is preserved before LIMIT"
+    },
+    {
+      "file": "restore-retention-conflicts.test.mjs",
+      "name": "a new attempt key stays quarantined as the raw deadline becomes due"
+    },
+    {
+      "file": "restore-retention-conflicts.test.mjs",
+      "name": "a committed rendition key after initial selection stops raw expiry before independent prepare"
+    },
+    {
+      "file": "restore-retention-conflicts.test.mjs",
+      "name": "a committed attempt key after initial selection stops raw expiry before independent prepare"
+    },
+    {
+      "file": "restore-retention-conflicts.test.mjs",
+      "name": "an inventory mismatch remains visible and blocks an already-retired raw job before claim"
+    },
+    {
+      "file": "restore-retention-conflicts.test.mjs",
+      "name": "a preview key appearing after a raw claim prevents its DELETE and preserves the claimed evidence"
+    },
+    {
+      "file": "restore-retention-conflicts.test.mjs",
+      "name": "a raw deadline earlier than the preview deadline still reports and quarantines a new key"
+    },
+    {
+      "file": "restore-retention-operator-saga.test.mjs",
+      "name": "manual schedule commits exact asset facts and replays its original receipt without redoing work"
+    },
+    {
+      "file": "restore-retention-operator-saga.test.mjs",
+      "name": "a lost committed asset reply resumes the same plan with the same allocations"
+    },
+    {
+      "file": "restore-retention-operator-saga.test.mjs",
+      "name": "a prepare accepted without a SQL commit leaves the plan fenced and stops later work"
+    },
+    {
+      "file": "restore-retention-operator-saga.test.mjs",
+      "name": "revoking the operator between steps stops progress; a fresh session resumes the same receipt"
+    },
+    {
+      "file": "restore-retention-operator-saga.test.mjs",
+      "name": "a replaced asset after reservation is not retired as its previously planned version"
+    },
+    {
+      "file": "restore-retention-operator-saga.test.mjs",
+      "name": "erasing an asset from a pending plan cascades its identifier and prevents a false success"
+    },
+    {
+      "file": "restore-retention-operator-saga.test.mjs",
+      "name": "old successful receipt replays and same-key pending reservations conflict with a retention update"
+    },
+    {
+      "file": "restore-retention-operator-saga.test.mjs",
+      "name": "concurrent same-key operator retries return the same receipt and do not duplicate asset jobs"
+    },
+    {
+      "file": "restore-retention-operator-saga.test.mjs",
+      "name": "concurrent changed payloads using one operation key cannot both succeed"
+    },
+    {
+      "file": "restore-retention-operator-saga.test.mjs",
+      "name": "preview-only operator work records a deterministic step and cleanup-job allocation"
+    },
+    {
+      "file": "restore-retention-operator-saga.test.mjs",
+      "name": "a cursor inconsistent with its pending item outcomes cannot return a successful receipt"
+    },
+    {
+      "file": "restore-retention-operator-saga.test.mjs",
+      "name": "a mismatched completed item identity cannot advance to a successful receipt"
+    },
+    {
+      "file": "restore-retention-operator-saga.test.mjs",
+      "name": "a temporary global-hold after reservation leaves the item pending and same-key retry resumes"
+    },
+    {
+      "file": "restore-retention-operator-saga.test.mjs",
+      "name": "a temporary asset-hold after reservation leaves the item pending and same-key retry resumes"
+    },
+    {
+      "file": "restore-retention-operator-saga.test.mjs",
+      "name": "a temporary moderation-hold after reservation leaves the item pending and same-key retry resumes"
+    },
+    {
+      "file": "restore-retention-operator-saga.test.mjs",
+      "name": "a temporary request-hold after reservation leaves the item pending and same-key retry resumes"
+    },
+    {
+      "file": "restore-retention-operator-saga.test.mjs",
+      "name": "a temporary pending-writer after reservation leaves the item pending and same-key retry resumes"
+    },
+    {
+      "file": "restore-retention-operator-saga.test.mjs",
+      "name": "a temporary extended-deadline after reservation leaves the item pending and same-key retry resumes"
+    },
+    {
+      "file": "restore-retention-operator-saga.test.mjs",
+      "name": "a temporary source-change after reservation leaves the item pending and same-key retry resumes"
+    },
+    {
+      "file": "restore-retention-operator-saga.test.mjs",
+      "name": "a policy change before finish returns non-success and the same key resumes after a journalled rebase"
+    },
+    {
+      "file": "restore-retention-operator-saga.test.mjs",
+      "name": "an unrelated raw conflict remains visible to maintenance but does not block a completed clean command"
+    },
+    {
+      "file": "restore-retention-operator-saga.test.mjs",
+      "name": "a completed preview accepts a later same-version raw retirement only with exact independent evidence"
+    },
+    {
+      "file": "restore-retention-operator-saga.test.mjs",
+      "name": "a malformed legacy-shaped receipt is not returned as a successful schedule"
+    },
+    {
+      "file": "restore-retention-operator-saga.test.mjs",
+      "name": "fresh operator expiry during accepted journal prepare rolls SQL back and leaves the independent fence pending"
+    },
+    {
+      "file": "restore-retention-operator-saga.test.mjs",
+      "name": "an acknowledged operator transaction leaves no ephemeral commit guard rows"
+    },
+    {
+      "file": "restore-retention-operator-saga.test.mjs",
+      "name": "the deferred DB-clock guard aborts if fresh authority expires after validation but before COMMIT"
+    },
+    {
+      "file": "restore-retention-operator-saga.test.mjs",
+      "name": "a locally fabricated raw retirement cannot justify completing a prior preview item"
+    },
+    {
+      "file": "restore-retention-operator-saga.test.mjs",
+      "name": "operator expiry during accepted asset prepare leaves SQL rollback and a pending fence"
+    },
+    {
+      "file": "restore-retention-operator-saga.test.mjs",
+      "name": "operator expiry during accepted finish prepare leaves SQL rollback and a pending fence"
+    },
+    {
+      "file": "restore-retention-operator-saga.test.mjs",
+      "name": "a disabled commit trigger rejects new scheduling before any independent prepare"
+    },
+    {
+      "file": "restore-retention-operator-saga.test.mjs",
+      "name": "a replaced source remains deferred while its subject has a hold or unresolved writer"
+    },
+    {
+      "file": "restore-retention-operator-saga.test.mjs",
+      "name": "a prior-policy preview appearing after reservation cannot yield a successful manual receipt"
+    },
+    {
+      "file": "restore-retention-operator-saga.test.mjs",
+      "name": "a new preview key after a manual raw reservation cannot produce a successful receipt"
+    }
+  ]
+}
