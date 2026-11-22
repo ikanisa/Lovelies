@@ -1,0 +1,52 @@
+name: Lovelies project source consolidation audit
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - .github/workflows/project-consolidation.yml
+      - scripts/project-consolidation-audit.py
+      - scripts/test-project-consolidation-audit.py
+permissions:
+  contents: read
+concurrency:
+  group: lovelies-project-source-audit
+  cancel-in-progress: false
+jobs:
+  preserve-and-compare:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+          lfs: false
+          submodules: false
+      - name: Test audit tooling with offline Git fixtures
+        run: python3 scripts/test-project-consolidation-audit.py
+      - name: Preserve exact histories and report textual conflicts
+        shell: bash
+        env:
+          AUDIT_MAIN_SHA: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          python3 scripts/project-consolidation-audit.py \
+            --repo "$GITHUB_WORKSPACE" \
+            --output "$RUNNER_TEMP/lovelies-project-source" \
+            --base 34b30678a64bf00933c8aeb979cccbcf622aa338 \
+            --main "$AUDIT_MAIN_SHA" \
+            --candidate 385de8659b737cbb383f184ce014d7dc165a2a1c \
+            --export f5363103083f060653e23099977cdc1953e5d829
+          printf '%s\n' '## Source preservation audit' \
+            'Successful reporting does not mean a merge, passing application tests, complete chat recovery or production approval.' >> "$GITHUB_STEP_SUMMARY"
+      - name: Publish Git bundle, manifest and conflict report
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: lovelies-project-source-${{ github.sha }}
+          path: ${{ runner.temp }}/lovelies-project-source/
+          if-no-files-found: error
+          retention-days: 7
+          compression-level: 0
+# This workflow has no deployment/provider secrets and no repository write scope.
+# It does not install dependencies or execute any application source.
