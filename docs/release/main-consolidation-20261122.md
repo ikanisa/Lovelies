@@ -27,9 +27,11 @@ implementation record is historical source evidence, not evidence that those
 changes are active on the current main branch.
 
 The earlier candidate CI runs were marked failed. Inspected service jobs had no
-steps and no assigned runner; a log request returned BlobNotFound. This does not
-establish an application-test failure or a specific billing/configuration cause.
-The old main checkpoint used `[skip ci]`; its commit is not a passing CI result.
+steps and no assigned runner; a log request returned BlobNotFound. Those original
+observations alone did not establish an application-test failure or a specific
+billing/configuration cause. A later, separately scoped diagnosis of the new
+main-branch audit job is recorded below. The old main checkpoint used `[skip ci]`;
+its commit is not a passing CI result.
 
 ## New read-only audit
 
@@ -52,7 +54,51 @@ refs/worktree, independent bundle restoration, included ancestry, invalid-input
 rejection and refusal to overwrite evidence. These are not Lovelies application
 tests. A hosted workflow result must be inspected separately.
 
+## Verified push and hosted CI blocker
+
+The audit tooling was committed and published on `main` as
+`78a4d98d0a9d02b6cfce86bed3325fc02c77cc9b`. GitHub ref and file readbacks confirmed
+the publication. This commit adds the audit script, its tests, the read-only
+workflow and this checkpoint; it does not merge the application candidate.
+
+GitHub started recording audit run `45047652914` for that exact commit. The
+`preserve-and-compare` job, `137285654655`, was marked failed before execution.
+Read-only browser inspection of the GitHub job page and its public annotations
+endpoint reported the same exact failure annotation:
+
+> The job was not started because your account is locked due to a billing issue.
+
+Sources:
+
+- Job: https://github.com/ikanisa/Lovelies/actions/runs/45047652914/job/137285654655
+- Annotation: https://api.github.com/repos/ikanisa/Lovelies/check-runs/137285654655/annotations
+
+This job did not execute the audit or application tests. No repository-history
+bundle or actual-repository conflict report is claimed from this failed run.
+The backend readiness run `45047652935` was also returned as failed, but its own
+annotation was not separately inspected; the audit-job diagnosis is not a
+substitute for reading other jobs' evidence. The earlier November 1 failures
+remain historical failures rather than retroactively diagnosed results.
+
+The GitHub account billing lock needs to be resolved before this hosted audit
+can run, followed by a real rerun and inspection of its outputs. No billing
+settings, payment information, spending limits or branch protection were changed.
+A billing-unblocked runner would not itself establish application correctness.
+
 ## Remaining source-integration work
+
+The exact schema sources were inspected on both application workstreams:
+
+- At `78a4d98d0a9d02b6cfce86bed3325fc02c77cc9b`,
+  `services/supabase-api/src/schema.ts` declares `currentSchemaVersion = 15`
+  and includes the download-v2 schema extension.
+- At `385de8659b737cbb383f184ce014d7dc165a2a1c`, the same path declares
+  `currentSchemaVersion = 19` and includes managed Auth, processing-match,
+  push-roster, restore-recovery, chunked-export and operator-capability extensions.
+
+These observations show distinct schema implementations; choosing the higher
+version number alone does not reconcile their migration histories or preserve
+both sets of behavior.
 
 Resolve the actual current-main/candidate conflicts without dropping either
 workstream. Reconcile schema versions and migration checksums before combining
